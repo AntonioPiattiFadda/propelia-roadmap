@@ -67,6 +67,16 @@ Este documento es el checklist de verificación manual en navegador que falta co
 - [ ] Con DevTools abierto (pestaña Console), repetir los pasos de arriba.
 - [ ] Esperado: sin errores en rojo durante el uso normal. Advertencias no críticas son aceptables, pero reportarlas igual si aparecen.
 
+### 9. Estados de carga y optimistic update
+
+- [ ] Recargar la página con DevTools → Network → throttling "Slow 3G". Esperado: se ve un skeleton con shimmer (bloques y filas grises pulsando) mientras carga, reemplazado por el tablero real al terminar.
+- [ ] Con red normal, cambiar el estado de una tarea. Esperado: aparece `● guardando` junto al buscador (franja de filtros) y después `✓ guardado`, que desaparece solo.
+- [ ] Scrollear la lista de tareas mientras se ve `● guardando`/`✓ guardado`. Esperado: el indicador sigue visible (la franja de filtros es sticky).
+- [ ] Cortar la red (DevTools → Network → Offline) y repetir, uno por uno: cambiar estado de tarea, cambiar responsable, escribir en explicación/comentario, mover una tarea de bloque con el select, arrastrar una tarea o un bloque, agregar tarea nueva, agregar bloque nuevo, borrar tarea, borrar bloque, subir un adjunto, borrar un adjunto. Esperado en TODOS: tras ~3.5s (2 reintentos de 1.5s) el cambio vuelve a como estaba antes y aparece el toast "No se pudo completar la acción. Revisa tu conexión." — nada queda "colgado" a mitad de camino.
+- [ ] Reconectar la red y repetir la lista anterior. Esperado: todo persiste normalmente, sin reverts, y recargando la página los cambios siguen ahí.
+- [ ] Intentar loguearse con credenciales incorrectas. Esperado: el botón de submit dice "Entrando..." mientras verifica, y vuelve a su texto normal al mostrar el error.
+- [ ] Cerrar sesión. Esperado: el botón dice "Saliendo..." brevemente antes de que aparezca el modal de login.
+
 ## Cómo reportar resultados
 
 Por cada ítem: marcar ✅ si pasó tal cual se espera, o ❌ con una descripción corta de qué pasó distinto (mensaje de error exacto, en qué paso, captura de pantalla si es posible). Si algo falla, indicar también: navegador y versión, si fue abierto como `file://` o servido con un server local, y si había extensiones de navegador que pudieran bloquear requests (ad blockers, etc.).
