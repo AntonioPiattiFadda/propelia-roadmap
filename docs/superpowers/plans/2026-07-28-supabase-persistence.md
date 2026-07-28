@@ -92,8 +92,21 @@ drop policy if exists roadmap_tareas_all on public.roadmap_tareas;
 create policy roadmap_tareas_all on public.roadmap_tareas
   for all using (true) with check (true);
 
-alter publication supabase_realtime add table public.roadmap_secciones;
-alter publication supabase_realtime add table public.roadmap_tareas;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'roadmap_secciones'
+  ) then
+    alter publication supabase_realtime add table public.roadmap_secciones;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'roadmap_tareas'
+  ) then
+    alter publication supabase_realtime add table public.roadmap_tareas;
+  end if;
+end $$;
 
 insert into storage.buckets (id, name, public)
 values ('roadmap-adjuntos', 'roadmap-adjuntos', true)
