@@ -405,19 +405,11 @@ function onEstadoGlobal(estado) {
   }, 1500);
 }
 
-async function persistirTarea(t, intentos = 2) {
-  try { await RoadmapSync.guardarTarea(t); }
-  catch (e) {
-    if (intentos > 0) setTimeout(() => persistirTarea(t, intentos - 1), 1500);
-    else aviso('No se pudo guardar «' + (t.tarea || t.id) + '». Revisa tu conexión.');
-  }
+async function persistirTarea(t, { onEstado = onEstadoGlobal, revertir, intentos = 2 } = {}) {
+  return conEstadoDeCarga(() => RoadmapSync.guardarTarea(t), { onEstado, revertir, intentos });
 }
-async function persistirSeccion(s, intentos = 2) {
-  try { await RoadmapSync.guardarSeccion(s); }
-  catch (e) {
-    if (intentos > 0) setTimeout(() => persistirSeccion(s, intentos - 1), 1500);
-    else aviso('No se pudo guardar el bloque «' + (s.titulo || s.id) + '». Revisa tu conexión.');
-  }
+async function persistirSeccion(s, { onEstado = onEstadoGlobal, revertir, intentos = 2 } = {}) {
+  return conEstadoDeCarga(() => RoadmapSync.guardarSeccion(s), { onEstado, revertir, intentos });
 }
 
 let refrescoPendiente = false;
