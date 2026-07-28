@@ -300,21 +300,12 @@ button.act.pri:hover{background:#000}
   <button class="newsec" id="bNuevoBloque">+  Nuevo bloque</button>
 
   <div class="acts">
-    <div class="aviso" id="avisoAlmacen" hidden>No caben más cambios en la memoria de este navegador,
-      normalmente por el peso de los archivos adjuntos. Pulsa <strong>Guardar archivo</strong> ahora
-      para no perder nada, y quita algún adjunto o pásalo a Drive.</div>
-    <h2>Compartir los cambios</h2>
-    <p>Lo que tocas aquí se guarda en este navegador, no dentro del archivo. Para que tu hermano vea
-       tus cambios, pulsa <strong>Guardar archivo</strong> y mándale el HTML que se descarga: al abrirlo
-       tendrá tus tareas, bloques y comentarios ya puestos. Cuando él te devuelva el suyo, usa
-       <strong>Cargar cambios de un archivo</strong>.</p>
+    <h2>Respaldo</h2>
+    <p>Los cambios ya se sincronizan solos entre vos y Toni. Estos botones son solo para guardar
+       una copia de respaldo puntual, no hace falta usarlos para compartir nada.</p>
     <div class="btns">
       <button class="act pri" id="bHtml">Guardar archivo</button>
-      <button class="act" id="bAbrir">Cargar cambios de un archivo</button>
       <button class="act" id="bCsv">Exportar a CSV</button>
-      <button class="act" id="bReset">Descartar mis cambios</button>
-      <input type="file" id="fIn" accept=".html,.htm,.json" hidden>
-      <span class="peso" id="peso" style="align-self:center"></span>
     </div>
   </div>
 </main>
@@ -937,29 +928,6 @@ bCsv.onclick=()=>{
     (t.files||[]).map(f=>f.n).join(' | '),t.com,t.fecha].map(e).join(';'));
   bajar('plan-loro-toni-'+hoy()+'.csv','\ufeff'+[cab.map(e).join(';'),...filas].join('\r\n'),'text/csv;charset=utf-8');
   aviso('CSV guardado. Se abre en Excel con doble clic.');
-};
-bReset.onclick=()=>{
-  if(!confirm('Vuelve al contenido original y descarta todo lo que hayas cambiado o creado en este navegador. ¿Seguir?')) return;
-  try{ localStorage.removeItem(KEY); }catch(e){}
-  estado=clon(RAW); estado.tareas.forEach(t=>{ if(!Array.isArray(t.files)) t.files=[]; });
-  abiertas.clear(); cerradas.clear(); guardar(); render();
-  aviso('Cambios descartados.');
-};
-bAbrir.onclick=()=>fIn.click();
-fIn.onchange=ev=>{
-  const f=ev.target.files[0]; if(!f) return;
-  const fr=new FileReader();
-  fr.onload=()=>{
-    try{
-      const m=fr.result.match(/<script id="datos"[^>]*>([\s\S]*?)<\/script>/);
-      const j=JSON.parse((m?m[1]:fr.result).replace(/<\\\//g,'</'));
-      if(!j.secciones||!j.tareas) throw 0;
-      estado=j; estado.tareas.forEach(t=>{ if(!Array.isArray(t.files)) t.files=[]; });
-      abiertas.clear(); cerradas.clear(); guardar(); render();
-      aviso('Cambios de '+f.name+' cargados.');
-    }catch(e){ aviso('Ese archivo no tiene datos que pueda leer.'); }
-  };
-  fr.readAsText(f); ev.target.value='';
 };
 document.addEventListener('click',()=>document.querySelectorAll('.menu:not([hidden])').forEach(m=>{
   m.hidden=true; m.closest('.sec')?.classList.remove('menu-open');
