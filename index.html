@@ -358,10 +358,11 @@ const ESTADOS = ['Pendiente','En curso','Bloqueado','Hecho'];
 let estado = { secciones: [], tareas: [] };
 
 const pendientesGuardado = new Map();
-function guardarDebounced(entidad, guardarFn) {
-  clearTimeout(pendientesGuardado.get(entidad.id));
-  pendientesGuardado.set(entidad.id, setTimeout(() => guardarFn(entidad), 500));
+function guardarDebounced(clave, fn) {
+  clearTimeout(pendientesGuardado.get(clave));
+  pendientesGuardado.set(clave, setTimeout(fn, 500));
 }
+const valoresAntesDelCambio = new Map();
 
 async function conEstadoDeCarga(accion, { revertir, intentos = 2, onEstado } = {}) {
   onEstado?.('cargando');
@@ -713,20 +714,25 @@ function pintarFila(t){
   row.querySelectorAll('.seg button').forEach(b=>{
     b.onclick=ev=>{
       ev.stopPropagation();
+      const respAnterior=t.resp;
       t.resp=(t.resp===b.dataset.r)?'':b.dataset.r;
       row.dataset.resp=t.resp;
       row.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r===t.resp));
-      persistirTarea(t); cancha();
+      persistirTarea(t, { revertir: () => { t.resp=respAnterior; render(); cancha(); } });
+      cancha();
       if(filtros.resp!=='todas') render();
     };
   });
   row.querySelector('.est').onchange=e=>{
+    const estadoAnterior=t.estado;
     t.estado=e.target.value; row.dataset.estado=t.estado;
-    persistirTarea(t); cancha(); actualizarPills();
+    persistirTarea(t, { revertir: () => { t.estado=estadoAnterior; render(); cancha(); actualizarPills(); } });
+    cancha(); actualizarPills();
     if(filtros.ocultarHechas) render();
   };
   row.querySelectorAll('[data-k]').forEach(el=>{
     el.oninput=()=>{
+      if(!valoresAntesDelCambio.has(t.id)) valoresAntesDelCambio.set(t.id, {...t});
       t[el.dataset.k]=el.value;
       if(el.tagName==='TEXTAREA') autosize(el);
       if(el.dataset.k==='tarea'){
@@ -734,7 +740,13 @@ function pintarFila(t){
         ttl.textContent=el.value||'Tarea sin título — ábrela y ponle nombre';
         ttl.classList.toggle('vacio', !el.value);
       }
-      guardarDebounced(t, persistirTarea);
+      guardarDebounced(t.id, () => persistirTarea(t, {
+        revertir: () => {
+          const previo = valoresAntesDelCambio.get(t.id);
+          if (previo) Object.assign(t, previo);
+          render();
+        },
+      }).then(ok => { if (ok) valoresAntesDelCambio.delete(t.id); }));
     };
   });
   const thumbs=row.querySelector('.thumbs'), zona=row.querySelector('.zona');
@@ -760,11 +772,13 @@ function pintarFila(t){
   });
 
   row.querySelector('[data-mover]').onchange=e=>{
+    const secAnterior=t.sec, ordenAnterior=t.orden;
     t.sec=e.target.value;
     const delSec=estado.tareas.filter(x=>x.sec===t.sec && x.id!==t.id);
     const ultimo=delSec.length ? delSec[delSec.length-1].orden : null;
     t.orden=RoadmapSync.calcularOrden(ultimo, null);
-    persistirTarea(t); render();
+    persistirTarea(t, { revertir: () => { t.sec=secAnterior; t.orden=ordenAnterior; render(); } });
+    render();
   };
   row.querySelector('.del').onclick=async ()=>{
     if(!confirm('Se borra «'+(t.tarea||t.id)+'». ¿Seguir?')) return;
@@ -827,8 +841,15 @@ function pintarSeccion(s){
   };
   const inp=sec.querySelector('.sec-name');
   inp.oninput=()=>{
+    if(!valoresAntesDelCambio.has(s.id)) valoresAntesDelCambio.set(s.id, {...s});
     s.titulo=inp.value;
-    guardarDebounced(s, persistirSeccion);
+    guardarDebounced(s.id, () => persistirSeccion(s, {
+      revertir: () => {
+        const previo = valoresAntesDelCambio.get(s.id);
+        if (previo) Object.assign(s, previo);
+        render();
+      },
+    }).then(ok => { if (ok) valoresAntesDelCambio.delete(s.id); }));
   };
   inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } };
   const cab=sec.querySelector('.sec-h');
