@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plan de trabajo CRM · Loro &amp; Toni</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --ink:#151C26; --ink-2:#414D5C; --muted:#7A8595; --faint:#9AA4B2;
+  --canvas:#F2F4F7; --surface:#FFFFFF; --sunken:#F7F9FB;
+  --edge:#DCE2EA; --edge-soft:#EAEEF3; --edge-hard:#C4CDD8;
+  --loro:#2E7A51; --loro-soft:#F1F8F4;
+  --toni:#2B5FA8; --toni-soft:#F1F6FC;
+  --warn:#96590A; --warn-soft:#FDF8EE;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --barh:57px; --r:8px;
+}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--canvas);color:var(--ink);font:15px/1.55 var(--sans);padding:0 0 70px}
+.wrap{max-width:1140px;margin:0 auto;padding:0 18px}
+.lbl{font:600 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+/* ---------- cabecera ---------- */
+header{background:var(--ink);color:#fff;padding:20px 0 18px}
+.htop{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1{margin:0;font-size:18px;font-weight:650;letter-spacing:-.2px}
+h1 span{color:#8C99AB;font-weight:400}
+.trello{font:600 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;
+  color:#A9B7C9;text-decoration:none;border-bottom:1px solid #3D4859;padding-bottom:3px}
+.trello:hover{color:#fff;border-color:#fff}
+.cancha{margin-top:17px}
+.cancha-lbl{display:flex;justify-content:space-between;font:600 10px/1 var(--mono);
+  letter-spacing:.12em;text-transform:uppercase;color:#8C99AB;margin-bottom:7px}
+.cancha-lbl b{font:700 13px/1 var(--sans);letter-spacing:0}
+.cl-loro b{color:#6FC194}.cl-toni b{color:#8FB6EE}
+.court{display:flex;height:8px;border-radius:99px;overflow:hidden;background:#28313E}
+.court i{display:block;transition:flex-grow .45s cubic-bezier(.4,0,.2,1)}
+.court .c-loro{background:#3E9A67}.court .c-toni{background:#3B72C4}.court .c-none{background:#39424F}
+.cancha-note{margin:9px 0 0;font-size:12.5px;color:#8C99AB}
+
+/* ---------- barra ---------- */
+.bar{position:sticky;top:0;z-index:30;background:rgba(242,244,247,.94);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--edge);padding:10px 0}
+.bar-in{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chips{display:flex;gap:2px;background:var(--surface);border:1px solid var(--edge);
+  border-radius:var(--r);padding:3px}
+.chip{border:0;background:transparent;font:600 12.5px/1 var(--sans);color:var(--ink-2);
+  padding:7px 11px;border-radius:5px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.chip:hover{background:var(--canvas)}
+.chip[aria-pressed=true]{background:#EDF1F6;color:var(--ink);box-shadow:inset 0 0 0 1px var(--edge)}
+.dot{width:7px;height:7px;border-radius:99px;flex:none;background:var(--faint)}
+.dot.l{background:var(--loro)}.dot.t{background:var(--toni)}
+.search{flex:1;min-width:180px;border:1px solid var(--edge);border-radius:var(--r);
+  padding:9px 12px;font:14px var(--sans);background:var(--surface);color:var(--ink)}
+.search::placeholder{color:var(--faint)}
+.toggle{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-2);
+  background:var(--surface);border:1px solid var(--edge);border-radius:var(--r);
+  padding:8px 11px;cursor:pointer;user-select:none;white-space:nowrap}
+.toggle input{margin:0;accent-color:var(--ink-2)}
+.mini{border:1px solid var(--edge);background:var(--surface);color:var(--ink-2);
+  font:600 12.5px var(--sans);padding:8px 11px;border-radius:var(--r);cursor:pointer;white-space:nowrap}
+.mini:hover{border-color:var(--edge-hard);color:var(--ink)}
+.count{font:600 11.5px/1 var(--mono);color:var(--faint);white-space:nowrap;padding:0 2px}
+
+/* ---------- bloques ---------- */
+.sec{margin-top:26px}
+.sec:first-child{margin-top:20px}
+.sec-h{position:sticky;top:var(--barh);z-index:20;display:flex;align-items:center;gap:10px;
+  background:var(--surface);border:1px solid var(--edge);border-left:3px solid var(--ink);
+  border-radius:var(--r);padding:11px 12px}
+.caret{flex:none;width:18px;height:18px;border:0;background:transparent;cursor:pointer;
+  color:var(--faint);font-size:10px;padding:0;transition:transform .18s;font-family:var(--mono)}
+.sec.open>.sec-h .caret{transform:rotate(90deg)}
+.sec-name{flex:1;min-width:60px;border:1px solid transparent;background:transparent;
+  font:650 13.5px/1.35 var(--sans);color:var(--ink);letter-spacing:-.1px;
+  padding:5px 7px;border-radius:5px;width:100%}
+.sec-name:hover{border-color:var(--edge)}
+.sec-name:focus{border-color:var(--edge-hard);background:var(--sunken);outline:none}
+.sec-tools{display:flex;align-items:center;gap:3px;opacity:0;transition:opacity .15s}
+.sec-h:hover .sec-tools,.sec-h:focus-within .sec-tools,.sec.menu-open .sec-tools{opacity:1}
+.tool{width:26px;height:26px;border:1px solid transparent;background:transparent;border-radius:5px;
+  cursor:pointer;color:var(--muted);font-size:12px;line-height:1;padding:0;font-family:var(--sans)}
+.tool:hover{background:var(--canvas);border-color:var(--edge);color:var(--ink)}
+/* ---------- asa de arrastre ---------- */
+.grip{flex:none;width:16px;height:24px;border:0;background:transparent;padding:0;
+  display:flex;align-items:center;justify-content:center;color:var(--edge-hard);
+  cursor:grab;opacity:0;transition:opacity .15s;touch-action:none}
+.grip:active{cursor:grabbing}
+.grip svg{display:block;fill:currentColor}
+.sec-h:hover .grip,.row:hover .grip,.grip:focus-visible{opacity:1}
+.grip[aria-disabled=true]{cursor:not-allowed}
+.dragging{opacity:.38}
+.row,.sec{position:relative}
+.row.dz-a::after,.row.dz-b::after,.sec.dz-a::after,.sec.dz-b::after{
+  content:'';position:absolute;left:0;right:0;height:3px;background:var(--toni);
+  border-radius:2px;z-index:25;pointer-events:none}
+.row.dz-a::after,.sec.dz-a::after{top:-3px}
+.row.dz-b::after,.sec.dz-b::after{bottom:-3px}
+.sec-h.dz-in,.sec-body.dz-in{box-shadow:inset 0 0 0 2px var(--toni)}
+.sec-body.dz-in{border-radius:6px}
+
+/* ---------- menú de tres puntos ---------- */
+.menu-wrap{position:relative;display:flex}
+.menu{position:absolute;top:30px;right:0;z-index:40;min-width:172px;background:var(--surface);
+  border:1px solid var(--edge);border-radius:7px;padding:5px;
+  box-shadow:0 10px 28px rgba(21,28,38,.16)}
+.menu button{display:block;width:100%;text-align:left;border:0;background:transparent;
+  font:500 13px var(--sans);color:var(--ink);padding:8px 10px;border-radius:5px;cursor:pointer}
+.menu button:hover{background:var(--sunken)}
+.menu button:disabled{color:var(--faint);cursor:default;background:transparent}
+.menu hr{border:0;border-top:1px solid var(--edge-soft);margin:5px 2px}
+.menu button.peligro{color:#9E3131}
+.menu button.peligro:hover{background:#FCF4F4}
+
+.pill{flex:none;font:600 11px/1 var(--mono);padding:5px 8px;border-radius:5px;
+  background:var(--sunken);color:var(--muted);border:1px solid var(--edge-soft);white-space:nowrap}
+.sec-body{display:none;margin:6px 0 0 11px;padding-left:14px;border-left:2px solid var(--edge-soft)}
+.sec.open>.sec-body{display:block}
+.addrow{width:100%;margin-top:4px;border:1px dashed var(--edge);background:transparent;
+  color:var(--muted);font:600 12.5px var(--sans);padding:9px;border-radius:var(--r);cursor:pointer;text-align:left}
+.addrow:hover{border-color:var(--edge-hard);color:var(--ink);background:var(--surface)}
+
+/* ---------- filas ---------- */
+.row{background:var(--surface);border:1px solid var(--edge-soft);
+  border-left:3px solid var(--edge-hard);border-radius:var(--r);margin-bottom:4px}
+.row[data-resp=Loro]{border-left-color:var(--loro)}
+.row[data-resp=Toni]{border-left-color:var(--toni)}
+.row[data-estado=Hecho]{border-left-color:var(--edge);background:var(--sunken)}
+.row[data-estado=Hecho] .r-t{text-decoration:line-through;color:var(--faint)}
+.row:hover{border-top-color:var(--edge);border-right-color:var(--edge);border-bottom-color:var(--edge)}
+.row.open{margin:10px 0;box-shadow:0 2px 10px rgba(21,28,38,.07);
+  border-top-color:var(--edge-hard);border-right-color:var(--edge-hard);border-bottom-color:var(--edge-hard)}
+.r-head{display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer}
+.r-head .caret{transition:transform .18s}
+.row.open .r-head .caret{transform:rotate(90deg)}
+.r-id{flex:none;font:600 10px/1 var(--mono);color:var(--faint);width:29px}
+.r-t{flex:1;min-width:0;font-size:14px;font-weight:600;letter-spacing:-.1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.r-t.vacio{color:var(--faint);font-weight:400;font-style:italic}
+.seg{flex:none;display:flex;gap:2px;background:var(--sunken);border:1px solid var(--edge-soft);
+  border-radius:6px;padding:2px}
+.seg button{display:flex;align-items:center;gap:6px;border:0;background:transparent;
+  font:600 11.5px/1 var(--sans);color:var(--muted);padding:6px 9px;border-radius:4px;cursor:pointer}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed=true]{background:var(--surface);box-shadow:0 1px 2px rgba(21,28,38,.09)}
+.seg button[data-r=Loro][aria-pressed=true]{color:var(--loro)}
+.seg button[data-r=Toni][aria-pressed=true]{color:var(--toni)}
+select.est{flex:none;border:1px solid var(--edge-soft);border-radius:6px;padding:6px 7px;
+  font:600 11.5px var(--sans);background:var(--sunken);color:var(--ink-2);cursor:pointer}
+.row[data-estado=Bloqueado] select.est{color:var(--warn);background:var(--warn-soft);border-color:#EBDCBE}
+.flag{flex:none;font-size:12px}
+
+/* ---------- panel desplegado (sangrado) ---------- */
+.r-body{display:none;margin:0 12px 12px 41px;padding:14px 16px;
+  background:var(--sunken);border:1px solid var(--edge-soft);border-radius:6px}
+.row.open .r-body{display:block}
+.row[data-resp=Loro].open .r-body{background:var(--loro-soft)}
+.row[data-resp=Toni].open .r-body{background:var(--toni-soft)}
+.grp{margin-bottom:12px}
+.grp:last-child{margin-bottom:0}
+.grp>label{display:block;margin-bottom:5px}
+.fld{width:100%;border:1px solid var(--edge);border-radius:6px;padding:9px 11px;
+  font:14px/1.6 var(--sans);background:var(--surface);color:var(--ink);resize:none;
+  font-family:var(--sans)}
+.fld:hover{border-color:var(--edge-hard)}
+textarea.fld{overflow:hidden;min-height:44px}
+textarea.expl{line-height:1.65}
+.trio{display:grid;grid-template-columns:1fr 200px 148px;gap:10px}
+.duo{display:grid;grid-template-columns:1fr 220px;gap:10px}
+.duo2{display:grid;grid-template-columns:1fr 200px;gap:10px}
+.zona{display:flex;align-items:center;gap:9px;flex-wrap:wrap;border:1px dashed var(--edge);
+  border-radius:6px;padding:10px 12px;background:var(--surface);transition:border-color .15s,background .15s}
+.zona.drag{border-color:var(--toni);background:var(--toni-soft);border-style:solid}
+.zona-txt{font-size:12.5px;color:var(--muted)}
+.zona kbd{font:600 10.5px var(--mono);background:var(--sunken);border:1px solid var(--edge);
+  border-radius:4px;padding:1px 4px;color:var(--ink-2)}
+.mini2{border:1px solid var(--edge);background:var(--sunken);color:var(--ink);
+  font:600 12px var(--sans);padding:7px 11px;border-radius:5px;cursor:pointer}
+.mini2:hover{border-color:var(--edge-hard);background:var(--surface)}
+.enl{margin-top:7px}
+.thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:9px}
+.thumbs:empty{display:none}
+.th{position:relative;width:106px;border:1px solid var(--edge);border-radius:6px;
+  overflow:hidden;background:var(--surface)}
+.th img{display:block;width:100%;height:70px;object-fit:cover;cursor:zoom-in;background:var(--sunken)}
+.th .nom{font:11px/1.35 var(--sans);padding:5px 6px;color:var(--ink-2);
+  word-break:break-word;max-height:33px;overflow:hidden}
+.th .x{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:99px;border:0;
+  background:rgba(21,28,38,.7);color:#fff;font-size:11px;line-height:20px;padding:0;
+  cursor:pointer;opacity:0;transition:opacity .15s}
+.th:hover .x,.th:focus-within .x{opacity:1}
+.th.doc{width:140px;padding:10px;cursor:pointer}
+.th.doc .ico{font-size:17px}
+.th.doc:hover{border-color:var(--edge-hard)}
+.th .kb{font:600 10px var(--mono);color:var(--faint);padding:0 6px 5px}
+.peso{font:600 11px/1 var(--mono);color:var(--faint)}
+.aviso{margin-bottom:13px;padding:11px 13px;border-radius:6px;background:var(--warn-soft);
+  border:1px solid #EBDCBE;color:#6E4207;font-size:13px}
+.link{display:inline-block;margin-top:5px;font-size:12px;color:var(--toni);word-break:break-all}
+.r-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;
+  margin-top:13px;padding-top:11px;border-top:1px solid var(--edge-soft);flex-wrap:wrap}
+.mover{display:flex;align-items:center;gap:7px}
+.mover select{border:1px solid var(--edge);border-radius:6px;padding:7px 8px;
+  font:13px var(--sans);background:var(--surface);color:var(--ink-2);max-width:280px}
+.del{border:1px solid transparent;background:transparent;color:var(--muted);
+  font:600 12px var(--sans);padding:7px 10px;border-radius:6px;cursor:pointer}
+.del:hover{color:#9E3131;border-color:#E8CACA;background:#FCF4F4}
+
+/* ---------- pie ---------- */
+.acts{margin-top:30px;background:var(--surface);border:1px solid var(--edge);
+  border-radius:var(--r);padding:17px}
+.acts h2{margin:0 0 5px;font:600 10px/1 var(--mono);letter-spacing:.13em;
+  text-transform:uppercase;color:var(--muted)}
+.acts p{margin:0 0 14px;font-size:13.5px;color:var(--ink-2);max-width:76ch}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+button.act{border:1px solid var(--edge);background:var(--surface);color:var(--ink);
+  font:600 13px var(--sans);padding:10px 14px;border-radius:6px;cursor:pointer}
+button.act:hover{border-color:var(--edge-hard);background:var(--sunken)}
+button.act.pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+button.act.pri:hover{background:#000}
+.newsec{margin-top:14px;width:100%;border:1px dashed var(--edge);background:transparent;
+  color:var(--muted);font:600 13px var(--sans);padding:13px;border-radius:var(--r);cursor:pointer}
+.newsec:hover{border-color:var(--edge-hard);color:var(--ink);background:var(--surface)}
+.empty{background:var(--surface);border:1px dashed var(--edge);border-radius:var(--r);
+  padding:28px;text-align:center;color:var(--muted);font-size:14px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,90px);
+  background:var(--ink);color:#fff;padding:11px 17px;border-radius:8px;font-size:13.5px;
+  z-index:60;transition:transform .3s;box-shadow:0 8px 26px rgba(0,0,0,.2)}
+.toast.on{transform:translate(-50%,0)}
+:focus-visible{outline:2px solid var(--toni);outline-offset:2px}
+@media (max-width:900px){
+  .trio,.duo,.duo2{grid-template-columns:1fr}
+  .r-body{margin-left:12px;padding:12px}
+  .r-head{flex-wrap:wrap}
+  .r-t{flex-basis:100%;order:-1;white-space:normal}
+  .sec-tools,.grip{opacity:1}
+  .sec-h{position:static;flex-wrap:wrap}
+  .sec-name{flex-basis:100%;order:-1}
+  .chips{flex-wrap:wrap}
+  .mover{flex-wrap:wrap;min-width:0}
+  .mover select{max-width:100%;width:100%}
+  .r-foot{align-items:stretch}
+  .pill{margin-left:auto}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+@media print{
+  .bar,.acts,.newsec,.addrow,.sec-tools,.grip,.seg,select.est,.r-foot,header .cancha{display:none}
+  .sec-h,.sec-body,.r-body{position:static!important;display:block!important}
+  body{background:#fff}.row.open{box-shadow:none}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="htop">
+      <h1>Plan de trabajo CRM <span>· Loro &amp; Toni</span></h1>
+      <a class="trello" href="https://trello.com/b/vlKCxRTS/propelia" target="_blank" rel="noopener">Tablero de Trello</a>
+    </div>
+    <div class="cancha">
+      <div class="cancha-lbl">
+        <span class="cl-loro">Loro <b id="nLoro">0</b></span>
+        <span class="cl-toni"><b id="nToni">0</b> Toni</span>
+      </div>
+      <div class="court"><i class="c-loro"></i><i class="c-none"></i><i class="c-toni"></i></div>
+      <p class="cancha-note" id="nota"></p>
+    </div>
+  </div>
+</header>
+
+<div class="bar"><div class="wrap bar-in">
+  <div class="chips" role="group" aria-label="Filtrar por responsable">
+    <button class="chip" data-f="todas" aria-pressed="true">Todas</button>
+    <button class="chip" data-f="Loro" aria-pressed="false"><i class="dot l"></i>Lo mío</button>
+    <button class="chip" data-f="Toni" aria-pressed="false"><i class="dot t"></i>Lo de Toni</button>
+    <button class="chip" data-f="sin" aria-pressed="false"><i class="dot"></i>Sin asignar</button>
+  </div>
+  <input class="search" id="q" type="search" placeholder="Buscar en títulos, módulos y explicaciones…   ( / )">
+  <label class="toggle"><input type="checkbox" id="oh"> Ocultar hechas</label>
+  <button class="mini" id="bPlegar">Plegar todo</button>
+  <span class="count" id="visibles"></span>
+</div></div>
+
+<main class="wrap">
+  <div id="lista"></div>
+  <button class="newsec" id="bNuevoBloque">+  Nuevo bloque</button>
+
+  <div class="acts">
+    <div class="aviso" id="avisoAlmacen" hidden>No caben más cambios en la memoria de este navegador,
+      normalmente por el peso de los archivos adjuntos. Pulsa <strong>Guardar archivo</strong> ahora
+      para no perder nada, y quita algún adjunto o pásalo a Drive.</div>
+    <h2>Compartir los cambios</h2>
+    <p>Lo que tocas aquí se guarda en este navegador, no dentro del archivo. Para que tu hermano vea
+       tus cambios, pulsa <strong>Guardar archivo</strong> y mándale el HTML que se descarga: al abrirlo
+       tendrá tus tareas, bloques y comentarios ya puestos. Cuando él te devuelva el suyo, usa
+       <strong>Cargar cambios de un archivo</strong>.</p>
+    <div class="btns">
+      <button class="act pri" id="bHtml">Guardar archivo</button>
+      <button class="act" id="bAbrir">Cargar cambios de un archivo</button>
+      <button class="act" id="bCsv">Exportar a CSV</button>
+      <button class="act" id="bReset">Descartar mis cambios</button>
+      <input type="file" id="fIn" accept=".html,.htm,.json" hidden>
+      <span class="peso" id="peso" style="align-self:center"></span>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script id="datos" type="application/json">{
+ "secciones": [
+  {
+   "id": "s1",
+   "titulo": "MODIFIICACIONES URGENTES - IMPORTANTES (Errores o fallas funcionales o cosas mega indispensables)"
+  },
+  {
+   "id": "s2",
+   "titulo": "MODIFICACIONES URGENTES - NO IMPORTANTES (Necesarias para implementar)"
+  },
+  {
+   "id": "s3",
+   "titulo": "PROXIMAS MODIFICACIONES (No necesarias para implementar)"
+  },
+  {
+   "id": "s4",
+   "titulo": "PROXIMOS DESARROLLOS"
+  }
+ ],
+ "tareas": [
+  {
+   "id": "T01",
+   "sec": "s1",
+   "modulo": "Idealista",
+   "tarea": "Integración Idealista pedidos",
+   "expl": "Integracion idealista pedidos.\n· Probar sistema con mail nuestro y testear, y testeado implementar sacando inmovilla.\n· Hacer excel con historico todos los pedidos para poder meterlos y planificar la metida en el sistema.",
+   "resp": "Toni",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "ya implemente los usuarios y los mails, vamos a ir ajustando el algoritmo",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T02",
+   "sec": "s1",
+   "modulo": "Agenda / Visitas",
+   "tarea": "Sistema para agendar visitas con Google",
+   "expl": "la dinamica seria. El lead entra o puede ser un lead qeu ya entro yle comparti un piso y quiere visitarlo. De cualquier forma, el usuario tendra que agendar la visita. -------------- aca el usuario iria a acciones del piso dentro de ese lead y apretaria agendar visita--- Se le abriria un campo donde pueda apuntar (",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T03",
+   "sec": "s1",
+   "modulo": "",
+   "tarea": "leads nuevos",
+   "expl": "Los leads de ayer nuevos estan apareciendo aunque hayan sido gesrionados ayer como nuevos sin gestionar en rojo — incluso se da el caso en que me aparece cartel rojo de lead nuevo sin gestionar cuando esta  gestionado en la columna de gestion.  - Ademas, en el comentario que viene desde idealista, estaria bueno que se aclare en la lista de comentarios cuando se introduce algo como (( mensaje via idealista\" hola, me gustaria consutltar por el pios bla bla \"))) para que sea mas clari  ---- Tambien se dio el caso de que aparecian los lead que llegaron de idealista directamente como gestionados cuando entraban. seguramente por el comentario que se asento cuando entro via idealista. ",
+   "resp": "Toni",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T04",
+   "sec": "s1",
+   "modulo": "",
+   "tarea": "leads nuevos que no reconoce piso",
+   "expl": "cuando sistema entra lead cuyo piso por el que solicito no reconoce crea un piso nuevo entonces en propiedades se crearon algunos que no corresponden y ademas el la lista de pisos dentro del lead no aparece marcheado con el que deberia si no con uno inventado por el sistema. Ademas deberiamos ver por que sistema no entiende que arago es arago en el caso del lead que te adjunto foto ",
+   "resp": "Toni",
+   "estado": "Pendiente",
+   "img": "img 2",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T05",
+   "sec": "s2",
+   "modulo": "Vistas y filtros",
+   "tarea": "Vistas de trabajo por prioridad / match / estado / gestión / piso",
+   "expl": "Ver temas y formas de trabajo POR PRIORIDAD; POR MATCH; POR ESTADO; POR GESTIÓN; POR PISO. Cada vista me tiene que decir los que tienen pendiente gestión o tarea pendiente, en rojo.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "Ya lo hice revisadlo",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T06",
+   "sec": "s2",
+   "modulo": "Matching",
+   "tarea": "Matching implícito (match provisorio automático)",
+   "expl": "Seria importante empezar a llamar a brifing \"demanda\" para adaptarnos al idioma local. jeje. el brifing implicito estaba pensando que en lugar de rojo, para que no moleste al verlo podria aparecer tal cual aparece ahora. gris claro. como pendiente de rellenar. tanto en la parte de los campos del brifing como en la parte de los campos del brifing cuando el lead esta plegado.. y que el sistema ya trabaje con esos valores para matchear. Luego si el cliente pone un valor se escribe en negrito normal xd lol ",
+   "resp": "Toni",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T07",
+   "sec": "s2",
+   "modulo": "Capasitacion",
+   "tarea": "Loom",
+   "expl": "Hacer loom explicativos para los chicos mostrando como funciona el sistema parte por parte y despues reunion para dudas y anotar las dudas para agregarlas a planing de capasitaciones ",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T08",
+   "sec": "s2",
+   "modulo": "",
+   "tarea": "UxUi filtros",
+   "expl": "mejorar el planteo de la ux de carga de filtros. presentar propuesta a toni que sea intuitiva ",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T09",
+   "sec": "s2",
+   "modulo": "",
+   "tarea": "Panel de leads",
+   "expl": "seria interesante que arriba del recuadro donde apareccen los leads el sistema te diga la cantidad de resultados encontrados siempre. ADJUNTO IMAGNE DE DONDE ",
+   "resp": "Toni",
+   "estado": "Pendiente",
+   "img": "img 1",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T10",
+   "sec": "s2",
+   "modulo": "",
+   "tarea": "filtros vistas",
+   "expl": "resulta un poco confuso cuando vemos las oportunidades entender que un numero corresponde a la cantidad que hay de oportunidades, o rojos o etc y otro numero a los pendientes. dejar solo el de pendientes mejor no? y que se vea rojo para que se entienda que tiene  -- aca tambien deberiamos ver ",
+   "resp": "Toni",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T11",
+   "sec": "s2",
+   "modulo": "",
+   "tarea": "columna derecha comentarios + tareas + perfil",
+   "expl": "proponer nuevo diseño de las tres cosas integradas para que sea cvisualmente mas intuitivo porque ahora mismo se hace muy confuso entender esta parte ",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T12",
+   "sec": "s2",
+   "modulo": "",
+   "tarea": "color lead en izquierda  de la fila",
+   "expl": "seria bueno que borremos el color del lead a la izquierda de la fila. esto fue mala mia pero entorpece la visual y no aporta valor realmente ",
+   "resp": "Toni",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T13",
+   "sec": "s2",
+   "modulo": "",
+   "tarea": "Puntito azul del lead en el que se esta trabajando",
+   "expl": "el puntito azul que estamos usando ahora esta bueno pero realmente es muy sutil y incuso a mi sabiendo lo que representa y habiendo recibido esas info explicita me cuesta. podriamos buscar otra forma de resaltarlo? resaltando el cuadro de la fila o o algo asi ",
+   "resp": "Toni",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T14",
+   "sec": "s3",
+   "modulo": "",
+   "tarea": "mensajes predeterminadso",
+   "expl": "En el mensaje predeterminado estaruia bueno que el nombre lo incruste la IA. Entonces redactas el mensaje que queres. Tenes una lista en plan check list de los datos del sistema que queres que la ia te incruste en el mensaje y si los tildas la ia en el mensaje que vos redactastre te incrusta nombre, apellido, ibi, comunidad, link del anuncio etc etc etc entonces el usuario no tiene que lidiar con corchetes ni cosas raras ",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T15",
+   "sec": "s3",
+   "modulo": "Brifing",
+   "tarea": "Brifing",
+   "expl": "hacer sistemas para brifear -brifing con link, brifing con txt y respuyesta en texto para meter en campo con IA directamente y que se rellene, brifing con bot ",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T16",
+   "sec": "s3",
+   "modulo": "Integración pedidos",
+   "tarea": "Cranear cómo va a funcionar la integración de pedidos",
+   "expl": "Cranear como va a funcionar la integracion de pedidos... (del historial de la base de datos) para gestionarlos y publicitarles que pisos a nombre de que usuario, y que usuario se les asgnrara cada piso.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T17",
+   "sec": "s3",
+   "modulo": "Personal Shopper",
+   "tarea": "Registro de clientes que vengan de personal shoppers",
+   "expl": "Ver como se registrarian clientes que vengan de parte de personal shoppers.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T18",
+   "sec": "s3",
+   "modulo": "Mensajería / WhatsApp",
+   "tarea": "Protocolizar mensaje para cruzar varios pisos",
+   "expl": "Protocolizar mensaje para cruzar otros pisos ademas del que coordino visita por su consulta. Todos en un mensaje unido, varios pisos que puedan encajarle.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T19",
+   "sec": "s3",
+   "modulo": "UX / Carga de pisos",
+   "tarea": "Mejorar UX de la carga de pisos",
+   "expl": "Mejorar Ux de la carga de pisos. Primero loro tiene que ver tema diseño y funcionalidad para optimizarlo. Que haya boton de carga via crm y boton de carga via idealista.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T20",
+   "sec": "s3",
+   "modulo": "Leads",
+   "tarea": "Quitar el desplegable de estado del piso al cargar el lead",
+   "expl": "Sacar, cuando se carga el lead, el desplegable para elegir el estado del piso.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T21",
+   "sec": "s3",
+   "modulo": "UX / Columna gestión",
+   "tarea": "Iconos de gestión y agenda sin columna extra",
+   "expl": "Brodix: aca, para no hacer una columna con tareas que agrega mucho espacio con poca informacion, yo lo pensaba mas como el icono ese al lado de el posponer (el relojuito de gestion) pegado, sin una columna extra. Al final es parte de lo mismo.\nEn la columna de gestion vos ves si esta pendiente o gestionado. Ves si queres posponer la gestion (eso se podria hacer que la palabra «posponer» aparezca solo cuando pones el cursor arriba, para que solo se vea el reloj) y la agendita al lado solo si hay una tarea agendada. Si no hay tarea agendada, nada.\nSi la tarea esta vencida, la agendita tiene que aparecer roja para marcar que esta vencida.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T22",
+   "sec": "s3",
+   "modulo": "UX / Leads",
+   "tarea": "Línea de color del lead más gruesa",
+   "expl": "¿Podemos hacer la linea de color del lead a la izquierda mas gruesa para que sea mas notorio el color del lead?",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T23",
+   "sec": "s3",
+   "modulo": "Perfil cliente",
+   "tarea": "Perfil del cliente dentro del desplegable",
+   "expl": "Ver dentro del desplegable que el perfil del cliente aparezca: nombre, telefono usuario (el que esta cargado), telefono alternativo si hay otro, y una parte de notas para poder poner cualquier cosa que se quiera poner de notas sobre el cliente. «Es una familia», «tiene que vender dos pisos en francia» o lo que sea.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "🔴 LORO: ver de mandar exactamente como tiene que ser.",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T24",
+   "sec": "s3",
+   "modulo": "Gestión / Comentarios",
+   "tarea": "¿Exigir comentario para marcar como gestionado?",
+   "expl": "Pensar si no es bueno exigir comentario para marcar como gestionado, y que cambios de estado se añadan como comentarios.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T25",
+   "sec": "s3",
+   "modulo": "Feedback visitas",
+   "tarea": "Sistema de feedback de visitas",
+   "expl": "Sistema de feetback visitas. Si esta en visitado hay que sacarlo cuanto antes:\n1 Solicitar a usuario feetbacj post visita por ws.\n2 Solicitar a cliente feetback por ws.\n3 Insisitir a usuario.\n4 Avisar a usuario que si cliente no responde mas de 3 veces, descarta piso.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T26",
+   "sec": "s3",
+   "modulo": "Mensajería / WhatsApp",
+   "tarea": "Botón de resumen de pisos en un solo mensaje",
+   "expl": "Hacer boton para enviar resumen de pisos que pueden encajarle al cliente en un solo mensaje.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T27",
+   "sec": "s3",
+   "modulo": "Briefing / IA",
+   "tarea": "Campo de IA al principio del briefing (renombrar a DEMANDA)",
+   "expl": "Como idea para pensar: ¿si campo de IA aparece al principio del brifing y podemos agregar todo con IA? Zona, comentarios extras, presupeusto, mensajes del cliente copiados y pegados, y que ia interprete y llene brifing en general y listo. Seria mucho mas intuitivo y practico. Y que lo que agregas en ese campo se introduzca donde corresponde y se borre.\n—- Tambien cambiar mensaje de «brifing» a DEMANDA.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T28",
+   "sec": "s3",
+   "modulo": "Perfil cliente",
+   "tarea": "Perfil ampliado en el desplegable superior izquierdo",
+   "expl": "Seria bueno que dentro del desplegable, arriba a la izquierda, salga perfil del cliente con notas del perfil, brifing hipotecario y datos de contacto mas amplios que solo el telefomno. Ademas, que se pueda configurar el contacto principal para que se ponga el que tiene whatsapp ahi.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T29",
+   "sec": "s3",
+   "modulo": "Funnel",
+   "tarea": "Pisos «en limbo»: sacarlos del funnel a pendiente match",
+   "expl": "Ojo con los pisos que quedan en un limbo de que solicitaron por un piso y visitaron y nunca avanzan en el funnel. ¿Como los sacamos del funnel para que caigan a pendiente match automaticamente y se haga el trabajo de matching? Y a los clientes que tienen match en curso, ¿se les trabajara para matchearle pisos tambien?",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T30",
+   "sec": "s3",
+   "modulo": "Estados",
+   "tarea": "Estados múltiples por piso y detalle al pasar el cursor",
+   "expl": "Cuando aparece el estado visitado en seguimiento, el proximo piso que agendo, el estado no es agendado. ¿Seria prodente hacer aparecer varios estados con el piso al cual se asocia ese estado? ¿O mostrar el mas avanzado como principal y los estados anteriroes como estados anexos?\n—- Para empezar seria bueno que, al poner cursor arriba de estados, se pueda ver detalle de estados del cliente con cada piso. Ademas quizas que en la parte de estados te muestre todos, y con cada piso cual tiene.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T31",
+   "sec": "s3",
+   "modulo": "UX / Leads",
+   "tarea": "Reemplazar el puntito azul por un recuadro remarcado",
+   "expl": "El puntito ese azul seria bueno remplazarlo por un recuadro remarcado en el lead para que se vea claro.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T32",
+   "sec": "s3",
+   "modulo": "UX / Estados",
+   "tarea": "Estados de los pisos más claros en el desplegable",
+   "expl": "Tenemos que mejorar la UX para que los estados de los pisos en el desplegavle se vean claros.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T33",
+   "sec": "s3",
+   "modulo": "Filtros",
+   "tarea": "No cerrar la ficha al cambiar de estado dentro de un filtro",
+   "expl": "El tema de cuando cambio de estado un piso y se me cierra porque estoy en un filtro que no contiene a ese piso: esta dificil y no esta bueno, porque quizas quiero ponerle un comentario o algo y no me deja.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T34",
+   "sec": "s3",
+   "modulo": "Funnel",
+   "tarea": "Distinguir visualmente pisos con match y sin match",
+   "expl": "Visualmente, en el funnel, distinguir los pisos que tienen matrch de los que no tienen match. Para que sea mas pedagogico.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T35",
+   "sec": "s3",
+   "modulo": "UX / Carga de pisos",
+   "tarea": "Botón carga piso desde CRM y desde Idealista",
+   "expl": "Poner boton carga piso desde crm y boton carga piso desde idealista.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T36",
+   "sec": "s3",
+   "modulo": "",
+   "tarea": "Cruce pisos lead nuevo",
+   "expl": "Programar agenda predeterminada de tarea de enviar a cliente pisos que puedan encajarle justo despues de agendar la visita ",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T37",
+   "sec": "s3",
+   "modulo": "",
+   "tarea": "Funnel ventas",
+   "expl": "deslpazar un poquito en la reprecentacion del funnel a la derecha lo que esta matcheado con un piso para que la gente netienda conceptualmente vierndo que todo eso es matcheado ",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T38",
+   "sec": "s4",
+   "modulo": "Estadísticas / Informes",
+   "tarea": "Estadísticas de pisos, agentes y descartes",
+   "expl": "Estadisticas sobre los pisos y los agentes. Estadisticas motivos de descarte pisos, estadisticas portales, informes de comercializacion de pisos, informes para cita gestion, informes para rebajas, estadisticas de trabajo del empleado, estadisticas de descarte de lead… estadisticas muchas.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T39",
+   "sec": "s4",
+   "modulo": "Fotos / IA",
+   "tarea": "Procesado masivo de fotos con IA y ordenación",
+   "expl": "Sistema para pasar fotos masivamente por IA, con prompts puestos para cada foto y uno puesto en general para todas las fotos juntas.\n—- Tambien sistema para ordenar las fotos de forma ultra archi facil.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T40",
+   "sec": "s4",
+   "modulo": "Catastro / IA",
+   "tarea": "Herramienta de uso de Catastro con IA",
+   "expl": "Herramienta de uso de catastro con IA.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T41",
+   "sec": "s4",
+   "modulo": "Portal / Red",
+   "tarea": "PORTAL INMOBILIARIO + RED INMOBILIARIA + agente IA",
+   "expl": "PORTAL INMOBILIARIO + RED INMOBILIARIA + agente con IA (maneja sms, whatsapp y mail).\nDeberia haber dos opciones: que toda la info la gestione internamente el crm, o participar de propelialista, que es la red de venta con portal propio con mas potencial de españa. Basicamente es un super bot que es personal shopper con todos los pedidos de la red, los que entran por el portal y los pisos de toda la red, y permanentemente esta optimizandose para convertir lo mas rapido y mejor posible.\nEn el portal, que se manejen videos en plan tik-tok para fomentar consumo y revolucionar la forma de mostrar los pisos, resumiendo imagenes, descripcion y etc en un video corto mas consumible.\nIMPORTANTE que esté la base de la lógica muy bien planteada: cada lead se tiene que caer por tiempo de la escalera de estados, a menos que el usuario renueve su vigencia en ese estado a mano. Si no, se cae y va automáticamente a pendiente match. Los pendiente match se trabajan masivamente con bot para encajarles pisos. Los clientes que están en escalera, aún ver de cranear bien cómo trabajarlos con IA, o si permitir detener la promoción de pisos a estos si avanzan o si muestran interés.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T42",
+   "sec": "s4",
+   "modulo": "Portales",
+   "tarea": "Publicar/despublicar automático en Idealista y Fotocasa",
+   "expl": "Sistema que publica y despublica en idealsita y fotocasa para optimizar pedidos. Tambien que optimiza las publis y da consejos.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T43",
+   "sec": "s4",
+   "modulo": "Web cliente",
+   "tarea": "Web para la inmobiliaria usuaria con portal integrado",
+   "expl": "Desarrollo de pagina web para la inmobiliaria usuaria con IA, con portal inmobiliario integrado. O pagina de portal inmobiliario para que integren en su pagina web directamente.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T44",
+   "sec": "s4",
+   "modulo": "Automatizaciones",
+   "tarea": "Secuencia completa de automatizaciones del funnel",
+   "expl": "Automatizacion:\n1 Cuando entra el lead, que agende la visita.\n2 Cuando se agenda visita, mensaje de confirmacion.\n3 Dia de la visita, mensaje de recordatorio y posible documento de reconocimiento de visita.\n4 Feedback visita.\n5 Sistema de briefing transversal a todas las acciones.\n6 Sistema de promocion de pisos automaticamente a leads.\n7 Sistema de campañas para nuevos pisos, pisos rebajados, pisos con informacion/fotos nuevas, etc.\n—- Agente: seria bueno que este pensado para automaticamente impulsar a todos los leads a avanzar en la etapa del funnel. Entonces que nada se pierda y que avance si el comercial no lo avanza.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T45",
+   "sec": "s4",
+   "modulo": "Briefing",
+   "tarea": "Botón para copiar/enviar briefing",
+   "expl": "Boton en la parte de briefing para copiar link de briefing con formulario, copiar txt de briefing, o mandar a bot a brifiar.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T46",
+   "sec": "s4",
+   "modulo": "Historial",
+   "tarea": "Acciones que disparen comentarios automáticos al historial",
+   "expl": "Acciones: estaria bueno que disparen comentarios al historial de comentarios. «Se agendo visita a tal piso», «se compartio tal piso», etc. Para que vaya quedando registro de todo. Incluso si se brifio, quedaria registro.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T47",
+   "sec": "s4",
+   "modulo": "Informes / IA",
+   "tarea": "Generador de informes con IA y branding",
+   "expl": "Informes con IA. Interface donde cada uno de los informes tiene su lugar: informe de valoracion, informe de tal, informe de cual. Y podes trabajar con Claude pidiendole modificaciones y diseñando informes con todo el material visual de la empresa. Documentos mega archi profesionales, como los que entrego yo. Con la posibilidad de usar el anterior para hacer el nuevo, dejar fijado un modelo, y modificar hoja por hoja con prompts distinguidos.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  },
+  {
+   "id": "T48",
+   "sec": "s4",
+   "modulo": "Soporte",
+   "tarea": "Bot de soporte dentro del CRM o por WhatsApp",
+   "expl": "Bot de soporte dentro del crm o por ws que te ofrezca, desde el crm, ir a whatsapp a hablar para: reclamos de cosas que no funcionan, sugerencias de mejoras, cosas que podrian funcionar mejor, ideas, etc.",
+   "resp": "Loro",
+   "estado": "Pendiente",
+   "img": "",
+   "com": "",
+   "fecha": "",
+   "files": []
+  }
+ ]
+}</script>
+<script>
+const RAW = JSON.parse(document.getElementById('datos').textContent);
+const KEY = 'plan-loro-toni-v2';
+const ESTADOS = ['Pendiente','En curso','Bloqueado','Hecho'];
+const clon = o => JSON.parse(JSON.stringify(o));
+
+let estado = (()=>{
+  try{ const g=localStorage.getItem(KEY); if(g){const j=JSON.parse(g); if(j.secciones&&j.tareas) return j;} }catch(e){}
+  return clon(RAW);
+})();
+
+estado.tareas.forEach(t=>{ if(!Array.isArray(t.files)) t.files=[]; });
+
+let sinAlmacen=false;
+function guardar(){
+  try{
+    localStorage.setItem(KEY, JSON.stringify(estado));
+    if(sinAlmacen){ sinAlmacen=false; avisoAlmacen.hidden=true; }
+  }catch(e){
+    sinAlmacen=true; avisoAlmacen.hidden=false;
+  }
+  pintarPeso();
+}
+function pintarPeso(){
+  const b=new Blob([JSON.stringify(estado)]).size;
+  const n=estado.tareas.reduce((a,t)=>a+(t.files||[]).length,0);
+  peso.textContent=(n?n+' archivos · ':'')+(b/1048576).toFixed(2)+' MB';
+}
+
+/* ---------- archivos ---------- */
+const MAX_LADO=1800, CALIDAD=.82, MAX_ARCHIVO=6*1048576;
+const kb=n=>n<1048576?Math.round(n/1024)+' KB':(n/1048576).toFixed(1)+' MB';
+const bytesDe=d=>Math.round((d.length-(d.indexOf(',')+1))*0.75);
+
+function leerComoDataURL(file){
+  return new Promise((ok,mal)=>{
+    const fr=new FileReader();
+    fr.onload=()=>ok(fr.result); fr.onerror=()=>mal(fr.error);
+    fr.readAsDataURL(file);
+  });
+}
+async function comprimirImagen(file){
+  try{
+    const bmp=await createImageBitmap(file);
+    const f=Math.min(1, MAX_LADO/Math.max(bmp.width,bmp.height));
+    const w=Math.round(bmp.width*f), h=Math.round(bmp.height*f);
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    c.getContext('2d').drawImage(bmp,0,0,w,h);
+    if(bmp.close) bmp.close();
+    let d=c.toDataURL('image/webp',CALIDAD);
+    if(!d.startsWith('data:image/webp')) d=c.toDataURL('image/jpeg',CALIDAD);
+    const orig=await leerComoDataURL(file);
+    return bytesDe(d)<bytesDe(orig) ? d : orig;
+  }catch(e){ return leerComoDataURL(file); }
+}
+async function adjuntar(t, files, alTerminar){
+  let n=0, saltados=[], ahorro=0;
+  for(const f of files){
+    const esImg=/^image\//.test(f.type);
+    /* las imágenes pasan siempre: se comprimen antes de guardarlas */
+    if(!esImg && f.size>MAX_ARCHIVO){ saltados.push(f.name+' ('+kb(f.size)+')'); continue; }
+    const d = esImg ? await comprimirImagen(f) : await leerComoDataURL(f);
+    const peso = bytesDe(d);
+    if(peso>MAX_ARCHIVO){ saltados.push((f.name||'captura')+' ('+kb(peso)+' ya comprimida)'); continue; }
+    if(esImg && f.size>peso) ahorro += f.size-peso;
+    t.files.push({n:f.name||('captura-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.webp'),
+                  t:f.type||'', d});
+    n++;
+  }
+  guardar(); alTerminar();
+  if(saltados.length) aviso('No pude adjuntar: '+saltados.join(', ')+'. Súbelo a Drive y pega el enlace.');
+  else if(n) aviso((n===1?'1 archivo adjuntado':n+' archivos adjuntados')+(ahorro>512000?' · '+kb(ahorro)+' ahorrados al comprimir':''));
+}
+function abrirArchivo(f, descargar){
+  const [cab,b64]=f.d.split(',');
+  const tipo=(cab.match(/data:([^;]+)/)||[,'application/octet-stream'])[1];
+  const bin=atob(b64), arr=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  const url=URL.createObjectURL(new Blob([arr],{type:tipo}));
+  const a=document.createElement('a'); a.href=url;
+  if(descargar) a.download=f.n; else { a.target='_blank'; a.rel='noopener'; }
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),20000);
+}
+function pintarThumbs(t, cont){
+  cont.innerHTML='';
+  (t.files||[]).forEach((f,i)=>{
+    const esImg=/^data:image\//.test(f.d);
+    const box=document.createElement('div');
+    box.className='th'+(esImg?'':' doc');
+    if(esImg){
+      const im=document.createElement('img');
+      im.src=f.d; im.alt=f.n; im.title='Abrir '+f.n;
+      im.onclick=()=>abrirArchivo(f,false);
+      box.appendChild(im);
+    }else{
+      const ic=document.createElement('div'); ic.className='ico'; ic.textContent='📄';
+      box.appendChild(ic);
+      box.title='Descargar '+f.n;
+      box.onclick=e=>{ if(!e.target.closest('.x')) abrirArchivo(f,true); };
+    }
+    const nm=document.createElement('div'); nm.className='nom'; nm.textContent=f.n;
+    box.appendChild(nm);
+    const pz=document.createElement('div'); pz.className='kb'; pz.textContent=kb(bytesDe(f.d));
+    box.appendChild(pz);
+    const x=document.createElement('button');
+    x.className='x'; x.type='button'; x.textContent='✕';
+    x.title='Quitar este archivo'; x.setAttribute('aria-label','Quitar '+f.n);
+    x.onclick=ev=>{ ev.stopPropagation(); t.files.splice(i,1); guardar(); pintarThumbs(t,cont); };
+    box.appendChild(x);
+    cont.appendChild(box);
+  });
+}
+
+const abiertas = new Set();
+const cerradas = new Set();
+const filtros = {resp:'todas', q:'', ocultarHechas:false};
+
+function nuevoId(pref, lista){
+  let n=1; const usados=new Set(lista);
+  while(usados.has(pref+String(n).padStart(2,'0'))) n++;
+  return pref+String(n).padStart(2,'0');
+}
+const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const escA = s => esc(s).replace(/"/g,'&quot;');
+
+const GRIP='<svg viewBox="0 0 10 16" width="10" height="16" aria-hidden="true">'+
+  [4,8,12].map(y=>`<circle cx="3" cy="${y}" r="1.35"/><circle cx="7" cy="${y}" r="1.35"/>`).join('')+'</svg>';
+
+let arrastre=null;
+const filtrando=()=>filtros.resp!=='todas'||!!filtros.q||filtros.ocultarHechas;
+function limpiarZonas(){
+  document.querySelectorAll('.dz-a,.dz-b,.dz-in').forEach(e=>e.classList.remove('dz-a','dz-b','dz-in'));
+}
+const llevaArchivos=e=>[...(e.dataTransfer?.types||[])].includes('Files');
+
+function asa(el, tipo, id, titulo){
+  const g=document.createElement('button');
+  g.className='grip'; g.type='button'; g.innerHTML=GRIP;
+  g.title=titulo; g.setAttribute('aria-label',titulo);
+  g.addEventListener('mousedown',()=>{ el.draggable=true; });
+  g.addEventListener('touchstart',()=>{ el.draggable=true; },{passive:true});
+  ['mouseup','touchend'].forEach(n=>document.addEventListener(n,()=>{ el.draggable=false; }));
+  g.onclick=ev=>ev.stopPropagation();
+  el.addEventListener('dragstart',e=>{
+    if(!el.draggable) return;
+    if(filtrando()){ e.preventDefault(); el.draggable=false; aviso('Quita el filtro y la búsqueda para poder reordenar.'); return; }
+    arrastre={tipo,id};
+    e.dataTransfer.effectAllowed='move';
+    e.dataTransfer.setData('text/plain', id);
+    setTimeout(()=>el.classList.add('dragging'),0);
+  });
+  el.addEventListener('dragend',()=>{
+    el.classList.remove('dragging'); el.draggable=false; arrastre=null; limpiarZonas();
+  });
+  return g;
+}
+
+function moverTarea(idA, idObj, despues){
+  const a=estado.tareas;
+  const i=a.findIndex(t=>t.id===idA); if(i<0||idA===idObj) return;
+  const [t]=a.splice(i,1);
+  const j=a.findIndex(x=>x.id===idObj);
+  if(j<0){ a.splice(i,0,t); return; }
+  t.sec=a[j].sec;
+  a.splice(despues?j+1:j,0,t);
+  guardar(); render();
+}
+function moverTareaAlFinal(idA, secId){
+  const a=estado.tareas;
+  const i=a.findIndex(t=>t.id===idA); if(i<0) return;
+  const [t]=a.splice(i,1); t.sec=secId;
+  let ultimo=-1; a.forEach((x,k)=>{ if(x.sec===secId) ultimo=k; });
+  a.splice(ultimo+1,0,t);
+  guardar(); render();
+}
+function moverBloque(idA, idObj, despues){
+  const a=estado.secciones;
+  const i=a.findIndex(x=>x.id===idA); if(i<0||idA===idObj) return;
+  const [s]=a.splice(i,1);
+  const j=a.findIndex(x=>x.id===idObj);
+  if(j<0){ a.splice(i,0,s); return; }
+  a.splice(despues?j+1:j,0,s);
+  guardar(); render();
+}
+function moverBloquePaso(id, paso){
+  const a=estado.secciones, i=a.findIndex(x=>x.id===id), j=i+paso;
+  if(i<0||j<0||j>=a.length) return;
+  [a[i],a[j]]=[a[j],a[i]]; guardar(); render();
+}
+
+function visible(t){
+  if(filtros.resp==='sin'){ if(t.resp) return false; }
+  else if(filtros.resp!=='todas' && t.resp!==filtros.resp) return false;
+  if(filtros.ocultarHechas && t.estado==='Hecho') return false;
+  if(filtros.q){
+    const h=(t.tarea+' '+t.modulo+' '+t.expl+' '+t.com+' '+t.id).toLowerCase();
+    if(!h.includes(filtros.q)) return false;
+  }
+  return true;
+}
+
+function cancha(){
+  const act = t=>t.estado!=='Hecho';
+  const l=estado.tareas.filter(t=>t.resp==='Loro'&&act(t)).length;
+  const n=estado.tareas.filter(t=>t.resp==='Toni'&&act(t)).length;
+  const s=estado.tareas.filter(t=>!t.resp&&act(t)).length;
+  const h=estado.tareas.filter(t=>t.estado==='Hecho').length;
+  nLoro.textContent=l; nToni.textContent=n;
+  const tot=Math.max(l+n+s,1);
+  document.querySelector('.c-loro').style.flexGrow=l/tot;
+  document.querySelector('.c-none').style.flexGrow=s/tot;
+  document.querySelector('.c-toni').style.flexGrow=n/tot;
+  nota.textContent=(s?s+' sin asignar · ':'')+h+' hechas de '+estado.tareas.length;
+}
+
+function autosize(el){ el.style.height='auto'; el.style.height=(el.scrollHeight+2)+'px'; }
+
+function pintarFila(t){
+  const row=document.createElement('article');
+  row.className='row'+(abiertas.has(t.id)?' open':'');
+  row.dataset.resp=t.resp||''; row.dataset.estado=t.estado; row.dataset.id=t.id;
+  const roja=(t.com||'').includes('🔴');
+  const opciones=estado.secciones.map(s=>
+    `<option value="${s.id}" ${s.id===t.sec?'selected':''}>${esc(s.titulo.slice(0,58))}</option>`).join('');
+  row.innerHTML=`
+   <div class="r-head">
+     <span class="grip-slot"></span>
+     <button class="caret" aria-label="Abrir o cerrar">&#9654;</button>
+     <span class="r-id">${t.id}</span>
+     <div class="r-t${t.tarea?'':' vacio'}">${esc(t.tarea)||'Tarea sin título — ábrela y ponle nombre'}</div>
+     ${roja?'<span class="flag" title="Nota marcada para Loro">🔴</span>':''}
+     <div class="seg">
+       <button data-r="Loro" aria-pressed="${t.resp==='Loro'}"><i class="dot l"></i>Loro</button>
+       <button data-r="Toni" aria-pressed="${t.resp==='Toni'}"><i class="dot t"></i>Toni</button>
+     </div>
+     <select class="est" aria-label="Estado">${ESTADOS.map(e=>`<option ${e===t.estado?'selected':''}>${e}</option>`).join('')}</select>
+   </div>
+   <div class="r-body">
+     <div class="grp duo">
+       <div><label class="lbl">Título</label>
+         <input class="fld" data-k="tarea" value="${escA(t.tarea)}" placeholder="Qué hay que hacer, en una línea"></div>
+       <div><label class="lbl">Módulo</label>
+         <input class="fld" data-k="modulo" value="${escA(t.modulo)}" placeholder="Leads, Matching, Briefing…"></div>
+     </div>
+     <div class="grp"><label class="lbl">Explicación</label>
+       <textarea class="fld expl" data-k="expl" placeholder="El detalle completo: qué pasa, cuándo, y cómo debería quedar">${esc(t.expl)}</textarea></div>
+     <div class="grp duo2">
+       <div><label class="lbl">Último comentario</label>
+         <textarea class="fld" data-k="com" placeholder="Qué hiciste y qué esperas del otro">${esc(t.com)}</textarea></div>
+       <div><label class="lbl">Fecha límite</label>
+         <input class="fld" type="date" data-k="fecha" value="${t.fecha||''}"></div>
+     </div>
+     <div class="grp">
+       <label class="lbl">Archivos y capturas</label>
+       <div class="zona">
+         <span class="zona-txt">Arrastra archivos aquí, pega una captura con <kbd>Ctrl</kbd>+<kbd>V</kbd>, o</span>
+         <button class="mini2" type="button" data-pick>Elegir archivos</button>
+         <input type="file" multiple hidden data-file>
+       </div>
+       <input class="fld enl" data-k="img" value="${escA(t.img)}" placeholder="…o pega aquí un enlace de Drive, si prefieres no adjuntar">
+       ${/^https?:\/\//.test(t.img)?`<a class="link" href="${escA(t.img)}" target="_blank" rel="noopener">Abrir enlace</a>`:''}
+       <div class="thumbs"></div>
+     </div>
+     <div class="r-foot">
+       <div class="mover"><span class="lbl">Bloque</span>
+         <select data-mover>${opciones}</select></div>
+       <button class="del">Borrar tarea</button>
+     </div>
+   </div>`;
+
+  row.querySelector('.grip-slot').replaceWith(asa(row,'tarea',t.id,'Arrastra para mover la tarea'));
+  row.addEventListener('dragover',e=>{
+    if(arrastre?.tipo!=='tarea'||arrastre.id===t.id||llevaArchivos(e)) return;
+    e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect='move';
+    const r=row.getBoundingClientRect();
+    const abajo=e.clientY > r.top + r.height/2;
+    limpiarZonas(); row.classList.add(abajo?'dz-b':'dz-a');
+  });
+  row.addEventListener('drop',e=>{
+    if(arrastre?.tipo!=='tarea'||llevaArchivos(e)) return;
+    e.preventDefault(); e.stopPropagation();
+    const abajo=row.classList.contains('dz-b');
+    const id=arrastre.id; limpiarZonas();
+    moverTarea(id, t.id, abajo);
+  });
+
+  const toggle = e=>{
+    if(e.target.closest('.seg,select,.r-body,.grip')) return;
+    row.classList.toggle('open');
+    row.classList.contains('open') ? abiertas.add(t.id) : abiertas.delete(t.id);
+    if(row.classList.contains('open')) row.querySelectorAll('textarea').forEach(autosize);
+  };
+  row.querySelector('.r-head').onclick = toggle;
+
+  row.querySelectorAll('.seg button').forEach(b=>{
+    b.onclick=ev=>{
+      ev.stopPropagation();
+      t.resp=(t.resp===b.dataset.r)?'':b.dataset.r;
+      row.dataset.resp=t.resp;
+      row.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r===t.resp));
+      guardar(); cancha();
+      if(filtros.resp!=='todas') render();
+    };
+  });
+  row.querySelector('.est').onchange=e=>{
+    t.estado=e.target.value; row.dataset.estado=t.estado;
+    guardar(); cancha(); actualizarPills();
+    if(filtros.ocultarHechas) render();
+  };
+  row.querySelectorAll('[data-k]').forEach(el=>{
+    el.oninput=()=>{
+      t[el.dataset.k]=el.value;
+      if(el.tagName==='TEXTAREA') autosize(el);
+      if(el.dataset.k==='tarea'){
+        const ttl=row.querySelector('.r-t');
+        ttl.textContent=el.value||'Tarea sin título — ábrela y ponle nombre';
+        ttl.classList.toggle('vacio', !el.value);
+      }
+      guardar();
+    };
+  });
+  const thumbs=row.querySelector('.thumbs'), zona=row.querySelector('.zona');
+  const inFile=row.querySelector('[data-file]');
+  pintarThumbs(t, thumbs);
+  const repinta=()=>{ pintarThumbs(t, thumbs); };
+  row.querySelector('[data-pick]').onclick=ev=>{ ev.stopPropagation(); inFile.click(); };
+  inFile.onchange=ev=>{ if(ev.target.files.length) adjuntar(t, [...ev.target.files], repinta); ev.target.value=''; };
+  ['dragenter','dragover'].forEach(n=>zona.addEventListener(n,e=>{
+    if(!llevaArchivos(e)) return;
+    e.preventDefault(); e.stopPropagation(); zona.classList.add('drag'); }));
+  ['dragleave','drop'].forEach(n=>zona.addEventListener(n,e=>{
+    if(!llevaArchivos(e)) return;
+    e.preventDefault(); e.stopPropagation(); zona.classList.remove('drag'); }));
+  zona.addEventListener('drop',e=>{
+    const fs=[...(e.dataTransfer?.files||[])];
+    if(fs.length) adjuntar(t, fs, repinta);
+  });
+  row.querySelector('.r-body').addEventListener('paste',e=>{
+    const fs=[...(e.clipboardData?.files||[])].filter(f=>f.size);
+    if(!fs.length) return;
+    e.preventDefault(); adjuntar(t, fs, repinta);
+  });
+
+  row.querySelector('[data-mover]').onchange=e=>{ t.sec=e.target.value; guardar(); render(); };
+  row.querySelector('.del').onclick=()=>{
+    if(!confirm('Se borra «'+(t.tarea||t.id)+'». ¿Seguir?')) return;
+    estado.tareas=estado.tareas.filter(x=>x.id!==t.id);
+    abiertas.delete(t.id); guardar(); render();
+  };
+  if(abiertas.has(t.id)) setTimeout(()=>row.querySelectorAll('textarea').forEach(autosize),0);
+  return row;
+}
+
+function actualizarPills(){
+  estado.secciones.forEach(s=>{
+    const el=document.querySelector(`.sec[data-id="${s.id}"] .pill`);
+    if(!el) return;
+    const suyas=estado.tareas.filter(t=>t.sec===s.id);
+    el.textContent=suyas.filter(t=>t.estado!=='Hecho').length+' abiertas / '+suyas.length;
+  });
+}
+
+function pintarSeccion(s){
+  const suyas=estado.tareas.filter(t=>t.sec===s.id);
+  const vis=suyas.filter(visible);
+  const filtrando = filtros.resp!=='todas' || filtros.q || filtros.ocultarHechas;
+  if(filtrando && !vis.length) return null;
+
+  const sec=document.createElement('section');
+  sec.className='sec'+(cerradas.has(s.id)?'':' open');
+  sec.dataset.id=s.id;
+  sec.innerHTML=`
+    <div class="sec-h">
+      <span class="grip-slot"></span>
+      <button class="caret" aria-label="Plegar o desplegar bloque">&#9654;</button>
+      <input class="sec-name" value="${escA(s.titulo)}" aria-label="Nombre del bloque" placeholder="Nombre del bloque">
+      <div class="sec-tools">
+        <span class="menu-wrap">
+          <button class="tool" data-menu title="Más opciones" aria-haspopup="true" aria-expanded="false">&#8943;</button>
+          <div class="menu" hidden role="menu">
+            <button data-up role="menuitem">Subir bloque</button>
+            <button data-down role="menuitem">Bajar bloque</button>
+            <hr>
+            <button data-del class="peligro" role="menuitem">Borrar bloque</button>
+          </div>
+        </span>
+      </div>
+      <span class="pill">${suyas.filter(t=>t.estado!=='Hecho').length} abiertas / ${suyas.length}</span>
+    </div>
+    <div class="sec-body"></div>`;
+
+  sec.querySelector('.caret').onclick=()=>{
+    sec.classList.toggle('open');
+    sec.classList.contains('open')?cerradas.delete(s.id):cerradas.add(s.id);
+  };
+  const inp=sec.querySelector('.sec-name');
+  inp.oninput=()=>{ s.titulo=inp.value; guardar(); };
+  inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } };
+  const cab=sec.querySelector('.sec-h');
+  cab.querySelector('.grip-slot').replaceWith(asa(cab,'bloque',s.id,'Arrastra para mover el bloque'));
+  cab.addEventListener('dragover',e=>{
+    if(llevaArchivos(e)) return;
+    if(arrastre?.tipo==='bloque'&&arrastre.id!==s.id){
+      e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect='move';
+      const r=cab.getBoundingClientRect();
+      limpiarZonas(); sec.classList.add(e.clientY>r.top+r.height/2?'dz-b':'dz-a');
+    } else if(arrastre?.tipo==='tarea'){
+      e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect='move';
+      limpiarZonas(); cab.classList.add('dz-in');
+    }
+  });
+  cab.addEventListener('drop',e=>{
+    if(llevaArchivos(e)||!arrastre) return;
+    e.preventDefault(); e.stopPropagation();
+    const {tipo,id}=arrastre;
+    if(tipo==='bloque'){ const abajo=sec.classList.contains('dz-b'); limpiarZonas(); moverBloque(id,s.id,abajo); }
+    else { limpiarZonas(); cerradas.delete(s.id); moverTareaAlFinal(id,s.id); }
+  });
+
+  /* menú de tres puntos */
+  const wrap=sec.querySelector('.menu-wrap'), bm=wrap.querySelector('[data-menu]'), menu=wrap.querySelector('.menu');
+  const cerrarMenus=()=>document.querySelectorAll('.menu').forEach(m=>{
+    m.hidden=true; m.closest('.sec')?.classList.remove('menu-open');
+    m.parentElement.querySelector('[data-menu]').setAttribute('aria-expanded','false');
+  });
+  bm.onclick=ev=>{
+    ev.stopPropagation();
+    const abierto=!menu.hidden; cerrarMenus();
+    if(!abierto){
+      menu.hidden=false; sec.classList.add('menu-open'); bm.setAttribute('aria-expanded','true');
+      const i=estado.secciones.findIndex(x=>x.id===s.id);
+      menu.querySelector('[data-up]').disabled = i<=0;
+      menu.querySelector('[data-down]').disabled = i>=estado.secciones.length-1;
+    }
+  };
+  menu.onclick=ev=>ev.stopPropagation();
+  menu.querySelector('[data-up]').onclick=()=>{ cerrarMenus(); moverBloquePaso(s.id,-1); };
+  menu.querySelector('[data-down]').onclick=()=>{ cerrarMenus(); moverBloquePaso(s.id,1); };
+  sec.querySelector('[data-del]').onclick=()=>{
+    cerrarMenus();
+    if(suyas.length){ aviso('Ese bloque tiene '+suyas.length+' tareas. Muévelas o bórralas primero.'); return; }
+    if(!confirm('Se borra el bloque «'+s.titulo+'». ¿Seguir?')) return;
+    estado.secciones=estado.secciones.filter(x=>x.id!==s.id); guardar(); render();
+  };
+
+  const body=sec.querySelector('.sec-body');
+  body.addEventListener('dragover',e=>{
+    if(arrastre?.tipo!=='tarea'||llevaArchivos(e)) return;
+    e.preventDefault(); e.dataTransfer.dropEffect='move';
+    if(!body.querySelector('.dz-a,.dz-b')){ limpiarZonas(); body.classList.add('dz-in'); }
+  });
+  body.addEventListener('drop',e=>{
+    if(arrastre?.tipo!=='tarea'||llevaArchivos(e)) return;
+    e.preventDefault(); const id=arrastre.id; limpiarZonas(); moverTareaAlFinal(id,s.id);
+  });
+  vis.forEach(t=>body.appendChild(pintarFila(t)));
+  if(!vis.length){
+    const v=document.createElement('div');
+    v.className='empty'; v.style.padding='18px'; v.textContent='Bloque vacío.';
+    body.appendChild(v);
+  }
+  const add=document.createElement('button');
+  add.className='addrow'; add.textContent='+  Nueva tarea en este bloque';
+  add.onclick=()=>{
+    const id=nuevoId('T', estado.tareas.map(x=>x.id));
+    estado.tareas.push({id,sec:s.id,modulo:'',tarea:'',expl:'',resp:'',estado:'Pendiente',img:'',com:'',fecha:'',files:[]});
+    abiertas.add(id); cerradas.delete(s.id); guardar(); render();
+    const el=document.querySelector(`.row[data-id="${id}"] [data-k=tarea]`);
+    if(el){ el.scrollIntoView({block:'center',behavior:'smooth'}); el.focus(); }
+  };
+  body.appendChild(add);
+  return sec;
+}
+
+function render(){
+  lista.innerHTML='';
+  let n=0;
+  estado.secciones.forEach(s=>{
+    const el=pintarSeccion(s);
+    if(el){ lista.appendChild(el); n+=estado.tareas.filter(t=>t.sec===s.id&&visible(t)).length; }
+  });
+  if(!estado.secciones.length){
+    lista.innerHTML='<div class="empty">No hay bloques. Crea el primero con el botón de abajo.</div>';
+  } else if(!n && (filtros.resp!=='todas'||filtros.q||filtros.ocultarHechas)){
+    lista.innerHTML='<div class="empty">Ninguna tarea encaja con este filtro. Prueba «Todas» o vacía la búsqueda.</div>';
+  }
+  visibles.textContent=n+' visibles';
+  cancha(); pintarPeso();
+}
+
+/* ---- barra ---- */
+document.querySelectorAll('.chip').forEach(c=>{
+  c.onclick=()=>{
+    filtros.resp=c.dataset.f;
+    document.querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===c));
+    render();
+  };
+});
+q.oninput=e=>{ filtros.q=e.target.value.trim().toLowerCase(); render(); };
+oh.onchange=e=>{ filtros.ocultarHechas=e.target.checked; render(); };
+bPlegar.onclick=()=>{
+  const algoAbierto = abiertas.size>0 || cerradas.size<estado.secciones.length;
+  if(algoAbierto){
+    abiertas.clear(); estado.secciones.forEach(s=>cerradas.add(s.id));
+    bPlegar.textContent='Desplegar todo';
+  }else{
+    cerradas.clear(); bPlegar.textContent='Plegar todo';
+  }
+  render();
+};
+bNuevoBloque.onclick=()=>{
+  const id=nuevoId('s', estado.secciones.map(x=>x.id));
+  estado.secciones.push({id,titulo:'',tipo:'gris'});
+  cerradas.delete(id); guardar(); render();
+  const el=document.querySelector(`.sec[data-id="${id}"] .sec-name`);
+  if(el){ el.scrollIntoView({block:'center',behavior:'smooth'}); el.focus(); }
+};
+
+/* ---- utilidades ---- */
+function aviso(txt){
+  toast.textContent=txt; toast.classList.add('on');
+  clearTimeout(toast._x); toast._x=setTimeout(()=>toast.classList.remove('on'),2800);
+}
+function bajar(nombre,contenido,tipo){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([contenido],{type:tipo}));
+  a.download=nombre; a.click(); URL.revokeObjectURL(a.href);
+}
+const hoy=()=>new Date().toISOString().slice(0,10);
+
+bHtml.onclick=()=>{
+  const tag=document.getElementById('datos'), antes=tag.textContent;
+  tag.textContent=JSON.stringify(estado,null,1).replace(/<\//g,'<\\/');
+  const copia=lista.innerHTML; lista.innerHTML='';
+  const doc='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+  lista.innerHTML=copia; tag.textContent=antes;
+  bajar('plan-loro-toni-'+hoy()+'.html',doc,'text/html;charset=utf-8');
+  aviso('Archivo guardado. Ese es el que le pasas a tu hermano.');
+};
+bCsv.onclick=()=>{
+  const sec={}; estado.secciones.forEach(s=>sec[s.id]=s.titulo);
+  const e=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const cab=['ID','Bloque','Modulo','Tarea','Explicacion','Responsable','Estado','Enlace','Archivos adjuntos','Ultimo comentario','Fecha limite'];
+  const filas=estado.tareas.map(t=>[t.id,sec[t.sec]||'',t.modulo,t.tarea,t.expl,t.resp,t.estado,t.img,
+    (t.files||[]).map(f=>f.n).join(' | '),t.com,t.fecha].map(e).join(';'));
+  bajar('plan-loro-toni-'+hoy()+'.csv','\ufeff'+[cab.map(e).join(';'),...filas].join('\r\n'),'text/csv;charset=utf-8');
+  aviso('CSV guardado. Se abre en Excel con doble clic.');
+};
+bReset.onclick=()=>{
+  if(!confirm('Vuelve al contenido original y descarta todo lo que hayas cambiado o creado en este navegador. ¿Seguir?')) return;
+  try{ localStorage.removeItem(KEY); }catch(e){}
+  estado=clon(RAW); estado.tareas.forEach(t=>{ if(!Array.isArray(t.files)) t.files=[]; });
+  abiertas.clear(); cerradas.clear(); guardar(); render();
+  aviso('Cambios descartados.');
+};
+bAbrir.onclick=()=>fIn.click();
+fIn.onchange=ev=>{
+  const f=ev.target.files[0]; if(!f) return;
+  const fr=new FileReader();
+  fr.onload=()=>{
+    try{
+      const m=fr.result.match(/<script id="datos"[^>]*>([\s\S]*?)<\/script>/);
+      const j=JSON.parse((m?m[1]:fr.result).replace(/<\\\//g,'</'));
+      if(!j.secciones||!j.tareas) throw 0;
+      estado=j; estado.tareas.forEach(t=>{ if(!Array.isArray(t.files)) t.files=[]; });
+      abiertas.clear(); cerradas.clear(); guardar(); render();
+      aviso('Cambios de '+f.name+' cargados.');
+    }catch(e){ aviso('Ese archivo no tiene datos que pueda leer.'); }
+  };
+  fr.readAsText(f); ev.target.value='';
+};
+document.addEventListener('click',()=>document.querySelectorAll('.menu:not([hidden])').forEach(m=>{
+  m.hidden=true; m.closest('.sec')?.classList.remove('menu-open');
+  m.parentElement.querySelector('[data-menu]').setAttribute('aria-expanded','false');
+}));
+document.addEventListener('dragend',()=>{ arrastre=null; limpiarZonas(); });
+document.addEventListener('keydown',e=>{
+  const t=document.activeElement.tagName;
+  if(e.key==='Escape'){ document.querySelectorAll('.menu:not([hidden])').forEach(m=>{
+    m.hidden=true; m.closest('.sec')?.classList.remove('menu-open');
+    m.parentElement.querySelector('[data-menu]').setAttribute('aria-expanded','false'); }); }
+  if(e.key==='/' && t!=='INPUT' && t!=='TEXTAREA'){ e.preventDefault(); q.focus(); }
+  if(e.key==='Escape' && t!=='INPUT' && t!=='TEXTAREA' && abiertas.size){ abiertas.clear(); render(); }
+});
+
+render();
+</script>
+</body>
+</html>
