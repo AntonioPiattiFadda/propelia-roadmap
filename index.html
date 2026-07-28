@@ -250,6 +250,16 @@ button.act.pri:hover{background:#000}
   .sec-h,.sec-body,.r-body{position:static!important;display:block!important}
   body{background:#fff}.row.open{box-shadow:none}
 }
+.login-overlay{position:fixed;inset:0;z-index:200;background:rgba(21,28,38,.55);
+  display:flex;align-items:center;justify-content:center;padding:18px}
+.login-overlay[hidden]{display:none}
+.login-modal{background:var(--surface);border:1px solid var(--edge);border-radius:10px;
+  padding:24px;width:100%;max-width:320px;box-shadow:0 20px 50px rgba(21,28,38,.3)}
+.login-modal h2{margin:0 0 16px;font-size:16px}
+.login-modal .lbl{margin:12px 0 5px}
+.login-error{margin-top:10px;color:#9E3131;font-size:12.5px}
+.login-error[hidden]{display:none}
+.login-modal button{margin-top:16px;width:100%}
 </style>
 </head>
 <body>
@@ -259,6 +269,7 @@ button.act.pri:hover{background:#000}
     <div class="htop">
       <h1>Plan de trabajo CRM <span>· Loro &amp; Toni</span></h1>
       <a class="trello" href="https://trello.com/b/vlKCxRTS/propelia" target="_blank" rel="noopener">Tablero de Trello</a>
+      <button class="trello" id="bCerrarSesion" style="border:0;background:transparent;cursor:pointer;font:inherit">Cerrar sesión</button>
     </div>
     <div class="cancha">
       <div class="cancha-lbl">
@@ -289,714 +300,80 @@ button.act.pri:hover{background:#000}
   <button class="newsec" id="bNuevoBloque">+  Nuevo bloque</button>
 
   <div class="acts">
-    <div class="aviso" id="avisoAlmacen" hidden>No caben más cambios en la memoria de este navegador,
-      normalmente por el peso de los archivos adjuntos. Pulsa <strong>Guardar archivo</strong> ahora
-      para no perder nada, y quita algún adjunto o pásalo a Drive.</div>
-    <h2>Compartir los cambios</h2>
-    <p>Lo que tocas aquí se guarda en este navegador, no dentro del archivo. Para que tu hermano vea
-       tus cambios, pulsa <strong>Guardar archivo</strong> y mándale el HTML que se descarga: al abrirlo
-       tendrá tus tareas, bloques y comentarios ya puestos. Cuando él te devuelva el suyo, usa
-       <strong>Cargar cambios de un archivo</strong>.</p>
+    <h2>Respaldo</h2>
+    <p>Los cambios ya se sincronizan solos entre vos y Toni. Estos botones son solo para guardar
+       una copia de respaldo puntual, no hace falta usarlos para compartir nada.</p>
     <div class="btns">
       <button class="act pri" id="bHtml">Guardar archivo</button>
-      <button class="act" id="bAbrir">Cargar cambios de un archivo</button>
       <button class="act" id="bCsv">Exportar a CSV</button>
-      <button class="act" id="bReset">Descartar mis cambios</button>
-      <input type="file" id="fIn" accept=".html,.htm,.json" hidden>
-      <span class="peso" id="peso" style="align-self:center"></span>
     </div>
   </div>
 </main>
 
+<div class="login-overlay" id="loginOverlay" hidden>
+  <form class="login-modal" id="loginForm">
+    <h2>Iniciar sesión</h2>
+    <label class="lbl">Email</label>
+    <input class="fld" type="email" id="loginEmail" required autocomplete="username">
+    <label class="lbl">Contraseña</label>
+    <input class="fld" type="password" id="loginPassword" required autocomplete="current-password">
+    <div class="login-error" id="loginError" hidden></div>
+    <button class="act pri" type="submit">Entrar</button>
+  </form>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script id="datos" type="application/json">{
- "secciones": [
-  {
-   "id": "s1",
-   "titulo": "MODIFIICACIONES URGENTES - IMPORTANTES (Errores o fallas funcionales o cosas mega indispensables)"
-  },
-  {
-   "id": "s2",
-   "titulo": "MODIFICACIONES URGENTES - NO IMPORTANTES (Necesarias para implementar)"
-  },
-  {
-   "id": "s3",
-   "titulo": "PROXIMAS MODIFICACIONES (No necesarias para implementar)"
-  },
-  {
-   "id": "s4",
-   "titulo": "PROXIMOS DESARROLLOS"
-  }
- ],
- "tareas": [
-  {
-   "id": "T01",
-   "sec": "s1",
-   "modulo": "Idealista",
-   "tarea": "Integración Idealista pedidos",
-   "expl": "Integracion idealista pedidos.\n· Probar sistema con mail nuestro y testear, y testeado implementar sacando inmovilla.\n· Hacer excel con historico todos los pedidos para poder meterlos y planificar la metida en el sistema.",
-   "resp": "Toni",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "ya implemente los usuarios y los mails, vamos a ir ajustando el algoritmo",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T02",
-   "sec": "s1",
-   "modulo": "Agenda / Visitas",
-   "tarea": "Sistema para agendar visitas con Google",
-   "expl": "la dinamica seria. El lead entra o puede ser un lead qeu ya entro yle comparti un piso y quiere visitarlo. De cualquier forma, el usuario tendra que agendar la visita. -------------- aca el usuario iria a acciones del piso dentro de ese lead y apretaria agendar visita--- Se le abriria un campo donde pueda apuntar (",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T03",
-   "sec": "s1",
-   "modulo": "",
-   "tarea": "leads nuevos",
-   "expl": "Los leads de ayer nuevos estan apareciendo aunque hayan sido gesrionados ayer como nuevos sin gestionar en rojo — incluso se da el caso en que me aparece cartel rojo de lead nuevo sin gestionar cuando esta  gestionado en la columna de gestion.  - Ademas, en el comentario que viene desde idealista, estaria bueno que se aclare en la lista de comentarios cuando se introduce algo como (( mensaje via idealista\" hola, me gustaria consutltar por el pios bla bla \"))) para que sea mas clari  ---- Tambien se dio el caso de que aparecian los lead que llegaron de idealista directamente como gestionados cuando entraban. seguramente por el comentario que se asento cuando entro via idealista. ",
-   "resp": "Toni",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T04",
-   "sec": "s1",
-   "modulo": "",
-   "tarea": "leads nuevos que no reconoce piso",
-   "expl": "cuando sistema entra lead cuyo piso por el que solicito no reconoce crea un piso nuevo entonces en propiedades se crearon algunos que no corresponden y ademas el la lista de pisos dentro del lead no aparece marcheado con el que deberia si no con uno inventado por el sistema. Ademas deberiamos ver por que sistema no entiende que arago es arago en el caso del lead que te adjunto foto ",
-   "resp": "Toni",
-   "estado": "Pendiente",
-   "img": "img 2",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T05",
-   "sec": "s2",
-   "modulo": "Vistas y filtros",
-   "tarea": "Vistas de trabajo por prioridad / match / estado / gestión / piso",
-   "expl": "Ver temas y formas de trabajo POR PRIORIDAD; POR MATCH; POR ESTADO; POR GESTIÓN; POR PISO. Cada vista me tiene que decir los que tienen pendiente gestión o tarea pendiente, en rojo.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "Ya lo hice revisadlo",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T06",
-   "sec": "s2",
-   "modulo": "Matching",
-   "tarea": "Matching implícito (match provisorio automático)",
-   "expl": "Seria importante empezar a llamar a brifing \"demanda\" para adaptarnos al idioma local. jeje. el brifing implicito estaba pensando que en lugar de rojo, para que no moleste al verlo podria aparecer tal cual aparece ahora. gris claro. como pendiente de rellenar. tanto en la parte de los campos del brifing como en la parte de los campos del brifing cuando el lead esta plegado.. y que el sistema ya trabaje con esos valores para matchear. Luego si el cliente pone un valor se escribe en negrito normal xd lol ",
-   "resp": "Toni",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T07",
-   "sec": "s2",
-   "modulo": "Capasitacion",
-   "tarea": "Loom",
-   "expl": "Hacer loom explicativos para los chicos mostrando como funciona el sistema parte por parte y despues reunion para dudas y anotar las dudas para agregarlas a planing de capasitaciones ",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T08",
-   "sec": "s2",
-   "modulo": "",
-   "tarea": "UxUi filtros",
-   "expl": "mejorar el planteo de la ux de carga de filtros. presentar propuesta a toni que sea intuitiva ",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T09",
-   "sec": "s2",
-   "modulo": "",
-   "tarea": "Panel de leads",
-   "expl": "seria interesante que arriba del recuadro donde apareccen los leads el sistema te diga la cantidad de resultados encontrados siempre. ADJUNTO IMAGNE DE DONDE ",
-   "resp": "Toni",
-   "estado": "Pendiente",
-   "img": "img 1",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T10",
-   "sec": "s2",
-   "modulo": "",
-   "tarea": "filtros vistas",
-   "expl": "resulta un poco confuso cuando vemos las oportunidades entender que un numero corresponde a la cantidad que hay de oportunidades, o rojos o etc y otro numero a los pendientes. dejar solo el de pendientes mejor no? y que se vea rojo para que se entienda que tiene  -- aca tambien deberiamos ver ",
-   "resp": "Toni",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T11",
-   "sec": "s2",
-   "modulo": "",
-   "tarea": "columna derecha comentarios + tareas + perfil",
-   "expl": "proponer nuevo diseño de las tres cosas integradas para que sea cvisualmente mas intuitivo porque ahora mismo se hace muy confuso entender esta parte ",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T12",
-   "sec": "s2",
-   "modulo": "",
-   "tarea": "color lead en izquierda  de la fila",
-   "expl": "seria bueno que borremos el color del lead a la izquierda de la fila. esto fue mala mia pero entorpece la visual y no aporta valor realmente ",
-   "resp": "Toni",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T13",
-   "sec": "s2",
-   "modulo": "",
-   "tarea": "Puntito azul del lead en el que se esta trabajando",
-   "expl": "el puntito azul que estamos usando ahora esta bueno pero realmente es muy sutil y incuso a mi sabiendo lo que representa y habiendo recibido esas info explicita me cuesta. podriamos buscar otra forma de resaltarlo? resaltando el cuadro de la fila o o algo asi ",
-   "resp": "Toni",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T14",
-   "sec": "s3",
-   "modulo": "",
-   "tarea": "mensajes predeterminadso",
-   "expl": "En el mensaje predeterminado estaruia bueno que el nombre lo incruste la IA. Entonces redactas el mensaje que queres. Tenes una lista en plan check list de los datos del sistema que queres que la ia te incruste en el mensaje y si los tildas la ia en el mensaje que vos redactastre te incrusta nombre, apellido, ibi, comunidad, link del anuncio etc etc etc entonces el usuario no tiene que lidiar con corchetes ni cosas raras ",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T15",
-   "sec": "s3",
-   "modulo": "Brifing",
-   "tarea": "Brifing",
-   "expl": "hacer sistemas para brifear -brifing con link, brifing con txt y respuyesta en texto para meter en campo con IA directamente y que se rellene, brifing con bot ",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T16",
-   "sec": "s3",
-   "modulo": "Integración pedidos",
-   "tarea": "Cranear cómo va a funcionar la integración de pedidos",
-   "expl": "Cranear como va a funcionar la integracion de pedidos... (del historial de la base de datos) para gestionarlos y publicitarles que pisos a nombre de que usuario, y que usuario se les asgnrara cada piso.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T17",
-   "sec": "s3",
-   "modulo": "Personal Shopper",
-   "tarea": "Registro de clientes que vengan de personal shoppers",
-   "expl": "Ver como se registrarian clientes que vengan de parte de personal shoppers.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T18",
-   "sec": "s3",
-   "modulo": "Mensajería / WhatsApp",
-   "tarea": "Protocolizar mensaje para cruzar varios pisos",
-   "expl": "Protocolizar mensaje para cruzar otros pisos ademas del que coordino visita por su consulta. Todos en un mensaje unido, varios pisos que puedan encajarle.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T19",
-   "sec": "s3",
-   "modulo": "UX / Carga de pisos",
-   "tarea": "Mejorar UX de la carga de pisos",
-   "expl": "Mejorar Ux de la carga de pisos. Primero loro tiene que ver tema diseño y funcionalidad para optimizarlo. Que haya boton de carga via crm y boton de carga via idealista.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T20",
-   "sec": "s3",
-   "modulo": "Leads",
-   "tarea": "Quitar el desplegable de estado del piso al cargar el lead",
-   "expl": "Sacar, cuando se carga el lead, el desplegable para elegir el estado del piso.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T21",
-   "sec": "s3",
-   "modulo": "UX / Columna gestión",
-   "tarea": "Iconos de gestión y agenda sin columna extra",
-   "expl": "Brodix: aca, para no hacer una columna con tareas que agrega mucho espacio con poca informacion, yo lo pensaba mas como el icono ese al lado de el posponer (el relojuito de gestion) pegado, sin una columna extra. Al final es parte de lo mismo.\nEn la columna de gestion vos ves si esta pendiente o gestionado. Ves si queres posponer la gestion (eso se podria hacer que la palabra «posponer» aparezca solo cuando pones el cursor arriba, para que solo se vea el reloj) y la agendita al lado solo si hay una tarea agendada. Si no hay tarea agendada, nada.\nSi la tarea esta vencida, la agendita tiene que aparecer roja para marcar que esta vencida.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T22",
-   "sec": "s3",
-   "modulo": "UX / Leads",
-   "tarea": "Línea de color del lead más gruesa",
-   "expl": "¿Podemos hacer la linea de color del lead a la izquierda mas gruesa para que sea mas notorio el color del lead?",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T23",
-   "sec": "s3",
-   "modulo": "Perfil cliente",
-   "tarea": "Perfil del cliente dentro del desplegable",
-   "expl": "Ver dentro del desplegable que el perfil del cliente aparezca: nombre, telefono usuario (el que esta cargado), telefono alternativo si hay otro, y una parte de notas para poder poner cualquier cosa que se quiera poner de notas sobre el cliente. «Es una familia», «tiene que vender dos pisos en francia» o lo que sea.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "🔴 LORO: ver de mandar exactamente como tiene que ser.",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T24",
-   "sec": "s3",
-   "modulo": "Gestión / Comentarios",
-   "tarea": "¿Exigir comentario para marcar como gestionado?",
-   "expl": "Pensar si no es bueno exigir comentario para marcar como gestionado, y que cambios de estado se añadan como comentarios.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T25",
-   "sec": "s3",
-   "modulo": "Feedback visitas",
-   "tarea": "Sistema de feedback de visitas",
-   "expl": "Sistema de feetback visitas. Si esta en visitado hay que sacarlo cuanto antes:\n1 Solicitar a usuario feetbacj post visita por ws.\n2 Solicitar a cliente feetback por ws.\n3 Insisitir a usuario.\n4 Avisar a usuario que si cliente no responde mas de 3 veces, descarta piso.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T26",
-   "sec": "s3",
-   "modulo": "Mensajería / WhatsApp",
-   "tarea": "Botón de resumen de pisos en un solo mensaje",
-   "expl": "Hacer boton para enviar resumen de pisos que pueden encajarle al cliente en un solo mensaje.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T27",
-   "sec": "s3",
-   "modulo": "Briefing / IA",
-   "tarea": "Campo de IA al principio del briefing (renombrar a DEMANDA)",
-   "expl": "Como idea para pensar: ¿si campo de IA aparece al principio del brifing y podemos agregar todo con IA? Zona, comentarios extras, presupeusto, mensajes del cliente copiados y pegados, y que ia interprete y llene brifing en general y listo. Seria mucho mas intuitivo y practico. Y que lo que agregas en ese campo se introduzca donde corresponde y se borre.\n—- Tambien cambiar mensaje de «brifing» a DEMANDA.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T28",
-   "sec": "s3",
-   "modulo": "Perfil cliente",
-   "tarea": "Perfil ampliado en el desplegable superior izquierdo",
-   "expl": "Seria bueno que dentro del desplegable, arriba a la izquierda, salga perfil del cliente con notas del perfil, brifing hipotecario y datos de contacto mas amplios que solo el telefomno. Ademas, que se pueda configurar el contacto principal para que se ponga el que tiene whatsapp ahi.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T29",
-   "sec": "s3",
-   "modulo": "Funnel",
-   "tarea": "Pisos «en limbo»: sacarlos del funnel a pendiente match",
-   "expl": "Ojo con los pisos que quedan en un limbo de que solicitaron por un piso y visitaron y nunca avanzan en el funnel. ¿Como los sacamos del funnel para que caigan a pendiente match automaticamente y se haga el trabajo de matching? Y a los clientes que tienen match en curso, ¿se les trabajara para matchearle pisos tambien?",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T30",
-   "sec": "s3",
-   "modulo": "Estados",
-   "tarea": "Estados múltiples por piso y detalle al pasar el cursor",
-   "expl": "Cuando aparece el estado visitado en seguimiento, el proximo piso que agendo, el estado no es agendado. ¿Seria prodente hacer aparecer varios estados con el piso al cual se asocia ese estado? ¿O mostrar el mas avanzado como principal y los estados anteriroes como estados anexos?\n—- Para empezar seria bueno que, al poner cursor arriba de estados, se pueda ver detalle de estados del cliente con cada piso. Ademas quizas que en la parte de estados te muestre todos, y con cada piso cual tiene.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T31",
-   "sec": "s3",
-   "modulo": "UX / Leads",
-   "tarea": "Reemplazar el puntito azul por un recuadro remarcado",
-   "expl": "El puntito ese azul seria bueno remplazarlo por un recuadro remarcado en el lead para que se vea claro.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T32",
-   "sec": "s3",
-   "modulo": "UX / Estados",
-   "tarea": "Estados de los pisos más claros en el desplegable",
-   "expl": "Tenemos que mejorar la UX para que los estados de los pisos en el desplegavle se vean claros.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T33",
-   "sec": "s3",
-   "modulo": "Filtros",
-   "tarea": "No cerrar la ficha al cambiar de estado dentro de un filtro",
-   "expl": "El tema de cuando cambio de estado un piso y se me cierra porque estoy en un filtro que no contiene a ese piso: esta dificil y no esta bueno, porque quizas quiero ponerle un comentario o algo y no me deja.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T34",
-   "sec": "s3",
-   "modulo": "Funnel",
-   "tarea": "Distinguir visualmente pisos con match y sin match",
-   "expl": "Visualmente, en el funnel, distinguir los pisos que tienen matrch de los que no tienen match. Para que sea mas pedagogico.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T35",
-   "sec": "s3",
-   "modulo": "UX / Carga de pisos",
-   "tarea": "Botón carga piso desde CRM y desde Idealista",
-   "expl": "Poner boton carga piso desde crm y boton carga piso desde idealista.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T36",
-   "sec": "s3",
-   "modulo": "",
-   "tarea": "Cruce pisos lead nuevo",
-   "expl": "Programar agenda predeterminada de tarea de enviar a cliente pisos que puedan encajarle justo despues de agendar la visita ",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T37",
-   "sec": "s3",
-   "modulo": "",
-   "tarea": "Funnel ventas",
-   "expl": "deslpazar un poquito en la reprecentacion del funnel a la derecha lo que esta matcheado con un piso para que la gente netienda conceptualmente vierndo que todo eso es matcheado ",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T38",
-   "sec": "s4",
-   "modulo": "Estadísticas / Informes",
-   "tarea": "Estadísticas de pisos, agentes y descartes",
-   "expl": "Estadisticas sobre los pisos y los agentes. Estadisticas motivos de descarte pisos, estadisticas portales, informes de comercializacion de pisos, informes para cita gestion, informes para rebajas, estadisticas de trabajo del empleado, estadisticas de descarte de lead… estadisticas muchas.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T39",
-   "sec": "s4",
-   "modulo": "Fotos / IA",
-   "tarea": "Procesado masivo de fotos con IA y ordenación",
-   "expl": "Sistema para pasar fotos masivamente por IA, con prompts puestos para cada foto y uno puesto en general para todas las fotos juntas.\n—- Tambien sistema para ordenar las fotos de forma ultra archi facil.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T40",
-   "sec": "s4",
-   "modulo": "Catastro / IA",
-   "tarea": "Herramienta de uso de Catastro con IA",
-   "expl": "Herramienta de uso de catastro con IA.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T41",
-   "sec": "s4",
-   "modulo": "Portal / Red",
-   "tarea": "PORTAL INMOBILIARIO + RED INMOBILIARIA + agente IA",
-   "expl": "PORTAL INMOBILIARIO + RED INMOBILIARIA + agente con IA (maneja sms, whatsapp y mail).\nDeberia haber dos opciones: que toda la info la gestione internamente el crm, o participar de propelialista, que es la red de venta con portal propio con mas potencial de españa. Basicamente es un super bot que es personal shopper con todos los pedidos de la red, los que entran por el portal y los pisos de toda la red, y permanentemente esta optimizandose para convertir lo mas rapido y mejor posible.\nEn el portal, que se manejen videos en plan tik-tok para fomentar consumo y revolucionar la forma de mostrar los pisos, resumiendo imagenes, descripcion y etc en un video corto mas consumible.\nIMPORTANTE que esté la base de la lógica muy bien planteada: cada lead se tiene que caer por tiempo de la escalera de estados, a menos que el usuario renueve su vigencia en ese estado a mano. Si no, se cae y va automáticamente a pendiente match. Los pendiente match se trabajan masivamente con bot para encajarles pisos. Los clientes que están en escalera, aún ver de cranear bien cómo trabajarlos con IA, o si permitir detener la promoción de pisos a estos si avanzan o si muestran interés.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T42",
-   "sec": "s4",
-   "modulo": "Portales",
-   "tarea": "Publicar/despublicar automático en Idealista y Fotocasa",
-   "expl": "Sistema que publica y despublica en idealsita y fotocasa para optimizar pedidos. Tambien que optimiza las publis y da consejos.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T43",
-   "sec": "s4",
-   "modulo": "Web cliente",
-   "tarea": "Web para la inmobiliaria usuaria con portal integrado",
-   "expl": "Desarrollo de pagina web para la inmobiliaria usuaria con IA, con portal inmobiliario integrado. O pagina de portal inmobiliario para que integren en su pagina web directamente.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T44",
-   "sec": "s4",
-   "modulo": "Automatizaciones",
-   "tarea": "Secuencia completa de automatizaciones del funnel",
-   "expl": "Automatizacion:\n1 Cuando entra el lead, que agende la visita.\n2 Cuando se agenda visita, mensaje de confirmacion.\n3 Dia de la visita, mensaje de recordatorio y posible documento de reconocimiento de visita.\n4 Feedback visita.\n5 Sistema de briefing transversal a todas las acciones.\n6 Sistema de promocion de pisos automaticamente a leads.\n7 Sistema de campañas para nuevos pisos, pisos rebajados, pisos con informacion/fotos nuevas, etc.\n—- Agente: seria bueno que este pensado para automaticamente impulsar a todos los leads a avanzar en la etapa del funnel. Entonces que nada se pierda y que avance si el comercial no lo avanza.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T45",
-   "sec": "s4",
-   "modulo": "Briefing",
-   "tarea": "Botón para copiar/enviar briefing",
-   "expl": "Boton en la parte de briefing para copiar link de briefing con formulario, copiar txt de briefing, o mandar a bot a brifiar.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T46",
-   "sec": "s4",
-   "modulo": "Historial",
-   "tarea": "Acciones que disparen comentarios automáticos al historial",
-   "expl": "Acciones: estaria bueno que disparen comentarios al historial de comentarios. «Se agendo visita a tal piso», «se compartio tal piso», etc. Para que vaya quedando registro de todo. Incluso si se brifio, quedaria registro.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T47",
-   "sec": "s4",
-   "modulo": "Informes / IA",
-   "tarea": "Generador de informes con IA y branding",
-   "expl": "Informes con IA. Interface donde cada uno de los informes tiene su lugar: informe de valoracion, informe de tal, informe de cual. Y podes trabajar con Claude pidiendole modificaciones y diseñando informes con todo el material visual de la empresa. Documentos mega archi profesionales, como los que entrego yo. Con la posibilidad de usar el anterior para hacer el nuevo, dejar fijado un modelo, y modificar hoja por hoja con prompts distinguidos.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  },
-  {
-   "id": "T48",
-   "sec": "s4",
-   "modulo": "Soporte",
-   "tarea": "Bot de soporte dentro del CRM o por WhatsApp",
-   "expl": "Bot de soporte dentro del crm o por ws que te ofrezca, desde el crm, ir a whatsapp a hablar para: reclamos de cosas que no funcionan, sugerencias de mejoras, cosas que podrian funcionar mejor, ideas, etc.",
-   "resp": "Loro",
-   "estado": "Pendiente",
-   "img": "",
-   "com": "",
-   "fecha": "",
-   "files": []
-  }
- ]
-}</script>
+<script id="datos" type="application/json">{"secciones":[],"tareas":[]}</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="order-math.js"></script>
+<script src="supabase-sync.js"></script>
 <script>
-const RAW = JSON.parse(document.getElementById('datos').textContent);
-const KEY = 'plan-loro-toni-v2';
 const ESTADOS = ['Pendiente','En curso','Bloqueado','Hecho'];
-const clon = o => JSON.parse(JSON.stringify(o));
 
-let estado = (()=>{
-  try{ const g=localStorage.getItem(KEY); if(g){const j=JSON.parse(g); if(j.secciones&&j.tareas) return j;} }catch(e){}
-  return clon(RAW);
-})();
+let estado = { secciones: [], tareas: [] };
 
-estado.tareas.forEach(t=>{ if(!Array.isArray(t.files)) t.files=[]; });
+const pendientesGuardado = new Map();
+function guardarDebounced(entidad, guardarFn) {
+  clearTimeout(pendientesGuardado.get(entidad.id));
+  pendientesGuardado.set(entidad.id, setTimeout(() => guardarFn(entidad), 500));
+}
 
-let sinAlmacen=false;
-function guardar(){
-  try{
-    localStorage.setItem(KEY, JSON.stringify(estado));
-    if(sinAlmacen){ sinAlmacen=false; avisoAlmacen.hidden=true; }
-  }catch(e){
-    sinAlmacen=true; avisoAlmacen.hidden=false;
+async function persistirTarea(t, intentos = 2) {
+  try { await RoadmapSync.guardarTarea(t); }
+  catch (e) {
+    if (intentos > 0) setTimeout(() => persistirTarea(t, intentos - 1), 1500);
+    else aviso('No se pudo guardar «' + (t.tarea || t.id) + '». Revisa tu conexión.');
   }
-  pintarPeso();
 }
-function pintarPeso(){
-  const b=new Blob([JSON.stringify(estado)]).size;
-  const n=estado.tareas.reduce((a,t)=>a+(t.files||[]).length,0);
-  peso.textContent=(n?n+' archivos · ':'')+(b/1048576).toFixed(2)+' MB';
+async function persistirSeccion(s, intentos = 2) {
+  try { await RoadmapSync.guardarSeccion(s); }
+  catch (e) {
+    if (intentos > 0) setTimeout(() => persistirSeccion(s, intentos - 1), 1500);
+    else aviso('No se pudo guardar el bloque «' + (s.titulo || s.id) + '». Revisa tu conexión.');
+  }
 }
+
+let refrescoPendiente = false;
+async function refrescarDesdeSupabase() {
+  const enFoco = document.activeElement;
+  const escribiendo = enFoco && lista.contains(enFoco) && (enFoco.tagName === 'INPUT' || enFoco.tagName === 'TEXTAREA');
+  if (escribiendo) { refrescoPendiente = true; return; }
+  try { estado = await RoadmapSync.cargarEstado(); }
+  catch (e) { aviso('No se pudo sincronizar: ' + e.message); return; }
+  render();
+}
+document.addEventListener('focusout', e => {
+  if (refrescoPendiente && lista.contains(e.target)) {
+    refrescoPendiente = false;
+    refrescarDesdeSupabase();
+  }
+});
 
 /* ---------- archivos ---------- */
 const MAX_LADO=1800, CALIDAD=.82, MAX_ARCHIVO=6*1048576;
 const kb=n=>n<1048576?Math.round(n/1024)+' KB':(n/1048576).toFixed(1)+' MB';
-const bytesDe=d=>Math.round((d.length-(d.indexOf(',')+1))*0.75);
 
-function leerComoDataURL(file){
-  return new Promise((ok,mal)=>{
-    const fr=new FileReader();
-    fr.onload=()=>ok(fr.result); fr.onerror=()=>mal(fr.error);
-    fr.readAsDataURL(file);
-  });
-}
 async function comprimirImagen(file){
   try{
     const bmp=await createImageBitmap(file);
@@ -1005,50 +382,46 @@ async function comprimirImagen(file){
     const c=document.createElement('canvas'); c.width=w; c.height=h;
     c.getContext('2d').drawImage(bmp,0,0,w,h);
     if(bmp.close) bmp.close();
-    let d=c.toDataURL('image/webp',CALIDAD);
-    if(!d.startsWith('data:image/webp')) d=c.toDataURL('image/jpeg',CALIDAD);
-    const orig=await leerComoDataURL(file);
-    return bytesDe(d)<bytesDe(orig) ? d : orig;
-  }catch(e){ return leerComoDataURL(file); }
+    const blob = await new Promise(resolve=>c.toBlob(resolve,'image/webp',CALIDAD));
+    return (blob && blob.size<file.size) ? blob : file;
+  }catch(e){ return file; }
 }
 async function adjuntar(t, files, alTerminar){
   let n=0, saltados=[], ahorro=0;
   for(const f of files){
     const esImg=/^image\//.test(f.type);
-    /* las imágenes pasan siempre: se comprimen antes de guardarlas */
     if(!esImg && f.size>MAX_ARCHIVO){ saltados.push(f.name+' ('+kb(f.size)+')'); continue; }
-    const d = esImg ? await comprimirImagen(f) : await leerComoDataURL(f);
-    const peso = bytesDe(d);
-    if(peso>MAX_ARCHIVO){ saltados.push((f.name||'captura')+' ('+kb(peso)+' ya comprimida)'); continue; }
-    if(esImg && f.size>peso) ahorro += f.size-peso;
-    t.files.push({n:f.name||('captura-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.webp'),
-                  t:f.type||'', d});
-    n++;
+    const blob = esImg ? await comprimirImagen(f) : f;
+    if(blob.size>MAX_ARCHIVO){ saltados.push((f.name||'captura')+' ('+kb(blob.size)+' ya comprimida)'); continue; }
+    if(esImg && f.size>blob.size) ahorro += f.size-blob.size;
+    try{
+      const nombre = f.name || ('captura-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.webp');
+      const archivo = await RoadmapSync.subirArchivo(t.id, blob, nombre);
+      t.files.push(archivo);
+      n++;
+    }catch(e){ saltados.push((f.name||'captura')+' (error al subir)'); }
   }
-  guardar(); alTerminar();
+  if(n) await persistirTarea(t);
+  alTerminar();
   if(saltados.length) aviso('No pude adjuntar: '+saltados.join(', ')+'. Súbelo a Drive y pega el enlace.');
   else if(n) aviso((n===1?'1 archivo adjuntado':n+' archivos adjuntados')+(ahorro>512000?' · '+kb(ahorro)+' ahorrados al comprimir':''));
 }
 function abrirArchivo(f, descargar){
-  const [cab,b64]=f.d.split(',');
-  const tipo=(cab.match(/data:([^;]+)/)||[,'application/octet-stream'])[1];
-  const bin=atob(b64), arr=new Uint8Array(bin.length);
-  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
-  const url=URL.createObjectURL(new Blob([arr],{type:tipo}));
+  const url = RoadmapSync.urlPublica(f.path);
   const a=document.createElement('a'); a.href=url;
   if(descargar) a.download=f.n; else { a.target='_blank'; a.rel='noopener'; }
   a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),20000);
 }
 function pintarThumbs(t, cont){
   cont.innerHTML='';
   (t.files||[]).forEach((f,i)=>{
-    const esImg=/^data:image\//.test(f.d);
+    const esImg=/^image\//.test(f.t);
     const box=document.createElement('div');
     box.className='th'+(esImg?'':' doc');
+    const url = RoadmapSync.urlPublica(f.path);
     if(esImg){
       const im=document.createElement('img');
-      im.src=f.d; im.alt=f.n; im.title='Abrir '+f.n;
+      im.src=url; im.alt=f.n; im.title='Abrir '+f.n;
       im.onclick=()=>abrirArchivo(f,false);
       box.appendChild(im);
     }else{
@@ -1059,12 +432,18 @@ function pintarThumbs(t, cont){
     }
     const nm=document.createElement('div'); nm.className='nom'; nm.textContent=f.n;
     box.appendChild(nm);
-    const pz=document.createElement('div'); pz.className='kb'; pz.textContent=kb(bytesDe(f.d));
+    const pz=document.createElement('div'); pz.className='kb'; pz.textContent=kb(f.size||0);
     box.appendChild(pz);
     const x=document.createElement('button');
     x.className='x'; x.type='button'; x.textContent='✕';
     x.title='Quitar este archivo'; x.setAttribute('aria-label','Quitar '+f.n);
-    x.onclick=ev=>{ ev.stopPropagation(); t.files.splice(i,1); guardar(); pintarThumbs(t,cont); };
+    x.onclick=async ev=>{
+      ev.stopPropagation();
+      const [quitado]=t.files.splice(i,1);
+      pintarThumbs(t,cont);
+      try{ await RoadmapSync.borrarArchivo(quitado.path); }catch(e){}
+      await persistirTarea(t);
+    };
     box.appendChild(x);
     cont.appendChild(box);
   });
@@ -1121,8 +500,12 @@ function moverTarea(idA, idObj, despues){
   const j=a.findIndex(x=>x.id===idObj);
   if(j<0){ a.splice(i,0,t); return; }
   t.sec=a[j].sec;
-  a.splice(despues?j+1:j,0,t);
-  guardar(); render();
+  const destino=despues?j+1:j;
+  a.splice(destino,0,t);
+  const anterior=a[destino-1]?.orden ?? null;
+  const siguiente=a[destino+1]?.orden ?? null;
+  t.orden=RoadmapSync.calcularOrden(anterior, siguiente);
+  persistirTarea(t); render();
 }
 function moverTareaAlFinal(idA, secId){
   const a=estado.tareas;
@@ -1130,7 +513,8 @@ function moverTareaAlFinal(idA, secId){
   const [t]=a.splice(i,1); t.sec=secId;
   let ultimo=-1; a.forEach((x,k)=>{ if(x.sec===secId) ultimo=k; });
   a.splice(ultimo+1,0,t);
-  guardar(); render();
+  t.orden=RoadmapSync.calcularOrden(a[ultimo]?.orden ?? null, null);
+  persistirTarea(t); render();
 }
 function moverBloque(idA, idObj, despues){
   const a=estado.secciones;
@@ -1138,13 +522,22 @@ function moverBloque(idA, idObj, despues){
   const [s]=a.splice(i,1);
   const j=a.findIndex(x=>x.id===idObj);
   if(j<0){ a.splice(i,0,s); return; }
-  a.splice(despues?j+1:j,0,s);
-  guardar(); render();
+  const destino=despues?j+1:j;
+  a.splice(destino,0,s);
+  const anterior=a[destino-1]?.orden ?? null;
+  const siguiente=a[destino+1]?.orden ?? null;
+  s.orden=RoadmapSync.calcularOrden(anterior, siguiente);
+  persistirSeccion(s); render();
 }
 function moverBloquePaso(id, paso){
   const a=estado.secciones, i=a.findIndex(x=>x.id===id), j=i+paso;
   if(i<0||j<0||j>=a.length) return;
-  [a[i],a[j]]=[a[j],a[i]]; guardar(); render();
+  [a[i],a[j]]=[a[j],a[i]];
+  const s=a[j];
+  const anterior=a[j-1]?.orden ?? null;
+  const siguiente=a[j+1]?.orden ?? null;
+  s.orden=RoadmapSync.calcularOrden(anterior, siguiente);
+  persistirSeccion(s); render();
 }
 
 function visible(t){
@@ -1257,13 +650,13 @@ function pintarFila(t){
       t.resp=(t.resp===b.dataset.r)?'':b.dataset.r;
       row.dataset.resp=t.resp;
       row.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r===t.resp));
-      guardar(); cancha();
+      persistirTarea(t); cancha();
       if(filtros.resp!=='todas') render();
     };
   });
   row.querySelector('.est').onchange=e=>{
     t.estado=e.target.value; row.dataset.estado=t.estado;
-    guardar(); cancha(); actualizarPills();
+    persistirTarea(t); cancha(); actualizarPills();
     if(filtros.ocultarHechas) render();
   };
   row.querySelectorAll('[data-k]').forEach(el=>{
@@ -1275,7 +668,7 @@ function pintarFila(t){
         ttl.textContent=el.value||'Tarea sin título — ábrela y ponle nombre';
         ttl.classList.toggle('vacio', !el.value);
       }
-      guardar();
+      guardarDebounced(t, persistirTarea);
     };
   });
   const thumbs=row.querySelector('.thumbs'), zona=row.querySelector('.zona');
@@ -1300,11 +693,25 @@ function pintarFila(t){
     e.preventDefault(); adjuntar(t, fs, repinta);
   });
 
-  row.querySelector('[data-mover]').onchange=e=>{ t.sec=e.target.value; guardar(); render(); };
-  row.querySelector('.del').onclick=()=>{
+  row.querySelector('[data-mover]').onchange=e=>{
+    t.sec=e.target.value;
+    const delSec=estado.tareas.filter(x=>x.sec===t.sec && x.id!==t.id);
+    const ultimo=delSec.length ? delSec[delSec.length-1].orden : null;
+    t.orden=RoadmapSync.calcularOrden(ultimo, null);
+    persistirTarea(t); render();
+  };
+  row.querySelector('.del').onclick=async ()=>{
     if(!confirm('Se borra «'+(t.tarea||t.id)+'». ¿Seguir?')) return;
+    const idx=estado.tareas.findIndex(x=>x.id===t.id);
     estado.tareas=estado.tareas.filter(x=>x.id!==t.id);
-    abiertas.delete(t.id); guardar(); render();
+    abiertas.delete(t.id); render();
+    try{
+      for(const f of (t.files||[])){ try{ await RoadmapSync.borrarArchivo(f.path); }catch(e){} }
+      await RoadmapSync.borrarTarea(t.id);
+    }catch(e){
+      estado.tareas.splice(idx,0,t); render();
+      aviso('No se pudo borrar «'+(t.tarea||t.id)+'». Revisa tu conexión.');
+    }
   };
   if(abiertas.has(t.id)) setTimeout(()=>row.querySelectorAll('textarea').forEach(autosize),0);
   return row;
@@ -1353,7 +760,10 @@ function pintarSeccion(s){
     sec.classList.contains('open')?cerradas.delete(s.id):cerradas.add(s.id);
   };
   const inp=sec.querySelector('.sec-name');
-  inp.oninput=()=>{ s.titulo=inp.value; guardar(); };
+  inp.oninput=()=>{
+    s.titulo=inp.value;
+    guardarDebounced(s, persistirSeccion);
+  };
   inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } };
   const cab=sec.querySelector('.sec-h');
   cab.querySelector('.grip-slot').replaceWith(asa(cab,'bloque',s.id,'Arrastra para mover el bloque'));
@@ -1395,11 +805,18 @@ function pintarSeccion(s){
   menu.onclick=ev=>ev.stopPropagation();
   menu.querySelector('[data-up]').onclick=()=>{ cerrarMenus(); moverBloquePaso(s.id,-1); };
   menu.querySelector('[data-down]').onclick=()=>{ cerrarMenus(); moverBloquePaso(s.id,1); };
-  sec.querySelector('[data-del]').onclick=()=>{
+  sec.querySelector('[data-del]').onclick=async ()=>{
     cerrarMenus();
     if(suyas.length){ aviso('Ese bloque tiene '+suyas.length+' tareas. Muévelas o bórralas primero.'); return; }
     if(!confirm('Se borra el bloque «'+s.titulo+'». ¿Seguir?')) return;
-    estado.secciones=estado.secciones.filter(x=>x.id!==s.id); guardar(); render();
+    const idx=estado.secciones.findIndex(x=>x.id===s.id);
+    estado.secciones=estado.secciones.filter(x=>x.id!==s.id); render();
+    try{
+      await RoadmapSync.borrarSeccion(s.id);
+    }catch(e){
+      estado.secciones.splice(idx,0,s); render();
+      aviso('No se pudo borrar el bloque «'+(s.titulo||s.id)+'». Revisa tu conexión.');
+    }
   };
 
   const body=sec.querySelector('.sec-body');
@@ -1422,8 +839,12 @@ function pintarSeccion(s){
   add.className='addrow'; add.textContent='+  Nueva tarea en este bloque';
   add.onclick=()=>{
     const id=nuevoId('T', estado.tareas.map(x=>x.id));
-    estado.tareas.push({id,sec:s.id,modulo:'',tarea:'',expl:'',resp:'',estado:'Pendiente',img:'',com:'',fecha:'',files:[]});
-    abiertas.add(id); cerradas.delete(s.id); guardar(); render();
+    const delSec=estado.tareas.filter(x=>x.sec===s.id);
+    const ultimo=delSec.length ? delSec[delSec.length-1].orden : null;
+    const nueva={id,sec:s.id,modulo:'',tarea:'',expl:'',resp:'',estado:'Pendiente',img:'',com:'',fecha:'',files:[],orden:RoadmapSync.calcularOrden(ultimo,null)};
+    estado.tareas.push(nueva);
+    abiertas.add(id); cerradas.delete(s.id); render();
+    persistirTarea(nueva);
     const el=document.querySelector(`.row[data-id="${id}"] [data-k=tarea]`);
     if(el){ el.scrollIntoView({block:'center',behavior:'smooth'}); el.focus(); }
   };
@@ -1444,7 +865,7 @@ function render(){
     lista.innerHTML='<div class="empty">Ninguna tarea encaja con este filtro. Prueba «Todas» o vacía la búsqueda.</div>';
   }
   visibles.textContent=n+' visibles';
-  cancha(); pintarPeso();
+  cancha();
 }
 
 /* ---- barra ---- */
@@ -1469,8 +890,11 @@ bPlegar.onclick=()=>{
 };
 bNuevoBloque.onclick=()=>{
   const id=nuevoId('s', estado.secciones.map(x=>x.id));
-  estado.secciones.push({id,titulo:'',tipo:'gris'});
-  cerradas.delete(id); guardar(); render();
+  const ultima=estado.secciones.length ? estado.secciones[estado.secciones.length-1].orden : null;
+  const nueva={id,titulo:'',orden:RoadmapSync.calcularOrden(ultima,null)};
+  estado.secciones.push(nueva);
+  cerradas.delete(id); render();
+  persistirSeccion(nueva);
   const el=document.querySelector(`.sec[data-id="${id}"] .sec-name`);
   if(el){ el.scrollIntoView({block:'center',behavior:'smooth'}); el.focus(); }
 };
@@ -1505,29 +929,6 @@ bCsv.onclick=()=>{
   bajar('plan-loro-toni-'+hoy()+'.csv','\ufeff'+[cab.map(e).join(';'),...filas].join('\r\n'),'text/csv;charset=utf-8');
   aviso('CSV guardado. Se abre en Excel con doble clic.');
 };
-bReset.onclick=()=>{
-  if(!confirm('Vuelve al contenido original y descarta todo lo que hayas cambiado o creado en este navegador. ¿Seguir?')) return;
-  try{ localStorage.removeItem(KEY); }catch(e){}
-  estado=clon(RAW); estado.tareas.forEach(t=>{ if(!Array.isArray(t.files)) t.files=[]; });
-  abiertas.clear(); cerradas.clear(); guardar(); render();
-  aviso('Cambios descartados.');
-};
-bAbrir.onclick=()=>fIn.click();
-fIn.onchange=ev=>{
-  const f=ev.target.files[0]; if(!f) return;
-  const fr=new FileReader();
-  fr.onload=()=>{
-    try{
-      const m=fr.result.match(/<script id="datos"[^>]*>([\s\S]*?)<\/script>/);
-      const j=JSON.parse((m?m[1]:fr.result).replace(/<\\\//g,'</'));
-      if(!j.secciones||!j.tareas) throw 0;
-      estado=j; estado.tareas.forEach(t=>{ if(!Array.isArray(t.files)) t.files=[]; });
-      abiertas.clear(); cerradas.clear(); guardar(); render();
-      aviso('Cambios de '+f.name+' cargados.');
-    }catch(e){ aviso('Ese archivo no tiene datos que pueda leer.'); }
-  };
-  fr.readAsText(f); ev.target.value='';
-};
 document.addEventListener('click',()=>document.querySelectorAll('.menu:not([hidden])').forEach(m=>{
   m.hidden=true; m.closest('.sec')?.classList.remove('menu-open');
   m.parentElement.querySelector('[data-menu]').setAttribute('aria-expanded','false');
@@ -1542,7 +943,52 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape' && t!=='INPUT' && t!=='TEXTAREA' && abiertas.size){ abiertas.clear(); render(); }
 });
 
-render();
+const loginOverlay = document.getElementById('loginOverlay');
+const loginForm = document.getElementById('loginForm');
+const loginError = document.getElementById('loginError');
+
+function mostrarModalLogin(){ loginOverlay.hidden = false; }
+function ocultarModalLogin(){ loginOverlay.hidden = true; }
+
+async function cargarYArrancar(){
+  try{
+    estado = await RoadmapSync.cargarEstado();
+  }catch(e){
+    aviso('No se pudo conectar con la base: '+e.message);
+    estado = { secciones: [], tareas: [] };
+  }
+  render();
+}
+
+loginForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  loginError.hidden = true;
+  try{
+    await RoadmapSync.iniciarSesion(loginEmail.value.trim(), loginPassword.value);
+  }catch(err){
+    loginError.textContent = 'Email o contraseña incorrectos.';
+    loginError.hidden = false;
+  }
+});
+
+bCerrarSesion.onclick = async () => {
+  try{ await RoadmapSync.cerrarSesion(); }
+  catch(e){ aviso('No se pudo cerrar sesión: '+e.message); }
+};
+
+(async function iniciar(){
+  let activa = false;
+  try{ activa = await RoadmapSync.sesionActiva(); }
+  catch(e){ aviso('No se pudo verificar la sesión: '+e.message); }
+  if(activa){ await cargarYArrancar(); } else { mostrarModalLogin(); }
+
+  RoadmapSync.onCambioSesion(async sesionOk => {
+    if(sesionOk){ ocultarModalLogin(); await cargarYArrancar(); }
+    else { estado = { secciones: [], tareas: [] }; render(); mostrarModalLogin(); }
+  });
+
+  RoadmapSync.suscribir(refrescarDesdeSupabase);
+})();
 </script>
 </body>
 </html>
