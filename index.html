@@ -63,6 +63,9 @@ h1 span{color:#8C99AB;font-weight:400}
   font:600 12.5px var(--sans);padding:8px 11px;border-radius:var(--r);cursor:pointer;white-space:nowrap}
 .mini:hover{border-color:var(--edge-hard);color:var(--ink)}
 .count{font:600 11.5px/1 var(--mono);color:var(--faint);white-space:nowrap;padding:0 2px}
+.estado-guardado{font:600 11px var(--mono);color:var(--faint);white-space:nowrap}
+.estado-guardado.cargando{color:var(--ink-2)}
+.estado-guardado.ok{color:#2E7D32}
 
 /* ---------- bloques ---------- */
 .sec{margin-top:26px}
@@ -294,6 +297,7 @@ button.act.pri:hover{background:#000}
   <label class="toggle"><input type="checkbox" id="oh"> Ocultar hechas</label>
   <button class="mini" id="bPlegar">Plegar todo</button>
   <span class="count" id="visibles"></span>
+  <span class="estado-guardado" id="estadoGuardado" aria-live="polite"></span>
 </div></div>
 
 <main class="wrap">
@@ -363,6 +367,24 @@ function onEstadoBoton(btn, textoCargando) {
   };
 }
 const combinar = (...fns) => estado => fns.forEach(fn => fn(estado));
+
+let enVuelo = 0;
+const elGuardado = document.getElementById('estadoGuardado');
+function onEstadoGlobal(estado) {
+  if (estado === 'cargando') {
+    enVuelo++;
+    elGuardado.className = 'estado-guardado cargando';
+    elGuardado.textContent = '● guardando';
+    return;
+  }
+  enVuelo = Math.max(0, enVuelo - 1);
+  if (enVuelo > 0) return;
+  elGuardado.className = 'estado-guardado' + (estado === 'ok' ? ' ok' : '');
+  elGuardado.textContent = estado === 'ok' ? '✓ guardado' : '';
+  if (estado === 'ok') setTimeout(() => {
+    if (enVuelo === 0) { elGuardado.textContent = ''; elGuardado.className = 'estado-guardado'; }
+  }, 1500);
+}
 
 async function persistirTarea(t, intentos = 2) {
   try { await RoadmapSync.guardarTarea(t); }
