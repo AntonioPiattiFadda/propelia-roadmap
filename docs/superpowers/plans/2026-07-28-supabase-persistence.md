@@ -734,10 +734,16 @@ row.querySelector('[data-mover]').onchange=e=>{
 };
 row.querySelector('.del').onclick=async ()=>{
   if(!confirm('Se borra «'+(t.tarea||t.id)+'». ¿Seguir?')) return;
+  const idx=estado.tareas.findIndex(x=>x.id===t.id);
   estado.tareas=estado.tareas.filter(x=>x.id!==t.id);
   abiertas.delete(t.id); render();
-  for(const f of (t.files||[])){ try{ await RoadmapSync.borrarArchivo(f.path); }catch(e){} }
-  await RoadmapSync.borrarTarea(t.id);
+  try{
+    for(const f of (t.files||[])){ try{ await RoadmapSync.borrarArchivo(f.path); }catch(e){} }
+    await RoadmapSync.borrarTarea(t.id);
+  }catch(e){
+    estado.tareas.splice(idx,0,t); render();
+    aviso('No se pudo borrar «'+(t.tarea||t.id)+'». Revisa tu conexión.');
+  }
 };
 ```
 
@@ -812,8 +818,14 @@ sec.querySelector('[data-del]').onclick=async ()=>{
   cerrarMenus();
   if(suyas.length){ aviso('Ese bloque tiene '+suyas.length+' tareas. Muévelas o bórralas primero.'); return; }
   if(!confirm('Se borra el bloque «'+s.titulo+'». ¿Seguir?')) return;
+  const idx=estado.secciones.findIndex(x=>x.id===s.id);
   estado.secciones=estado.secciones.filter(x=>x.id!==s.id); render();
-  await RoadmapSync.borrarSeccion(s.id);
+  try{
+    await RoadmapSync.borrarSeccion(s.id);
+  }catch(e){
+    estado.secciones.splice(idx,0,s); render();
+    aviso('No se pudo borrar el bloque «'+(s.titulo||s.id)+'». Revisa tu conexión.');
+  }
 };
 ```
 
@@ -919,10 +931,15 @@ loginForm.addEventListener('submit', async e => {
   }
 });
 
-bCerrarSesion.onclick = () => RoadmapSync.cerrarSesion();
+bCerrarSesion.onclick = async () => {
+  try{ await RoadmapSync.cerrarSesion(); }
+  catch(e){ aviso('No se pudo cerrar sesión: '+e.message); }
+};
 
 (async function iniciar(){
-  const activa = await RoadmapSync.sesionActiva();
+  let activa = false;
+  try{ activa = await RoadmapSync.sesionActiva(); }
+  catch(e){ aviso('No se pudo verificar la sesión: '+e.message); }
   if(activa){ await cargarYArrancar(); } else { mostrarModalLogin(); }
 
   RoadmapSync.onCambioSesion(async sesionOk => {
