@@ -77,6 +77,23 @@ Este documento es el checklist de verificación manual en navegador que falta co
 - [ ] Intentar loguearse con credenciales incorrectas. Esperado: el botón de submit dice "Entrando..." mientras verifica, y vuelve a su texto normal al mostrar el error.
 - [ ] Cerrar sesión. Esperado: el botón dice "Saliendo..." brevemente antes de que aparezca el modal de login.
 
+### 10. Fixes de reverts y adjuntos huérfanos (post-mortem del optimistic update)
+
+- [ ] Con red normal, adjuntar un archivo a una tarea y después borrarlo (doble click en la ✕). Esperado: desaparece la miniatura y no queda "colgado" nada raro. Confirmar en el dashboard de Supabase Storage (bucket `roadmap-adjuntos`) que el archivo ya no está.
+- [ ] Cortar la red (DevTools → Network → Offline). Borrar un adjunto existente (doble click en la ✕) → esperar los ~3.5s de reintentos → esperado: la miniatura REAPARECE (revert) Y el archivo sigue existiendo en el bucket de Storage (verificar en el dashboard de Supabase o reconectando la red y recargando la página — el link no debe estar roto).
+- [ ] Con red normal: abrir una tarea, escribir en "Explicación", esperar ~1s a que guarde (`✓ guardado`), sin soltar el foco del campo seguir escribiendo más texto, esperar otro segundo a que guarde de nuevo. Esperado: ambos cambios quedan guardados, sin parpadeos ni pérdida de texto.
+- [ ] Cortar la red. Escribir en "Explicación", esperar el toast de error (~3.5s) SIN sacar el foco del campo, y seguir escribiendo apenas aparece el toast. Esperado: el campo no se "pisa" ni pierde el texto que se sigue tipeando mientras se tiene el foco ahí — el revert visual se aplica recién cuando se sale del campo (blur/tab a otro campo).
+- [ ] Con la red aún cortada: abrir un bloque (⋯ → "Subir bloque" o "Bajar bloque"). Esperado: tras ~3.5s el bloque vuelve a su posición original y aparece el toast de error (antes de este fix, el bloque quedaba reordenado en pantalla sin avisar que no se guardó).
+- [ ] Reconectar la red y repetir "Subir bloque"/"Bajar bloque". Esperado: el reorden persiste tras recargar la página.
+
+### 11. Foco no se pierde en selects + no hay re-render fantasma de tu propio guardado
+
+- [ ] Abrir una tarea, hacer click en el `<select>` de "Estado" (dejarlo con foco, sin todavía elegir otra opción) y esperar unos segundos sin tocar nada más. Esperado: el select sigue teniendo el foco, no se cierra ni se redibuja solo.
+- [ ] Elegir una opción distinta en el `<select>` de "Estado" (dispara guardado). Esperado: no hay ningún parpadeo/reconstrucción visible de la fila ni de la lista completa apenas después de elegir — antes de este fix, el eco de realtime del propio guardado disparaba un re-render completo a los pocos cientos de ms.
+- [ ] Repetir lo mismo con el `<select>` de "mover a otro bloque".
+- [ ] Con DOS pestañas abiertas (caso del punto 2 del checklist): en la pestaña A, dejar el foco en el `<select>` de "Estado" de una tarea. En la pestaña B, cambiar el estado de OTRA tarea distinta. Esperado en la pestaña A: el select sigue con el foco (esto sí debe verse afectado — es un cambio ajeno real — pero no debe tirar al usuario del control si estaba interactuando en ese momento con el mouse/teclado sobre el select).
+- [ ] Con dos pestañas: en la pestaña A cambiar el estado de una tarea. Esperado en la pestaña B: el cambio SÍ aparece (el eco ajeno no se suprime, solo se suprime el eco de tus propios guardados).
+
 ## Cómo reportar resultados
 
 Por cada ítem: marcar ✅ si pasó tal cual se espera, o ❌ con una descripción corta de qué pasó distinto (mensaje de error exacto, en qué paso, captura de pantalla si es posible). Si algo falla, indicar también: navegador y versión, si fue abierto como `file://` o servido con un server local, y si había extensiones de navegador que pudieran bloquear requests (ad blockers, etc.).

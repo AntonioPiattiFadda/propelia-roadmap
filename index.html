@@ -364,6 +364,14 @@ function guardarDebounced(clave, fn) {
 }
 const valoresAntesDelCambio = new Map();
 const pendientesEnVuelo = new Map();
+const generacionGuardado = new Map();
+const pendienteDeRevertir = new Set();
+
+const ecosPropiosEsperados = new Map();
+function marcarEcoPropio(tabla, id) {
+  const clave = tabla+':'+id;
+  ecosPropiosEsperados.set(clave, (ecosPropiosEsperados.get(clave)||0)+1);
+}
 
 async function conEstadoDeCarga(accion, { revertir, intentos = 2, onEstado } = {}) {
   onEstado?.('cargando');
@@ -408,26 +416,36 @@ function onEstadoGlobal(estado) {
 }
 
 async function persistirTarea(t, { onEstado = onEstadoGlobal, revertir, intentos = 2 } = {}) {
-  return conEstadoDeCarga(() => RoadmapSync.guardarTarea(t), { onEstado, revertir, intentos });
+  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarTarea(t), { onEstado, revertir, intentos });
+  if (ok) marcarEcoPropio('roadmap_tareas', t.id);
+  return ok;
 }
 async function persistirSeccion(s, { onEstado = onEstadoGlobal, revertir, intentos = 2 } = {}) {
-  return conEstadoDeCarga(() => RoadmapSync.guardarSeccion(s), { onEstado, revertir, intentos });
+  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarSeccion(s), { onEstado, revertir, intentos });
+  if (ok) marcarEcoPropio('roadmap_secciones', s.id);
+  return ok;
 }
 
 let refrescoPendiente = false;
-async function refrescarDesdeSupabase() {
+async function refrescarDesdeSupabase(payload) {
+  if (payload?.table) {
+    const id = payload.new?.id ?? payload.old?.id;
+    const clave = payload.table+':'+id;
+    const pendientes = ecosPropiosEsperados.get(clave);
+    if (pendientes > 0) { ecosPropiosEsperados.set(clave, pendientes-1); return; }
+  }
   const enFoco = document.activeElement;
-  const escribiendo = enFoco && lista.contains(enFoco) && (enFoco.tagName === 'INPUT' || enFoco.tagName === 'TEXTAREA');
+  const escribiendo = enFoco && lista.contains(enFoco) &&
+    (enFoco.tagName === 'INPUT' || enFoco.tagName === 'TEXTAREA' || enFoco.tagName === 'SELECT');
   if (escribiendo) { refrescoPendiente = true; return; }
   try { estado = await RoadmapSync.cargarEstado(); }
   catch (e) { aviso('No se pudo sincronizar: ' + e.message); return; }
   render();
 }
 document.addEventListener('focusout', e => {
-  if (refrescoPendiente && lista.contains(e.target)) {
-    refrescoPendiente = false;
-    refrescarDesdeSupabase();
-  }
+  if (!lista.contains(e.target)) return;
+  if (refrescoPendiente) { refrescoPendiente = false; refrescarDesdeSupabase(); return; }
+  if (pendienteDeRevertir.size) { pendienteDeRevertir.clear(); render(); }
 });
 
 /* ---------- archivos ---------- */
@@ -524,10 +542,10 @@ function pintarThumbs(t, cont){
       const idx=t.files.indexOf(f);
       const [quitado]=t.files.splice(idx,1);
       pintarThumbs(t,cont);
-      await persistirTarea(t, {
+      const guardadoOk = await persistirTarea(t, {
         revertir: () => { t.files.splice(idx,0,quitado); pintarThumbs(t,cont); },
       });
-      try{ await RoadmapSync.borrarArchivo(quitado.path); }catch(e){}
+      if(guardadoOk){ try{ await RoadmapSync.borrarArchivo(quitado.path); }catch(e){} }
     };
     box.appendChild(x);
     cont.appendChild(box);
@@ -626,10 +644,12 @@ function moverBloquePaso(id, paso){
   if(i<0||j<0||j>=a.length) return;
   [a[i],a[j]]=[a[j],a[i]];
   const s=a[j];
+  const ordenAnterior=s.orden;
   const anterior=a[j-1]?.orden ?? null;
   const siguiente=a[j+1]?.orden ?? null;
   s.orden=RoadmapSync.calcularOrden(anterior, siguiente);
-  persistirSeccion(s); render();
+  persistirSeccion(s, { revertir: () => { [a[i],a[j]]=[a[j],a[i]]; s.orden=ordenAnterior; render(); } });
+  render();
 }
 
 function visible(t){
@@ -767,11 +787,17 @@ function pintarFila(t){
       }
       guardarDebounced(t.id, () => {
         pendientesEnVuelo.set(t.id, (pendientesEnVuelo.get(t.id)||0)+1);
+        const miGen = (generacionGuardado.get(t.id)||0)+1;
+        generacionGuardado.set(t.id, miGen);
         persistirTarea(t, {
           revertir: () => {
+            if (generacionGuardado.get(t.id) !== miGen) return;
             const previo = valoresAntesDelCambio.get(t.id);
             if (previo) Object.assign(t, previo);
-            render();
+            const enFoco=document.activeElement;
+            if(enFoco && row.contains(enFoco) && (enFoco.tagName==='INPUT'||enFoco.tagName==='TEXTAREA')){
+              pendienteDeRevertir.add(t.id);
+            } else render();
           },
         }).then(() => {
           const restantes = (pendientesEnVuelo.get(t.id)||1) - 1;
@@ -819,13 +845,14 @@ function pintarFila(t){
     const idx=estado.tareas.findIndex(x=>x.id===t.id);
     estado.tareas=estado.tareas.filter(x=>x.id!==t.id);
     abiertas.delete(t.id); render();
-    await conEstadoDeCarga(async () => {
+    const okBorrado = await conEstadoDeCarga(async () => {
       for(const f of (t.files||[])){ try{ await RoadmapSync.borrarArchivo(f.path); }catch(e){} }
       await RoadmapSync.borrarTarea(t.id);
     }, {
       onEstado: combinar(onEstadoBoton(btnDel, 'Borrando...'), onEstadoGlobal),
       revertir: () => { estado.tareas.splice(idx,0,t); render(); },
     });
+    if (okBorrado) marcarEcoPropio('roadmap_tareas', t.id);
   };
   if(abiertas.has(t.id)) setTimeout(()=>row.querySelectorAll('textarea').forEach(autosize),0);
   return row;
@@ -879,11 +906,17 @@ function pintarSeccion(s){
     s.titulo=inp.value;
     guardarDebounced(s.id, () => {
       pendientesEnVuelo.set(s.id, (pendientesEnVuelo.get(s.id)||0)+1);
+      const miGen = (generacionGuardado.get(s.id)||0)+1;
+      generacionGuardado.set(s.id, miGen);
       persistirSeccion(s, {
         revertir: () => {
+          if (generacionGuardado.get(s.id) !== miGen) return;
           const previo = valoresAntesDelCambio.get(s.id);
           if (previo) Object.assign(s, previo);
-          render();
+          const enFoco=document.activeElement;
+          if(enFoco && sec.contains(enFoco) && (enFoco.tagName==='INPUT'||enFoco.tagName==='TEXTAREA')){
+            pendienteDeRevertir.add(s.id);
+          } else render();
         },
       }).then(() => {
         const restantes = (pendientesEnVuelo.get(s.id)||1) - 1;
@@ -941,10 +974,11 @@ function pintarSeccion(s){
     if(!confirm('Se borra el bloque «'+s.titulo+'». ¿Seguir?')) return;
     const idx=estado.secciones.findIndex(x=>x.id===s.id);
     estado.secciones=estado.secciones.filter(x=>x.id!==s.id); render();
-    await conEstadoDeCarga(() => RoadmapSync.borrarSeccion(s.id), {
+    const okBorrado = await conEstadoDeCarga(() => RoadmapSync.borrarSeccion(s.id), {
       onEstado: combinar(onEstadoBoton(btnDelBloque, 'Borrando...'), onEstadoGlobal),
       revertir: () => { estado.secciones.splice(idx,0,s); render(); },
     });
+    if (okBorrado) marcarEcoPropio('roadmap_secciones', s.id);
   };
 
   const body=sec.querySelector('.sec-body');
