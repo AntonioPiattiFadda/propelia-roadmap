@@ -789,18 +789,19 @@ function pintarFila(t){
     persistirTarea(t, { revertir: () => { t.sec=secAnterior; t.orden=ordenAnterior; render(); } });
     render();
   };
-  row.querySelector('.del').onclick=async ()=>{
+  const btnDel=row.querySelector('.del');
+  btnDel.onclick=async ()=>{
     if(!confirm('Se borra «'+(t.tarea||t.id)+'». ¿Seguir?')) return;
     const idx=estado.tareas.findIndex(x=>x.id===t.id);
     estado.tareas=estado.tareas.filter(x=>x.id!==t.id);
     abiertas.delete(t.id); render();
-    try{
+    await conEstadoDeCarga(async () => {
       for(const f of (t.files||[])){ try{ await RoadmapSync.borrarArchivo(f.path); }catch(e){} }
       await RoadmapSync.borrarTarea(t.id);
-    }catch(e){
-      estado.tareas.splice(idx,0,t); render();
-      aviso('No se pudo borrar «'+(t.tarea||t.id)+'». Revisa tu conexión.');
-    }
+    }, {
+      onEstado: combinar(onEstadoBoton(btnDel, 'Borrando...'), onEstadoGlobal),
+      revertir: () => { estado.tareas.splice(idx,0,t); render(); },
+    });
   };
   if(abiertas.has(t.id)) setTimeout(()=>row.querySelectorAll('textarea').forEach(autosize),0);
   return row;
@@ -909,18 +910,17 @@ function pintarSeccion(s){
   menu.onclick=ev=>ev.stopPropagation();
   menu.querySelector('[data-up]').onclick=()=>{ cerrarMenus(); moverBloquePaso(s.id,-1); };
   menu.querySelector('[data-down]').onclick=()=>{ cerrarMenus(); moverBloquePaso(s.id,1); };
-  sec.querySelector('[data-del]').onclick=async ()=>{
+  const btnDelBloque=sec.querySelector('[data-del]');
+  btnDelBloque.onclick=async ()=>{
     cerrarMenus();
     if(suyas.length){ aviso('Ese bloque tiene '+suyas.length+' tareas. Muévelas o bórralas primero.'); return; }
     if(!confirm('Se borra el bloque «'+s.titulo+'». ¿Seguir?')) return;
     const idx=estado.secciones.findIndex(x=>x.id===s.id);
     estado.secciones=estado.secciones.filter(x=>x.id!==s.id); render();
-    try{
-      await RoadmapSync.borrarSeccion(s.id);
-    }catch(e){
-      estado.secciones.splice(idx,0,s); render();
-      aviso('No se pudo borrar el bloque «'+(s.titulo||s.id)+'». Revisa tu conexión.');
-    }
+    await conEstadoDeCarga(() => RoadmapSync.borrarSeccion(s.id), {
+      onEstado: combinar(onEstadoBoton(btnDelBloque, 'Borrando...'), onEstadoGlobal),
+      revertir: () => { estado.secciones.splice(idx,0,s); render(); },
+    });
   };
 
   const body=sec.querySelector('.sec-body');
