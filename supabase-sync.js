@@ -90,4 +90,18 @@ RoadmapSync.onCambioSesion = function (cb) {
   supabaseClient.auth.onAuthStateChange((_evento, sesion) => cb(!!sesion));
 };
 
+RoadmapSync.suscribir = function (onCambio) {
+  const canal = supabaseClient
+    .channel('roadmap-sync')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'roadmap_secciones' }, onCambio)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'roadmap_tareas' }, onCambio)
+    .subscribe(estadoCanal => {
+      // 'SUBSCRIBED' se dispara tanto en la conexión inicial como en cada reconexión
+      // (ej. laptop que vuelve de suspendido) — refetch completo por las dudas de haberse
+      // perdido algún evento mientras estuvo desconectado, tal como pide la spec.
+      if (estadoCanal === 'SUBSCRIBED') onCambio();
+    });
+  return () => supabaseClient.removeChannel(canal);
+};
+
 window.RoadmapSync = RoadmapSync;
