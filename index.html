@@ -202,6 +202,13 @@ textarea.expl{line-height:1.65}
 .peso{font:600 11px/1 var(--mono);color:var(--faint)}
 .aviso{margin-bottom:13px;padding:11px 13px;border-radius:6px;background:var(--warn-soft);
   border:1px solid #EBDCBE;color:#6E4207;font-size:13px}
+.esq-bloque{border:1px solid var(--edge);border-radius:8px;padding:14px;
+  display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.esq-cab{height:20px;width:40%;border-radius:4px}
+.esq-fila{height:15px;border-radius:4px}
+.shimmer{background:linear-gradient(90deg,var(--sunken) 25%,var(--edge) 37%,var(--sunken) 63%);
+  background-size:400% 100%;animation:shimmer 1.4s ease-in-out infinite}
+@keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
 .link{display:inline-block;margin-top:5px;font-size:12px;color:var(--toni);word-break:break-all}
 .r-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;
   margin-top:13px;padding-top:11px;border-top:1px solid var(--edge-soft);flex-wrap:wrap}
@@ -301,7 +308,19 @@ button.act.pri:hover{background:#000}
 </div></div>
 
 <main class="wrap">
-  <div id="lista"></div>
+  <div id="lista"><div class="esqueleto" aria-hidden="true">
+    <div class="esq-bloque">
+      <div class="esq-cab shimmer"></div>
+      <div class="esq-fila shimmer"></div>
+      <div class="esq-fila shimmer"></div>
+      <div class="esq-fila shimmer" style="width:70%"></div>
+    </div>
+    <div class="esq-bloque">
+      <div class="esq-cab shimmer"></div>
+      <div class="esq-fila shimmer"></div>
+      <div class="esq-fila shimmer" style="width:60%"></div>
+    </div>
+  </div></div>
   <button class="newsec" id="bNuevoBloque">+  Nuevo bloque</button>
 
   <div class="acts">
