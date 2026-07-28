@@ -447,7 +447,8 @@ async function comprimirImagen(file){
   }catch(e){ return file; }
 }
 async function adjuntar(t, files, alTerminar){
-  let n=0, saltados=[], ahorro=0;
+  let n=0, saltados=[], ahorro=0, subidos=[];
+  onEstadoGlobal('cargando');
   for(const f of files){
     const esImg=/^image\//.test(f.type);
     if(!esImg && f.size>MAX_ARCHIVO){ saltados.push(f.name+' ('+kb(f.size)+')'); continue; }
@@ -457,11 +458,24 @@ async function adjuntar(t, files, alTerminar){
     try{
       const nombre = f.name || ('captura-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.webp');
       const archivo = await RoadmapSync.subirArchivo(t.id, blob, nombre);
-      t.files.push(archivo);
+      t.files.push(archivo); subidos.push(archivo);
       n++;
     }catch(e){ saltados.push((f.name||'captura')+' (error al subir)'); }
   }
-  if(n) await persistirTarea(t);
+  if(n){
+    await persistirTarea(t, {
+      onEstado: estado => { if (estado !== 'cargando') onEstadoGlobal(estado); },
+      revertir: () => {
+        subidos.forEach(a => {
+          const i=t.files.indexOf(a); if(i>-1) t.files.splice(i,1);
+          RoadmapSync.borrarArchivo(a.path).catch(()=>{});
+        });
+        alTerminar();
+      },
+    });
+  } else {
+    onEstadoGlobal('ok');
+  }
   alTerminar();
   if(saltados.length) aviso('No pude adjuntar: '+saltados.join(', ')+'. Súbelo a Drive y pega el enlace.');
   else if(n) aviso((n===1?'1 archivo adjuntado':n+' archivos adjuntados')+(ahorro>512000?' · '+kb(ahorro)+' ahorrados al comprimir':''));
