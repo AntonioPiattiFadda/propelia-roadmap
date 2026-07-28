@@ -521,10 +521,13 @@ function pintarThumbs(t, cont){
         return;
       }
       clearTimeout(armarTimeout);
-      const [quitado]=t.files.splice(i,1);
+      const idx=t.files.indexOf(f);
+      const [quitado]=t.files.splice(idx,1);
       pintarThumbs(t,cont);
+      await persistirTarea(t, {
+        revertir: () => { t.files.splice(idx,0,quitado); pintarThumbs(t,cont); },
+      });
       try{ await RoadmapSync.borrarArchivo(quitado.path); }catch(e){}
-      await persistirTarea(t);
     };
     box.appendChild(x);
     cont.appendChild(box);
