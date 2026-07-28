@@ -397,10 +397,12 @@ RoadmapSync.onCambioSesion = function (cb) {
 -- Idempotente: se puede correr más de una vez sin error.
 
 drop policy if exists roadmap_secciones_all on public.roadmap_secciones;
+drop policy if exists roadmap_secciones_auth on public.roadmap_secciones;
 create policy roadmap_secciones_auth on public.roadmap_secciones
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
 drop policy if exists roadmap_tareas_all on public.roadmap_tareas;
+drop policy if exists roadmap_tareas_auth on public.roadmap_tareas;
 create policy roadmap_tareas_auth on public.roadmap_tareas
   for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
 
