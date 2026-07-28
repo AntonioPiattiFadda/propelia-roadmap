@@ -1095,17 +1095,24 @@ async function cargarYArrancar(){
 loginForm.addEventListener('submit', async e => {
   e.preventDefault();
   loginError.hidden = true;
+  const submitBtn = loginForm.querySelector('button[type=submit]');
+  const marcar = onEstadoBoton(submitBtn, 'Entrando...');
+  marcar('cargando');
   try{
     await RoadmapSync.iniciarSesion(loginEmail.value.trim(), loginPassword.value);
+    marcar('ok');
   }catch(err){
+    marcar('error');
     loginError.textContent = 'Email o contraseña incorrectos.';
     loginError.hidden = false;
   }
 });
 
 bCerrarSesion.onclick = async () => {
-  try{ await RoadmapSync.cerrarSesion(); }
-  catch(e){ aviso('No se pudo cerrar sesión: '+e.message); }
+  const marcar = onEstadoBoton(bCerrarSesion, 'Saliendo...');
+  marcar('cargando');
+  try{ await RoadmapSync.cerrarSesion(); marcar('ok'); }
+  catch(e){ marcar('error'); aviso('No se pudo cerrar sesión: '+e.message); }
 };
 
 (async function iniciar(){
