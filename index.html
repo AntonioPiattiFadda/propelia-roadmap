@@ -948,7 +948,9 @@ function pintarSeccion(s){
     const nueva={id,sec:s.id,modulo:'',tarea:'',expl:'',resp:'',estado:'Pendiente',img:'',com:'',fecha:'',files:[],orden:RoadmapSync.calcularOrden(ultimo,null)};
     estado.tareas.push(nueva);
     abiertas.add(id); cerradas.delete(s.id); render();
-    persistirTarea(nueva);
+    persistirTarea(nueva, {
+      revertir: () => { estado.tareas=estado.tareas.filter(x=>x.id!==id); abiertas.delete(id); render(); },
+    });
     const el=document.querySelector(`.row[data-id="${id}"] [data-k=tarea]`);
     if(el){ el.scrollIntoView({block:'center',behavior:'smooth'}); el.focus(); }
   };
@@ -998,7 +1000,9 @@ bNuevoBloque.onclick=()=>{
   const nueva={id,titulo:'',orden:RoadmapSync.calcularOrden(ultima,null)};
   estado.secciones.push(nueva);
   cerradas.delete(id); render();
-  persistirSeccion(nueva);
+  persistirSeccion(nueva, {
+    revertir: () => { estado.secciones=estado.secciones.filter(x=>x.id!==id); render(); },
+  });
   const el=document.querySelector(`.sec[data-id="${id}"] .sec-name`);
   if(el){ el.scrollIntoView({block:'center',behavior:'smooth'}); el.focus(); }
 };
