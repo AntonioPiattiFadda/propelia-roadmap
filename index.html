@@ -360,9 +360,10 @@ let estado = { secciones: [], tareas: [] };
 const pendientesGuardado = new Map();
 function guardarDebounced(clave, fn) {
   clearTimeout(pendientesGuardado.get(clave));
-  pendientesGuardado.set(clave, setTimeout(fn, 500));
+  pendientesGuardado.set(clave, setTimeout(() => { pendientesGuardado.delete(clave); fn(); }, 500));
 }
 const valoresAntesDelCambio = new Map();
+const pendientesEnVuelo = new Map();
 
 async function conEstadoDeCarga(accion, { revertir, intentos = 2, onEstado } = {}) {
   onEstado?.('cargando');
@@ -740,13 +741,21 @@ function pintarFila(t){
         ttl.textContent=el.value||'Tarea sin título — ábrela y ponle nombre';
         ttl.classList.toggle('vacio', !el.value);
       }
-      guardarDebounced(t.id, () => persistirTarea(t, {
-        revertir: () => {
-          const previo = valoresAntesDelCambio.get(t.id);
-          if (previo) Object.assign(t, previo);
-          render();
-        },
-      }).then(ok => { if (ok) valoresAntesDelCambio.delete(t.id); }));
+      guardarDebounced(t.id, () => {
+        pendientesEnVuelo.set(t.id, (pendientesEnVuelo.get(t.id)||0)+1);
+        persistirTarea(t, {
+          revertir: () => {
+            const previo = valoresAntesDelCambio.get(t.id);
+            if (previo) Object.assign(t, previo);
+            render();
+          },
+        }).then(() => {
+          const restantes = (pendientesEnVuelo.get(t.id)||1) - 1;
+          if (restantes <= 0 && !pendientesGuardado.has(t.id)) {
+            pendientesEnVuelo.delete(t.id); valoresAntesDelCambio.delete(t.id);
+          } else pendientesEnVuelo.set(t.id, Math.max(0, restantes));
+        });
+      });
     };
   });
   const thumbs=row.querySelector('.thumbs'), zona=row.querySelector('.zona');
@@ -843,13 +852,21 @@ function pintarSeccion(s){
   inp.oninput=()=>{
     if(!valoresAntesDelCambio.has(s.id)) valoresAntesDelCambio.set(s.id, {...s});
     s.titulo=inp.value;
-    guardarDebounced(s.id, () => persistirSeccion(s, {
-      revertir: () => {
-        const previo = valoresAntesDelCambio.get(s.id);
-        if (previo) Object.assign(s, previo);
-        render();
-      },
-    }).then(ok => { if (ok) valoresAntesDelCambio.delete(s.id); }));
+    guardarDebounced(s.id, () => {
+      pendientesEnVuelo.set(s.id, (pendientesEnVuelo.get(s.id)||0)+1);
+      persistirSeccion(s, {
+        revertir: () => {
+          const previo = valoresAntesDelCambio.get(s.id);
+          if (previo) Object.assign(s, previo);
+          render();
+        },
+      }).then(() => {
+        const restantes = (pendientesEnVuelo.get(s.id)||1) - 1;
+        if (restantes <= 0 && !pendientesGuardado.has(s.id)) {
+          pendientesEnVuelo.delete(s.id); valoresAntesDelCambio.delete(s.id);
+        } else pendientesEnVuelo.set(s.id, Math.max(0, restantes));
+      });
+    });
   };
   inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } };
   const cab=sec.querySelector('.sec-h');
