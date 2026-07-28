@@ -584,22 +584,27 @@ function moverTarea(idA, idObj, despues){
   const [t]=a.splice(i,1);
   const j=a.findIndex(x=>x.id===idObj);
   if(j<0){ a.splice(i,0,t); return; }
+  const secAnterior=t.sec, ordenAnterior=t.orden;
   t.sec=a[j].sec;
   const destino=despues?j+1:j;
   a.splice(destino,0,t);
   const anterior=a[destino-1]?.orden ?? null;
   const siguiente=a[destino+1]?.orden ?? null;
   t.orden=RoadmapSync.calcularOrden(anterior, siguiente);
-  persistirTarea(t); render();
+  persistirTarea(t, { revertir: () => { t.sec=secAnterior; t.orden=ordenAnterior; render(); } });
+  render();
 }
 function moverTareaAlFinal(idA, secId){
   const a=estado.tareas;
   const i=a.findIndex(t=>t.id===idA); if(i<0) return;
-  const [t]=a.splice(i,1); t.sec=secId;
+  const [t]=a.splice(i,1);
+  const secAnterior=t.sec, ordenAnterior=t.orden;
+  t.sec=secId;
   let ultimo=-1; a.forEach((x,k)=>{ if(x.sec===secId) ultimo=k; });
   a.splice(ultimo+1,0,t);
   t.orden=RoadmapSync.calcularOrden(a[ultimo]?.orden ?? null, null);
-  persistirTarea(t); render();
+  persistirTarea(t, { revertir: () => { t.sec=secAnterior; t.orden=ordenAnterior; render(); } });
+  render();
 }
 function moverBloque(idA, idObj, despues){
   const a=estado.secciones;
@@ -607,12 +612,14 @@ function moverBloque(idA, idObj, despues){
   const [s]=a.splice(i,1);
   const j=a.findIndex(x=>x.id===idObj);
   if(j<0){ a.splice(i,0,s); return; }
+  const ordenAnterior=s.orden;
   const destino=despues?j+1:j;
   a.splice(destino,0,s);
   const anterior=a[destino-1]?.orden ?? null;
   const siguiente=a[destino+1]?.orden ?? null;
   s.orden=RoadmapSync.calcularOrden(anterior, siguiente);
-  persistirSeccion(s); render();
+  persistirSeccion(s, { revertir: () => { s.orden=ordenAnterior; render(); } });
+  render();
 }
 function moverBloquePaso(id, paso){
   const a=estado.secciones, i=a.findIndex(x=>x.id===id), j=i+paso;
