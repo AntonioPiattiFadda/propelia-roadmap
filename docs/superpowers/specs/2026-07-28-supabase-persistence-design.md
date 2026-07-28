@@ -15,7 +15,7 @@ Reemplazar el `localStorage` + export/import manual por una base de datos compar
 - **Backend:** Supabase (Postgres + Realtime + Storage), cargado vía CDN (`@supabase/supabase-js@2`) — no rompe el "un solo HTML sin build".
 - **Proyecto Supabase:** el mismo proyecto real de `propelia-frontend` (`propelia`, project ID `gvkdyxhxsnpumxlhvhsm`), justificado porque es literalmente el CRM del que hablan las tareas del roadmap.
 - **Prefijo de tablas:** `roadmap_` para aislar lógicamente estas tablas de las del CRM (`leads`, `properties`, `clients`, etc.).
-- **Auth:** ninguna. En su lugar, un código compartido (passcode) pedido en el navegador antes de habilitar edición.
+- **Auth:** Supabase Auth real (email + password), vía un modal flotante en `index.html` — **actualizado durante la ejecución del plan** (ver Addendum abajo). Se descartó tanto la opción original "sin auth" como la variante intermedia de passcode fijo: se reutiliza el mismo proyecto Supabase que ya usa `propelia-frontend`, así que Loro y Toni pueden loguearse con la cuenta que ya tienen ahí, sin alta nueva.
 - **Adjuntos:** Supabase Storage (bucket `roadmap-adjuntos`), no más base64 embebido.
 - **Ejecución del SQL:** el usuario lo corre él mismo en el SQL Editor del dashboard de Supabase — Claude no recibe credenciales de la base.
 
@@ -81,11 +81,23 @@ Un trigger `roadmap_set_updated_at()` actualiza `updated_at` en cada `UPDATE` de
 - Los inputs de texto (`tarea`, `expl`, `com`, `modulo`) debouncean el `UPDATE` a Supabase (~500ms) para no disparar un request por tecla — el estado local (`estado.tareas`) se sigue actualizando al instante para que la UI no sienta lag.
 - Al reconectar el WebSocket (ej. laptop que vuelve de suspendido), se hace un refetch completo por las dudas de haberse perdido algún evento mientras estuvo desconectado.
 
-## Seguridad — caveat explícito
+## Seguridad — SUPERSEDIDO, ver Addendum
 
-RLS habilitado en ambas tablas con policy `using (true) with check (true)`: cualquiera con la `anon key` (visible en el HTML, "ver código fuente") puede leer y escribir. El passcode pedido en el navegador es un **candado de UX, no de seguridad real** — no hay verificación server-side de ese código. Es el mismo nivel de exposición que ya existe hoy (cualquiera con el HTML que se pasan por WhatsApp podía editarlo todo).
+~~RLS habilitado en ambas tablas con policy `using (true) with check (true)`: cualquiera con la `anon key` (visible en el HTML, "ver código fuente") puede leer y escribir. El passcode pedido en el navegador es un candado de UX, no de seguridad real — no hay verificación server-side de ese código. Es el mismo nivel de exposición que ya existe hoy.~~
 
-Esto es aceptable para una herramienta interna de dos personas. Si en el futuro esto se abre a más gente o datos sensibles, ahí sí corresponde Supabase Auth de verdad.
+~~Esto es aceptable para una herramienta interna de dos personas. Si en el futuro esto se abre a más gente o datos sensibles, ahí sí corresponde Supabase Auth de verdad.~~
+
+Esta sección quedó obsoleta a mitad de la implementación (Task 1 ya había corrido con `using (true) with check (true)`) — el usuario pidió pasar a Auth real. Ver "Addendum: Auth real reemplaza el passcode" al final de este documento para la decisión vigente.
+
+## Addendum: Auth real reemplaza el passcode
+
+Durante la ejecución del plan (después de completar la Task 1 contra la base real), el usuario decidió reemplazar el passcode de UX por **Supabase Auth real** (email + password), razonando que `propelia-frontend` ya tiene Auth andando contra este mismo proyecto (`gvkdyxhxsnpumxlhvhsm`) — Loro y Toni ya tienen cuenta ahí, no hace falta un alta nueva.
+
+Cambios respecto al diseño original:
+- **RLS:** las policies `roadmap_secciones_all` / `roadmap_tareas_all` (`using (true) with check (true)`) se reemplazan por policies que exigen sesión autenticada (`auth.role() = 'authenticated'`). Esto requiere una migración de ALTER sobre la base ya viva (Task 1 corrió con las policies abiertas).
+- **UI:** un modal flotante (overlay) con campos email/password, usando `supabaseClient.auth.signInWithPassword(...)`. Si no hay sesión activa (`supabaseClient.auth.getSession()`), se muestra el modal y se bloquea la interacción con el resto de la página.
+- **Sin alta de usuarios nueva:** no se crea un flujo de registro — se asume que Loro y Toni ya existen como usuarios de Supabase Auth en este proyecto (dados de alta al usar `propelia-frontend`). Si alguno no tiene cuenta ahí, hay que crearla manualmente en el dashboard (Authentication → Users) antes de que pueda entrar al roadmap.
+- **Ya no aplica:** el candado de "código compartido" (passcode) como UX gate — queda completamente reemplazado, no coexiste con el login real.
 
 ## Migración de datos existentes
 

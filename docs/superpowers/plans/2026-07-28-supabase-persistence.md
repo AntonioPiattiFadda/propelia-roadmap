@@ -4,7 +4,7 @@
 
 **Goal:** Reemplazar el `localStorage` + export/import manual de `index.html` por una base de datos Supabase compartida entre Loro y Toni, con sincronización en tiempo real y adjuntos en Supabase Storage.
 
-**Architecture:** `index.html` sigue siendo un único archivo estático sin build tools. Se agrega `supabase-sync.js` (cargado por `<script src>` antes del script principal) como capa de datos: expone un objeto global `RoadmapSync` con funciones de lectura/escritura contra Postgres, subida/borrado de archivos contra Storage, suscripción realtime, y el gate de passcode. El script principal de `index.html` deja de tocar `localStorage`/`RAW` y llama a `RoadmapSync.*` en cada punto donde antes llamaba a `guardar()`.
+**Architecture:** `index.html` sigue siendo un único archivo estático sin build tools. Se agrega `supabase-sync.js` (cargado por `<script src>` antes del script principal) como capa de datos: expone un objeto global `RoadmapSync` con funciones de lectura/escritura contra Postgres, subida/borrado de archivos contra Storage, suscripción realtime, y sesión de Auth real (email+password, reutilizando el proyecto Supabase de `propelia-frontend`). El script principal de `index.html` deja de tocar `localStorage`/`RAW` y llama a `RoadmapSync.*` en cada punto donde antes llamaba a `guardar()`. Un modal flotante bloquea toda la app hasta que hay sesión activa.
 
 **Tech Stack:** Supabase JS SDK v2 (vía CDN `https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2`), Postgres, Supabase Realtime, Supabase Storage. Sin build tools, sin framework de test (proyecto HTML estático).
 
@@ -12,7 +12,7 @@
 
 - Proyecto Supabase real: `propelia`, ref `gvkdyxhxsnpumxlhvhsm`. El SQL de creación de tablas lo corre el usuario mismo en el SQL Editor del dashboard — ningún agente recibe credenciales de la base.
 - Prefijo de tablas: `roadmap_` (`roadmap_secciones`, `roadmap_tareas`). Bucket de Storage: `roadmap-adjuntos`.
-- RLS habilitado con policy `using (true) with check (true)` en ambas tablas — sin auth real. El passcode del cliente es un candado de UX, no de seguridad (ver spec, sección "Seguridad — caveat explícito").
+- **[ACTUALIZADO durante la ejecución, ver spec Addendum]** RLS exige sesión autenticada (`auth.role() = 'authenticated'`) en ambas tablas y en `storage.objects` del bucket `roadmap-adjuntos` — Auth real (email+password) contra el mismo proyecto Supabase que ya usa `propelia-frontend`. Se descartaron tanto "sin auth" como el passcode de UX (decisiones originales del spec, ya supersedidas). Loro y Toni entran con la cuenta que ya tengan ahí; no hay alta de usuarios nueva en este plan.
 - `orden` es `float8` en ambas tablas; al reordenar se recalcula solo el punto medio entre vecinos, nunca se reescribe la lista completa.
 - Debounce de 500ms en los campos de texto (`tarea`, `expl`, `com`, `modulo`, `titulo` de sección) antes de persistir.
 - Sin framework de test en este repo. Para lógica pura (`calcularOrden`, el generador de seed) se usan aserciones planas de Node (`node -e` / `assert`). Para todo lo que depende del DOM o de la red (Supabase real) la verificación es manual en dos pestañas del navegador — así lo aprobó el spec.
@@ -331,14 +331,17 @@ git commit -m "feat: add Supabase client, order-math helper, and base CRUD in su
 
 ---
 
-### Task 4: Storage de adjuntos + passcode gate
+### Task 4: Storage de adjuntos + Auth real (login) + RLS por sesión
+
+**Nota:** esta task fue rediseñada a mitad de la ejecución del plan — la Task 1 ya había corrido con RLS abierto (`using (true)`); el usuario pidió reemplazar el passcode de UX por Auth real (email+password), reutilizando el proyecto Supabase de `propelia-frontend`. Ver spec, sección "Addendum: Auth real reemplaza el passcode".
 
 **Files:**
+- Create: `supabase/rls-auth.sql` (migración: reemplaza las policies abiertas de Task 1 por policies que exigen sesión autenticada)
 - Modify: `supabase-sync.js`
 
 **Interfaces:**
 - Consumes: `supabaseClient` (definido en Task 3, mismo archivo)
-- Produces: `RoadmapSync.subirArchivo(tareaId, blob, nombreArchivo)`, `.borrarArchivo(path)`, `.urlPublica(path)`, `.passcodeOk()`, `.pedirPasscode()` — usados por Task 6.
+- Produces: `RoadmapSync.subirArchivo(tareaId, blob, nombreArchivo)`, `.borrarArchivo(path)`, `.urlPublica(path)`, `.sesionActiva()`, `.iniciarSesion(email, password)`, `.cerrarSesion()`, `.onCambioSesion(cb)` — usados por Task 6.
 
 - [ ] **Step 1: Agregar las funciones de Storage antes de `window.RoadmapSync = RoadmapSync;`**
 
@@ -362,34 +365,67 @@ RoadmapSync.urlPublica = function (path) {
 };
 ```
 
-- [ ] **Step 2: Pedirle al usuario el passcode compartido y agregar el gate**
-
-STOP: preguntarle al usuario qué código quiere usar como passcode compartido (recordar: es un candado de UX, no de seguridad real — ver spec). Reemplazar `CAMBIAR-ESTE-CODIGO` por ese valor.
+- [ ] **Step 2: Agregar las funciones de Auth antes de `window.RoadmapSync = RoadmapSync;`**
 
 ```js
-const PASSCODE = 'CAMBIAR-ESTE-CODIGO';
-let passcodeVerificado = sessionStorage.getItem('roadmap-passcode-ok') === '1';
+RoadmapSync.sesionActiva = async function () {
+  const { data } = await supabaseClient.auth.getSession();
+  return !!data.session;
+};
 
-RoadmapSync.passcodeOk = function () { return passcodeVerificado; };
+RoadmapSync.iniciarSesion = async function (email, password) {
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+};
 
-RoadmapSync.pedirPasscode = function () {
-  if (passcodeVerificado) return true;
-  const intento = prompt('Código para editar el roadmap:');
-  if (intento === PASSCODE) {
-    passcodeVerificado = true;
-    sessionStorage.setItem('roadmap-passcode-ok', '1');
-    return true;
-  }
-  if (intento !== null) alert('Código incorrecto.');
-  return false;
+RoadmapSync.cerrarSesion = async function () {
+  await supabaseClient.auth.signOut();
+};
+
+RoadmapSync.onCambioSesion = function (cb) {
+  supabaseClient.auth.onAuthStateChange((_evento, sesion) => cb(!!sesion));
 };
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Escribir la migración de RLS**
+
+```sql
+-- supabase/rls-auth.sql
+-- Ejecutar en el SQL Editor del proyecto Supabase "propelia" (gvkdyxhxsnpumxlhvhsm),
+-- DESPUÉS de supabase/schema.sql (Task 1). Reemplaza las policies abiertas por
+-- policies que exigen sesión autenticada (Supabase Auth real).
+-- Idempotente: se puede correr más de una vez sin error.
+
+drop policy if exists roadmap_secciones_all on public.roadmap_secciones;
+create policy roadmap_secciones_auth on public.roadmap_secciones
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+drop policy if exists roadmap_tareas_all on public.roadmap_tareas;
+create policy roadmap_tareas_auth on public.roadmap_tareas
+  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+drop policy if exists roadmap_adjuntos_read on storage.objects;
+create policy roadmap_adjuntos_read on storage.objects
+  for select using (bucket_id = 'roadmap-adjuntos' and auth.role() = 'authenticated');
+
+drop policy if exists roadmap_adjuntos_write on storage.objects;
+create policy roadmap_adjuntos_write on storage.objects
+  for insert with check (bucket_id = 'roadmap-adjuntos' and auth.role() = 'authenticated');
+
+drop policy if exists roadmap_adjuntos_delete on storage.objects;
+create policy roadmap_adjuntos_delete on storage.objects
+  for delete using (bucket_id = 'roadmap-adjuntos' and auth.role() = 'authenticated');
+```
+
+- [ ] **Step 4: [MANUAL — lo hace el usuario] Correr la migración y confirmar cuentas**
+
+STOP: pedirle al usuario que corra `supabase/rls-auth.sql` en el SQL Editor de Supabase, y que confirme que Loro y Toni ya existen como usuarios en este proyecto (Dashboard → Authentication → Users) — son las mismas cuentas que usan en `propelia-frontend`. Si alguno no existe ahí, no va a poder loguearse hasta que se le cree la cuenta manualmente en ese panel. No avanzar a Task 6 sin esta confirmación (Task 5 no depende de esto y puede seguir).
+
+- [ ] **Step 5: Commit**
 
 ```bash
-git add supabase-sync.js
-git commit -m "feat: add Storage upload/delete and UX passcode gate to supabase-sync.js"
+git add supabase/rls-auth.sql supabase-sync.js
+git commit -m "feat: add Storage upload/delete and real Auth (session-gated RLS) to supabase-sync.js"
 ```
 
 ---
@@ -439,7 +475,9 @@ Esta es la tarea grande: reemplaza cada punto donde el script principal usaba `l
 - Modify: `index.html`
 
 **Interfaces:**
-- Consumes: todo lo producido en Tasks 3-5 (`RoadmapSync.cargarEstado/guardarSeccion/borrarSeccion/guardarTarea/borrarTarea/calcularOrden/subirArchivo/borrarArchivo/urlPublica/passcodeOk/pedirPasscode/suscribir`)
+- Consumes: todo lo producido en Tasks 3-5 (`RoadmapSync.cargarEstado/guardarSeccion/borrarSeccion/guardarTarea/borrarTarea/calcularOrden/subirArchivo/borrarArchivo/urlPublica/sesionActiva/iniciarSesion/cerrarSesion/onCambioSesion/suscribir`)
+
+**Nota sobre Auth:** ya no hay guards de passcode por handler. La RLS (Task 4) exige sesión autenticada a nivel de base — el gate es UNO SOLO, a nivel de app completa (un modal que bloquea todo hasta loguearse), no un `if(!...) return;` repetido en cada acción. Ver Step 10 (modal de login) y Step 11 (arranque con el gate de sesión) más abajo.
 
 - [ ] **Step 1: Agregar los `<script>` de Supabase antes del script principal**
 
@@ -632,7 +670,6 @@ function pintarThumbs(t, cont){
     x.title='Quitar este archivo'; x.setAttribute('aria-label','Quitar '+f.n);
     x.onclick=async ev=>{
       ev.stopPropagation();
-      if(!RoadmapSync.pedirPasscode()) return;
       const [quitado]=t.files.splice(i,1);
       pintarThumbs(t,cont);
       try{ await RoadmapSync.borrarArchivo(quitado.path); }catch(e){}
@@ -644,7 +681,7 @@ function pintarThumbs(t, cont){
 }
 ```
 
-- [ ] **Step 5: Agregar el guard de passcode + reemplazar `guardar()` por persistencia puntual en cada handler de `pintarFila`**
+- [ ] **Step 5: Reemplazar `guardar()` por persistencia puntual en cada handler de `pintarFila`**
 
 En los handlers de `.seg button` (resp) y `select.est` (estado) (líneas ~1254-1268 actuales):
 
@@ -652,7 +689,6 @@ En los handlers de `.seg button` (resp) y `select.est` (estado) (líneas ~1254-1
 row.querySelectorAll('.seg button').forEach(b=>{
   b.onclick=ev=>{
     ev.stopPropagation();
-    if(!RoadmapSync.pedirPasscode()) return;
     t.resp=(t.resp===b.dataset.r)?'':b.dataset.r;
     row.dataset.resp=t.resp;
     row.querySelectorAll('.seg button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.r===t.resp));
@@ -661,7 +697,6 @@ row.querySelectorAll('.seg button').forEach(b=>{
   };
 });
 row.querySelector('.est').onchange=e=>{
-  if(!RoadmapSync.pedirPasscode()) return;
   t.estado=e.target.value; row.dataset.estado=t.estado;
   persistirTarea(t); cancha(); actualizarPills();
   if(filtros.ocultarHechas) render();
@@ -673,7 +708,6 @@ En el handler de `[data-k]` (inputs de texto) (líneas ~1269-1280 actuales):
 ```js
 row.querySelectorAll('[data-k]').forEach(el=>{
   el.oninput=()=>{
-    if(!RoadmapSync.pedirPasscode()) return;
     t[el.dataset.k]=el.value;
     if(el.tagName==='TEXTAREA') autosize(el);
     if(el.dataset.k==='tarea'){
@@ -690,7 +724,6 @@ En `[data-mover]` y `.del` (líneas ~1303-1308 actuales):
 
 ```js
 row.querySelector('[data-mover]').onchange=e=>{
-  if(!RoadmapSync.pedirPasscode()) return;
   t.sec=e.target.value;
   const delSec=estado.tareas.filter(x=>x.sec===t.sec && x.id!==t.id);
   const ultimo=delSec.length ? delSec[delSec.length-1].orden : null;
@@ -698,7 +731,6 @@ row.querySelector('[data-mover]').onchange=e=>{
   persistirTarea(t); render();
 };
 row.querySelector('.del').onclick=async ()=>{
-  if(!RoadmapSync.pedirPasscode()) return;
   if(!confirm('Se borra «'+(t.tarea||t.id)+'». ¿Seguir?')) return;
   estado.tareas=estado.tareas.filter(x=>x.id!==t.id);
   abiertas.delete(t.id); render();
@@ -758,14 +790,13 @@ function moverBloquePaso(id, paso){
 }
 ```
 
-Agregar el guard de passcode en los tres call-sites de drag&drop que disparan estas funciones: el `drop` handler de `.row` (llama `moverTarea`), el `drop` handler de `.sec-h`/`.sec-body` (llama `moverBloque`/`moverTareaAlFinal`), y los botones `data-up`/`data-down` del menú de tres puntos (llaman `moverBloquePaso`). En cada uno, agregar `if(!RoadmapSync.pedirPasscode()) return;` como primera línea del handler, antes de la línea que ya existe.
+Estas cuatro funciones no llevan ningún guard de auth propio: la RLS de Task 4 ya exige sesión autenticada a nivel de base, y el modal de login (Step 10b) bloquea toda interacción con la página hasta que hay sesión — no hace falta repetir un chequeo en cada call-site de drag&drop.
 
 - [ ] **Step 7: Reemplazar el input de nombre de sección (líneas ~1355-1357 actuales)**
 
 ```js
 const inp=sec.querySelector('.sec-name');
 inp.oninput=()=>{
-  if(!RoadmapSync.pedirPasscode()) return;
   s.titulo=inp.value;
   guardarDebounced(s, persistirSeccion);
 };
@@ -777,7 +808,6 @@ inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } };
 ```js
 sec.querySelector('[data-del]').onclick=async ()=>{
   cerrarMenus();
-  if(!RoadmapSync.pedirPasscode()) return;
   if(suyas.length){ aviso('Ese bloque tiene '+suyas.length+' tareas. Muévelas o bórralas primero.'); return; }
   if(!confirm('Se borra el bloque «'+s.titulo+'». ¿Seguir?')) return;
   estado.secciones=estado.secciones.filter(x=>x.id!==s.id); render();
@@ -789,7 +819,6 @@ sec.querySelector('[data-del]').onclick=async ()=>{
 
 ```js
 add.onclick=()=>{
-  if(!RoadmapSync.pedirPasscode()) return;
   const id=nuevoId('T', estado.tareas.map(x=>x.id));
   const delSec=estado.tareas.filter(x=>x.sec===s.id);
   const ultimo=delSec.length ? delSec[delSec.length-1].orden : null;
@@ -804,7 +833,6 @@ add.onclick=()=>{
 
 ```js
 bNuevoBloque.onclick=()=>{
-  if(!RoadmapSync.pedirPasscode()) return;
   const id=nuevoId('s', estado.secciones.map(x=>x.id));
   const ultima=estado.secciones.length ? estado.secciones[estado.secciones.length-1].orden : null;
   const nueva={id,titulo:'',orden:RoadmapSync.calcularOrden(ultima,null)};
@@ -816,12 +844,59 @@ bNuevoBloque.onclick=()=>{
 };
 ```
 
-- [ ] **Step 10: Reemplazar el arranque y el `render()` final (línea 1545 actual)**
+- [ ] **Step 10: Agregar el modal de login (HTML + CSS)**
+
+Agregar este markup justo antes de `<div class="toast" id="toast" ...>` (cerca del final del `<body>`, línea ~311 actual):
+
+```html
+<div class="login-overlay" id="loginOverlay" hidden>
+  <form class="login-modal" id="loginForm">
+    <h2>Iniciar sesión</h2>
+    <label class="lbl">Email</label>
+    <input class="fld" type="email" id="loginEmail" required autocomplete="username">
+    <label class="lbl">Contraseña</label>
+    <input class="fld" type="password" id="loginPassword" required autocomplete="current-password">
+    <div class="login-error" id="loginError" hidden></div>
+    <button class="act pri" type="submit">Entrar</button>
+  </form>
+</div>
+```
+
+Y este CSS al final del bloque `<style>` existente (antes de `</style>`, línea ~253 actual):
+
+```css
+.login-overlay{position:fixed;inset:0;z-index:200;background:rgba(21,28,38,.55);
+  display:flex;align-items:center;justify-content:center;padding:18px}
+.login-overlay[hidden]{display:none}
+.login-modal{background:var(--surface);border:1px solid var(--edge);border-radius:10px;
+  padding:24px;width:100%;max-width:320px;box-shadow:0 20px 50px rgba(21,28,38,.3)}
+.login-modal h2{margin:0 0 16px;font-size:16px}
+.login-modal .lbl{margin:12px 0 5px}
+.login-error{margin-top:10px;color:#9E3131;font-size:12.5px}
+.login-error[hidden]{display:none}
+.login-modal button{margin-top:16px;width:100%}
+```
+
+También agregar un enlace de "Cerrar sesión" en el header, al lado del enlace de Trello (línea ~261 actual, `<a class="trello" ...>Tablero de Trello</a>`):
+
+```html
+<a class="trello" href="https://trello.com/b/vlKCxRTS/propelia" target="_blank" rel="noopener">Tablero de Trello</a>
+<button class="trello" id="bCerrarSesion" style="border:0;background:transparent;cursor:pointer;font:inherit">Cerrar sesión</button>
+```
+
+- [ ] **Step 11: Reemplazar el arranque y el `render()` final (línea 1545 actual) por el gate de sesión**
 
 Quitar la línea suelta `render();` al final del script y reemplazar por:
 
 ```js
-(async function iniciar(){
+const loginOverlay = document.getElementById('loginOverlay');
+const loginForm = document.getElementById('loginForm');
+const loginError = document.getElementById('loginError');
+
+function mostrarModalLogin(){ loginOverlay.hidden = false; }
+function ocultarModalLogin(){ loginOverlay.hidden = true; }
+
+async function cargarYArrancar(){
   try{
     estado = await RoadmapSync.cargarEstado();
   }catch(e){
@@ -829,15 +904,41 @@ Quitar la línea suelta `render();` al final del script y reemplazar por:
     estado = { secciones: [], tareas: [] };
   }
   render();
+}
+
+loginForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  loginError.hidden = true;
+  try{
+    await RoadmapSync.iniciarSesion(loginEmail.value.trim(), loginPassword.value);
+  }catch(err){
+    loginError.textContent = 'Email o contraseña incorrectos.';
+    loginError.hidden = false;
+  }
+});
+
+bCerrarSesion.onclick = () => RoadmapSync.cerrarSesion();
+
+(async function iniciar(){
+  const activa = await RoadmapSync.sesionActiva();
+  if(activa){ await cargarYArrancar(); } else { mostrarModalLogin(); }
+
+  RoadmapSync.onCambioSesion(async sesionOk => {
+    if(sesionOk){ ocultarModalLogin(); await cargarYArrancar(); }
+    else { estado = { secciones: [], tareas: [] }; render(); mostrarModalLogin(); }
+  });
+
   RoadmapSync.suscribir(refrescarDesdeSupabase);
 })();
 ```
 
-- [ ] **Step 11: Verificación manual (dos pestañas)**
+Nota: `onCambioSesion` va a disparar una vez más apenas se registra si ya había sesión activa (comportamiento estándar de `onAuthStateChange`) — eso pisa el `cargarYArrancar()` inicial con uno idéntico, es un fetch de más pero inofensivo, no un bug. Al cerrar sesión (`bCerrarSesion`), `estado` se vacía y se vuelve a mostrar el modal — no queda data vieja visible detrás del overlay.
 
-Abrir `index.html` en dos pestañas del navegador (simulando a Loro y Toni). En la pestaña A: crear una tarea, cambiar su estado, escribir en la explicación, subir un archivo. Confirmar en la pestaña B que cada cambio aparece solo, sin recargar. Confirmar que si la pestaña B tiene un textarea enfocado mientras llega un cambio remoto, no pierde el foco (se actualiza recién al salir del campo).
+- [ ] **Step 12: Verificación manual (dos pestañas + login)**
 
-- [ ] **Step 12: Commit**
+Abrir `index.html` sin sesión iniciada: confirmar que el modal de login tapa toda la app. Loguearse con una cuenta real de Loro o Toni (las mismas que usan en `propelia-frontend`) y confirmar que el modal desaparece y carga la data. Abrir una segunda pestaña (misma sesión de navegador): confirmar que NO pide login de nuevo. En la pestaña A: crear una tarea, cambiar su estado, escribir en la explicación, subir un archivo. Confirmar en la pestaña B que cada cambio aparece solo, sin recargar. Confirmar que si la pestaña B tiene un textarea enfocado mientras llega un cambio remoto, no pierde el foco (se actualiza recién al salir del campo). Probar "Cerrar sesión" y confirmar que vuelve a tapar la app con el modal.
+
+- [ ] **Step 13: Commit**
 
 ```bash
 git add index.html
@@ -952,9 +1053,9 @@ Subir una imagen y un PDF desde una pestaña; confirmar que ambos son visibles y
 
 Arrastrar una tarea a otra posición y una sección a otro lugar; recargar la página; confirmar que el orden se mantiene.
 
-- [ ] **Step 5: Passcode**
+- [ ] **Step 5: Login**
 
-En una pestaña sin el passcode ingresado todavía, intentar editar un campo; confirmar que pide el código y que un código incorrecto no habilita la edición.
+Abrir `index.html` en una ventana de incógnito (sin sesión): confirmar que el modal de login tapa toda la app y que no se puede interactuar con nada detrás. Probar un email/password incorrecto y confirmar que muestra el error sin dejar pasar. Loguearse con una cuenta real y confirmar que carga. Probar "Cerrar sesión" y confirmar que vuelve a tapar la app.
 
 - [ ] **Step 6: Exportar sigue funcionando**
 
