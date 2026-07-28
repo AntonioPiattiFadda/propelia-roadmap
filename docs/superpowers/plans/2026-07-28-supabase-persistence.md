@@ -197,27 +197,41 @@ No avanzar a la Task 3 hasta que los dos `count(*)` de arriba devuelvan los núm
 ### Task 3: Cliente Supabase + CRUD base (`supabase-sync.js`)
 
 **Files:**
+- Create: `order-math.js` (función pura compartida, sin `window`/`document` — cargable tanto por `<script src>` en el navegador como por `require()` en Node)
 - Create: `supabase-sync.js`
-- Test: `scripts/test-calcular-orden.mjs`
+- Test: `scripts/test-calcular-orden.cjs`
 
 **Interfaces:**
-- Consumes: variables globales `SUPABASE_URL`, `SUPABASE_ANON_KEY` (a completar con los valores reales del proyecto — Dashboard → Settings → API → Project URL / anon public)
+- Consumes: variables globales `SUPABASE_URL`, `SUPABASE_ANON_KEY` (a completar con los valores reales del proyecto — Dashboard → Settings → API → Project URL / anon public); `calcularOrden` global expuesta por `order-math.js` (cargado antes que `supabase-sync.js` en `index.html`, ver Task 6 Step 1)
 - Produces: `window.RoadmapSync.cargarEstado()`, `.guardarSeccion(s)`, `.borrarSeccion(id)`, `.guardarTarea(t)`, `.borrarTarea(id)`, `.calcularOrden(anterior, siguiente)` — usados por las Tasks 4-6.
 
-- [ ] **Step 1: Escribir la función pura `calcularOrden` y su test**
+- [ ] **Step 1: Escribir la función pura `calcularOrden` en su propio archivo**
 
 ```js
-// scripts/test-calcular-orden.mjs
-// Duplicamos la función acá (en vez de importar supabase-sync.js) porque ese archivo
-// asume `window`/`document` y no corre en Node sin un shim de DOM.
-import assert from 'node:assert/strict';
-
+// order-math.js
+// Sin `window`/`document`: la carga tanto un <script src> plano en el navegador
+// como un require() en Node (para el test), sin necesitar build tools ni módulos ES.
 function calcularOrden(anterior, siguiente) {
   if (anterior == null && siguiente == null) return 1;
   if (anterior == null) return siguiente - 1;
   if (siguiente == null) return anterior + 1;
   return (anterior + siguiente) / 2;
 }
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = { calcularOrden };
+}
+if (typeof window !== 'undefined') {
+  window.calcularOrden = calcularOrden;
+}
+```
+
+- [ ] **Step 2: Escribir el test y correrlo**
+
+```js
+// scripts/test-calcular-orden.cjs
+const assert = require('node:assert/strict');
+const { calcularOrden } = require('../order-math.js');
 
 assert.equal(calcularOrden(null, null), 1);
 assert.equal(calcularOrden(null, 5), 4);
@@ -226,9 +240,7 @@ assert.equal(calcularOrden(2, 4), 3);
 console.log('calcularOrden: OK');
 ```
 
-- [ ] **Step 2: Correr el test y verificar que pasa**
-
-Run: `node scripts/test-calcular-orden.mjs`
+Run: `node scripts/test-calcular-orden.cjs`
 Expected: `calcularOrden: OK`
 
 - [ ] **Step 3: Preguntarle al usuario por las credenciales del proyecto**
@@ -240,19 +252,13 @@ STOP: pedirle al usuario el **Project URL** y la **anon public key** del proyect
 ```js
 // supabase-sync.js
 // Requiere que scripts/generate-seed-sql.mjs + supabase/schema.sql + seed.sql
-// ya se hayan corrido contra el proyecto (ver Task 1 y 2).
+// ya se hayan corrido contra el proyecto (ver Task 1 y 2), y que order-math.js
+// se cargue antes que este script (ver Task 6 Step 1) para que `calcularOrden` exista.
 
 const SUPABASE_URL = 'REEMPLAZAR_CON_PROJECT_URL';
 const SUPABASE_ANON_KEY = 'REEMPLAZAR_CON_ANON_PUBLIC_KEY';
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-function calcularOrden(anterior, siguiente) {
-  if (anterior == null && siguiente == null) return 1;
-  if (anterior == null) return siguiente - 1;
-  if (siguiente == null) return anterior + 1;
-  return (anterior + siguiente) / 2;
-}
 
 const RoadmapSync = {
   calcularOrden,
@@ -306,8 +312,8 @@ window.RoadmapSync = RoadmapSync;
 - [ ] **Step 5: Commit**
 
 ```bash
-git add supabase-sync.js scripts/test-calcular-orden.mjs
-git commit -m "feat: add Supabase client and base CRUD in supabase-sync.js"
+git add order-math.js supabase-sync.js scripts/test-calcular-orden.cjs
+git commit -m "feat: add Supabase client, order-math helper, and base CRUD in supabase-sync.js"
 ```
 
 ---
@@ -424,10 +430,11 @@ Esta es la tarea grande: reemplaza cada punto donde el script principal usaba `l
 
 - [ ] **Step 1: Agregar los `<script>` de Supabase antes del script principal**
 
-En el `<head>` o justo antes del `<script>` principal (línea 959 actual, `const RAW = ...`), agregar:
+En el `<head>` o justo antes del `<script>` principal (línea 959 actual, `const RAW = ...`), agregar, en este orden exacto (`order-math.js` define `calcularOrden` en `window` antes de que `supabase-sync.js` la use):
 
 ```html
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="order-math.js"></script>
 <script src="supabase-sync.js"></script>
 ```
 
