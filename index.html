@@ -191,6 +191,7 @@ textarea.expl{line-height:1.65}
   background:rgba(21,28,38,.7);color:#fff;font-size:11px;line-height:20px;padding:0;
   cursor:pointer;opacity:0;transition:opacity .15s}
 .th:hover .x,.th:focus-within .x{opacity:1}
+.th .x.armar{opacity:1;background:#9E3131}
 .th.doc{width:140px;padding:10px;cursor:pointer}
 .th.doc .ico{font-size:17px}
 .th.doc:hover{border-color:var(--edge-hard)}
@@ -437,8 +438,16 @@ function pintarThumbs(t, cont){
     const x=document.createElement('button');
     x.className='x'; x.type='button'; x.textContent='✕';
     x.title='Quitar este archivo'; x.setAttribute('aria-label','Quitar '+f.n);
+    let armarTimeout=null;
     x.onclick=async ev=>{
       ev.stopPropagation();
+      if(!x.classList.contains('armar')){
+        x.classList.add('armar');
+        x.title='Click de nuevo para confirmar el borrado';
+        armarTimeout=setTimeout(()=>{ x.classList.remove('armar'); x.title='Quitar este archivo'; }, 3000);
+        return;
+      }
+      clearTimeout(armarTimeout);
       const [quitado]=t.files.splice(i,1);
       pintarThumbs(t,cont);
       try{ await RoadmapSync.borrarArchivo(quitado.path); }catch(e){}
