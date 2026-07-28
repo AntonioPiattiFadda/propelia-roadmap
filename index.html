@@ -340,6 +340,30 @@ function guardarDebounced(entidad, guardarFn) {
   pendientesGuardado.set(entidad.id, setTimeout(() => guardarFn(entidad), 500));
 }
 
+async function conEstadoDeCarga(accion, { revertir, intentos = 2, onEstado } = {}) {
+  onEstado?.('cargando');
+  for (let intento = 0; intento <= intentos; intento++) {
+    try { await accion(); onEstado?.('ok'); return true; }
+    catch (e) {
+      if (intento === intentos) {
+        onEstado?.('error');
+        revertir?.();
+        aviso('No se pudo completar la acción. Revisa tu conexión.');
+        return false;
+      }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+}
+function onEstadoBoton(btn, textoCargando) {
+  const original = btn.textContent;
+  return estado => {
+    btn.disabled = estado === 'cargando';
+    btn.textContent = estado === 'cargando' ? textoCargando : original;
+  };
+}
+const combinar = (...fns) => estado => fns.forEach(fn => fn(estado));
+
 async function persistirTarea(t, intentos = 2) {
   try { await RoadmapSync.guardarTarea(t); }
   catch (e) {
