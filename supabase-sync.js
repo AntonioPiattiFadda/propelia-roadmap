@@ -54,4 +54,40 @@ const RoadmapSync = {
   },
 };
 
+RoadmapSync.subirArchivo = async function (tareaId, blob, nombreArchivo) {
+  const path = `${tareaId}/${Date.now()}-${nombreArchivo}`;
+  const { error } = await supabaseClient.storage.from('roadmap-adjuntos')
+    .upload(path, blob, { contentType: blob.type || 'application/octet-stream' });
+  if (error) throw error;
+  return { n: nombreArchivo, t: blob.type || '', path, size: blob.size };
+};
+
+RoadmapSync.borrarArchivo = async function (path) {
+  const { error } = await supabaseClient.storage.from('roadmap-adjuntos').remove([path]);
+  if (error) throw error;
+};
+
+RoadmapSync.urlPublica = function (path) {
+  const { data } = supabaseClient.storage.from('roadmap-adjuntos').getPublicUrl(path);
+  return data.publicUrl;
+};
+
+RoadmapSync.sesionActiva = async function () {
+  const { data } = await supabaseClient.auth.getSession();
+  return !!data.session;
+};
+
+RoadmapSync.iniciarSesion = async function (email, password) {
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+};
+
+RoadmapSync.cerrarSesion = async function () {
+  await supabaseClient.auth.signOut();
+};
+
+RoadmapSync.onCambioSesion = function (cb) {
+  supabaseClient.auth.onAuthStateChange((_evento, sesion) => cb(!!sesion));
+};
+
 window.RoadmapSync = RoadmapSync;
