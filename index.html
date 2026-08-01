@@ -132,6 +132,15 @@ h1 span{color:#8C99AB;font-weight:400}
 .row[data-resp=Toni]{border-left-color:var(--toni)}
 .row[data-estado=Hecho]{border-left-color:var(--edge);background:var(--sunken)}
 .row[data-estado=Hecho] .r-t{text-decoration:line-through;color:var(--faint)}
+.hechas{margin-top:8px;border-top:1px dashed var(--edge)}
+.hechas-h{width:100%;text-align:left;background:transparent;border:0;cursor:pointer;
+  font:600 10px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);
+  padding:11px 14px;display:flex;align-items:center;gap:8px}
+.hechas-h:hover{color:var(--muted)}
+.hechas-h .cr{font-size:9px;transition:transform .15s;color:var(--muted)}
+.hechas.open .hechas-h .cr{transform:rotate(90deg)}
+.hechas-body{display:none;padding-top:2px}
+.hechas.open .hechas-body{display:block}
 .row:hover{border-top-color:var(--edge);border-right-color:var(--edge);border-bottom-color:var(--edge)}
 .row.open{margin:10px 0;box-shadow:0 2px 10px rgba(21,28,38,.07);
   border-top-color:var(--edge-hard);border-right-color:var(--edge-hard);border-bottom-color:var(--edge-hard)}
@@ -553,6 +562,7 @@ function pintarThumbs(t, cont){
 
 const abiertas = new Set();
 const cerradas = new Set();
+const hechasAbiertas = new Set();
 const filtros = {resp:'todas', q:'', ocultarHechas:false};
 
 function nuevoId(pref, lista){
@@ -772,7 +782,7 @@ function pintarFila(t){
     t.estado=e.target.value; row.dataset.estado=t.estado;
     persistirTarea(t, { revertir: () => { t.estado=estadoAnterior; render(); cancha(); actualizarPills(); } });
     cancha(); actualizarPills();
-    if(filtros.ocultarHechas) render();
+    if(filtros.ocultarHechas || estadoAnterior==='Hecho' || t.estado==='Hecho') render();
   };
   row.querySelectorAll('[data-k]').forEach(el=>{
     el.oninput=()=>{
@@ -990,11 +1000,30 @@ function pintarSeccion(s){
     if(arrastre?.tipo!=='tarea'||llevaArchivos(e)) return;
     e.preventDefault(); const id=arrastre.id; limpiarZonas(); moverTareaAlFinal(id,s.id);
   });
-  vis.forEach(t=>body.appendChild(pintarFila(t)));
+  const activas = vis.filter(t=>t.estado!=='Hecho');
+  const hechas  = vis.filter(t=>t.estado==='Hecho');
+  activas.forEach(t=>body.appendChild(pintarFila(t)));
   if(!vis.length){
     const v=document.createElement('div');
     v.className='empty'; v.style.padding='18px'; v.textContent='Bloque vacío.';
     body.appendChild(v);
+  } else if(!activas.length && !filtros.q){
+    const v=document.createElement('div');
+    v.className='empty'; v.style.padding='18px'; v.textContent='Sin tareas pendientes. 🎉';
+    body.appendChild(v);
+  }
+  if(hechas.length){
+    const abierto = hechasAbiertas.has(s.id) || !!filtros.q;
+    const drawer=document.createElement('div');
+    drawer.className='hechas'+(abierto?' open':'');
+    drawer.innerHTML=`<button class="hechas-h"><span class="cr">&#9654;</span> ${hechas.length} ${hechas.length===1?'hecha':'hechas'}</button><div class="hechas-body"></div>`;
+    const cuerpo=drawer.querySelector('.hechas-body');
+    hechas.forEach(t=>cuerpo.appendChild(pintarFila(t)));
+    drawer.querySelector('.hechas-h').onclick=()=>{
+      drawer.classList.toggle('open');
+      drawer.classList.contains('open')?hechasAbiertas.add(s.id):hechasAbiertas.delete(s.id);
+    };
+    body.appendChild(drawer);
   }
   const add=document.createElement('button');
   add.className='addrow'; add.textContent='+  Nueva tarea en este bloque';
