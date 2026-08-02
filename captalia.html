@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Plan de trabajo · Propelia</title>
+<title>Plan de trabajo · Captalia</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -73,35 +73,37 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* === CONFIGURACIÓN DE ESTA PÁGINA (Propelia) ===
-   Antonio: completá los emails reales de cada cuenta en `usuarios` (en minúscula).
-   Con eso el chat pinta cada mensaje según quién lo escribió. */
+/* === CONFIGURACIÓN DE ESTA PÁGINA (Captalia) ===
+   Antonio: completá los emails reales en `usuarios` (en minúscula).
+   Miembros de Captalia = los 3 (Loro, Toni, Diego). Toni solo visualiza (no es
+   responsable asignable, pero si escribe en la conversación sale en su color).
+   Diego solo tiene acceso a Captalia (ver supabase/schema-v2.sql, tabla app_miembros). */
 window.APP_CONFIG = {
-  proyecto: 'propelia',
-  titulo: 'Plan de trabajo CRM',
-  subtitulo: 'Propelia · Loro & Toni',
-  tablas: { secciones:'roadmap_secciones', tareas:'roadmap_tareas', caja:'roadmap_caja' },
-  bucket: 'roadmap-adjuntos',
-  canal: 'roadmap-sync',
+  proyecto: 'captalia',
+  titulo: 'Plan de trabajo Captalia',
+  subtitulo: 'Captalia · Loro & Diego',
+  tablas: { secciones:'captalia_secciones', tareas:'captalia_tareas', caja:'captalia_caja' },
+  bucket: 'captalia-adjuntos',
+  canal: 'captalia-sync',
+  // Opciones de responsable: solo Loro y Diego (Toni solo visualiza).
   responsables: [
-    { nombre:'Loro', color:'loro', dot:'l' },
-    { nombre:'Toni', color:'toni', dot:'t' },
+    { nombre:'Loro',  color:'loro',  dot:'l' },
+    { nombre:'Diego', color:'diego', dot:'d' },
   ],
-  // Proyectos entre los que se puede navegar (el selector arriba a la izquierda).
   proyectos: [
     { nombre:'Propelia', url:'index.html',    clave:'propelia' },
     { nombre:'Captalia', url:'captalia.html', clave:'captalia' },
   ],
-  // Por cada cuenta: nombre, color y a qué proyectos pertenece (qué links ve).
+  // Captalia = los 3. Propelia = solo Loro y Toni (Diego NO ve el link a Propelia).
   usuarios: {
     'lorenzopiattifadda@gmail.com': { nombre:'Loro', color:'loro', proyectos:['propelia','captalia'] },
     // 'ANTONIO@ejemplo.com': { nombre:'Toni', color:'toni', proyectos:['propelia','captalia'] },
     // 'DIEGO@ejemplo.com':   { nombre:'Diego', color:'diego', proyectos:['captalia'] },
   },
   caja: {
-    intro: 'Caja de Propelia. Anotá los movimientos de dinero: en positivo lo que entra, en negativo lo que sale.',
-    etiquetaMonto: 'Monto (+ ingreso / − gasto)',
-    etiquetaIngresos: 'Ingresos',
+    intro: 'Caja de Captalia. Registrá los aportes (en positivo) y los gastos (en negativo).',
+    etiquetaMonto: 'Monto (+ aporte / − gasto)',
+    etiquetaIngresos: 'Aportes',
     etiquetaEgresos: 'Gastos',
   },
 };

@@ -1,5 +1,27 @@
 # Convenciones del proyecto
 
+## Arquitectura (código compartido entre proyectos)
+
+La app es una SPA que se sirve estática. Hay **dos páginas** que comparten el mismo código y solo cambian su configuración:
+
+- `index.html` → **Propelia** (Loro & Toni)
+- `captalia.html` → **Captalia** (Loro, Toni & Diego)
+
+Cada HTML define `window.APP_CONFIG` (título, `tablas`, `bucket`, `canal`, `responsables`, `usuarios` email→identidad, textos de `caja`) y luego carga, en orden: `order-math.js`, `supabase-sync.js`, `app.js`. Todo el CSS vive en `app.css`. **Regla de oro: la lógica y los estilos van una sola vez en `app.js`/`app.css`; nunca duplicar en los HTML** (así las dos páginas no divergen).
+
+- `supabase-sync.js` expone `RoadmapSync`, config-driven vía `APP_CONFIG.tablas/bucket/canal`. Ojo: sus `const` top-level son globales de script; no repetir nombres en `app.js` (ej.: usa `_CFG`, no `CFG`).
+- Identidad: `RoadmapSync.emailActual()` → se mapea con `APP_CONFIG.usuarios` para saber si el usuario logueado es Loro/Toni/Diego. Eso pinta el chat (verde/azul/morado) y marca "Lo mío".
+
+### Modelo de datos
+- `tareas`: además de los campos previos, `chat` (jsonb `[{autor,ts,texto}]`) y `subtareas` (jsonb `[{id,titulo,resp,estado,expl,chat,files}]`). El viejo `com` se conserva.
+- `<proyecto>_caja`: libro de movimientos (`fecha, concepto, categoria, monto, cuenta, notas, orden`).
+
+### Supabase / permisos
+- `supabase/schema-v2.sql` (idempotente) agrega columnas, cajas, tablas de Captalia, realtime y **aislamiento por membresía**: tabla `app_miembros(email, proyecto)` + helper `es_miembro(proyecto)`; las policies exigen membresía. Diego solo es miembro de `captalia`. Los emails de `app_miembros` deben coincidir con Supabase Auth (en minúscula) y con los `usuarios` de cada HTML.
+
+### Preview local
+`.claude/static-server.mjs` sirve la carpeta (respeta `PORT`). La app siempre pega contra el Supabase real; sin sesión válida la base no devuelve datos.
+
 ## Loading states & optimistic updates (index.html)
 
 Patrón acordado para toda acción que persiste contra Supabase (`RoadmapSync.*`). Arquitectura: un helper genérico `conEstadoDeCarga(accion, {revertir, intentos, onEstado})` que centraliza reintento (2 por defecto) + revert + aviso, desacoplado del DOM — cada call site decide cómo se ve mediante su propio `onEstado(estado)`.
