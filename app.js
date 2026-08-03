@@ -381,12 +381,13 @@ function construirBarras(){
   const yoEl = document.getElementById('yoNombre');
   if(yoEl) yoEl.innerHTML = YO.nombre ? `<i class="dot ${colorDe(YO.nombre)==='none'?'':colorDe(YO.nombre)}"></i>Sos ${esc(YO.nombre)}` : '';
 
-  // Selector de proyecto: muestra solo los proyectos a los que pertenece el usuario.
+  // Selector de proyecto: muestra solo los proyectos donde el usuario es miembro real
+  // en `app_miembros` (YO.proyectos siempre es un array; vacío = no se ve ningún link).
   const nav = document.getElementById('navProyectos');
   if(nav){
     const proys = CFG.proyectos || [];
-    const permitidos = YO.proyectos; // array de claves, o null = todos (RLS igual protege)
-    const vis = proys.filter(p => !permitidos || permitidos.includes(p.clave));
+    const permitidos = YO.proyectos || [];
+    const vis = proys.filter(p => permitidos.includes(p.clave));
     nav.innerHTML = vis.map(p =>
       `<a href="${escA(p.url)}"${p.clave===CFG.proyecto?' aria-current="page"':''}>${esc(p.nombre)}</a>`).join('');
     nav.hidden = vis.length < 2;
@@ -1236,17 +1237,36 @@ const loginForm = document.getElementById('loginForm');
 const loginError = document.getElementById('loginError');
 const loginEmail = document.getElementById('loginEmail');
 const loginPassword = document.getElementById('loginPassword');
+const sinAccesoOverlay = document.getElementById('sinAccesoOverlay');
+const bSinAccesoSalir = document.getElementById('bSinAccesoSalir');
 
 function mostrarModalLogin(){ loginOverlay.hidden = false; }
 function ocultarModalLogin(){ loginOverlay.hidden = true; }
+function mostrarSinAcceso(){ sinAccesoOverlay.hidden = false; }
+function ocultarSinAcceso(){ sinAccesoOverlay.hidden = true; }
+
+// Guard de ruta: aunque la RLS ya protege los datos, una cuenta autenticada pero no
+// miembro de CFG.proyecto no debe ver ni el esqueleto del tablero (bloques, botones, etc).
+// Si la página define CFG.rutaPublica (ej.: index.html -> captalia.html), la cuenta no
+// autorizada se manda ahí en silencio, sin mostrar ningún mensaje de "sin acceso".
+function verificarAcceso(){
+  if((YO.proyectos||[]).includes(CFG.proyecto)){ ocultarSinAcceso(); return true; }
+  if(CFG.rutaPublica){ location.replace(CFG.rutaPublica); return false; }
+  mostrarSinAcceso();
+  return false;
+}
 
 async function resolverIdentidad(){
   let email=null;
   try{ email=await RoadmapSync.emailActual(); }catch(e){}
+  // Membresía por proyecto: viene de app_miembros en Supabase (RoadmapSync.misProyectos),
+  // no de un mapa hardcodeado. `usuarios` acá solo aporta nombre/color para el chat.
+  let proyectos=[];
+  try{ proyectos = email ? await RoadmapSync.misProyectos() : []; }catch(e){}
   const u = email && USUARIOS[email.toLowerCase()];
-  if(u){ YO={ nombre:u.nombre, color:u.color||colorDe(u.nombre), proyectos:u.proyectos||null }; }
-  else if(email){ YO={ nombre:email.split('@')[0], color:'none', proyectos:null }; }
-  else { YO={ nombre:'', color:'none', proyectos:null }; }
+  if(u){ YO={ nombre:u.nombre, color:u.color||colorDe(u.nombre), proyectos }; }
+  else if(email){ YO={ nombre:email.split('@')[0], color:'none', proyectos }; }
+  else { YO={ nombre:'', color:'none', proyectos:[] }; }
 }
 
 async function cargarYArrancar(){
@@ -1282,17 +1302,30 @@ bCerrarSesion.onclick = async () => {
   catch(e){ marcar('error'); aviso('No se pudo cerrar sesión: '+e.message); }
 };
 
+bSinAccesoSalir.onclick = async () => {
+  const marcar = onEstadoBoton(bSinAccesoSalir, 'Saliendo...');
+  marcar('cargando');
+  try{ await RoadmapSync.cerrarSesion(); marcar('ok'); }
+  catch(e){ marcar('error'); aviso('No se pudo cerrar sesión: '+e.message); }
+};
+
 (async function iniciar(){
   activarTab('flujo');
   let activa = false;
   try{ activa = await RoadmapSync.sesionActiva(); }
   catch(e){ aviso('No se pudo verificar la sesión: '+e.message); }
-  if(activa){ await resolverIdentidad(); construirBarras(); await cargarYArrancar(); }
+  if(activa){
+    await resolverIdentidad(); construirBarras();
+    if(verificarAcceso()) await cargarYArrancar();
+  }
   else { construirBarras(); mostrarModalLogin(); }
 
   RoadmapSync.onCambioSesion(async sesionOk => {
-    if(sesionOk){ ocultarModalLogin(); await resolverIdentidad(); construirBarras(); await cargarYArrancar(); }
-    else { estado = { secciones: [], tareas: [], caja: [] }; YO={nombre:'',color:'none'}; pintarTodo(); mostrarModalLogin(); }
+    if(sesionOk){
+      ocultarModalLogin(); await resolverIdentidad(); construirBarras();
+      if(verificarAcceso()) await cargarYArrancar();
+    }
+    else { estado = { secciones: [], tareas: [], caja: [] }; YO={nombre:'',color:'none'}; pintarTodo(); ocultarSinAcceso(); mostrarModalLogin(); }
   });
 
   RoadmapSync.suscribir(refrescarDesdeSupabase);

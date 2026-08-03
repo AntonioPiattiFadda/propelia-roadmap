@@ -3,61 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Plan de trabajo · Propelia</title>
+<title>Plan de trabajo</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
 
-<header>
-  <div class="wrap">
-    <nav class="nav-proy" id="navProyectos" hidden aria-label="Cambiar de proyecto"></nav>
-    <div class="htop">
-      <h1 id="tituloApp">Plan de trabajo</h1>
-      <div class="htop-r">
-        <span class="yo" id="yoNombre"></span>
-        <button class="trello" id="bCerrarSesion" style="border:0;background:transparent;cursor:pointer;font:inherit">Cerrar sesión</button>
-      </div>
-    </div>
-    <div class="tabs" role="tablist">
-      <button class="tab" role="tab" data-tab="flujo" aria-selected="true">Flujo de trabajo</button>
-      <button class="tab" role="tab" data-tab="caja" aria-selected="false">Caja</button>
-    </div>
-  </div>
-</header>
-
-<div class="bar"><div class="wrap bar-in">
-  <span id="filtrosFlujo" style="display:contents">
-    <div class="chips" id="chips" role="group" aria-label="Filtrar por responsable"></div>
-    <input class="search" id="q" type="search" placeholder="Buscar en títulos, explicaciones, conversación…   ( / )">
-    <button class="mini" id="bPlegar">Plegar todo</button>
-    <span class="count" id="visibles"></span>
-  </span>
-  <span class="estado-guardado" id="estadoGuardado" aria-live="polite"></span>
-</div></div>
-
-<main class="wrap">
-  <!-- VISTA: Flujo de trabajo -->
-  <section class="vista" id="vistaFlujo">
-    <div id="lista"><div class="esqueleto" aria-hidden="true">
-      <div class="esq-bloque">
-        <div class="esq-cab shimmer"></div>
-        <div class="esq-fila shimmer"></div>
-        <div class="esq-fila shimmer"></div>
-        <div class="esq-fila shimmer" style="width:70%"></div>
-      </div>
-      <div class="esq-bloque">
-        <div class="esq-cab shimmer"></div>
-        <div class="esq-fila shimmer"></div>
-        <div class="esq-fila shimmer" style="width:60%"></div>
-      </div>
-    </div></div>
-    <button class="newsec" id="bNuevoBloque">+  Nuevo bloque</button>
-  </section>
-
-  <!-- VISTA: Caja -->
-  <section class="vista" id="vistaCaja" hidden></section>
-</main>
-
+<!-- Router: no pinta ningún tablero. Solo resuelve sesión + membresía y redirige a
+     toniylorete.html o captalia.html — así nadie sin acceso a Propelia llega a ver ese
+     tablero ni un instante antes del redirect. -->
 <div class="login-overlay" id="loginOverlay" hidden>
   <form class="login-modal" id="loginForm">
     <h2>Iniciar sesión</h2>
@@ -70,45 +23,48 @@
   </form>
 </div>
 
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
-
 <script>
-/* === CONFIGURACIÓN DE ESTA PÁGINA (Propelia) ===
-   Antonio: completá los emails reales de cada cuenta en `usuarios` (en minúscula).
-   Con eso el chat pinta cada mensaje según quién lo escribió. */
-window.APP_CONFIG = {
-  proyecto: 'propelia',
-  titulo: 'Plan de trabajo CRM',
-  subtitulo: 'Propelia · Loro & Toni',
-  tablas: { secciones:'roadmap_secciones', tareas:'roadmap_tareas', caja:'roadmap_caja' },
-  bucket: 'roadmap-adjuntos',
-  canal: 'roadmap-sync',
-  responsables: [
-    { nombre:'Loro', color:'loro', dot:'l' },
-    { nombre:'Toni', color:'toni', dot:'t' },
-  ],
-  // Proyectos entre los que se puede navegar (el selector arriba a la izquierda).
-  proyectos: [
-    { nombre:'Propelia', url:'index.html',    clave:'propelia' },
-    { nombre:'Captalia', url:'captalia.html', clave:'captalia' },
-  ],
-  // Por cada cuenta: nombre, color y a qué proyectos pertenece (qué links ve).
-  usuarios: {
-    'lorenzopiattifadda@gmail.com': { nombre:'Loro', color:'loro', proyectos:['propelia','captalia'] },
-    // 'ANTONIO@ejemplo.com': { nombre:'Toni', color:'toni', proyectos:['propelia','captalia'] },
-    // 'DIEGO@ejemplo.com':   { nombre:'Diego', color:'diego', proyectos:['captalia'] },
-  },
-  caja: {
-    intro: 'Caja de Propelia. Anotá los movimientos de dinero: en positivo lo que entra, en negativo lo que sale.',
-    etiquetaMonto: 'Monto (+ ingreso / − gasto)',
-    etiquetaIngresos: 'Ingresos',
-    etiquetaEgresos: 'Gastos',
-  },
-};
+/* Config mínima: RoadmapSync solo la usa para valores por defecto de tablas que este
+   router nunca toca (no lee/escribe roadmap_*/captalia_*, solo auth + app_miembros). */
+window.APP_CONFIG = {};
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="order-math.js"></script>
 <script src="supabase-sync.js"></script>
-<script src="app.js"></script>
+<script>
+(async function(){
+  const loginOverlay = document.getElementById('loginOverlay');
+  const loginForm    = document.getElementById('loginForm');
+  const loginError   = document.getElementById('loginError');
+  const loginEmail   = document.getElementById('loginEmail');
+  const loginPassword= document.getElementById('loginPassword');
+
+  async function redirigirSegunMembresia(){
+    let proyectos = [];
+    try{ proyectos = await RoadmapSync.misProyectos(); }catch(e){}
+    location.replace(proyectos.includes('propelia') ? 'toniylorete.html' : 'captalia.html');
+  }
+
+  let activa = false;
+  try{ activa = await RoadmapSync.sesionActiva(); }catch(e){}
+  if(activa){ await redirigirSegunMembresia(); return; }
+
+  loginOverlay.hidden = false;
+  loginForm.addEventListener('submit', async e => {
+    e.preventDefault();
+    loginError.hidden = true;
+    const btn = loginForm.querySelector('button[type=submit]');
+    btn.disabled = true; btn.textContent = 'Entrando...';
+    try{
+      await RoadmapSync.iniciarSesion(loginEmail.value.trim(), loginPassword.value);
+      await redirigirSegunMembresia();
+    }catch(err){
+      btn.disabled = false; btn.textContent = 'Entrar';
+      loginError.textContent = 'Email o contraseña incorrectos.';
+      loginError.hidden = false;
+    }
+  });
+})();
+</script>
 </body>
 </html>

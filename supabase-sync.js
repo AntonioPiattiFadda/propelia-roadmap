@@ -118,6 +118,15 @@ RoadmapSync.emailActual = async function () {
   return data.user?.email || null;
 };
 
+// Proyectos de los que el usuario logueado es miembro, según `app_miembros` (RLS: cada
+// cuenta solo puede leer sus propias filas). Fuente de verdad para el selector de proyecto
+// y el guard de ruta — vive en la base, no en un mapa hardcodeado en el HTML.
+RoadmapSync.misProyectos = async function () {
+  const { data, error } = await supabaseClient.from('app_miembros').select('proyecto');
+  if (error) throw error;
+  return (data || []).map(r => r.proyecto);
+};
+
 RoadmapSync.iniciarSesion = async function (email, password) {
   const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
   if (error) throw error;

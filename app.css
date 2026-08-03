@@ -384,11 +384,13 @@ table.caja tr:hover td{background:var(--sunken)}
   body{background:#fff}.row.open{box-shadow:none}
 }
 .login-overlay{position:fixed;inset:0;z-index:200;background:rgba(21,28,38,.55);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   display:flex;align-items:center;justify-content:center;padding:18px}
 .login-overlay[hidden]{display:none}
 .login-modal{background:var(--surface);border:1px solid var(--edge);border-radius:10px;
   padding:24px;width:100%;max-width:320px;box-shadow:0 20px 50px rgba(21,28,38,.3)}
 .login-modal h2{margin:0 0 16px;font-size:16px}
+.login-modal p{margin:0 0 16px;font-size:13px;color:var(--muted)}
 .login-modal .lbl{margin:12px 0 5px}
 .login-modal .fld{border:1px solid var(--edge);border-radius:6px;padding:9px 11px;background:var(--surface)}
 .login-modal .fld:focus{border-color:var(--edge-hard);border-radius:6px;padding:9px 11px}

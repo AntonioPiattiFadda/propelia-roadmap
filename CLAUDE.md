@@ -2,22 +2,24 @@
 
 ## Arquitectura (código compartido entre proyectos)
 
-La app es una SPA que se sirve estática. Hay **dos páginas** que comparten el mismo código y solo cambian su configuración:
+La app es una SPA que se sirve estática. Hay **tres páginas**:
 
-- `index.html` → **Propelia** (Loro & Toni)
-- `captalia.html` → **Captalia** (Loro, Toni & Diego)
+- `index.html` → **router**. No pinta ningún tablero: resuelve sesión + membresía (`RoadmapSync.misProyectos()`) y redirige en silencio (`location.replace`) a `toniylorete.html` o `captalia.html` según corresponda. Es la raíz del sitio (lo que sirve cualquier hosting estático en `/`). No carga `app.js` — solo `order-math.js` + `supabase-sync.js` + su propio script inline de login/redirect.
+- `toniylorete.html` → **Propelia** (Loro & Toni). Antes se llamaba `index.html`; se separó del router para que nadie sin acceso viera el tablero ni un instante antes de ser redirigido.
+- `captalia.html` → **Captalia** (Loro, Toni & Diego). Es la página "pública": quien no es miembro de `propelia` termina ahí.
 
-Cada HTML define `window.APP_CONFIG` (título, `tablas`, `bucket`, `canal`, `responsables`, `usuarios` email→identidad, textos de `caja`) y luego carga, en orden: `order-math.js`, `supabase-sync.js`, `app.js`. Todo el CSS vive en `app.css`. **Regla de oro: la lógica y los estilos van una sola vez en `app.js`/`app.css`; nunca duplicar en los HTML** (así las dos páginas no divergen).
+`toniylorete.html` y `captalia.html` comparten el mismo código y solo cambian su configuración: cada una define `window.APP_CONFIG` (título, `tablas`, `bucket`, `canal`, `responsables`, `usuarios` email→nombre/color, textos de `caja`, `proyectos` para el selector de nav) y luego carga, en orden: `order-math.js`, `supabase-sync.js`, `app.js`. Todo el CSS vive en `app.css`. **Regla de oro: la lógica y los estilos van una sola vez en `app.js`/`app.css`; nunca duplicar en los HTML** (así las dos páginas no divergen).
 
 - `supabase-sync.js` expone `RoadmapSync`, config-driven vía `APP_CONFIG.tablas/bucket/canal`. Ojo: sus `const` top-level son globales de script; no repetir nombres en `app.js` (ej.: usa `_CFG`, no `CFG`).
-- Identidad: `RoadmapSync.emailActual()` → se mapea con `APP_CONFIG.usuarios` para saber si el usuario logueado es Loro/Toni/Diego. Eso pinta el chat (verde/azul/morado) y marca "Lo mío".
+- **Identidad vs. membresía, no confundir:** `APP_CONFIG.usuarios` (email→nombre/color) es solo para pintar el chat — vive en el HTML público, no protege nada. La membresía real (a qué proyecto pertenece cada cuenta, qué nav ve, a dónde la redirige `verificarAcceso()`) sale de `RoadmapSync.misProyectos()`, que lee `app_miembros` en Supabase (protegida por RLS). Cambiar el `usuarios` del HTML no le da a nadie acceso a nada; eso solo se otorga con un insert en `app_miembros`.
+- `APP_CONFIG.rutaPublica` (solo en `toniylorete.html`, apunta a `captalia.html`): si una cuenta autenticada no es miembro de `propelia`, `verificarAcceso()` la manda ahí en silencio. `captalia.html` no define `rutaPublica` — es la última parada; quien no sea miembro ahí ve el cartel "Sin acceso".
 
 ### Modelo de datos
 - `tareas`: además de los campos previos, `chat` (jsonb `[{autor,ts,texto}]`) y `subtareas` (jsonb `[{id,titulo,resp,estado,expl,chat,files}]`). El viejo `com` se conserva.
 - `<proyecto>_caja`: libro de movimientos (`fecha, concepto, categoria, monto, cuenta, notas, orden`).
 
 ### Supabase / permisos
-- `supabase/schema-v2.sql` (idempotente) agrega columnas, cajas, tablas de Captalia, realtime y **aislamiento por membresía**: tabla `app_miembros(email, proyecto)` + helper `es_miembro(proyecto)`; las policies exigen membresía. Diego solo es miembro de `captalia`. Los emails de `app_miembros` deben coincidir con Supabase Auth (en minúscula) y con los `usuarios` de cada HTML.
+- `supabase/schema-v2.sql` (idempotente) agrega columnas, cajas, tablas de Captalia, realtime y **aislamiento por membresía**: tabla `app_miembros(email, proyecto)` + helper `es_miembro(proyecto)`; las policies exigen membresía. Diego solo es miembro de `captalia`. Los emails de `app_miembros` deben coincidir con Supabase Auth (en minúscula). No hace falta que coincidan con `usuarios` del HTML — ese mapa es solo cosmético (nombre/color del chat), agregar ahí una cuenta no le da acceso a nada.
 
 ### Preview local
 `.claude/static-server.mjs` sirve la carpeta (respeta `PORT`). La app siempre pega contra el Supabase real; sin sesión válida la base no devuelve datos.

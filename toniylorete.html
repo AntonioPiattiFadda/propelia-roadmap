@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Plan de trabajo · Captalia</title>
+<title>Plan de trabajo · Propelia</title>
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -81,31 +81,29 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-/* === CONFIGURACIÓN DE ESTA PÁGINA (Captalia) ===
-   Antonio: completá los emails reales en `usuarios` (en minúscula).
-   Miembros de Captalia = los 3 (Loro, Toni, Diego). Toni solo visualiza (no es
-   responsable asignable, pero si escribe en la conversación sale en su color).
-   Diego solo tiene acceso a Captalia (ver supabase/schema-v2.sql, tabla app_miembros). */
+/* === CONFIGURACIÓN DE ESTA PÁGINA (Propelia) ===
+   Antonio: completá los emails reales de cada cuenta en `usuarios` (en minúscula).
+   Con eso el chat pinta cada mensaje según quién lo escribió. */
 window.APP_CONFIG = {
-  proyecto: 'captalia',
-  titulo: 'Plan de trabajo Captalia',
-  subtitulo: 'Captalia · Loro & Diego',
-  tablas: { secciones:'captalia_secciones', tareas:'captalia_tareas', caja:'captalia_caja' },
-  bucket: 'captalia-adjuntos',
-  canal: 'captalia-sync',
-  // Opciones de responsable: solo Loro y Diego (Toni solo visualiza).
+  proyecto: 'propelia',
+  titulo: 'Plan de trabajo CRM',
+  subtitulo: 'Propelia · Loro & Toni',
+  // Captalia es la ruta pública: cualquier cuenta no autorizada para Propelia se
+  // redirige ahí en silencio (sin mostrar mensaje de "sin acceso").
+  rutaPublica: 'captalia.html',
+  tablas: { secciones:'roadmap_secciones', tareas:'roadmap_tareas', caja:'roadmap_caja' },
+  bucket: 'roadmap-adjuntos',
+  canal: 'roadmap-sync',
   responsables: [
-    { nombre:'Loro',  color:'loro',  dot:'l' },
-    { nombre:'Diego', color:'diego', dot:'d' },
+    { nombre:'Loro', color:'loro', dot:'l' },
+    { nombre:'Toni', color:'toni', dot:'t' },
   ],
-  // El link a Propelia solo aparece para quien sea miembro real de 'propelia' en
-  // app_miembros (ver misProyectos() en supabase-sync.js) — Diego, que solo es
-  // miembro de 'captalia', nunca lo ve aunque esté listado acá.
+  // Proyectos entre los que se puede navegar (el selector arriba a la izquierda).
   proyectos: [
     { nombre:'Propelia', url:'toniylorete.html', clave:'propelia' },
     { nombre:'Captalia', url:'captalia.html', clave:'captalia' },
   ],
-  // Captalia = los 3. Propelia = solo Loro y Toni (Diego NO ve el link a Propelia).
+  // Por cada cuenta: nombre, color y a qué proyectos pertenece (qué links ve).
   // Solo nombre/color para el chat — la membresía real (qué proyectos ve cada uno)
   // vive en app_miembros en Supabase, no acá.
   usuarios: {
@@ -115,9 +113,9 @@ window.APP_CONFIG = {
     'test@gmail.com': { nombre:'Diego', color:'diego' },
   },
   caja: {
-    intro: 'Caja de Captalia. Registrá los aportes (en positivo) y los gastos (en negativo).',
-    etiquetaMonto: 'Monto (+ aporte / − gasto)',
-    etiquetaIngresos: 'Aportes',
+    intro: 'Caja de Propelia. Anotá los movimientos de dinero: en positivo lo que entra, en negativo lo que sale.',
+    etiquetaMonto: 'Monto (+ ingreso / − gasto)',
+    etiquetaIngresos: 'Ingresos',
     etiquetaEgresos: 'Gastos',
   },
 };
