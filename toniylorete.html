@@ -3,126 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Plan de trabajo · Propelia</title>
-<link rel="stylesheet" href="app.css">
+<title>Tablero de tareas</title>
+<!-- Propelia y Captalia se unificaron en un solo tablero. Esta página queda solo para
+     que los enlaces y favoritos viejos no den error: manda derecho a la raíz. -->
+<meta http-equiv="refresh" content="0; url=index.html">
+<link rel="canonical" href="index.html">
 </head>
 <body>
-
-<header>
-  <div class="wrap">
-    <nav class="nav-proy" id="navProyectos" hidden aria-label="Cambiar de proyecto"></nav>
-    <div class="htop">
-      <h1 id="tituloApp">Plan de trabajo</h1>
-      <div class="htop-r">
-        <span class="yo" id="yoNombre"></span>
-        <button class="trello" id="bCerrarSesion" style="border:0;background:transparent;cursor:pointer;font:inherit">Cerrar sesión</button>
-      </div>
-    </div>
-    <div class="tabs" role="tablist">
-      <button class="tab" role="tab" data-tab="flujo" aria-selected="true">Flujo de trabajo</button>
-      <button class="tab" role="tab" data-tab="caja" aria-selected="false">Caja</button>
-    </div>
-  </div>
-</header>
-
-<div class="bar"><div class="wrap bar-in">
-  <span id="filtrosFlujo" style="display:contents">
-    <div class="chips" id="chips" role="group" aria-label="Filtrar por responsable"></div>
-    <input class="search" id="q" type="search" placeholder="Buscar en títulos, explicaciones, conversación…   ( / )">
-    <button class="mini" id="bPlegar">Plegar todo</button>
-    <span class="count" id="visibles"></span>
-  </span>
-  <span class="estado-guardado" id="estadoGuardado" aria-live="polite"></span>
-</div></div>
-
-<main class="wrap">
-  <!-- VISTA: Flujo de trabajo -->
-  <section class="vista" id="vistaFlujo">
-    <div id="lista"><div class="esqueleto" aria-hidden="true">
-      <div class="esq-bloque">
-        <div class="esq-cab shimmer"></div>
-        <div class="esq-fila shimmer"></div>
-        <div class="esq-fila shimmer"></div>
-        <div class="esq-fila shimmer" style="width:70%"></div>
-      </div>
-      <div class="esq-bloque">
-        <div class="esq-cab shimmer"></div>
-        <div class="esq-fila shimmer"></div>
-        <div class="esq-fila shimmer" style="width:60%"></div>
-      </div>
-    </div></div>
-    <button class="newsec" id="bNuevoBloque">+  Nuevo bloque</button>
-  </section>
-
-  <!-- VISTA: Caja -->
-  <section class="vista" id="vistaCaja" hidden></section>
-</main>
-
-<div class="login-overlay" id="loginOverlay" hidden>
-  <form class="login-modal" id="loginForm">
-    <h2>Iniciar sesión</h2>
-    <label class="lbl">Email</label>
-    <input class="fld" type="email" id="loginEmail" required autocomplete="username">
-    <label class="lbl">Contraseña</label>
-    <input class="fld" type="password" id="loginPassword" required autocomplete="current-password">
-    <div class="login-error" id="loginError" hidden></div>
-    <button class="act pri" type="submit">Entrar</button>
-  </form>
-</div>
-
-<div class="login-overlay" id="sinAccesoOverlay" hidden>
-  <div class="login-modal">
-    <h2>Sin acceso</h2>
-    <p>Esta cuenta no es miembro de este proyecto.</p>
-    <button class="act pri" type="button" id="bSinAccesoSalir">Cerrar sesión</button>
-  </div>
-</div>
-
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-<script>
-/* === CONFIGURACIÓN DE ESTA PÁGINA (Propelia) ===
-   Antonio: completá los emails reales de cada cuenta en `usuarios` (en minúscula).
-   Con eso el chat pinta cada mensaje según quién lo escribió. */
-window.APP_CONFIG = {
-  proyecto: 'propelia',
-  titulo: 'Plan de trabajo CRM',
-  subtitulo: 'Propelia · Loro & Toni',
-  // Captalia es la ruta pública: cualquier cuenta no autorizada para Propelia se
-  // redirige ahí en silencio (sin mostrar mensaje de "sin acceso").
-  rutaPublica: 'captalia.html',
-  tablas: { secciones:'roadmap_secciones', tareas:'roadmap_tareas', caja:'roadmap_caja' },
-  bucket: 'roadmap-adjuntos',
-  canal: 'roadmap-sync',
-  responsables: [
-    { nombre:'Loro', color:'loro', dot:'l' },
-    { nombre:'Toni', color:'toni', dot:'t' },
-  ],
-  // Proyectos entre los que se puede navegar (el selector arriba a la izquierda).
-  proyectos: [
-    { nombre:'Propelia', url:'toniylorete.html', clave:'propelia' },
-    { nombre:'Captalia', url:'captalia.html', clave:'captalia' },
-  ],
-  // Por cada cuenta: nombre, color y a qué proyectos pertenece (qué links ve).
-  // Solo nombre/color para el chat — la membresía real (qué proyectos ve cada uno)
-  // vive en app_miembros en Supabase, no acá.
-  usuarios: {
-    'lorenzopiattifadda@gmail.com': { nombre:'Loro', color:'loro' },
-    'antonio.piattifadda@gmail.com': { nombre:'Toni', color:'toni' },
-    // Cuenta de prueba, hace de Diego hasta tener su email real.
-    'test@gmail.com': { nombre:'Diego', color:'diego' },
-  },
-  caja: {
-    intro: 'Caja de Propelia. Anotá los movimientos de dinero: en positivo lo que entra, en negativo lo que sale.',
-    etiquetaMonto: 'Monto (+ ingreso / − gasto)',
-    etiquetaIngresos: 'Ingresos',
-    etiquetaEgresos: 'Gastos',
-  },
-};
-</script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="order-math.js"></script>
-<script src="supabase-sync.js"></script>
-<script src="app.js"></script>
+<p>El tablero se mudó. <a href="index.html">Entrar al tablero</a>.</p>
+<script>location.replace('index.html');</script>
 </body>
 </html>

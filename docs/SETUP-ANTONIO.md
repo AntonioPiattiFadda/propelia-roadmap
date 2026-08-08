@@ -1,5 +1,12 @@
 # Setup para Antonio — conectar la nueva versión
 
+> ⚠️ **DOCUMENTO VIEJO — no lo sigas.** Describe la etapa en la que había dos tableros
+> separados (Propelia y Captalia) y Diego era miembro de uno de ellos. Eso ya no existe:
+> ahora hay **un solo tablero** con Lorenzo, Antonio y Luis.
+>
+> La lista vigente está en **[`PENDIENTES-BACKEND.md`](../PENDIENTES-BACKEND.md)**, en la
+> raíz del repo. Este archivo queda solo como historial de cómo llegó a estar así la base.
+
 Los cambios de código ya están en `main`. Falta **la parte de base de datos y cuentas**, que es tuya.
 Son 4 pasos. Proyecto Supabase: `propelia` (`gvkdyxhxsnpumxlhvhsm`).
 
