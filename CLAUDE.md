@@ -1,39 +1,109 @@
 # Convenciones del proyecto
 
-## Arquitectura (código compartido entre proyectos)
+## Arquitectura
 
-La app es una SPA que se sirve estática. Hay **tres páginas**:
+SPA que se sirve estática. **Una sola página**: `index.html`. Fue tablero doble (Propelia
+y Captalia, con un router al frente); se unificó en un único sistema con tres personas:
+Lorenzo, Antonio y Luis.
 
-- `index.html` → **router**. No pinta ningún tablero: resuelve sesión + membresía (`RoadmapSync.misProyectos()`) y redirige en silencio (`location.replace`) a `toniylorete.html` o `captalia.html` según corresponda. Es la raíz del sitio (lo que sirve cualquier hosting estático en `/`). No carga `app.js` — solo `order-math.js` + `supabase-sync.js` + su propio script inline de login/redirect.
-- `toniylorete.html` → **Propelia** (Loro & Toni). Antes se llamaba `index.html`; se separó del router para que nadie sin acceso viera el tablero ni un instante antes de ser redirigido.
-- `captalia.html` → **Captalia** (Loro, Toni & Diego). Es la página "pública": quien no es miembro de `propelia` termina ahí.
+- `index.html` — la app entera. Define `window.APP_CONFIG` (título, `tablas`, `bucket`,
+  `canal`, `personas`, textos de `caja`) y luego carga, en orden: `order-math.js`,
+  `supabase-sync.js`, `app.js`. Todo el CSS vive en `app.css`.
+- `toniylorete.html` / `captalia.html` — stubs que redirigen a `index.html`. Existen solo
+  para que no se rompan enlaces y favoritos viejos. No tienen lógica.
+- `supabase-sync.js` expone `RoadmapSync`. Sus `const` top-level son globales de script;
+  no repetir nombres en `app.js` (usa `_CFG`, no `CFG`).
 
-`toniylorete.html` y `captalia.html` comparten el mismo código y solo cambian su configuración: cada una define `window.APP_CONFIG` (título, `tablas`, `bucket`, `canal`, `responsables`, `usuarios` email→nombre/color, textos de `caja`, `proyectos` para el selector de nav) y luego carga, en orden: `order-math.js`, `supabase-sync.js`, `app.js`. Todo el CSS vive en `app.css`. **Regla de oro: la lógica y los estilos van una sola vez en `app.js`/`app.css`; nunca duplicar en los HTML** (así las dos páginas no divergen).
+**Regla de oro: la lógica va en `app.js` y los estilos en `app.css`. Nunca en el HTML.**
 
-- `supabase-sync.js` expone `RoadmapSync`, config-driven vía `APP_CONFIG.tablas/bucket/canal`. Ojo: sus `const` top-level son globales de script; no repetir nombres en `app.js` (ej.: usa `_CFG`, no `CFG`).
-- **Identidad vs. membresía, no confundir:** `APP_CONFIG.usuarios` (email→nombre/color) es solo para pintar el chat — vive en el HTML público, no protege nada. La membresía real (a qué proyecto pertenece cada cuenta, qué nav ve, a dónde la redirige `verificarAcceso()`) sale de `RoadmapSync.misProyectos()`, que lee `app_miembros` en Supabase (protegida por RLS). Cambiar el `usuarios` del HTML no le da a nadie acceso a nada; eso solo se otorga con un insert en `app_miembros`.
-- `APP_CONFIG.rutaPublica` (solo en `toniylorete.html`, apunta a `captalia.html`): si una cuenta autenticada no es miembro de `propelia`, `verificarAcceso()` la manda ahí en silencio. `captalia.html` no define `rutaPublica` — es la última parada; quien no sea miembro ahí ve el cartel "Sin acceso".
+### Identidad vs. membresía — no confundir
+
+Dos cosas distintas que se resuelven en lugares distintos:
+
+- **Membresía** (¿esta cuenta puede ver el tablero?) sale de `app_miembros` en Supabase,
+  protegida por RLS, vía `RoadmapSync.esMiembro()`. Es lo único que da acceso.
+- **Identidad** (¿esta cuenta es Lorenzo, Antonio o Luis?) sale de `APP_CONFIG.personas`,
+  cruzando el email de la sesión contra el campo `email` de cada persona. Solo sirve para
+  pintar nombre y color, firmar mensajes del chat y resaltar «Lo mío».
+
+Agregar a alguien en `personas` **no le da acceso a nada**. El acceso se otorga con un
+insert en `app_miembros`. Y al revés: una cuenta con membresía pero sin `email` cargado en
+`personas` entra y ve todo, pero el tablero no sabe quién es (avisa en pantalla).
 
 ### Modelo de datos
-- `tareas`: además de los campos previos, `chat` (jsonb `[{autor,ts,texto}]`) y `subtareas` (jsonb `[{id,titulo,resp,estado,expl,chat,files}]`). El viejo `com` se conserva.
-- `<proyecto>_caja`: libro de movimientos (`fecha, concepto, categoria, monto, cuenta, notas, orden`).
 
-### Supabase / permisos
-- `supabase/schema-v2.sql` (idempotente) agrega columnas, cajas, tablas de Captalia, realtime y **aislamiento por membresía**: tabla `app_miembros(email, proyecto)` + helper `es_miembro(proyecto)`; las policies exigen membresía. Diego solo es miembro de `captalia`. Los emails de `app_miembros` deben coincidir con Supabase Auth (en minúscula). No hace falta que coincidan con `usuarios` del HTML — ese mapa es solo cosmético (nombre/color del chat), agregar ahí una cuenta no le da acceso a nada.
+Tablas: `roadmap_secciones`, `roadmap_tareas`, `roadmap_caja`.
+Bucket de adjuntos: `roadmap-adjuntos`.
+
+- `roadmap_secciones` son las **temáticas** del tablero (`titulo`, `color`, `orden`).
+- `roadmap_tareas`: además de lo viejo, `prioridad`, `tipo`, `hoy` (bool), `pend` (jsonb,
+  varios responsables), `creada`, `chat` (jsonb `[{autor,ts,texto}]`) y `subtareas`
+  (jsonb `[{id,titulo,resp,estado,expl,chat,files}]`). `sec_id` es **opcional** — nulo =
+  «Sin temática». `resp` se mantiene sincronizado con `pend[0]` por compatibilidad.
+- `roadmap_caja`: planilla de movimientos. Ojo: la columna se llama `cuenta` en la base
+  pero el front la expone como `quien` (persona que puso o gastó).
+
+`roadmap_notas` ya no se usa. Era la vista Visión (dos hojas de texto libre); Visión pasó
+a ser un documento de Notion y la pestaña es solo un acceso directo. **La tabla y su
+contenido siguen en Supabase**, intactos, por si hace falta recuperar lo que se escribió;
+el front no la lee ni la escribe.
+
+### Vistas y accesos directos
+
+`VISTAS` en `app.js` mezcla dos cosas distintas: las vistas de verdad, que pintan el
+`#board`, y los **accesos directos**, marcados con `enlace:true` y una `url`. Un acceso
+directo se dibuja como `<a target="_blank">` en vez de `<button>`, nunca queda resaltado
+como activo y no se puede restaurar desde `localStorage`. Si su `url` viene vacía, la
+pestaña no se dibuja — así nadie se topa con un botón que no lleva a ningún lado. La
+dirección de Visión sale de `APP_CONFIG.visionUrl` (`index.html`), no está escrita en `app.js`.
+
+**Los valores guardados no son los que se leen en pantalla.** En `app.js` cada catálogo
+tiene `id` (lo que va a la base) y `label` (lo que se ve). Los estados siguen siendo
+`'Pendiente' | 'En curso' | 'Bloqueado' | 'Hecho'` aunque en pantalla digan Nueva / En
+curso / Bloqueada / Terminada — así las tareas viejas no necesitan migración. Lo mismo con
+las personas: el `id` es `'Loro'`, `'Toni'`, `'Luis'`, que es lo que ya está escrito en las
+tareas. **Cambiar esos `id` deja huérfanas las asignaciones y los mensajes existentes.**
+
+### Adjuntos y buckets
+
+Cada archivo se guarda como `{n, t, path, size, b}`, donde `b` es el bucket del que salió.
+Los adjuntos heredados del viejo tablero de Captalia traen `b: 'captalia-adjuntos'`; los
+nuevos, el bucket principal. `RoadmapSync.urlPublica(archivo)` y `.borrarArchivo(archivo)`
+reciben **el objeto entero**, no el `path`, justamente para poder leer esa clave.
+
+### Supabase / migraciones
+
+`schema.sql` → `schema-v2.sql` → `schema-v3.sql`, en ese orden, todos idempotentes.
+`schema-v3.sql` es el que unifica los dos tableros y agrega los campos del diseño actual.
+Los pendientes de base y cuentas están en `PENDIENTES-BACKEND.md` (raíz).
 
 ### Preview local
-`.claude/static-server.mjs` sirve la carpeta (respeta `PORT`). La app siempre pega contra el Supabase real; sin sesión válida la base no devuelve datos.
 
-## Loading states & optimistic updates (index.html)
+`.claude/static-server.mjs` sirve la carpeta (respeta `PORT`). La app siempre pega contra
+el Supabase real; sin sesión válida la base no devuelve datos.
 
-Patrón acordado para toda acción que persiste contra Supabase (`RoadmapSync.*`). Arquitectura: un helper genérico `conEstadoDeCarga(accion, {revertir, intentos, onEstado})` que centraliza reintento (2 por defecto) + revert + aviso, desacoplado del DOM — cada call site decide cómo se ve mediante su propio `onEstado(estado)`.
+## Loading states & optimistic updates
 
-- **Optimistic update por defecto**: el cambio se aplica al estado en memoria y se pinta al toque; la persistencia contra Supabase corre en paralelo, sin bloquear la UI.
-- **Falla tras agotar los 2 reintentos → revertir, no dejar colgado**: el valor vuelve al que tenía antes del cambio (no se deja "sin guardar" en pantalla) y se muestra el aviso de error existente (`aviso('No se pudo guardar...')`). `conEstadoDeCarga` llama al `revertir` que le pasa el call site.
-- **Indicador global único, en la franja de filtros (`.bar`, la que ya es `position:sticky`)** — NO en el `<header>` de arriba (ese no es sticky, se va al scrollear). Un solo `● guardando` / `✓ guardado` con contador (`enVuelo++/--`) que refleja si HAY algo sincronizando en ese momento, sin importar cuál. Nada de un indicador por campo — sería ruido repartido por toda la pantalla.
-- **Acciones discretas** (borrar/agregar tarea o bloque, subir/borrar adjunto, login, logout): además del indicador global, feedback local en el propio control (texto del botón cambia a "Borrando...", "Agregando...", etc., vía `onEstadoBoton(el, texto)`) — combinado con el global usando `combinar(...fns)`.
-- **Campos con autoguardado debounced y drag&drop de reordenar**: solo alimentan el indicador global (no hay un control puntual al que asociarle feedback local).
-- **Carga inicial** (`RoadmapSync.cargarEstado()` antes de pintar el tablero): skeleton con shimmer estático en el HTML dentro de `#lista`, sin JS para mostrarlo/ocultarlo — `render()` ya hace `lista.innerHTML=''` la primera vez que corre y lo pisa solo.
-- Import: **algunas acciones ya revertían "a mano"** (borrar tarea/bloque) pero con un solo intento — se migran al helper para que todas compartan el mismo criterio de reintentos.
+Patrón para toda acción que persiste contra Supabase (`RoadmapSync.*`). El helper genérico
+es `conEstadoDeCarga(accion, {revertir, intentos, onEstado})`: centraliza reintento (2 por
+defecto) + revert + aviso, desacoplado del DOM — cada call site decide cómo se ve mediante
+su propio `onEstado(estado)`.
 
-Spec completa: `docs/superpowers/specs/2026-07-28-loading-optimistic-updates-design.md`.
+- **Optimistic update por defecto**: el cambio se aplica en memoria y se pinta al toque; la
+  persistencia corre en paralelo sin bloquear la UI.
+- **Falla tras agotar los reintentos → revertir, no dejar colgado**: el valor vuelve al
+  anterior (no se deja «sin guardar» en pantalla) y se muestra el aviso.
+- **Indicador global único** (`● guardando` / `✓ guardado`) en la franja de filtros, con
+  contador `enVuelo++/--`. Nada de un indicador por campo — sería ruido repartido por toda
+  la pantalla.
+- **Acciones discretas** (borrar tarea, borrar movimiento, login, logout): además del
+  indicador global, feedback local en el propio botón vía `onEstadoBoton(el, texto)`,
+  combinado con `combinar(...fns)`.
+- **Campos con autoguardado debounced y drag&drop**: solo alimentan el indicador global.
+- **Carga inicial**: esqueleto con shimmer escrito en el HTML dentro de `#board`, sin JS
+  para mostrarlo u ocultarlo — el primer `render()` lo pisa solo.
+- **No pisar lo que alguien está escribiendo**: `estaEditando()` bloquea el refresco de
+  realtime mientras hay un campo con foco dentro del tablero o el detalle de una tarea
+  abierto. El refresco pendiente se aplica al salir del campo o al cerrar el modal.
+- **Ecos propios**: `marcarEcoPropio(tabla, id)` evita que el cambio que acabás de guardar
+  vuelva por realtime y te repinte la pantalla encima.

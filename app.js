@@ -1,68 +1,140 @@
-/* app.js — lógica compartida por Propelia (index.html) y Captalia (captalia.html).
-   Cada página define window.APP_CONFIG antes de cargar este archivo. Toda mejora
-   se hace acá una sola vez y aplica a los dos proyectos. */
+/* app.js — lógica del tablero. Un solo sistema, un solo conjunto de tareas.
+   index.html define window.APP_CONFIG antes de cargar este archivo. */
 
 const CFG = window.APP_CONFIG || {};
-const ESTADOS = CFG.estados || ['Pendiente','En curso','Bloqueado','Hecho'];
-// Responsables asignables. dot = clase del puntito de color, color = clase base.
-const RESP = CFG.responsables || [
-  { nombre:'Loro', color:'loro', dot:'l' },
-  { nombre:'Toni', color:'toni', dot:'t' },
+
+/* ============================================================
+   Catálogos
+   ------------------------------------------------------------
+   `id` es SIEMPRE el valor que queda escrito en la base; `label` es solo lo que
+   se lee en pantalla. Por eso los estados conservan los nombres viejos
+   ('Pendiente', 'Hecho'…): así las tareas que ya estaban cargadas siguen
+   cayendo en su columna sin necesidad de migrar una sola fila.
+   ============================================================ */
+const ESTADOS = [
+  { id:'Pendiente', label:'Nueva',     color:'#9A9CA5' },
+  { id:'En curso',  label:'En curso',  color:'#5F7A9B' },
+  { id:'Bloqueado', label:'Bloqueada', color:'#A44B45' },
+  { id:'Hecho',     label:'Terminada', color:'#5E8467' },
 ];
-// Mapa email -> { nombre, color }. Lo completa Antonio con las cuentas reales.
-const USUARIOS = CFG.usuarios || {};
-// Identidad del usuario logueado (se resuelve tras iniciar sesión).
-let YO = { nombre:'', color:'none' };
+const HECHO = 'Hecho';
 
-// Mapa nombre -> color, armado con los responsables + los usuarios configurados.
-// Así el color de un mensaje sale bien incluso para alguien que solo visualiza
-// (ej.: Toni en Captalia, que no es responsable asignable pero sí escribe/lee).
-const COLOR_NOMBRE = {};
-RESP.forEach(r => { COLOR_NOMBRE[r.nombre] = r.color; });
-Object.values(USUARIOS).forEach(u => { if (u.nombre && u.color) COLOR_NOMBRE[u.nombre] = u.color; });
-function colorDe(nombre){ return COLOR_NOMBRE[nombre] || 'none'; }
+// El orden de esta lista es el orden en que se apilan los grupos dentro de cada columna:
+// primero lo crítico, al final lo mensual.
+const PRIORIDADES = [
+  { id:'critica',   label:'Crítica',   color:'#A44B45' },
+  { id:'urgente',   label:'Urgente',   color:'#A87A3F' },
+  { id:'semanal',   label:'Semanal',   color:'#6E6BA0' },
+  { id:'mensual',   label:'Mensual',   color:'#7C8A82' },
+];
+const CRITICA = 'critica';
+// 'bisemanal' salió del tablero. Lo que quedó cargado con esa prioridad se lee como
+// mensual, que es la que la reemplaza; en la base no se toca nada hasta que se edite.
+const PRIORIDADES_VIEJAS = { bisemanal:'mensual' };
+const TIPOS = [
+  { id:'nuevo',      label:'Desarrollo nuevo',          color:'#5E8467' },
+  { id:'modif',      label:'Modificación de lo hecho',  color:'#5F7A9B' },
+  { id:'correccion', label:'Corrección de errores',     color:'#A0565F' },
+  { id:'uxui',       label:'UX / UI',                   color:'#8A6E9C' },
+];
+// El tablero agrupa siempre por estado: las columnas son los estados y, dentro de cada
+// una, las tareas se apilan por prioridad. Las otras formas de mirar el tablero
+// (prioridad, tipo, temática) quedaron como filtros de la barra, no como vistas.
+// Una entrada con `enlace` no es una vista: es un acceso directo. No cambia lo que se ve
+// en el tablero, se dibuja como enlace y abre en otra pestaña. Visión dejó de vivir acá
+// —ahora es un documento de Notion— y esta es la puerta a ese documento.
+//
+// La marca es `enlace:true` y no «tiene url»: si la dirección viene vacía, la pestaña no
+// se dibuja, en vez de volverse una vista que al tocarla no lleva a ninguna parte.
+const VISTAS = [
+  { id:'hoy',    label:'☀ Hoy',    soloHoy:true },
+  { id:'estado', label:'Estado' },
+  { id:'vision', label:'◦ Visión', enlace:true, url:CFG.visionUrl || '' },
+  { id:'caja',   label:'Caja',     caja:true },
+];
+const esVista = v => !v.enlace;   // lo que sí se puede pintar en el board
 
-let estado = { secciones: [], tareas: [], caja: [] };
+// Personas del tablero. El `id` es lo que se guarda en la base (responsables, autor
+// del chat, quién puso la plata); `email` es lo que ata cada persona a su cuenta.
+const PERSONAS = (CFG.personas || []).map((p, i) => ({
+  id: p.id,
+  nombre: p.nombre || p.id,
+  ini: p.ini || String(p.nombre || p.id).slice(0, 2).toUpperCase(),
+  color: p.color || ['#6E6BA0','#4F7F79','#A87A3F','#5A7E8C'][i % 4],
+  email: (p.email || '').toLowerCase(),
+  caja: !!p.caja,
+}));
+// En la caja no participan todos: solo quienes tienen `caja:true` en la config. Si no
+// hay ninguno marcado se usan todos, para que la planilla nunca quede sin gente.
+const PERSONAS_CAJA = PERSONAS.filter(p => p.caja).length ? PERSONAS.filter(p => p.caja) : PERSONAS;
+const persona = id => PERSONAS.find(p => p.id === id) || null;
+const colorPersona = id => persona(id)?.color || '#858A99';
+const iniPersona = id => persona(id)?.ini || '?';
+const nombrePersona = id => persona(id)?.nombre || id || '—';
+
+// Paleta de reserva para temáticas sin color elegido.
+const PALETA = ['#6E6BA0','#5F6B96','#4F7F79','#A87A3F','#9C6480','#5A7E8C','#6B7079','#5E8467'];
+
+// Identidad de quien está usando el tablero (se resuelve al iniciar sesión).
+let YO = { id:'', nombre:'', esMiembro:false };
+
+/* ---------- datos y estado de pantalla ---------- */
+let datos = { secciones: [], tareas: [], caja: [] };
+let UI = {
+  vista: 'estado',
+  layout: 'cols',
+  // La columna de Terminadas arranca plegada: es lo que ya no hay que mirar.
+  terminadasAbiertas: false,
+  f: { q:'', pend:[], prioridad:'', tipo:'', tematica:'' },
+};
+try {
+  const guardado = JSON.parse(localStorage.getItem('tablero-ui') || '{}');
+  // `esVista` en el filtro: a quien le haya quedado 'vision' guardada de cuando era una
+  // vista de verdad, no lo dejamos arrancar en una pestaña que ya no pinta nada.
+  if (guardado.vista && VISTAS.some(v => esVista(v) && v.id === guardado.vista)) UI.vista = guardado.vista;
+  if (guardado.layout === 'rows' || guardado.layout === 'cols') UI.layout = guardado.layout;
+  UI.terminadasAbiertas = !!guardado.terminadasAbiertas;
+} catch (e) { /* preferencia local, si no se puede leer no importa */ }
+function guardarUI(){
+  try {
+    localStorage.setItem('tablero-ui', JSON.stringify({
+      vista: UI.vista, layout: UI.layout, terminadasAbiertas: UI.terminadasAbiertas,
+    }));
+  } catch (e) { /* modo privado o storage lleno: no es crítico */ }
+}
+
+let tareaAbierta = null;
+let arrastreId = null;
 
 /* ---------- elementos ---------- */
-const lista        = document.getElementById('lista');
-const vistaFlujo   = document.getElementById('vistaFlujo');
-const vistaCaja    = document.getElementById('vistaCaja');
-const filtrosFlujo = document.getElementById('filtrosFlujo');
-const chipsWrap    = document.getElementById('chips');
-const canchaLbl    = document.getElementById('canchaLbl');
-const canchaCourt  = document.getElementById('canchaCourt');
-const nota         = document.getElementById('nota');
-const visiblesEl   = document.getElementById('visibles');
-const toast        = document.getElementById('toast');
-const elGuardado   = document.getElementById('estadoGuardado');
-const q            = document.getElementById('q');
-const oh           = document.getElementById('oh');
-const bPlegar      = document.getElementById('bPlegar');
-const bNuevoBloque = document.getElementById('bNuevoBloque');
-const bHtml        = document.getElementById('bHtml');
-const bCsv         = document.getElementById('bCsv');
-const bCerrarSesion= document.getElementById('bCerrarSesion');
+const $  = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const board       = $('#board');
+const elFiltros   = $('#filtros');
+const elVistas    = $('#views');
+const elGuardado  = $('#estadoGuardado');
+const elToast     = $('#toast');
+const elAviso     = $('#avisoEsquema');
+const elAvisoTexto= $('#avisoEsquemaTexto');
+const elCampana   = $('#campana');
 
-/* ---------- infra optimista (guardado + reintentos + revert) ---------- */
+/* ============================================================
+   Infraestructura optimista: se pinta al toque, se guarda por detrás,
+   y si falla después de reintentar se vuelve atrás en vez de mentir.
+   ============================================================ */
 const pendientesGuardado = new Map();
-function guardarDebounced(clave, fn) {
+function guardarDebounced(clave, fn){
   clearTimeout(pendientesGuardado.get(clave));
   pendientesGuardado.set(clave, setTimeout(() => { pendientesGuardado.delete(clave); fn(); }, 500));
 }
-const valoresAntesDelCambio = new Map();
-const pendientesEnVuelo = new Map();
-const generacionGuardado = new Map();
-const pendienteDeRevertir = new Set();
-const snapsParcial = new Map(); // snapshots para revertir edits de subtareas / caja
-
-const ecosPropiosEsperados = new Map();
-function marcarEcoPropio(tabla, id) {
-  const clave = tabla+':'+id;
-  ecosPropiosEsperados.set(clave, (ecosPropiosEsperados.get(clave)||0)+1);
+const snaps = new Map();
+const ecosPropios = new Map();
+function marcarEcoPropio(tabla, id){
+  const clave = tabla + ':' + id;
+  ecosPropios.set(clave, (ecosPropios.get(clave) || 0) + 1);
 }
 
-async function conEstadoDeCarga(accion, { revertir, intentos = 2, onEstado } = {}) {
+async function conEstadoDeCarga(accion, { revertir, intentos = 2, onEstado } = {}){
   onEstado?.('cargando');
   for (let intento = 0; intento <= intentos; intento++) {
     try { await accion(); onEstado?.('ok'); return true; }
@@ -70,25 +142,25 @@ async function conEstadoDeCarga(accion, { revertir, intentos = 2, onEstado } = {
       if (intento === intentos) {
         onEstado?.('error');
         revertir?.();
-        aviso('No se pudo completar la acción. Revisa tu conexión.');
+        aviso('No se pudo guardar. Revisá tu conexión.');
         return false;
       }
       await new Promise(r => setTimeout(r, 1500));
     }
   }
 }
-function onEstadoBoton(btn, textoCargando) {
+function onEstadoBoton(btn, textoCargando){
   const original = btn.textContent;
-  return estado => {
-    btn.disabled = estado === 'cargando';
-    btn.textContent = estado === 'cargando' ? textoCargando : original;
+  return est => {
+    btn.disabled = est === 'cargando';
+    btn.textContent = est === 'cargando' ? textoCargando : original;
   };
 }
-const combinar = (...fns) => estado => fns.forEach(fn => fn(estado));
+const combinar = (...fns) => est => fns.forEach(fn => fn(est));
 
 let enVuelo = 0;
-function onEstadoGlobal(estado) {
-  if (estado === 'cargando') {
+function onEstadoGlobal(est){
+  if (est === 'cargando') {
     enVuelo++;
     elGuardado.className = 'estado-guardado cargando';
     elGuardado.textContent = '● guardando';
@@ -96,1237 +168,1282 @@ function onEstadoGlobal(estado) {
   }
   enVuelo = Math.max(0, enVuelo - 1);
   if (enVuelo > 0) return;
-  elGuardado.className = 'estado-guardado' + (estado === 'ok' ? ' ok' : '');
-  elGuardado.textContent = estado === 'ok' ? '✓ guardado' : '';
-  if (estado === 'ok') setTimeout(() => {
+  elGuardado.className = 'estado-guardado' + (est === 'ok' ? ' ok' : '');
+  elGuardado.textContent = est === 'ok' ? '✓ guardado' : '';
+  if (est === 'ok') setTimeout(() => {
     if (enVuelo === 0) { elGuardado.textContent = ''; elGuardado.className = 'estado-guardado'; }
   }, 1500);
 }
 
-async function persistirTarea(t, { onEstado = onEstadoGlobal, revertir, intentos = 2 } = {}) {
-  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarTarea(t), { onEstado, revertir, intentos });
+async function persistirTarea(t, opts = {}){
+  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarTarea(t),
+    { onEstado: onEstadoGlobal, ...opts });
   if (ok) marcarEcoPropio(RoadmapSync.TABLAS.tareas, t.id);
   return ok;
 }
-async function persistirSeccion(s, { onEstado = onEstadoGlobal, revertir, intentos = 2 } = {}) {
-  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarSeccion(s), { onEstado, revertir, intentos });
+async function persistirSeccion(s, opts = {}){
+  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarSeccion(s),
+    { onEstado: onEstadoGlobal, ...opts });
   if (ok) marcarEcoPropio(RoadmapSync.TABLAS.secciones, s.id);
   return ok;
 }
-async function persistirMovimiento(m, { onEstado = onEstadoGlobal, revertir, intentos = 2 } = {}) {
-  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarMovimiento(m), { onEstado, revertir, intentos });
+async function persistirMovimiento(m, opts = {}){
+  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarMovimiento(m),
+    { onEstado: onEstadoGlobal, ...opts });
   if (ok) marcarEcoPropio(RoadmapSync.TABLAS.caja, m.id);
   return ok;
 }
 
-let refrescoPendiente = false;
-function focoEditando(){
-  const f = document.activeElement;
-  const dentro = f && ((lista && lista.contains(f)) || (vistaCaja && vistaCaja.contains(f)));
-  return dentro && (f.tagName==='INPUT' || f.tagName==='TEXTAREA' || f.tagName==='SELECT');
+// Pone al día lo que quedó guardado con catálogos que ya no existen. Hoy es solo la
+// prioridad 'bisemanal', que salió del tablero: en memoria pasa a 'mensual' y en la base
+// recién se corrige cuando esa tarea se toca. Sin esto, el detalle de una de esas tareas
+// abriría el selector de prioridad en blanco.
+function normalizarDatos(){
+  datos.tareas.forEach(t => {
+    if (PRIORIDADES_VIEJAS[t.prioridad]) t.prioridad = PRIORIDADES_VIEJAS[t.prioridad];
+  });
 }
-async function refrescarDesdeSupabase(payload) {
+
+/* ---------- refresco en tiempo real ---------- */
+let refrescoPendiente = false;
+// No pisar la pantalla mientras alguien escribe: ni en la planilla, ni en las hojas de
+// Visión, ni con el detalle de una tarea abierto (ahí se está editando a mano).
+function estaEditando(){
+  if ($('#scrimTarea').classList.contains('on')) return true;
+  const f = document.activeElement;
+  return !!f && ['INPUT','TEXTAREA','SELECT'].includes(f.tagName) && board.contains(f);
+}
+async function refrescar(payload){
   if (payload?.table) {
     const id = payload.new?.id ?? payload.old?.id;
-    const clave = payload.table+':'+id;
-    const pendientes = ecosPropiosEsperados.get(clave);
-    if (pendientes > 0) { ecosPropiosEsperados.set(clave, pendientes-1); return; }
+    const clave = payload.table + ':' + id;
+    const pendientes = ecosPropios.get(clave);
+    if (pendientes > 0) { ecosPropios.set(clave, pendientes - 1); return; }
   }
-  if (focoEditando()) { refrescoPendiente = true; return; }
-  try { estado = await RoadmapSync.cargarEstado(); }
+  if (estaEditando()) { refrescoPendiente = true; return; }
+  try { datos = await RoadmapSync.cargarEstado(); normalizarDatos(); }
   catch (e) { aviso('No se pudo sincronizar: ' + e.message); return; }
-  pintarTodo();
+  render();
 }
 document.addEventListener('focusout', e => {
-  const enFlujo = lista && lista.contains(e.target);
-  const enCaja  = vistaCaja && vistaCaja.contains(e.target);
-  if (!enFlujo && !enCaja) return;
-  if (refrescoPendiente) { refrescoPendiente = false; refrescarDesdeSupabase(); return; }
-  if (pendienteDeRevertir.size) { pendienteDeRevertir.clear(); pintarTodo(); }
+  if (!board.contains(e.target)) return;
+  if (refrescoPendiente) { refrescoPendiente = false; refrescar(); }
 });
 
-/* ---------- archivos (sirve para tareas y subtareas) ---------- */
-const MAX_LADO=1800, CALIDAD=.82, MAX_ARCHIVO=6*1048576;
-const kb=n=>n<1048576?Math.round(n/1024)+' KB':(n/1048576).toFixed(1)+' MB';
-
-async function comprimirImagen(file){
-  try{
-    const bmp=await createImageBitmap(file);
-    const f=Math.min(1, MAX_LADO/Math.max(bmp.width,bmp.height));
-    const w=Math.round(bmp.width*f), h=Math.round(bmp.height*f);
-    const c=document.createElement('canvas'); c.width=w; c.height=h;
-    c.getContext('2d').drawImage(bmp,0,0,w,h);
-    if(bmp.close) bmp.close();
-    const blob = await new Promise(resolve=>c.toBlob(resolve,'image/webp',CALIDAD));
-    return (blob && blob.size<file.size) ? blob : file;
-  }catch(e){ return file; }
-}
-// destino: objeto con .id y .files (tarea o subtarea). padre: la tarea a persistir.
-async function adjuntar(destino, padre, files, alTerminar){
-  destino.files = destino.files || [];
-  let n=0, saltados=[], ahorro=0, subidos=[];
-  onEstadoGlobal('cargando');
-  for(const f of files){
-    const esImg=/^image\//.test(f.type);
-    if(!esImg && f.size>MAX_ARCHIVO){ saltados.push(f.name+' ('+kb(f.size)+')'); continue; }
-    const blob = esImg ? await comprimirImagen(f) : f;
-    if(blob.size>MAX_ARCHIVO){ saltados.push((f.name||'captura')+' ('+kb(blob.size)+' ya comprimida)'); continue; }
-    if(esImg && f.size>blob.size) ahorro += f.size-blob.size;
-    try{
-      const nombre = f.name || ('captura-'+new Date().toISOString().slice(0,19).replace(/[:T]/g,'-')+'.webp');
-      const archivo = await RoadmapSync.subirArchivo(destino.id, blob, nombre);
-      destino.files.push(archivo); subidos.push(archivo);
-      n++;
-    }catch(e){ saltados.push((f.name||'captura')+' (error al subir)'); }
-  }
-  if(n){
-    await persistirTarea(padre, {
-      onEstado: estado => { if (estado !== 'cargando') onEstadoGlobal(estado); },
-      revertir: () => {
-        subidos.forEach(a => {
-          const i=destino.files.indexOf(a); if(i>-1) destino.files.splice(i,1);
-          RoadmapSync.borrarArchivo(a.path).catch(()=>{});
-        });
-        alTerminar();
-      },
-    });
-  } else {
-    onEstadoGlobal('ok');
-  }
-  alTerminar();
-  if(saltados.length) aviso('No pude adjuntar: '+saltados.join(', ')+'. Súbelo a Drive y pega el enlace.');
-  else if(n) aviso((n===1?'1 archivo adjuntado':n+' archivos adjuntados')+(ahorro>512000?' · '+kb(ahorro)+' ahorrados al comprimir':''));
-}
-function abrirArchivo(f, descargar){
-  const url = RoadmapSync.urlPublica(f.path);
-  const a=document.createElement('a'); a.href=url;
-  if(descargar) a.download=f.n; else { a.target='_blank'; a.rel='noopener'; }
-  a.click();
-}
-function pintarThumbs(destino, cont, padre){
-  cont.innerHTML='';
-  (destino.files||[]).forEach(f=>{
-    const esImg=/^image\//.test(f.t);
-    const box=document.createElement('div');
-    box.className='th'+(esImg?'':' doc');
-    const url = RoadmapSync.urlPublica(f.path);
-    if(esImg){
-      const im=document.createElement('img');
-      im.src=url; im.alt=f.n; im.title='Abrir '+f.n;
-      im.onclick=()=>abrirArchivo(f,false);
-      box.appendChild(im);
-    }else{
-      const ic=document.createElement('div'); ic.className='ico'; ic.textContent='📄';
-      box.appendChild(ic);
-      box.title='Descargar '+f.n;
-      box.onclick=e=>{ if(!e.target.closest('.x')) abrirArchivo(f,true); };
-    }
-    const nm=document.createElement('div'); nm.className='nom'; nm.textContent=f.n;
-    box.appendChild(nm);
-    const pz=document.createElement('div'); pz.className='kb'; pz.textContent=kb(f.size||0);
-    box.appendChild(pz);
-    const x=document.createElement('button');
-    x.className='x'; x.type='button'; x.textContent='✕';
-    x.title='Quitar este archivo'; x.setAttribute('aria-label','Quitar '+f.n);
-    let armarTimeout=null;
-    x.onclick=async ev=>{
-      ev.stopPropagation();
-      if(!x.classList.contains('armar')){
-        x.classList.add('armar');
-        x.title='Click de nuevo para confirmar el borrado';
-        armarTimeout=setTimeout(()=>{ x.classList.remove('armar'); x.title='Quitar este archivo'; }, 3000);
-        return;
-      }
-      clearTimeout(armarTimeout);
-      const idx=destino.files.indexOf(f);
-      const [quitado]=destino.files.splice(idx,1);
-      pintarThumbs(destino,cont,padre);
-      const guardadoOk = await persistirTarea(padre, {
-        revertir: () => { destino.files.splice(idx,0,quitado); pintarThumbs(destino,cont,padre); },
-      });
-      if(guardadoOk){ try{ await RoadmapSync.borrarArchivo(quitado.path); }catch(e){} }
-    };
-    box.appendChild(x);
-    cont.appendChild(box);
-  });
-}
-
-/* ---------- estado de UI ---------- */
-const abiertas = new Set();
-const cerradas = new Set();
-const hechasAbiertas = new Set();
-const subAbiertas = new Set();
-const filtros = {resp:'todas', q:'', ocultarHechas:false};
+/* ============================================================
+   Utilidades
+   ============================================================ */
+const esc  = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const escA = s => esc(s).replace(/"/g,'&quot;');
+const porId = (arr, id) => arr.find(x => x.id === id) || null;
+const tarea = id => datos.tareas.find(t => t.id === id) || null;
 
 function nuevoId(pref, ids){
-  let n=1; const usados=new Set(ids);
-  while(usados.has(pref+String(n).padStart(2,'0'))) n++;
-  return pref+String(n).padStart(2,'0');
+  let n = 1; const usados = new Set(ids);
+  while (usados.has(pref + String(n).padStart(2,'0'))) n++;
+  return pref + String(n).padStart(2,'0');
 }
-const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-const escA = s => esc(s).replace(/"/g,'&quot;');
+function tint(hex, a){
+  const n = parseInt(String(hex).slice(1), 16);
+  return `rgba(${n>>16&255},${n>>8&255},${n&255},${a})`;
+}
 function fmtTs(iso){
-  if(!iso) return '';
-  const d=new Date(iso); if(isNaN(d)) return '';
-  const p=n=>String(n).padStart(2,'0');
+  if (!iso) return '';
+  const d = new Date(iso); if (isNaN(d)) return '';
+  const p = n => String(n).padStart(2,'0');
   return `${p(d.getDate())}/${p(d.getMonth()+1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
-
-const GRIP='<svg viewBox="0 0 10 16" width="10" height="16" aria-hidden="true">'+
-  [4,8,12].map(y=>`<circle cx="3" cy="${y}" r="1.35"/><circle cx="7" cy="${y}" r="1.35"/>`).join('')+'</svg>';
-
-let arrastre=null;
-const filtrando=()=>filtros.resp!=='todas'||!!filtros.q||filtros.ocultarHechas;
-function limpiarZonas(){
-  document.querySelectorAll('.dz-a,.dz-b,.dz-in').forEach(e=>e.classList.remove('dz-a','dz-b','dz-in'));
+function aviso(txt){
+  elToast.textContent = txt;
+  elToast.classList.add('on');
+  clearTimeout(elToast._x);
+  elToast._x = setTimeout(() => elToast.classList.remove('on'), 2800);
 }
-const llevaArchivos=e=>[...(e.dataTransfer?.types||[])].includes('Files');
+function autoGrow(el){ el.style.height = 'auto'; el.style.height = (el.scrollHeight + 2) + 'px'; }
+function llenarSelect(el, items, placeholder){
+  el.innerHTML = (placeholder != null ? `<option value="">${esc(placeholder)}</option>` : '')
+    + items.map(i => `<option value="${escA(i.id)}">${esc(i.label)}</option>`).join('');
+}
 
-function asa(el, tipo, id, titulo){
-  const g=document.createElement('button');
-  g.className='grip'; g.type='button'; g.innerHTML=GRIP;
-  g.title=titulo; g.setAttribute('aria-label',titulo);
-  g.addEventListener('mousedown',()=>{ el.draggable=true; });
-  g.addEventListener('touchstart',()=>{ el.draggable=true; },{passive:true});
-  ['mouseup','touchend'].forEach(n=>document.addEventListener(n,()=>{ el.draggable=false; }));
-  g.onclick=ev=>ev.stopPropagation();
-  el.addEventListener('dragstart',e=>{
-    if(!el.draggable) return;
-    if(filtrando()){ e.preventDefault(); el.draggable=false; aviso('Quita el filtro y la búsqueda para poder reordenar.'); return; }
-    arrastre={tipo,id};
-    e.dataTransfer.effectAllowed='move';
-    e.dataTransfer.setData('text/plain', id);
-    setTimeout(()=>el.classList.add('dragging'),0);
+const prioridadDe = id => porId(PRIORIDADES, PRIORIDADES_VIEJAS[id] || id) || PRIORIDADES[2];
+const tipoDe      = id => porId(TIPOS, id) || TIPOS[0];
+const estadoDe    = id => porId(ESTADOS, id) || ESTADOS[0];
+const tematicaDe  = id => porId(datos.secciones, id);
+const vistaActual = () => porId(VISTAS, UI.vista) || VISTAS[1];
+function colorTematica(s){
+  if (!s) return '#A9ABB4';
+  if (s.color) return s.color;
+  const i = datos.secciones.findIndex(x => x.id === s.id);
+  return PALETA[(i < 0 ? 0 : i) % PALETA.length];
+}
+
+/* ============================================================
+   Archivos adjuntos
+   ============================================================ */
+const MAX_LADO = 1800, CALIDAD = .82, MAX_ARCHIVO = 6 * 1048576;
+const kb = n => n < 1048576 ? Math.round(n/1024) + ' KB' : (n/1048576).toFixed(1) + ' MB';
+
+async function comprimirImagen(file){
+  try {
+    const bmp = await createImageBitmap(file);
+    const f = Math.min(1, MAX_LADO / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width * f), h = Math.round(bmp.height * f);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    if (bmp.close) bmp.close();
+    const blob = await new Promise(r => c.toBlob(r, 'image/webp', CALIDAD));
+    return (blob && blob.size < file.size) ? blob : file;
+  } catch (e) { return file; }
+}
+
+async function adjuntar(t, files){
+  t.files = t.files || [];
+  let n = 0, saltados = [], ahorro = 0;
+  const subidos = [];
+  onEstadoGlobal('cargando');
+  for (const f of files) {
+    const esImg = /^image\//.test(f.type);
+    if (!esImg && f.size > MAX_ARCHIVO) { saltados.push(f.name + ' (' + kb(f.size) + ')'); continue; }
+    const blob = esImg ? await comprimirImagen(f) : f;
+    if (blob.size > MAX_ARCHIVO) { saltados.push((f.name || 'captura') + ' (' + kb(blob.size) + ' ya comprimida)'); continue; }
+    if (esImg && f.size > blob.size) ahorro += f.size - blob.size;
+    try {
+      const nombre = f.name || ('captura-' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.webp');
+      const archivo = await RoadmapSync.subirArchivo(t.id, blob, nombre);
+      t.files.push(archivo); subidos.push(archivo); n++;
+    } catch (e) { saltados.push((f.name || 'captura') + ' (error al subir)'); }
+  }
+  if (n) {
+    await persistirTarea(t, {
+      onEstado: est => { if (est !== 'cargando') onEstadoGlobal(est); },
+      revertir: () => {
+        subidos.forEach(a => {
+          const i = t.files.indexOf(a); if (i > -1) t.files.splice(i, 1);
+          RoadmapSync.borrarArchivo(a).catch(() => {});
+        });
+        pintarArchivos(t);
+      },
+    });
+  } else onEstadoGlobal('ok');
+  pintarArchivos(t); render();
+  if (saltados.length) aviso('No pude adjuntar: ' + saltados.join(', ') + '. Subilo a Drive y pegá el enlace.');
+  else if (n) aviso((n === 1 ? '1 archivo adjuntado' : n + ' archivos adjuntados') + (ahorro > 512000 ? ' · ' + kb(ahorro) + ' ahorrados al comprimir' : ''));
+}
+
+async function borrarTodosLosArchivos(t){
+  const files = [...(t.files || []), ...((t.subtareas || []).flatMap(s => s.files || []))];
+  for (const f of files) { try { await RoadmapSync.borrarArchivo(f); } catch (e) { /* ya no existe */ } }
+}
+
+/* ============================================================
+   Cabecera: pestañas de vista y filtros
+   ============================================================ */
+function pintarChrome(){
+  document.title = CFG.titulo || 'Tablero de tareas';
+  $('#tituloApp').textContent = CFG.titulo || 'Tablero de tareas';
+  $('#subtituloApp').textContent = CFG.subtitulo || '';
+
+  const yo = $('#yoNombre');
+  yo.innerHTML = YO.id
+    ? `<span class="av mini" style="background:${colorPersona(YO.id)}">${esc(iniPersona(YO.id))}</span>Sos ${esc(YO.nombre)}`
+    : (YO.nombre ? `<span class="av mini off">?</span>${esc(YO.nombre)}` : '');
+
+  // Campana de críticas: mientras haya algo crítico sin terminar, late en rojo y lleva
+  // de un clic al tablero filtrado por esas tareas.
+  const criticas = datos.tareas.filter(t => prioridadDe(t.prioridad).id === CRITICA && t.estado !== HECHO);
+  elCampana.hidden = !criticas.length;
+  if (criticas.length) {
+    elCampana.querySelector('b').textContent = criticas.length;
+    elCampana.title = criticas.length === 1
+      ? '1 tarea crítica sin terminar — clic para verla'
+      : `${criticas.length} tareas críticas sin terminar — clic para verlas`;
+    elCampana.classList.toggle('viendo', UI.f.prioridad === CRITICA);
+  }
+  elCampana.onclick = () => {
+    UI.f.prioridad = UI.f.prioridad === CRITICA ? '' : CRITICA;
+    const v = vistaActual();
+    if (UI.f.prioridad && v.caja) { UI.vista = 'estado'; guardarUI(); }
+    render();
+  };
+
+  const nHoy = datos.tareas.filter(t => t.hoy).length;
+  elVistas.innerHTML = VISTAS.map(v => {
+    // Los accesos directos son `<a>`, no botones: así el navegador da lo que ya sabe dar
+    // con un enlace —abrir en pestaña nueva con el medio, copiar la dirección, ver a
+    // dónde va abajo a la izquierda—, cosas que un botón con JavaScript encima no tiene.
+    if (!esVista(v)) {
+      if (!v.url) return '';
+      return `<a class="view-tab link" href="${escA(v.url)}" target="_blank" rel="noopener noreferrer"
+        title="Se abre en otra pestaña">${esc(v.label)}<svg width="10" height="10" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+        ><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>`;
+    }
+    const on = UI.vista === v.id;
+    let badge = '';
+    if (v.soloHoy) badge = `<small>${nHoy}</small>`;
+    else if (on && !v.caja) badge = `<small>${datos.tareas.filter(visible).length}</small>`;
+    return `<button class="view-tab${on ? ' on' : ''}" data-vista="${v.id}">${esc(v.label)}${badge}</button>`;
+  }).join('');
+  $$('[data-vista]').forEach(b => b.onclick = () => {
+    UI.vista = b.dataset.vista; guardarUI(); render();
   });
-  el.addEventListener('dragend',()=>{
-    el.classList.remove('dragging'); el.draggable=false; arrastre=null; limpiarZonas();
+
+  $('#chipsPend').innerHTML = PERSONAS.map(p =>
+    `<button class="chip${UI.f.pend.includes(p.id) ? ' on' : ''}" data-persona="${escA(p.id)}">
+       <span class="av mini" style="background:${p.color}">${esc(p.ini)}</span>${esc(p.id === YO.id ? 'Lo mío' : p.nombre)}
+     </button>`).join('');
+  $$('[data-persona]').forEach(b => b.onclick = () => {
+    const k = b.dataset.persona, i = UI.f.pend.indexOf(k);
+    i > -1 ? UI.f.pend.splice(i, 1) : UI.f.pend.push(k);
+    render();
   });
-  return g;
+
+  $$('[data-layout]').forEach(b => b.classList.toggle('on', b.dataset.layout === UI.layout));
 }
 
-function moverTarea(idA, idObj, despues){
-  const a=estado.tareas;
-  const i=a.findIndex(t=>t.id===idA); if(i<0||idA===idObj) return;
-  const [t]=a.splice(i,1);
-  const j=a.findIndex(x=>x.id===idObj);
-  if(j<0){ a.splice(i,0,t); return; }
-  const secAnterior=t.sec, ordenAnterior=t.orden;
-  t.sec=a[j].sec;
-  const destino=despues?j+1:j;
-  a.splice(destino,0,t);
-  const anterior=a[destino-1]?.orden ?? null;
-  const siguiente=a[destino+1]?.orden ?? null;
-  t.orden=RoadmapSync.calcularOrden(anterior, siguiente);
-  persistirTarea(t, { revertir: () => { t.sec=secAnterior; t.orden=ordenAnterior; render(); } });
-  render();
-}
-function moverTareaAlFinal(idA, secId){
-  const a=estado.tareas;
-  const i=a.findIndex(t=>t.id===idA); if(i<0) return;
-  const [t]=a.splice(i,1);
-  const secAnterior=t.sec, ordenAnterior=t.orden;
-  t.sec=secId;
-  let ultimo=-1; a.forEach((x,k)=>{ if(x.sec===secId) ultimo=k; });
-  a.splice(ultimo+1,0,t);
-  t.orden=RoadmapSync.calcularOrden(a[ultimo]?.orden ?? null, null);
-  persistirTarea(t, { revertir: () => { t.sec=secAnterior; t.orden=ordenAnterior; render(); } });
-  render();
-}
-function moverBloque(idA, idObj, despues){
-  const a=estado.secciones;
-  const i=a.findIndex(x=>x.id===idA); if(i<0||idA===idObj) return;
-  const [s]=a.splice(i,1);
-  const j=a.findIndex(x=>x.id===idObj);
-  if(j<0){ a.splice(i,0,s); return; }
-  const ordenAnterior=s.orden;
-  const destino=despues?j+1:j;
-  a.splice(destino,0,s);
-  const anterior=a[destino-1]?.orden ?? null;
-  const siguiente=a[destino+1]?.orden ?? null;
-  s.orden=RoadmapSync.calcularOrden(anterior, siguiente);
-  persistirSeccion(s, { revertir: () => { s.orden=ordenAnterior; render(); } });
-  render();
-}
-function moverBloquePaso(id, paso){
-  const a=estado.secciones, i=a.findIndex(x=>x.id===id), j=i+paso;
-  if(i<0||j<0||j>=a.length) return;
-  [a[i],a[j]]=[a[j],a[i]];
-  const s=a[j];
-  const ordenAnterior=s.orden;
-  const anterior=a[j-1]?.orden ?? null;
-  const siguiente=a[j+1]?.orden ?? null;
-  s.orden=RoadmapSync.calcularOrden(anterior, siguiente);
-  persistirSeccion(s, { revertir: () => { [a[i],a[j]]=[a[j],a[i]]; s.orden=ordenAnterior; render(); } });
-  render();
+function sincronizarFiltros(){
+  const sel = (el, items, ph, val) => { llenarSelect(el, items, ph); el.value = val; };
+  // El texto del placeholder hace de etiqueta: así los filtros no necesitan un rótulo
+  // aparte arriba y toda la barra entra en una sola línea.
+  sel($('#fPrioridad'), PRIORIDADES, 'Prioridad', UI.f.prioridad);
+  sel($('#fTipo'), TIPOS, 'Tipo', UI.f.tipo);
+  sel($('#fTematica'),
+    datos.secciones.map(s => ({ id:s.id, label:s.titulo || 'Sin nombre' })).concat([{ id:'__sin__', label:'Sin temática' }]),
+    'Temática', UI.f.tematica);
+  $$('#filtros .sel').forEach(s => s.classList.toggle('activo', !!s.value));
 }
 
 function textoBuscable(t){
-  const subs=(t.subtareas||[]).map(s=>s.titulo+' '+(s.expl||'')).join(' ');
-  const chat=(t.chat||[]).map(m=>m.texto).join(' ');
-  return (t.tarea+' '+t.modulo+' '+t.expl+' '+t.com+' '+t.id+' '+subs+' '+chat).toLowerCase();
+  return [
+    t.tarea, t.expl, t.id,
+    (t.subtareas || []).map(s => s.titulo + ' ' + (s.expl || '')).join(' '),
+    (t.chat || []).map(m => m.texto).join(' '),
+  ].join(' ').toLowerCase();
 }
 function visible(t){
-  if(filtros.resp==='sin'){ if(t.resp) return false; }
-  else if(filtros.resp!=='todas' && t.resp!==filtros.resp) return false;
-  if(filtros.ocultarHechas && t.estado==='Hecho') return false;
-  if(filtros.q && !textoBuscable(t).includes(filtros.q)) return false;
+  const f = UI.f;
+  if (vistaActual().soloHoy && !t.hoy) return false;
+  if (f.prioridad && t.prioridad !== f.prioridad) return false;
+  if (f.tipo && t.tipo !== f.tipo) return false;
+  if (f.tematica) {
+    if (f.tematica === '__sin__') { if (t.sec) return false; }
+    else if (t.sec !== f.tematica) return false;
+  }
+  if (f.pend.length && !f.pend.some(p => (t.pend || []).includes(p))) return false;
+  if (f.q && !textoBuscable(t).includes(f.q)) return false;
   return true;
 }
+const filtrando = () => {
+  const f = UI.f;
+  return !!f.q || f.pend.length > 0 || !!f.prioridad || !!f.tipo || !!f.tematica;
+};
 
-/* ---------- cabecera: chips + cancha (dinámicos según responsables) ---------- */
-function construirBarras(){
-  document.title = (CFG.titulo || 'Plan de trabajo') + (CFG.subtitulo ? ' · ' + CFG.subtitulo : '');
-  const h1 = document.getElementById('tituloApp');
-  if(h1) h1.innerHTML = esc(CFG.titulo||'Plan de trabajo') + (CFG.subtitulo?` <span>· ${esc(CFG.subtitulo)}</span>`:'');
-  const yoEl = document.getElementById('yoNombre');
-  if(yoEl) yoEl.innerHTML = YO.nombre ? `<i class="dot ${colorDe(YO.nombre)==='none'?'':colorDe(YO.nombre)}"></i>Sos ${esc(YO.nombre)}` : '';
-
-  // Selector de proyecto: muestra solo los proyectos donde el usuario es miembro real
-  // en `app_miembros` (YO.proyectos siempre es un array; vacío = no se ve ningún link).
-  const nav = document.getElementById('navProyectos');
-  if(nav){
-    const proys = CFG.proyectos || [];
-    const permitidos = YO.proyectos || [];
-    const vis = proys.filter(p => permitidos.includes(p.clave));
-    nav.innerHTML = vis.map(p =>
-      `<a href="${escA(p.url)}"${p.clave===CFG.proyecto?' aria-current="page"':''}>${esc(p.nombre)}</a>`).join('');
-    nav.hidden = vis.length < 2;
-  }
-
-  if(chipsWrap){
-    chipsWrap.innerHTML =
-      `<button class="chip" data-f="todas" aria-pressed="true">Todas</button>` +
-      RESP.map(r=>`<button class="chip" data-f="${escA(r.nombre)}" aria-pressed="false"><i class="dot ${r.dot}"></i>${r.nombre===YO.nombre?'Lo mío':esc(r.nombre)}</button>`).join('') +
-      `<button class="chip" data-f="sin" aria-pressed="false"><i class="dot"></i>Sin asignar</button>`;
-    chipsWrap.querySelectorAll('.chip').forEach(c=>{
-      c.onclick=()=>{
-        filtros.resp=c.dataset.f;
-        chipsWrap.querySelectorAll('.chip').forEach(x=>x.setAttribute('aria-pressed',x===c));
-        render();
-      };
-    });
-  }
-  if(canchaCourt){
-    canchaCourt.innerHTML = RESP.map(r=>`<i class="c-${r.color}" data-r="${escA(r.nombre)}"></i>`).join('') + `<i class="c-none"></i>`;
-  }
-}
-
-function cancha(){
-  if(!canchaLbl) return;
-  const act = t=>t.estado!=='Hecho';
-  const cuentas = {};
-  RESP.forEach(r=>{ cuentas[r.nombre]=estado.tareas.filter(t=>t.resp===r.nombre&&act(t)).length; });
-  const sin=estado.tareas.filter(t=>!t.resp&&act(t)).length;
-  const h=estado.tareas.filter(t=>t.estado==='Hecho').length;
-  canchaLbl.innerHTML = RESP.map(r=>`<span class="cl-${r.color}">${esc(r.nombre)} <b>${cuentas[r.nombre]}</b></span>`).join('');
-  const tot=Math.max(RESP.reduce((a,r)=>a+cuentas[r.nombre],0)+sin,1);
-  RESP.forEach(r=>{
-    const i=canchaCourt?.querySelector(`i[data-r="${CSS.escape(r.nombre)}"]`);
-    if(i) i.style.flexGrow=cuentas[r.nombre]/tot;
-  });
-  const iNone=canchaCourt?.querySelector('.c-none');
-  if(iNone) iNone.style.flexGrow=sin/tot;
-  nota.textContent=(sin?sin+' sin asignar · ':'')+h+' hechas de '+estado.tareas.length;
-}
-
-function autosize(el){ el.style.height='auto'; el.style.height=(el.scrollHeight+2)+'px'; }
-
-/* ---------- segmento de responsable ---------- */
-function montarSeg(getResp, onPick){
-  const seg=document.createElement('div'); seg.className='seg';
-  RESP.forEach(r=>{
-    const b=document.createElement('button'); b.type='button'; b.dataset.r=r.nombre;
-    b.setAttribute('aria-pressed', getResp()===r.nombre);
-    b.innerHTML=`<i class="dot ${r.dot}"></i>${esc(r.nombre)}`;
-    b.onclick=ev=>{
-      ev.stopPropagation();
-      const nuevo = getResp()===r.nombre ? '' : r.nombre;
-      onPick(nuevo);
-      seg.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed', x.dataset.r===nuevo));
-    };
-    seg.appendChild(b);
-  });
-  return seg;
-}
-
-/* ---------- chat (tareas y subtareas) ---------- */
-// chatArr: array de {autor, ts, texto}. persist: (opts)=>Promise que guarda el padre.
-function montarChat(chatArr, persist){
-  const box=document.createElement('div'); box.className='chat';
-  const log=document.createElement('div'); log.className='chat-log';
-  const inp=document.createElement('div'); inp.className='chat-input';
-  const ta=document.createElement('textarea'); ta.rows=1; ta.placeholder='Escribí…';
-  const bt=document.createElement('button'); bt.className='chat-enviar'; bt.type='button'; bt.textContent='Enviar';
-  inp.append(ta,bt); box.append(log,inp);
-
-  function pintar(){
-    log.innerHTML='';
-    chatArr.forEach((m,i)=>{
-      const col=colorDe(m.autor);
-      const ln=document.createElement('div'); ln.className='linea a-'+col;
-      ln.innerHTML=`<span class="aut">${esc(m.autor||'—')}:</span><span class="txt">${esc(m.texto)}</span><span class="ts">${fmtTs(m.ts)}</span>`;
-      if(m.autor && m.autor===YO.nombre){
-        const x=document.createElement('button');
-        x.className='del-linea'; x.type='button'; x.title='Borrar'; x.textContent='✕';
-        x.onclick=()=>{
-          const [q]=chatArr.splice(i,1); pintar();
-          persist({ revertir:()=>{ chatArr.splice(i,0,q); pintar(); } });
-        };
-        ln.appendChild(x);
-      }
-      log.appendChild(ln);
-    });
-    log.scrollTop=log.scrollHeight;
-  }
-  function enviar(){
-    const txt=ta.value.trim(); if(!txt) return;
-    const m={ autor:YO.nombre||'', ts:new Date().toISOString(), texto:txt };
-    chatArr.push(m); ta.value=''; autosize(ta); pintar();
-    persist({ revertir:()=>{ const i=chatArr.indexOf(m); if(i>-1) chatArr.splice(i,1); pintar(); } });
-  }
-  bt.onclick=enviar;
-  ta.oninput=()=>autosize(ta);
-  ta.addEventListener('keydown',e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); enviar(); } });
-  pintar();
-  return box;
-}
-
-/* ---------- subtareas ---------- */
-function todosLosSubIds(){
-  return estado.tareas.flatMap(t=>(t.subtareas||[]).map(s=>s.id));
-}
-function guardarPadreDebounced(t, key){
-  if(!snapsParcial.has(key)) snapsParcial.set(key, JSON.stringify(t.subtareas||[]));
-  guardarDebounced(key, ()=>{
-    persistirTarea(t, {
-      revertir: ()=>{
-        try{ t.subtareas = JSON.parse(snapsParcial.get(key)); }catch(e){}
-        if(!focoEditando()) render();
-      },
-    }).then(()=>{ if(!pendientesGuardado.has(key)) snapsParcial.delete(key); });
-  });
-}
-
-function pintarSub(t, sub){
-  const el=document.createElement('div');
-  el.className='sub'+(subAbiertas.has(sub.id)?' open':'');
-  el.dataset.resp=sub.resp||''; el.dataset.estado=sub.estado;
-
-  const head=document.createElement('div'); head.className='sub-head';
-  const chk=document.createElement('input'); chk.type='checkbox'; chk.className='sub-chk';
-  chk.checked = sub.estado==='Hecho'; chk.title='Marcar hecha';
-  const car=document.createElement('button'); car.className='caret'; car.type='button'; car.innerHTML='&#9654;';
-  const ttl=document.createElement('div'); ttl.className='sub-t'+(sub.titulo?'':' vacio');
-  ttl.textContent=sub.titulo||'Subtarea sin título';
-  const seg=montarSeg(()=>sub.resp, nuevo=>{
-    const snap=JSON.stringify(t.subtareas);
-    sub.resp=nuevo; el.dataset.resp=nuevo;
-    persistirTarea(t, { revertir:()=>{ t.subtareas=JSON.parse(snap); render(); } });
-    cancha();
-  });
-  const del=document.createElement('button'); del.className='sub-del'; del.type='button'; del.title='Borrar subtarea'; del.innerHTML='🗑';
-
-  head.append(chk,car,ttl,seg,del);
-
-  const body=document.createElement('div'); body.className='sub-body';
-  body.innerHTML=`
-    <div class="grp"><input class="fld titulo-grande" data-sk="titulo" value="${escA(sub.titulo)}" placeholder="Título de la subtarea"></div>
-    <div class="grp"><label class="lbl">Explicación</label>
-      <textarea class="fld expl" data-sk="expl" placeholder="Detalle de la subtarea">${esc(sub.expl||'')}</textarea></div>
-    <div class="grp"><label class="lbl">Chat de la subtarea</label><div class="chat-slot"></div></div>
-    <div class="grp"><label class="lbl">Archivos</label>
-      <div class="zona">
-        <span class="zona-txt">Arrastra archivos, pega con <kbd>Ctrl</kbd>+<kbd>V</kbd>, o</span>
-        <button class="mini2" type="button" data-pick>Elegir archivos</button>
-        <input type="file" multiple hidden data-file>
-      </div>
-      <div class="thumbs"></div>
-    </div>`;
-  el.append(head,body);
-
-  // abrir/cerrar
-  const toggle=e=>{
-    if(e.target.closest('.seg,.sub-chk,.sub-del,.sub-body')) return;
-    el.classList.toggle('open');
-    el.classList.contains('open')?subAbiertas.add(sub.id):subAbiertas.delete(sub.id);
-    if(el.classList.contains('open')) body.querySelectorAll('textarea').forEach(autosize);
-  };
-  head.onclick=toggle;
-
-  chk.onclick=ev=>ev.stopPropagation();
-  chk.onchange=()=>{
-    const snap=JSON.stringify(t.subtareas);
-    sub.estado = chk.checked ? 'Hecho' : 'Pendiente';
-    el.dataset.estado=sub.estado; ttl.className='sub-t'+(sub.titulo?'':' vacio');
-    persistirTarea(t, { revertir:()=>{ t.subtareas=JSON.parse(snap); render(); } });
-  };
-  del.onclick=async ev=>{
-    ev.stopPropagation();
-    if(!confirm('Se borra la subtarea «'+(sub.titulo||sub.id)+'». ¿Seguir?')) return;
-    const snap=JSON.stringify(t.subtareas);
-    const files=sub.files||[];
-    t.subtareas=t.subtareas.filter(x=>x.id!==sub.id);
-    render();
-    const ok=await persistirTarea(t, { revertir:()=>{ t.subtareas=JSON.parse(snap); render(); } });
-    if(ok){ for(const f of files){ try{ await RoadmapSync.borrarArchivo(f.path); }catch(e){} } }
-  };
-
-  // campos texto (título / explicación) con autoguardado
-  body.querySelectorAll('[data-sk]').forEach(inp=>{
-    inp.oninput=()=>{
-      sub[inp.dataset.sk]=inp.value;
-      if(inp.tagName==='TEXTAREA') autosize(inp);
-      if(inp.dataset.sk==='titulo'){ ttl.textContent=inp.value||'Subtarea sin título'; ttl.classList.toggle('vacio',!inp.value); }
-      guardarPadreDebounced(t, 'sub:'+sub.id);
-    };
-  });
-
-  // chat de la subtarea
-  sub.chat=sub.chat||[];
-  body.querySelector('.chat-slot').appendChild(montarChat(sub.chat, opts=>persistirTarea(t, opts)));
-
-  // archivos de la subtarea
-  const thumbs=body.querySelector('.thumbs'), zona=body.querySelector('.zona');
-  const inFile=body.querySelector('[data-file]');
-  sub.files=sub.files||[];
-  pintarThumbs(sub, thumbs, t);
-  const repinta=()=>pintarThumbs(sub, thumbs, t);
-  body.querySelector('[data-pick]').onclick=ev=>{ ev.stopPropagation(); inFile.click(); };
-  inFile.onchange=ev=>{ if(ev.target.files.length) adjuntar(sub, t, [...ev.target.files], repinta); ev.target.value=''; };
-  ['dragenter','dragover'].forEach(n=>zona.addEventListener(n,e=>{ if(!llevaArchivos(e))return; e.preventDefault();e.stopPropagation();zona.classList.add('drag'); }));
-  ['dragleave','drop'].forEach(n=>zona.addEventListener(n,e=>{ if(!llevaArchivos(e))return; e.preventDefault();e.stopPropagation();zona.classList.remove('drag'); }));
-  zona.addEventListener('drop',e=>{ const fs=[...(e.dataTransfer?.files||[])]; if(fs.length) adjuntar(sub, t, fs, repinta); });
-
-  if(subAbiertas.has(sub.id)) setTimeout(()=>body.querySelectorAll('textarea').forEach(autosize),0);
-  return el;
-}
-
-function montarSubtareas(t){
-  t.subtareas=t.subtareas||[];
-  const cont=document.createElement('div'); cont.className='subs';
-  t.subtareas.forEach(sub=>cont.appendChild(pintarSub(t, sub)));
-  const add=document.createElement('button'); add.className='addsub'; add.type='button';
-  add.textContent='+  Nueva subtarea';
-  add.onclick=()=>{
-    const id=nuevoId('ST', todosLosSubIds());
-    const sub={ id, titulo:'', resp:'', estado:'Pendiente', expl:'', chat:[], files:[] };
-    t.subtareas.push(sub);
-    subAbiertas.add(id);
-    render();
-    persistirTarea(t, { revertir:()=>{ t.subtareas=t.subtareas.filter(x=>x.id!==id); render(); } });
-    const el=document.querySelector(`.sub[data-id="${id}"] [data-sk=titulo]`);
-  };
-  cont.appendChild(add);
-  return cont;
-}
-
-/* ---------- fila de tarea ---------- */
-function pintarFila(t){
-  t.chat=t.chat||[]; t.subtareas=t.subtareas||[];
-  const row=document.createElement('article');
-  row.className='row'+(abiertas.has(t.id)?' open':'');
-  row.dataset.resp=t.resp||''; row.dataset.estado=t.estado; row.dataset.id=t.id;
-  const roja=(t.com||'').includes('🔴');
-  const nSub=t.subtareas.length;
-  const opciones=estado.secciones.map(s=>
-    `<option value="${s.id}" ${s.id===t.sec?'selected':''}>${esc(s.titulo.slice(0,58))}</option>`).join('');
-  row.innerHTML=`
-   <div class="r-head">
-     <span class="grip-slot"></span>
-     <button class="caret" aria-label="Abrir o cerrar">&#9654;</button>
-     <span class="r-id">${t.id}</span>
-     <div class="r-t${t.tarea?'':' vacio'}">${esc(t.tarea)||'Tarea sin título — ábrela y ponle nombre'}</div>
-     ${nSub?`<span class="sub-count" title="Subtareas">☑ ${nSub}</span>`:''}
-     ${roja?'<span class="flag" title="Nota marcada">🔴</span>':''}
-     <span class="seg-slot"></span>
-     <select class="est" aria-label="Estado">${ESTADOS.map(e=>`<option ${e===t.estado?'selected':''}>${e}</option>`).join('')}</select>
-     <span class="menu-slot"></span>
-   </div>
-   <div class="r-body">
-     <div class="grp"><input class="fld titulo-grande" data-k="tarea" value="${escA(t.tarea)}" placeholder="Qué hay que hacer"></div>
-     <div class="grp"><label class="lbl">Explicación</label>
-       <textarea class="fld expl" data-k="expl" placeholder="El detalle completo: qué pasa, cuándo, y cómo debería quedar">${esc(t.expl)}</textarea></div>
-
-     <div class="grp seccion-panel"><label class="lbl">Subtareas</label><div class="subs-slot"></div></div>
-
-     <div class="grp seccion-panel"><label class="lbl">Conversación</label><div class="chat-slot"></div></div>
-
-     <div class="grp seccion-panel"><label class="lbl">Archivos y capturas</label>
-       <div class="zona">
-         <span class="zona-txt">Arrastra archivos aquí, pega una captura con <kbd>Ctrl</kbd>+<kbd>V</kbd>, o</span>
-         <button class="mini2" type="button" data-pick>Elegir archivos</button>
-         <input type="file" multiple hidden data-file>
-       </div>
-       <div class="thumbs"></div>
-     </div>
-
-     <div class="r-foot">
-       <div class="mover"><span class="lbl">Bloque</span>
-         <select data-mover>${opciones}</select></div>
-       <button class="del">Borrar tarea</button>
-     </div>
-   </div>`;
-
-  row.querySelector('.grip-slot').replaceWith(asa(row,'tarea',t.id,'Arrastra para mover la tarea'));
-
-  // segmento de responsable (resaltado)
-  const seg=montarSeg(()=>t.resp, nuevo=>{
-    const respAnterior=t.resp;
-    t.resp=nuevo; row.dataset.resp=t.resp;
-    persistirTarea(t, { revertir: () => { t.resp=respAnterior; render(); cancha(); } });
-    cancha();
-    if(filtros.resp!=='todas') render();
-  });
-  row.querySelector('.seg-slot').replaceWith(seg);
-
-  // menú de tres puntos (borrar sin desplegar)
-  const menuSlot=row.querySelector('.menu-slot');
-  const wrap=document.createElement('span'); wrap.className='menu-wrap';
-  wrap.innerHTML=`
-    <button class="tool" data-menu title="Más opciones" aria-haspopup="true" aria-expanded="false">&#8943;</button>
-    <div class="menu" hidden role="menu">
-      <button data-abrir role="menuitem">Abrir / editar</button>
-      <button data-sub role="menuitem">Agregar subtarea</button>
-      <hr>
-      <button data-del class="peligro" role="menuitem">Borrar tarea</button>
-    </div>`;
-  menuSlot.replaceWith(wrap);
-  const bm=wrap.querySelector('[data-menu]'), menu=wrap.querySelector('.menu');
-  bm.onclick=ev=>{
-    ev.stopPropagation();
-    const abierto=!menu.hidden; cerrarMenus();
-    if(!abierto){ menu.hidden=false; bm.setAttribute('aria-expanded','true'); }
-  };
-  menu.onclick=ev=>ev.stopPropagation();
-  menu.querySelector('[data-abrir]').onclick=()=>{ cerrarMenus(); if(!row.classList.contains('open')){ abiertas.add(t.id); render(); } };
-  menu.querySelector('[data-sub]').onclick=()=>{
-    cerrarMenus();
-    if(!row.classList.contains('open')){ abiertas.add(t.id); }
-    const id=nuevoId('ST', todosLosSubIds());
-    t.subtareas.push({ id, titulo:'', resp:'', estado:'Pendiente', expl:'', chat:[], files:[] });
-    subAbiertas.add(id); render();
-    persistirTarea(t, { revertir:()=>{ t.subtareas=t.subtareas.filter(x=>x.id!==id); render(); } });
-  };
-
-  const btnDel=menu.querySelector('[data-del]');
-  const borrarTarea=async (btn)=>{
-    if(!confirm('Se borra «'+(t.tarea||t.id)+'». ¿Seguir?')) return;
-    const idx=estado.tareas.findIndex(x=>x.id===t.id);
-    const copia=t;
-    estado.tareas=estado.tareas.filter(x=>x.id!==t.id);
-    abiertas.delete(t.id); render();
-    const files=[...(t.files||[]), ...((t.subtareas||[]).flatMap(s=>s.files||[]))];
-    const okBorrado = await conEstadoDeCarga(async () => {
-      for(const f of files){ try{ await RoadmapSync.borrarArchivo(f.path); }catch(e){} }
-      await RoadmapSync.borrarTarea(t.id);
-    }, {
-      onEstado: combinar(onEstadoBoton(btn, 'Borrando...'), onEstadoGlobal),
-      revertir: () => { estado.tareas.splice(idx,0,copia); render(); },
-    });
-    if (okBorrado) marcarEcoPropio(RoadmapSync.TABLAS.tareas, t.id);
-  };
-  btnDel.onclick=()=>{ cerrarMenus(); borrarTarea(btnDel); };
-
-  // abrir/cerrar
-  const toggle = e=>{
-    if(e.target.closest('.seg,select,.r-body,.grip,.menu-wrap')) return;
-    row.classList.toggle('open');
-    row.classList.contains('open') ? abiertas.add(t.id) : abiertas.delete(t.id);
-    if(row.classList.contains('open')) row.querySelectorAll('.r-body textarea').forEach(autosize);
-  };
-  row.querySelector('.r-head').onclick = toggle;
-
-  // estado
-  row.querySelector('.est').onchange=e=>{
-    const estadoAnterior=t.estado;
-    t.estado=e.target.value; row.dataset.estado=t.estado;
-    persistirTarea(t, { revertir: () => { t.estado=estadoAnterior; render(); cancha(); actualizarPills(); } });
-    cancha(); actualizarPills();
-    if(filtros.ocultarHechas || estadoAnterior==='Hecho' || t.estado==='Hecho') render();
-  };
-
-  // campos de texto de la tarea (con la lógica optimista original)
-  row.querySelectorAll('.r-body [data-k]').forEach(el=>{
-    el.oninput=()=>{
-      if(!valoresAntesDelCambio.has(t.id)) valoresAntesDelCambio.set(t.id, {...t});
-      t[el.dataset.k]=el.value;
-      if(el.tagName==='TEXTAREA') autosize(el);
-      if(el.dataset.k==='tarea'){
-        const ttl=row.querySelector('.r-t');
-        ttl.textContent=el.value||'Tarea sin título — ábrela y ponle nombre';
-        ttl.classList.toggle('vacio', !el.value);
-      }
-      guardarDebounced(t.id, () => {
-        pendientesEnVuelo.set(t.id, (pendientesEnVuelo.get(t.id)||0)+1);
-        const miGen = (generacionGuardado.get(t.id)||0)+1;
-        generacionGuardado.set(t.id, miGen);
-        persistirTarea(t, {
-          revertir: () => {
-            if (generacionGuardado.get(t.id) !== miGen) return;
-            const previo = valoresAntesDelCambio.get(t.id);
-            if (previo) Object.assign(t, previo);
-            const enFoco=document.activeElement;
-            if(enFoco && row.contains(enFoco) && (enFoco.tagName==='INPUT'||enFoco.tagName==='TEXTAREA')){
-              pendienteDeRevertir.add(t.id);
-            } else render();
-          },
-        }).then(() => {
-          const restantes = (pendientesEnVuelo.get(t.id)||1) - 1;
-          if (restantes <= 0 && !pendientesGuardado.has(t.id)) {
-            pendientesEnVuelo.delete(t.id); valoresAntesDelCambio.delete(t.id);
-          } else pendientesEnVuelo.set(t.id, Math.max(0, restantes));
-        });
-      });
-    };
-  });
-
-  // subtareas
-  row.querySelector('.subs-slot').appendChild(montarSubtareas(t));
-  // asignar data-id a cada .sub para poder enfocar la nueva
-  row.querySelectorAll('.sub').forEach((el,i)=>{ el.dataset.id=t.subtareas[i]?.id||''; });
-
-  // chat de la tarea
-  row.querySelector('.chat-slot').appendChild(montarChat(t.chat, opts=>persistirTarea(t, opts)));
-
-  // archivos de la tarea
-  const thumbs=row.querySelector('.r-body>.seccion-panel .thumbs')||row.querySelector('.thumbs');
-  const zona=row.querySelector('.r-body .zona');
-  const inFile=row.querySelector('.r-body [data-file]');
-  pintarThumbs(t, thumbs, t);
-  const repinta=()=>pintarThumbs(t, thumbs, t);
-  row.querySelector('.r-body [data-pick]').onclick=ev=>{ ev.stopPropagation(); inFile.click(); };
-  inFile.onchange=ev=>{ if(ev.target.files.length) adjuntar(t, t, [...ev.target.files], repinta); ev.target.value=''; };
-  ['dragenter','dragover'].forEach(n=>zona.addEventListener(n,e=>{
-    if(!llevaArchivos(e)) return;
-    e.preventDefault(); e.stopPropagation(); zona.classList.add('drag'); }));
-  ['dragleave','drop'].forEach(n=>zona.addEventListener(n,e=>{
-    if(!llevaArchivos(e)) return;
-    e.preventDefault(); e.stopPropagation(); zona.classList.remove('drag'); }));
-  zona.addEventListener('drop',e=>{
-    const fs=[...(e.dataTransfer?.files||[])];
-    if(fs.length) adjuntar(t, t, fs, repinta);
-  });
-  row.querySelector('.r-body').addEventListener('paste',e=>{
-    const fs=[...(e.clipboardData?.files||[])].filter(f=>f.size);
-    if(!fs.length) return;
-    e.preventDefault(); adjuntar(t, t, fs, repinta);
-  });
-
-  // arrastre de la fila
-  row.addEventListener('dragover',e=>{
-    if(arrastre?.tipo!=='tarea'||arrastre.id===t.id||llevaArchivos(e)) return;
-    e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect='move';
-    const r=row.getBoundingClientRect();
-    const abajo=e.clientY > r.top + r.height/2;
-    limpiarZonas(); row.classList.add(abajo?'dz-b':'dz-a');
-  });
-  row.addEventListener('drop',e=>{
-    if(arrastre?.tipo!=='tarea'||llevaArchivos(e)) return;
-    e.preventDefault(); e.stopPropagation();
-    const abajo=row.classList.contains('dz-b');
-    const id=arrastre.id; limpiarZonas();
-    moverTarea(id, t.id, abajo);
-  });
-
-  // mover de bloque
-  row.querySelector('[data-mover]').onchange=e=>{
-    const secAnterior=t.sec, ordenAnterior=t.orden;
-    t.sec=e.target.value;
-    const delSec=estado.tareas.filter(x=>x.sec===t.sec && x.id!==t.id);
-    const ultimo=delSec.length ? delSec[delSec.length-1].orden : null;
-    t.orden=RoadmapSync.calcularOrden(ultimo, null);
-    persistirTarea(t, { revertir: () => { t.sec=secAnterior; t.orden=ordenAnterior; render(); } });
-    render();
-  };
-  row.querySelector('.del').onclick=e=>{ borrarTarea(e.currentTarget); };
-
-  if(abiertas.has(t.id)) setTimeout(()=>row.querySelectorAll('.r-body textarea').forEach(autosize),0);
-  return row;
-}
-
-function actualizarPills(){
-  estado.secciones.forEach(s=>{
-    const el=document.querySelector(`.sec[data-id="${s.id}"] .pill`);
-    if(!el) return;
-    const suyas=estado.tareas.filter(t=>t.sec===s.id);
-    el.textContent=suyas.filter(t=>t.estado!=='Hecho').length+' abiertas / '+suyas.length;
-  });
-}
-
-function pintarSeccion(s){
-  const suyas=estado.tareas.filter(t=>t.sec===s.id);
-  const vis=suyas.filter(visible);
-  if(filtrando() && !vis.length) return null;
-
-  const sec=document.createElement('section');
-  sec.className='sec'+(cerradas.has(s.id)?'':' open');
-  sec.dataset.id=s.id;
-  sec.innerHTML=`
-    <div class="sec-h">
-      <span class="grip-slot"></span>
-      <button class="caret" aria-label="Plegar o desplegar bloque">&#9654;</button>
-      <input class="sec-name" value="${escA(s.titulo)}" aria-label="Nombre del bloque" placeholder="Nombre del bloque">
-      <div class="sec-tools">
-        <span class="menu-wrap">
-          <button class="tool" data-menu title="Más opciones" aria-haspopup="true" aria-expanded="false">&#8943;</button>
-          <div class="menu" hidden role="menu">
-            <button data-up role="menuitem">Subir bloque</button>
-            <button data-down role="menuitem">Bajar bloque</button>
-            <hr>
-            <button data-del class="peligro" role="menuitem">Borrar bloque</button>
-          </div>
-        </span>
-      </div>
-      <span class="pill">${suyas.filter(t=>t.estado!=='Hecho').length} abiertas / ${suyas.length}</span>
-    </div>
-    <div class="sec-body"></div>`;
-
-  sec.querySelector('.caret').onclick=()=>{
-    sec.classList.toggle('open');
-    sec.classList.contains('open')?cerradas.delete(s.id):cerradas.add(s.id);
-  };
-  const inp=sec.querySelector('.sec-name');
-  inp.oninput=()=>{
-    if(!valoresAntesDelCambio.has(s.id)) valoresAntesDelCambio.set(s.id, {...s});
-    s.titulo=inp.value;
-    guardarDebounced(s.id, () => {
-      pendientesEnVuelo.set(s.id, (pendientesEnVuelo.get(s.id)||0)+1);
-      const miGen = (generacionGuardado.get(s.id)||0)+1;
-      generacionGuardado.set(s.id, miGen);
-      persistirSeccion(s, {
-        revertir: () => {
-          if (generacionGuardado.get(s.id) !== miGen) return;
-          const previo = valoresAntesDelCambio.get(s.id);
-          if (previo) Object.assign(s, previo);
-          const enFoco=document.activeElement;
-          if(enFoco && sec.contains(enFoco) && (enFoco.tagName==='INPUT'||enFoco.tagName==='TEXTAREA')){
-            pendienteDeRevertir.add(s.id);
-          } else render();
-        },
-      }).then(() => {
-        const restantes = (pendientesEnVuelo.get(s.id)||1) - 1;
-        if (restantes <= 0 && !pendientesGuardado.has(s.id)) {
-          pendientesEnVuelo.delete(s.id); valoresAntesDelCambio.delete(s.id);
-        } else pendientesEnVuelo.set(s.id, Math.max(0, restantes));
-      });
-    });
-  };
-  inp.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); inp.blur(); } };
-  const cab=sec.querySelector('.sec-h');
-  cab.querySelector('.grip-slot').replaceWith(asa(cab,'bloque',s.id,'Arrastra para mover el bloque'));
-  cab.addEventListener('dragover',e=>{
-    if(llevaArchivos(e)) return;
-    if(arrastre?.tipo==='bloque'&&arrastre.id!==s.id){
-      e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect='move';
-      const r=cab.getBoundingClientRect();
-      limpiarZonas(); sec.classList.add(e.clientY>r.top+r.height/2?'dz-b':'dz-a');
-    } else if(arrastre?.tipo==='tarea'){
-      e.preventDefault(); e.stopPropagation(); e.dataTransfer.dropEffect='move';
-      limpiarZonas(); cab.classList.add('dz-in');
-    }
-  });
-  cab.addEventListener('drop',e=>{
-    if(llevaArchivos(e)||!arrastre) return;
-    e.preventDefault(); e.stopPropagation();
-    const {tipo,id}=arrastre;
-    if(tipo==='bloque'){ const abajo=sec.classList.contains('dz-b'); limpiarZonas(); moverBloque(id,s.id,abajo); }
-    else { limpiarZonas(); cerradas.delete(s.id); moverTareaAlFinal(id,s.id); }
-  });
-
-  const wrap=sec.querySelector('.menu-wrap'), bm=wrap.querySelector('[data-menu]'), menu=wrap.querySelector('.menu');
-  bm.onclick=ev=>{
-    ev.stopPropagation();
-    const abierto=!menu.hidden; cerrarMenus();
-    if(!abierto){
-      menu.hidden=false; sec.classList.add('menu-open'); bm.setAttribute('aria-expanded','true');
-      const i=estado.secciones.findIndex(x=>x.id===s.id);
-      menu.querySelector('[data-up]').disabled = i<=0;
-      menu.querySelector('[data-down]').disabled = i>=estado.secciones.length-1;
-    }
-  };
-  menu.onclick=ev=>ev.stopPropagation();
-  menu.querySelector('[data-up]').onclick=()=>{ cerrarMenus(); moverBloquePaso(s.id,-1); };
-  menu.querySelector('[data-down]').onclick=()=>{ cerrarMenus(); moverBloquePaso(s.id,1); };
-  const btnDelBloque=sec.querySelector('[data-del]');
-  btnDelBloque.onclick=async ()=>{
-    cerrarMenus();
-    if(suyas.length){ aviso('Ese bloque tiene '+suyas.length+' tareas. Muévelas o bórralas primero.'); return; }
-    if(!confirm('Se borra el bloque «'+s.titulo+'». ¿Seguir?')) return;
-    const idx=estado.secciones.findIndex(x=>x.id===s.id);
-    estado.secciones=estado.secciones.filter(x=>x.id!==s.id); render();
-    const okBorrado = await conEstadoDeCarga(() => RoadmapSync.borrarSeccion(s.id), {
-      onEstado: combinar(onEstadoBoton(btnDelBloque, 'Borrando...'), onEstadoGlobal),
-      revertir: () => { estado.secciones.splice(idx,0,s); render(); },
-    });
-    if (okBorrado) marcarEcoPropio(RoadmapSync.TABLAS.secciones, s.id);
-  };
-
-  const body=sec.querySelector('.sec-body');
-  body.addEventListener('dragover',e=>{
-    if(arrastre?.tipo!=='tarea'||llevaArchivos(e)) return;
-    e.preventDefault(); e.dataTransfer.dropEffect='move';
-    if(!body.querySelector('.dz-a,.dz-b')){ limpiarZonas(); body.classList.add('dz-in'); }
-  });
-  body.addEventListener('drop',e=>{
-    if(arrastre?.tipo!=='tarea'||llevaArchivos(e)) return;
-    e.preventDefault(); const id=arrastre.id; limpiarZonas(); moverTareaAlFinal(id,s.id);
-  });
-  const activas = vis.filter(t=>t.estado!=='Hecho');
-  const hechas  = vis.filter(t=>t.estado==='Hecho');
-  activas.forEach(t=>body.appendChild(pintarFila(t)));
-  if(!vis.length){
-    const v=document.createElement('div');
-    v.className='empty'; v.style.padding='18px'; v.textContent='Bloque vacío.';
-    body.appendChild(v);
-  } else if(!activas.length && !filtros.q){
-    const v=document.createElement('div');
-    v.className='empty'; v.style.padding='18px'; v.textContent='Sin tareas pendientes. 🎉';
-    body.appendChild(v);
-  }
-  if(hechas.length){
-    const abierto = hechasAbiertas.has(s.id) || !!filtros.q;
-    const drawer=document.createElement('div');
-    drawer.className='hechas'+(abierto?' open':'');
-    drawer.innerHTML=`<button class="hechas-h"><span class="cr">&#9654;</span> ${hechas.length} ${hechas.length===1?'hecha':'hechas'}</button><div class="hechas-body"></div>`;
-    const cuerpo=drawer.querySelector('.hechas-body');
-    hechas.forEach(t=>cuerpo.appendChild(pintarFila(t)));
-    drawer.querySelector('.hechas-h').onclick=()=>{
-      drawer.classList.toggle('open');
-      drawer.classList.contains('open')?hechasAbiertas.add(s.id):hechasAbiertas.delete(s.id);
-    };
-    body.appendChild(drawer);
-  }
-  const add=document.createElement('button');
-  add.className='addrow'; add.textContent='+  Nueva tarea en este bloque';
-  add.onclick=()=>{
-    const id=nuevoId('T', estado.tareas.map(x=>x.id));
-    const delSec=estado.tareas.filter(x=>x.sec===s.id);
-    const ultimo=delSec.length ? delSec[delSec.length-1].orden : null;
-    const nueva={id,sec:s.id,modulo:'',tarea:'',expl:'',resp:'',estado:'Pendiente',img:'',com:'',fecha:'',files:[],chat:[],subtareas:[],orden:RoadmapSync.calcularOrden(ultimo,null)};
-    estado.tareas.push(nueva);
-    abiertas.add(id); cerradas.delete(s.id); render();
-    persistirTarea(nueva, {
-      revertir: () => { estado.tareas=estado.tareas.filter(x=>x.id!==id); abiertas.delete(id); render(); },
-    });
-    const el=document.querySelector(`.row[data-id="${id}"] [data-k=tarea]`);
-    if(el){ el.scrollIntoView({block:'center',behavior:'smooth'}); el.focus(); }
-  };
-  body.appendChild(add);
-  return sec;
-}
-
+/* ============================================================
+   Render principal
+   ============================================================ */
 function render(){
-  if(!lista) return;
-  lista.innerHTML='';
-  let n=0;
-  estado.secciones.forEach(s=>{
-    const el=pintarSeccion(s);
-    if(el){ lista.appendChild(el); n+=estado.tareas.filter(t=>t.sec===s.id&&visible(t)).length; }
-  });
-  if(!estado.secciones.length){
-    lista.innerHTML='<div class="empty">No hay bloques. Crea el primero con el botón de abajo.</div>';
-  } else if(!n && filtrando()){
-    lista.innerHTML='<div class="empty">Ninguna tarea encaja con este filtro. Prueba «Todas» o vacía la búsqueda.</div>';
-  }
-  if(visiblesEl) visiblesEl.textContent=n+' visibles';
-  cancha();
+  pintarChrome();
+  sincronizarFiltros();
+  const v = vistaActual();
+
+  elFiltros.hidden = !!v.caja;
+  board.classList.toggle('cmode', !!v.caja);
+  board.classList.toggle('rows', !v.caja && UI.layout === 'rows');
+
+  if (v.caja) return renderCaja();
+  renderTablero(v);
 }
 
-/* ---------- caja ---------- */
-const fmtMoney = n => (Number(n)||0).toLocaleString('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2});
+/* Una columna por estado y, adentro, una banda por prioridad. Cada banda es su propia
+   zona de destino: soltar una tarjeta en la banda «Urgente» de otra columna le cambia
+   las dos cosas de una, el estado y la prioridad. Las bandas vacías no se dibujan salvo
+   mientras hay un arrastre en curso, para no gastar alto con cuatro títulos por columna. */
+function renderTablero(v){
+  const mostradas = datos.tareas.filter(visible);
 
-function editCaja(m, campo, valor){
-  const key='caja:'+m.id;
-  if(!snapsParcial.has(key)) snapsParcial.set(key, JSON.stringify(m));
-  m[campo]=valor;
-  guardarDebounced(key, ()=>{
-    persistirMovimiento(m, {
-      revertir: ()=>{
-        try{ Object.assign(m, JSON.parse(snapsParcial.get(key))); }catch(e){}
-        if(!focoEditando()) renderCaja();
-      },
-    }).then(()=>{ if(!pendientesGuardado.has(key)) snapsParcial.delete(key); });
+  if (v.soloHoy && !mostradas.length) {
+    board.innerHTML = `<p class="empty-board">Todavía no marcaste nada para hoy.<br>Tocá el ☀ de cualquier tarjeta y aparece acá.</p>`;
+    return;
+  }
+  if (!mostradas.length && filtrando()) {
+    board.innerHTML = `<p class="empty-board">Ninguna tarea encaja con este filtro.<br>Probá vaciar la búsqueda o destildar los filtros.</p>`;
+    return;
+  }
+
+  board.innerHTML = ESTADOS.map(c => {
+    const lista = mostradas.filter(t => t.estado === c.id);
+
+    // Terminadas va plegada a una solapa angosta. Se comía un cuarto del ancho para
+    // mostrar justo lo que ya no hay que mirar; ese ancho ahora es de las otras tres.
+    // No desaparece: sigue siendo zona donde soltar para dar algo por terminado, y un
+    // clic la abre entera.
+    if (c.id === HECHO && !UI.terminadasAbiertas) {
+      const n = lista.length;
+      return `<section class="col plegada" data-col="${escA(c.id)}">
+        <div class="plegada-in" data-drop="${escA(c.id)}" data-abrir-term role="button" tabindex="0"
+             title="${n} terminada${n === 1 ? '' : 's'} · clic para verlas, o soltá una tarea acá para darla por terminada">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5.5 5.5L20 6.5"/></svg>
+          <span class="plegada-n">${n}</span>
+          <span class="plegada-txt">Terminadas</span>
+        </div>
+      </section>`;
+    }
+
+    // La barrita ya no puede medir «cuánto de esta columna está hecho» —la columna ES un
+    // estado—, así que mide cuánto del tablero está parado acá. De un vistazo se ve si
+    // se está amontonando todo en Bloqueadas.
+    const pct = mostradas.length ? Math.round(lista.length / mostradas.length * 100) : 0;
+
+    const bandas = PRIORIDADES.map(p => {
+      const suyas = lista.filter(t => prioridadDe(t.prioridad).id === p.id);
+      return `<div class="grupo${suyas.length ? '' : ' vacio'}">
+        <div class="grupo-h"><i style="background:${p.color}"></i>${esc(p.label)}<span>${suyas.length}</span></div>
+        <div class="cards" data-drop="${escA(c.id)}" data-prio="${escA(p.id)}">${suyas.map(tarjetaHTML).join('')}</div>
+      </div>`;
+    }).join('');
+
+    return `<section class="col" data-col="${escA(c.id)}">
+      <div class="col-h">
+        <span class="dot" style="background:${c.color}"></span>
+        <h2>${esc(c.label)}</h2>
+        <span class="count">${lista.length}</span>
+        ${c.id === HECHO ? `<button class="plegar" data-plegar-term title="Plegar terminadas" aria-label="Plegar la columna de terminadas">«</button>` : ''}
+      </div>
+      <div class="rail" title="${pct}% de las tareas visibles está en esta columna"><i style="width:${pct}%;background:${c.color}"></i></div>
+      <div class="grupos">${lista.length ? '' : '<p class="empty-col">Arrastrá una tarea acá</p>'}${bandas}</div>
+      <div class="col-f"><button class="add-card" data-add="${escA(c.id)}">+ Agregar tarea</button></div>
+    </section>`;
+  }).join('');
+
+  conectarTablero(v);
+}
+
+function tarjetaHTML(t){
+  const p = prioridadDe(t.prioridad), ty = tipoDe(t.tipo), tm = tematicaDe(t.sec);
+
+  // Prioridad y tipo se leen en la tarjeta. La temática no: los nombres son largos y se
+  // comen la ficha, así que va como barrita de color. El tooltip arranca con la palabra
+  // "Temática" para que se entienda qué es esa barra sin tener que adivinarlo; el texto
+  // completo igual queda en el DOM, para lectores de pantalla y para Ctrl+F.
+  const etiqueta = (c, txt, fuerte) =>
+    `<span class="tag${fuerte ? ' fuerte' : ''}" style="background:${tint(c,.13)};color:${c}">${esc(txt)}</span>`;
+  const barra = (c, txt) =>
+    `<span class="tag barra" style="background:${c}" title="Temática: ${escA(txt)}"><b>Temática: ${esc(txt)}</b></span>`;
+
+  const tags = [etiqueta(p.color, p.label, p.id === CRITICA || p.id === 'urgente'), etiqueta(ty.color, ty.label)];
+  if (tm) tags.push(barra(colorTematica(tm), tm.titulo || 'Sin nombre'));
+
+  const bits = [`<button class="sun${t.hoy ? ' on' : ''}" data-hoy="${escA(t.id)}" aria-pressed="${t.hoy ? 'true' : 'false'}" title="${t.hoy ? 'Sacarla de hoy' : 'Marcarla para hacerla hoy'}">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg>Hoy
+    </button>`];
+  if ((t.chat || []).length) bits.push(`<span class="meta" title="Intervenciones en la conversación"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21 12a8 8 0 0 1-11.5 7.2L3.5 20.5l1.3-6A8 8 0 1 1 21 12z"/></svg>${t.chat.length}</span>`);
+  if ((t.files || []).length) bits.push(`<span class="meta" title="Adjuntos"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 11l-8.5 8.5a4.5 4.5 0 1 1-6.4-6.4L13 4.8a3 3 0 1 1 4.2 4.2l-8 8a1.5 1.5 0 0 1-2.1-2.1L14.5 7"/></svg>${t.files.length}</span>`);
+
+  const who = PERSONAS.map(p2 => {
+    const on = (t.pend || []).includes(p2.id);
+    return `<button class="av${on ? '' : ' off'}"${on ? ` style="background:${p2.color}"` : ''} data-toggle="${escA(t.id)}|${escA(p2.id)}" title="${on ? 'Pendiente de ' : 'Marcar pendiente de '}${escA(p2.nombre)}">${esc(p2.ini)}</button>`;
+  }).join('');
+
+  // El agarre no agrega comportamiento: la tarjeta entera ya es arrastrable. Lo que hace
+  // es dar un lugar donde el arrastre SIEMPRE arranca —sobre los botones del pie el
+  // navegador no lo inicia— y, sobre todo, mostrar que la tarjeta se puede mover.
+  return `<article class="card${t.estado === HECHO ? ' done' : ''}${t.hoy ? ' today' : ''}${p.id === CRITICA ? ' critica' : ''}" draggable="true" data-id="${escA(t.id)}" style="--spine:${tint(p.color,.55)}">
+    <span class="grip" aria-hidden="true" title="Arrastrá desde acá para mover la tarea de columna"></span>
+    <p class="title">${t.tarea ? esc(t.tarea) : '<em>Sin título</em>'}</p>
+    <div class="tags">${tags.join('')}</div>
+    <div class="card-f">${bits.join('')}<span class="who">${who}</span></div>
+  </article>`;
+}
+
+/* Arrastrar entre columnas: si la columna destino quedó fuera de pantalla, el tablero se
+   corre solo mientras la tarjeta se sostiene cerca del borde. Sin esto hay que soltarla,
+   scrollear y volver a agarrarla. El puntero se lee del `dragover` (durante un arrastre
+   no hay eventos de mouse) y el desplazamiento corre por rAF, no por evento: así sigue
+   andando aunque la mano se quede quieta contra el borde. */
+const punteroArrastre = { x:0, y:0 };
+let bucleScroll = 0;
+document.addEventListener('dragover', e => { punteroArrastre.x = e.clientX; punteroArrastre.y = e.clientY; });
+
+const empuje = (dist, margen) => dist < margen ? Math.min(22, (margen - dist) / 3.2) : 0;
+
+function scrollDeArrastre(){
+  if (!arrastreId) { bucleScroll = 0; return; }
+  const { x, y } = punteroArrastre;
+  const b = board.getBoundingClientRect(), m = 110;
+
+  if (board.classList.contains('rows')) board.scrollTop  += empuje(b.bottom - y, m) - empuje(y - b.top, m);
+  else                                  board.scrollLeft += empuje(b.right - x, m) - empuje(x - b.left, m);
+
+  const zona = document.elementFromPoint(x, y)?.closest('.grupos,.cards');
+  if (zona) {
+    const r = zona.getBoundingClientRect(), mv = 56;
+    zona.scrollTop += empuje(r.bottom - y, mv) - empuje(y - r.top, mv);
+  }
+  bucleScroll = requestAnimationFrame(scrollDeArrastre);
+}
+
+function conectarTablero(v){
+  $$('.card').forEach(el => {
+    el.addEventListener('dragstart', e => {
+      arrastreId = el.dataset.id;
+      el.classList.add('dragging');
+      // Con el arrastre en curso se muestran también las bandas de prioridad vacías:
+      // son el destino de «esto pasa a ser urgente» y si no se ven no se puede soltar ahí.
+      document.body.classList.add('arrastrando');
+      if (!bucleScroll) bucleScroll = requestAnimationFrame(scrollDeArrastre);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', arrastreId);
+    });
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging'); arrastreId = null;
+      document.body.classList.remove('arrastrando');
+      $$('.col').forEach(c => c.classList.remove('drop'));
+      $$('.grupo').forEach(g => g.classList.remove('drop'));
+    });
+    el.addEventListener('click', e => {
+      if (e.target.closest('[data-toggle],[data-hoy]')) return;
+      abrirTarea(el.dataset.id);
+    });
   });
+
+  $$('[data-toggle]').forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    const [id, quien] = b.dataset.toggle.split('|');
+    const t = tarea(id); if (!t) return;
+    const antes = [...(t.pend || [])];
+    t.pend = t.pend || [];
+    const i = t.pend.indexOf(quien);
+    i > -1 ? t.pend.splice(i, 1) : t.pend.push(quien);
+    render();
+    persistirTarea(t, { revertir: () => { t.pend = antes; render(); } });
+  });
+
+  $$('[data-hoy]').forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    const t = tarea(b.dataset.hoy); if (!t) return;
+    const antes = t.hoy;
+    t.hoy = !t.hoy; render();
+    aviso(t.hoy ? 'Va para hoy' : 'Sacada de hoy');
+    persistirTarea(t, { revertir: () => { t.hoy = antes; render(); } });
+  });
+
+  $$('[data-add]').forEach(b => b.onclick = () => nuevaTarea(v, b.dataset.add));
+
+  // Abrir / plegar la columna de Terminadas.
+  $$('[data-abrir-term]').forEach(el => {
+    const abrir = () => { UI.terminadasAbiertas = true; guardarUI(); render(); };
+    el.onclick = abrir;
+    el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } };
+  });
+  $$('[data-plegar-term]').forEach(el => el.onclick = () => {
+    UI.terminadasAbiertas = false; guardarUI(); render();
+  });
+
+  $$('[data-drop]').forEach(zona => {
+    // `?.` en los dos closest: la solapa plegada de Terminadas no tiene banda de
+    // prioridad adentro, así que ahí `.grupo` no existe.
+    zona.addEventListener('dragover', e => {
+      if (!arrastreId) return;
+      e.preventDefault();
+      zona.closest('.col')?.classList.add('drop');
+      zona.closest('.grupo')?.classList.add('drop');
+      // La solapa plegada no muestra tarjetas: se ilumina como destino y nada más.
+      if (zona.hasAttribute('data-abrir-term')) return;
+      const el = document.querySelector('.card.dragging'); if (!el) return;
+      const despues = tarjetaDespuesDe(zona, e.clientY);
+      despues ? zona.insertBefore(el, despues) : zona.appendChild(el);
+      zona.closest('.col').querySelector('.empty-col')?.remove();
+    });
+    zona.addEventListener('dragleave', e => {
+      if (zona.contains(e.relatedTarget)) return;
+      zona.closest('.col')?.classList.remove('drop');
+      zona.closest('.grupo')?.classList.remove('drop');
+    });
+    zona.addEventListener('drop', e => {
+      e.preventDefault();
+      const id = arrastreId || e.dataTransfer.getData('text/plain');
+      const t = tarea(id); if (!t) return;
+      soltarTarea(t, zona);
+    });
+  });
+}
+
+function tarjetaDespuesDe(zona, y){
+  return [...zona.querySelectorAll('.card:not(.dragging)')].reduce((mejor, hijo) => {
+    const b = hijo.getBoundingClientRect();
+    const off = y - b.top - b.height / 2;
+    return (off < 0 && off > mejor.off) ? { off, el: hijo } : mejor;
+  }, { off: -Infinity, el: null }).el;
+}
+
+// Al soltar, la tarjeta ya está en su lugar dentro del DOM: se leen sus vecinas para
+// calcular el `orden` nuevo. La zona de destino dice las dos cosas que cambian: la
+// columna es el estado y la banda dentro de la columna es la prioridad.
+function soltarTarea(t, zona){
+  const antes = { orden:t.orden, estado:t.estado, prioridad:t.prioridad };
+  const ids = [...zona.querySelectorAll('.card')].map(c => c.dataset.id);
+  const pos = ids.indexOf(t.id);
+  const vecino = i => { const x = ids[i] ? tarea(ids[i]) : null; return x && x.id !== t.id ? x.orden : null; };
+
+  t.estado = zona.dataset.drop;
+  if (zona.dataset.prio) t.prioridad = zona.dataset.prio;
+
+  if (pos < 0) {
+    // Soltada en la solapa plegada de Terminadas: ahí no hay tarjetas de dónde deducir
+    // el lugar, así que va al final de las que ya están terminadas. La prioridad no se
+    // toca: una tarea terminada conserva la que tenía.
+    const yaHechas = datos.tareas.filter(x => x.estado === t.estado && x.id !== t.id);
+    t.orden = RoadmapSync.calcularOrden(yaHechas.length ? yaHechas[yaHechas.length - 1].orden : null, null);
+  } else {
+    t.orden = RoadmapSync.calcularOrden(vecino(pos - 1), vecino(pos + 1));
+  }
+
+  datos.tareas.sort((a, b) => a.orden - b.orden);
+  render();
+  persistirTarea(t, {
+    revertir: () => {
+      Object.assign(t, antes);
+      datos.tareas.sort((a, b) => a.orden - b.orden);
+      render();
+    },
+  });
+}
+
+function nuevaTarea(v, colId){
+  const id = nuevoId('T', datos.tareas.map(x => x.id));
+  const ultimo = datos.tareas.length ? datos.tareas[datos.tareas.length - 1].orden : null;
+  const t = {
+    id, sec:'', modulo:'', tarea:'', expl:'', estado:'Pendiente', img:'', com:'', fecha:'',
+    files:[], chat:[], subtareas:[], prioridad:'semanal', tipo:'nuevo',
+    hoy: !!(v && v.soloHoy), pend:[], creada:new Date().toISOString(),
+    orden: RoadmapSync.calcularOrden(ultimo, null),
+  };
+  if (colId && !(v && v.soloHoy)) t.estado = colId;
+  datos.tareas.push(t);
+  render();
+  persistirTarea(t, {
+    revertir: () => { datos.tareas = datos.tareas.filter(x => x.id !== id); render(); },
+  });
+  abrirTarea(id, true);
+}
+
+/* ============================================================
+   Detalle de la tarea (modal)
+   ============================================================ */
+const actual = () => tarea(tareaAbierta);
+
+function abrirTarea(id, foco){
+  const t = tarea(id); if (!t) return;
+  tareaAbierta = id;
+
+  llenarSelect($('#tEstado'), ESTADOS); $('#tEstado').value = t.estado;
+  llenarSelect($('#tPrioridad'), PRIORIDADES); $('#tPrioridad').value = t.prioridad;
+  llenarSelect($('#tTipo'), TIPOS); $('#tTipo').value = t.tipo;
+  llenarSelect($('#tTematica'),
+    datos.secciones.map(s => ({ id:s.id, label:s.titulo || 'Sin nombre' })), 'Sin temática');
+  $('#tTematica').value = tematicaDe(t.sec) ? t.sec : '';
+
+  $('#tTitulo').value = t.tarea;
+  $('#tDesc').value = t.expl || '';
+  // Se vacía siempre: lo tipeado y no guardado en una tarea no puede aparecer en otra.
+  $('#tMsg').value = '';
+  $('#tMeta').textContent = t.creada
+    ? 'Creada el ' + new Date(t.creada).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
+    : '';
+  pintarHoy(t); pintarPend(t); pintarConversacion(t); pintarArchivos(t);
+  $('#scrimTarea').classList.add('on');
+  autoGrow($('#tTitulo'));
+  if (foco) setTimeout(() => $('#tTitulo').focus(), 40);
+}
+
+function pintarHoy(t){
+  const b = $('#tHoy');
+  b.classList.toggle('on', !!t.hoy);
+  b.textContent = t.hoy ? '☀ Hoy' : '☀ Realizar hoy';
+}
+
+function pintarPend(t){
+  $('#tPend').innerHTML = PERSONAS.map(p => {
+    const on = (t.pend || []).includes(p.id);
+    return `<button class="${on ? 'on' : ''}"${on ? ` style="background:${p.color}"` : ''} data-p="${escA(p.id)}">
+      <span class="av mini" style="background:${on ? 'rgba(255,255,255,.28)' : p.color}">${esc(p.ini)}</span>${esc(p.nombre)}
+    </button>`;
+  }).join('');
+  $$('#tPend [data-p]').forEach(b => b.onclick = () => {
+    const antes = [...(t.pend || [])];
+    t.pend = t.pend || [];
+    const i = t.pend.indexOf(b.dataset.p);
+    i > -1 ? t.pend.splice(i, 1) : t.pend.push(b.dataset.p);
+    pintarPend(t); render();
+    persistirTarea(t, { revertir: () => { t.pend = antes; pintarPend(t); render(); } });
+  });
+}
+
+/* ---------- conversación ----------
+   Se ve como un texto corrido y lo único que distingue a una persona de otra es el color
+   de su letra: sin nombres, sin globos, sin horarios a la vista.
+
+   Por qué no es un `<textarea>` común y corriente: un textarea pinta todo su contenido de
+   un solo color, no sabe de autores. Así que cada intervención se sigue guardando por
+   separado con su autor (que es lo que decide el color), y lo ya escrito se pinta como
+   párrafos. La caja de abajo, donde se escribe, sí es un textarea normal, teñido con el
+   color de quien está adentro. La fecha de cada intervención no se muestra, pero queda
+   en el tooltip: sirve para reconstruir cuándo se dijo algo sin ensuciar la lectura. */
+function pintarConversacion(t){
+  const log = $('#tChat'), msgs = t.chat || [];
+  log.innerHTML = msgs.map((m, i) => {
+    const quien = m.autor ? nombrePersona(m.autor) : 'Alguien';
+    const cuando = fmtTs(m.ts);
+    return `<p class="linea" style="--lc:${colorPersona(m.autor)}" title="${escA(quien + (cuando ? ' · ' + cuando : ''))}">${esc(m.texto)}${
+      m.autor && m.autor === YO.id
+        ? `<button class="x" data-mdel="${i}" title="Borrar lo que escribiste" aria-label="Borrar esta intervención">✕</button>`
+        : ''}</p>`;
+  }).join('');
+
+  $$('[data-mdel]').forEach(b => b.onclick = () => {
+    const i = Number(b.dataset.mdel);
+    const [quitado] = t.chat.splice(i, 1);
+    pintarConversacion(t); render();
+    persistirTarea(t, { revertir: () => { t.chat.splice(i, 0, quitado); pintarConversacion(t); render(); } });
+  });
+
+  const caja = $('#tMsg');
+  caja.style.setProperty('--yo', YO.id ? colorPersona(YO.id) : 'var(--ink)');
+  caja.placeholder = YO.id
+    ? `Escribí acá y va en tu color. Enter guarda; Shift+Enter baja de línea.`
+    : 'Escribí acá. Enter guarda; Shift+Enter baja de línea.';
+}
+
+// Pasa lo escrito en la caja a una intervención propia. Se llama con Enter y también al
+// salir del campo: escribir algo, hacer clic afuera y perderlo sería una traición.
+function guardarLoEscrito(){
+  const t = actual(), caja = $('#tMsg');
+  if (!t || !caja.value.trim()) return;
+  const m = { autor: YO.id || '', ts: new Date().toISOString(), texto: caja.value.trim() };
+  t.chat = t.chat || [];
+  t.chat.push(m);
+  caja.value = '';
+  pintarConversacion(t); render();
+  persistirTarea(t, {
+    revertir: () => {
+      const i = t.chat.indexOf(m);
+      if (i > -1) t.chat.splice(i, 1);
+      // Se devuelve el texto a la caja en vez de tirarlo: si no se pudo guardar, al menos
+      // que siga en pantalla para reintentar o copiarlo a mano.
+      if (!caja.value.trim()) caja.value = m.texto;
+      pintarConversacion(t); render();
+    },
+  });
+}
+
+function pintarArchivos(t){
+  const cont = $('#tFiles');
+  cont.innerHTML = (t.files || []).map((f, i) => {
+    const url = RoadmapSync.urlPublica(f);
+    return /^image\//.test(f.t)
+      ? `<div class="thumb" data-fopen="${i}" title="Abrir ${escA(f.n)}"><img src="${escA(url)}" alt="${escA(f.n)}"><button class="fx" data-fdel="${i}" title="Quitar" aria-label="Quitar ${escA(f.n)}">✕</button></div>`
+      : `<span class="filewrap"><a class="doc" href="${escA(url)}" target="_blank" rel="noopener" title="${escA(f.n)} · ${kb(f.size||0)}">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3v5h5"/><path d="M19 21H5V3h9l5 5v13z"/></svg>
+          <span>${esc(f.n)}</span></a><button class="fx" data-fdel="${i}" title="Quitar" aria-label="Quitar ${escA(f.n)}">✕</button></span>`;
+  }).join('');
+
+  $$('[data-fopen]').forEach(el => el.onclick = e => {
+    if (e.target.closest('.fx')) return;
+    $('#lbImg').src = RoadmapSync.urlPublica(t.files[Number(el.dataset.fopen)]);
+    $('#lightbox').classList.add('on');
+  });
+
+  // Borrado en dos pasos: el primer clic arma, el segundo confirma. Evita perder un
+  // adjunto por un clic al pasar, sin meter un diálogo de confirmación encima del modal.
+  $$('[data-fdel]').forEach(b => {
+    let temporizador = null;
+    b.onclick = async e => {
+      e.preventDefault(); e.stopPropagation();
+      if (!b.classList.contains('armar')) {
+        b.classList.add('armar');
+        b.title = 'Clic de nuevo para confirmar';
+        temporizador = setTimeout(() => { b.classList.remove('armar'); b.title = 'Quitar'; }, 3000);
+        return;
+      }
+      clearTimeout(temporizador);
+      const i = Number(b.dataset.fdel);
+      const [quitado] = t.files.splice(i, 1);
+      pintarArchivos(t); render();
+      const ok = await persistirTarea(t, {
+        revertir: () => { t.files.splice(i, 0, quitado); pintarArchivos(t); render(); },
+      });
+      if (ok) { try { await RoadmapSync.borrarArchivo(quitado); } catch (e2) {} }
+    };
+  });
+}
+
+/* ---------- enganches del modal de tarea ---------- */
+function campoTareaDebounced(t, campo, valor){
+  const clave = 'tarea:' + t.id + ':' + campo;
+  if (!snaps.has(clave)) snaps.set(clave, t[campo]);
+  t[campo] = valor;
+  guardarDebounced(clave, () => {
+    persistirTarea(t, {
+      revertir: () => { t[campo] = snaps.get(clave); render(); if (actual() === t) abrirTarea(t.id); },
+    }).then(() => { if (!pendientesGuardado.has(clave)) snaps.delete(clave); });
+  });
+}
+
+$('#tTitulo').addEventListener('input', e => {
+  const t = actual(); if (!t) return;
+  autoGrow(e.target);
+  campoTareaDebounced(t, 'tarea', e.target.value);
+  render();
+});
+$('#tDesc').addEventListener('input', e => {
+  const t = actual(); if (!t) return;
+  campoTareaDebounced(t, 'expl', e.target.value);
+});
+[['tEstado','estado'], ['tPrioridad','prioridad'], ['tTipo','tipo']].forEach(([elId, campo]) => {
+  $('#' + elId).addEventListener('change', e => {
+    const t = actual(); if (!t) return;
+    const antes = t[campo];
+    t[campo] = e.target.value; render();
+    persistirTarea(t, { revertir: () => { t[campo] = antes; render(); if (actual() === t) abrirTarea(t.id); } });
+  });
+});
+$('#tTematica').addEventListener('change', e => {
+  const t = actual(); if (!t) return;
+  const antes = t.sec;
+  t.sec = e.target.value || ''; render();
+  persistirTarea(t, { revertir: () => { t.sec = antes; render(); if (actual() === t) abrirTarea(t.id); } });
+});
+$('#tHoy').onclick = () => {
+  const t = actual(); if (!t) return;
+  const antes = t.hoy;
+  t.hoy = !t.hoy; pintarHoy(t); render();
+  persistirTarea(t, { revertir: () => { t.hoy = antes; pintarHoy(t); render(); } });
+};
+$('#tMsg').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); guardarLoEscrito(); }
+});
+$('#tMsg').addEventListener('blur', guardarLoEscrito);
+
+$('#tDrop').onclick = () => $('#tFileIn').click();
+$('#tFileIn').addEventListener('change', e => {
+  const t = actual();
+  if (t && e.target.files.length) adjuntar(t, [...e.target.files]);
+  e.target.value = '';
+});
+['dragenter','dragover'].forEach(n => $('#tDrop').addEventListener(n, e => { e.preventDefault(); $('#tDrop').classList.add('over'); }));
+['dragleave','drop'].forEach(n => $('#tDrop').addEventListener(n, e => { e.preventDefault(); $('#tDrop').classList.remove('over'); }));
+$('#tDrop').addEventListener('drop', e => {
+  const t = actual();
+  const fs = [...(e.dataTransfer?.files || [])];
+  if (t && fs.length) adjuntar(t, fs);
+});
+$('#scrimTarea .modal').addEventListener('paste', e => {
+  const t = actual(); if (!t) return;
+  const fs = [...(e.clipboardData?.files || [])].filter(f => f.size);
+  if (!fs.length) return;
+  e.preventDefault(); adjuntar(t, fs);
+});
+
+$('#tDel').onclick = async () => {
+  const t = actual(); if (!t) return;
+  if (!confirm('Se borra «' + (t.tarea || 'sin título') + '» con su conversación y sus archivos. ¿Seguir?')) return;
+  const idx = datos.tareas.findIndex(x => x.id === t.id);
+  datos.tareas = datos.tareas.filter(x => x.id !== t.id);
+  cerrarModales(); render();
+  const ok = await conEstadoDeCarga(async () => {
+    await borrarTodosLosArchivos(t);
+    await RoadmapSync.borrarTarea(t.id);
+  }, {
+    onEstado: combinar(onEstadoBoton($('#tDel'), 'Borrando...'), onEstadoGlobal),
+    revertir: () => { datos.tareas.splice(idx, 0, t); render(); },
+  });
+  if (ok) { marcarEcoPropio(RoadmapSync.TABLAS.tareas, t.id); aviso('Tarea eliminada'); }
+};
+
+/* ============================================================
+   Temáticas
+   ============================================================ */
+function pintarTem(){
+  $('#temList').innerHTML = datos.secciones.map(s => `
+    <div class="tem-row">
+      <input type="color" value="${escA(colorTematica(s))}" data-tc="${escA(s.id)}" aria-label="Color de la temática">
+      <input type="text" value="${escA(s.titulo)}" data-tl="${escA(s.id)}" placeholder="Nombre de la temática">
+      <span class="hint">${datos.tareas.filter(t => t.sec === s.id).length}</span>
+      <button class="x" data-td="${escA(s.id)}" title="Borrar" aria-label="Borrar temática">✕</button>
+    </div>`).join('') || '<p class="hint">Todavía no hay temáticas.</p>';
+
+  $$('[data-tc]').forEach(el => el.oninput = () => {
+    const s = tematicaDe(el.dataset.tc); if (!s) return;
+    const antes = s.color;
+    s.color = el.value; render();
+    guardarDebounced('sec-color:' + s.id, () =>
+      persistirSeccion(s, { revertir: () => { s.color = antes; render(); pintarTem(); } }));
+  });
+  $$('[data-tl]').forEach(el => el.oninput = () => {
+    const s = tematicaDe(el.dataset.tl); if (!s) return;
+    const clave = 'sec:' + s.id;
+    if (!snaps.has(clave)) snaps.set(clave, s.titulo);
+    s.titulo = el.value; render();
+    guardarDebounced(clave, () => {
+      persistirSeccion(s, { revertir: () => { s.titulo = snaps.get(clave); render(); pintarTem(); } })
+        .then(() => { if (!pendientesGuardado.has(clave)) snaps.delete(clave); });
+    });
+  });
+  $$('[data-td]').forEach(el => el.onclick = async () => {
+    const s = tematicaDe(el.dataset.td); if (!s) return;
+    const suyas = datos.tareas.filter(t => t.sec === s.id);
+    if (!confirm(suyas.length
+      ? `La temática «${s.titulo || 'sin nombre'}» tiene ${suyas.length} tarea(s). Se borra la temática y esas tareas quedan en «Sin temática». ¿Seguir?`
+      : `¿Borrar la temática «${s.titulo || 'sin nombre'}»?`)) return;
+
+    const idx = datos.secciones.findIndex(x => x.id === s.id);
+    const antesSec = suyas.map(t => t.sec);
+    datos.secciones = datos.secciones.filter(x => x.id !== s.id);
+    suyas.forEach(t => { t.sec = ''; });
+    pintarTem(); render();
+    // Las tareas se desenganchan primero: si no, el borrado en cascada de la base se
+    // las lleva puestas junto con la temática.
+    const ok = await conEstadoDeCarga(async () => {
+      for (const t of suyas) await RoadmapSync.guardarTarea(t);
+      await RoadmapSync.borrarSeccion(s.id);
+    }, {
+      onEstado: onEstadoGlobal,
+      revertir: () => {
+        datos.secciones.splice(idx, 0, s);
+        suyas.forEach((t, i) => { t.sec = antesSec[i]; });
+        pintarTem(); render();
+      },
+    });
+    if (ok) marcarEcoPropio(RoadmapSync.TABLAS.secciones, s.id);
+  });
+}
+
+function agregarTem(){
+  const inp = $('#temNew'), v = inp.value.trim();
+  if (!v) return;
+  const id = nuevoId('s', datos.secciones.map(x => x.id));
+  const ultima = datos.secciones.length ? datos.secciones[datos.secciones.length - 1].orden : null;
+  const s = { id, titulo:v, color:PALETA[datos.secciones.length % PALETA.length], orden:RoadmapSync.calcularOrden(ultima, null) };
+  datos.secciones.push(s);
+  inp.value = '';
+  pintarTem(); render();
+  persistirSeccion(s, {
+    revertir: () => { datos.secciones = datos.secciones.filter(x => x.id !== id); pintarTem(); render(); },
+  });
+}
+
+/* ============================================================
+   Caja · planilla de movimientos
+   ============================================================ */
+const fmtMoney = n => (Number(n) || 0).toLocaleString('es-ES', { minimumFractionDigits:2, maximumFractionDigits:2 });
+const CATEGORIAS = ['Sueldos','Servicios','Herramientas','Publicidad','Impuestos','Aporte','Cobro','Otros'];
+
+/* Cada movimiento lo pone alguien de su bolsillo. Lo que sale (monto negativo) es plata
+   que esa persona puso; lo que entra (positivo) es plata que recuperó. Como el gasto es
+   de los dos, al final cada uno debería haber puesto la mitad: quien puso de más queda
+   a favor por la mitad de la diferencia. Nada se prorratea todavía, solo se lleva la
+   cuenta de para qué lado está el saldo. */
+function saldoCaja(movs){
+  const puesto = p => movs.filter(m => m.quien === p.id).reduce((a, m) => a - m.monto, 0);
+  const cuentas = PERSONAS_CAJA.map(p => ({ p, puesto: puesto(p) }));
+  const total = cuentas.reduce((a, c) => a + c.puesto, 0);
+  const parte = cuentas.length ? total / cuentas.length : 0;
+  const conSaldo = cuentas.map(c => ({ ...c, saldo: c.puesto - parte }));
+  const aFavor = [...conSaldo].sort((a, b) => b.saldo - a.saldo)[0] || null;
+  const enContra = [...conSaldo].sort((a, b) => a.saldo - b.saldo)[0] || null;
+  return { cuentas: conSaldo, total, aFavor, enContra };
 }
 
 function renderCaja(){
-  if(!vistaCaja) return;
-  const movs=[...estado.caja].sort((a,b)=>(a.orden||0)-(b.orden||0));
-  const ingresos=movs.filter(m=>m.monto>0).reduce((a,m)=>a+m.monto,0);
-  const egresos =movs.filter(m=>m.monto<0).reduce((a,m)=>a+m.monto,0);
-  const saldo=ingresos+egresos;
-  const etiquetaMonto = CFG.caja?.etiquetaMonto || 'Monto (+ ingreso / − gasto)';
-  const intro = CFG.caja?.intro || 'Anotá los movimientos de dinero. Montos en positivo = entra, en negativo = sale.';
+  const nuevos = generarRecurrentes();
+  if (nuevos) aviso(nuevos === 1 ? 'Se cargó 1 gasto fijo que faltaba' : `Se cargaron ${nuevos} gastos fijos que faltaban`);
 
-  vistaCaja.innerHTML=`
-    <p class="caja-intro">${esc(intro)}</p>
+  // La planilla se lee por fecha, no por el orden en que se fue cargando: si no, los
+  // gastos fijos que se generan solos caen todos al final y no se entiende nada.
+  const movs = [...datos.caja].sort((a, b) =>
+    (a.fecha || '9999-99-99').localeCompare(b.fecha || '9999-99-99') || (a.orden || 0) - (b.orden || 0));
+  const { cuentas, total, aFavor, enContra } = saldoCaja(movs);
+  const fijos = datos.caja.filter(m => m.repite === 'mensual');
+
+  const tarjetaPersona = c => `<div class="saldo-card">
+    <div class="lbl"><span class="av mini" style="background:${c.p.color}">${esc(c.p.ini)}</span>${esc(c.p.nombre)}</div>
+    <div class="val">${fmtMoney(c.puesto)}</div>
+    <span class="sub">puso · ${movs.filter(m => m.quien === c.p.id).length} mov.</span>
+  </div>`;
+
+  const enPaz = !aFavor || Math.abs(aFavor.saldo) < 0.005;
+  const resumen = enPaz
+    ? `<div class="val">Están a mano</div><span class="sub">puesto entre los dos: ${fmtMoney(total)}</span>`
+    : `<div class="val">${esc(aFavor.p.nombre)} · ${fmtMoney(aFavor.saldo)}</div>
+       <span class="sub">${esc(enContra.p.nombre)} le debe esa diferencia · puesto entre los dos: ${fmtMoney(total)}</span>`;
+
+  board.innerHTML = `<div class="caja-wrap">
+    <p class="caja-intro">${esc(CFG.caja?.intro || 'Planilla de movimientos.')}</p>
     <div class="caja-top">
-      <div class="saldo-card total"><div class="lbl">Saldo</div><div class="val">${fmtMoney(saldo)}</div></div>
-      <div class="saldo-card ingresos"><div class="lbl">${esc(CFG.caja?.etiquetaIngresos || 'Ingresos / aportes')}</div><div class="val">${fmtMoney(ingresos)}</div></div>
-      <div class="saldo-card egresos"><div class="lbl">${esc(CFG.caja?.etiquetaEgresos || 'Gastos')}</div><div class="val">${fmtMoney(Math.abs(egresos))}</div></div>
+      <div class="saldo-card total">
+        <div class="lbl">A favor de</div>
+        ${resumen}
+      </div>
+      ${cuentas.map(tarjetaPersona).join('')}
     </div>
     <div class="caja-tabla-wrap">
       <table class="caja">
         <thead><tr>
           <th style="width:130px">Fecha</th>
           <th>Concepto</th>
-          <th style="width:150px">Categoría</th>
-          <th style="width:150px">Cuenta</th>
-          <th class="num" style="width:150px">${esc(etiquetaMonto)}</th>
-          <th>Notas</th>
-          <th style="width:40px"></th>
+          <th style="width:124px">Quién</th>
+          <th style="width:140px">Categoría</th>
+          <th class="num" style="width:148px">Monto (+ entra / − sale)</th>
+          <th style="width:180px">Notas</th>
+          <th style="width:38px" title="Se repite todos los meses">Fijo</th>
+          <th style="width:38px"></th>
         </tr></thead>
         <tbody></tbody>
       </table>
     </div>
-    <button class="caja-add" type="button">+  Nuevo movimiento</button>`;
+    <button class="caja-add" type="button">+  Nuevo movimiento</button>
+    <p class="caja-tip">Se mueve como una planilla: <kbd>Tab</kbd> pasa de celda, <kbd>↑</kbd> <kbd>↓</kbd> suben y bajan por la misma columna, y <kbd>Enter</kbd> al final agrega una fila nueva.<br>
+      El <b>↻</b> marca un gasto fijo: se vuelve a cargar solo cada mes, con el mismo importe, hasta el mes en curso.${fijos.length ? ` Hoy hay ${fijos.length} ${fijos.length === 1 ? 'gasto fijo' : 'gastos fijos'}.` : ''}</p>
+  </div>`;
 
-  const tbody=vistaCaja.querySelector('tbody');
-  if(!movs.length){
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td colspan="7" style="padding:22px;text-align:center;color:var(--muted)">Sin movimientos todavía. Agregá el primero abajo.</td>`;
-    tbody.appendChild(tr);
+  const tbody = board.querySelector('tbody');
+  if (!movs.length) {
+    tbody.innerHTML = `<tr><td colspan="8" class="caja-vacia">Sin movimientos todavía. Agregá el primero abajo.</td></tr>`;
+  } else {
+    movs.forEach(m => tbody.appendChild(filaCaja(m)));
   }
-  movs.forEach(m=>tbody.appendChild(filaCaja(m)));
+  board.querySelector('.caja-add').onclick = () => nuevoMovimiento();
+}
 
-  vistaCaja.querySelector('.caja-add').onclick=()=>{
-    const id=nuevoId('M', estado.caja.map(x=>x.id));
-    const ultimo=movs.length ? movs[movs.length-1].orden : null;
-    const nuevo={ id, fecha:new Date().toISOString().slice(0,10), concepto:'', categoria:'', monto:0, cuenta:'', notas:'', orden:RoadmapSync.calcularOrden(ultimo,null) };
-    estado.caja.push(nuevo); renderCaja();
-    persistirMovimiento(nuevo, { revertir:()=>{ estado.caja=estado.caja.filter(x=>x.id!==id); renderCaja(); } });
-    const el=vistaCaja.querySelector(`tr[data-id="${id}"] [data-c=concepto]`);
-    if(el){ el.scrollIntoView({block:'center',behavior:'smooth'}); el.focus(); }
+/* Gastos fijos: un movimiento marcado con ↻ es la plantilla del mes en que se cargó, y
+   de ahí en adelante se copia solo, un mes por vez, hasta el mes en curso. Cada copia es
+   un movimiento común y corriente —se edita y se borra— con `origen` apuntando a la
+   plantilla, que es lo que evita cargarlo dos veces. */
+const mesDe = f => String(f || '').slice(0, 7);
+
+function generarRecurrentes(){
+  const plantillas = datos.caja.filter(m => m.repite === 'mensual' && m.fecha);
+  if (!plantillas.length) return 0;
+  const mesHoy = new Date().toISOString().slice(0, 7);
+  let hechos = 0;
+
+  plantillas.forEach(tpl => {
+    const ya = new Set(datos.caja.filter(m => m.origen === tpl.id).map(m => mesDe(m.fecha)));
+    ya.add(mesDe(tpl.fecha));
+    const dia = Number(tpl.fecha.slice(8, 10)) || 1;
+    let [anio, mes] = tpl.fecha.slice(0, 7).split('-').map(Number);
+
+    for (let i = 0; i < 36; i++) {
+      mes++; if (mes > 12) { mes = 1; anio++; }
+      const clave = `${anio}-${String(mes).padStart(2, '0')}`;
+      if (clave > mesHoy) break;
+      if (ya.has(clave)) continue;
+
+      const ultimoDia = new Date(anio, mes, 0).getDate();
+      const orden = RoadmapSync.calcularOrden(Math.max(0, ...datos.caja.map(x => x.orden || 0)), null);
+      const copia = { ...tpl,
+        id: nuevoId('M', datos.caja.map(x => x.id)),
+        fecha: `${clave}-${String(Math.min(dia, ultimoDia)).padStart(2, '0')}`,
+        repite: '', origen: tpl.id, orden };
+      datos.caja.push(copia);
+      hechos++;
+      persistirMovimiento(copia, { revertir: () => { datos.caja = datos.caja.filter(x => x.id !== copia.id); } });
+    }
+  });
+  return hechos;
+}
+
+function nuevoMovimiento(){
+  const id = nuevoId('M', datos.caja.map(x => x.id));
+  const ultimo = datos.caja.length ? Math.max(...datos.caja.map(x => x.orden || 0)) : null;
+  const mio = PERSONAS_CAJA.some(p => p.id === YO.id) ? YO.id : '';
+  const m = {
+    id, fecha:new Date().toISOString().slice(0, 10), concepto:'', categoria:'',
+    monto:0, quien:mio, notas:'', repite:'', origen:'',
+    orden:RoadmapSync.calcularOrden(ultimo, null),
   };
+  datos.caja.push(m);
+  renderCaja();
+  persistirMovimiento(m, { revertir: () => { datos.caja = datos.caja.filter(x => x.id !== id); renderCaja(); } });
+  board.querySelector(`tr[data-id="${m.id}"] [data-c="concepto"]`)?.focus();
 }
 
 function filaCaja(m){
-  const tr=document.createElement('tr'); tr.dataset.id=m.id;
-  const cls=m.monto>0?'monto-pos':(m.monto<0?'monto-neg':'');
-  tr.innerHTML=`
-    <td><input class="cinp" type="date" data-c="fecha" value="${m.fecha||''}"></td>
-    <td><input class="cinp" data-c="concepto" value="${escA(m.concepto)}" placeholder="Concepto"></td>
-    <td><input class="cinp" data-c="categoria" value="${escA(m.categoria)}" placeholder="Categoría"></td>
-    <td><input class="cinp" data-c="cuenta" value="${escA(m.cuenta)}" placeholder="Cuenta / quién"></td>
-    <td class="num"><input class="cinp num ${cls}" type="number" step="0.01" data-c="monto" value="${m.monto||0}"></td>
-    <td><input class="cinp" data-c="notas" value="${escA(m.notas)}" placeholder="Notas"></td>
-    <td><button class="caja-del" type="button" title="Borrar movimiento">✕</button></td>`;
+  const tr = document.createElement('tr');
+  tr.dataset.id = m.id;
+  if (m.origen) tr.classList.add('generada');
+  const cls = m.monto > 0 ? 'pos' : (m.monto < 0 ? 'neg' : '');
+  // La lista de gente es la de la caja, pero si el movimiento quedó a nombre de alguien
+  // que ya no participa se le agrega igual su opción: nadie cambia de dueño solo.
+  const gente = PERSONAS_CAJA.some(p => p.id === m.quien) || !m.quien
+    ? PERSONAS_CAJA
+    : PERSONAS_CAJA.concat(PERSONAS.filter(p => p.id === m.quien));
+  const fijo = m.origen
+    ? `<span class="caja-rep hecha" title="Copia automática del gasto fijo — se genera todos los meses">↻</span>`
+    : `<button class="caja-rep${m.repite === 'mensual' ? ' on' : ''}" type="button" title="${m.repite === 'mensual' ? 'Es un gasto fijo: dejar de repetirlo' : 'Repetir este movimiento todos los meses'}" aria-pressed="${m.repite === 'mensual'}">↻</button>`;
 
-  tr.querySelectorAll('[data-c]').forEach(inp=>{
-    inp.oninput=()=>{
-      const campo=inp.dataset.c;
-      let val=inp.value;
-      if(campo==='monto'){
-        val=parseFloat(inp.value)||0;
-        inp.classList.remove('monto-pos','monto-neg');
-        inp.classList.add(val>0?'monto-pos':(val<0?'monto-neg':''));
+  tr.innerHTML = `
+    <td><input class="cinp" type="date" data-c="fecha" value="${escA(m.fecha)}" aria-label="Fecha"></td>
+    <td><input class="cinp" data-c="concepto" value="${escA(m.concepto)}" placeholder="En qué se fue / de dónde vino" aria-label="Concepto"></td>
+    <td><select class="cinp" data-c="quien" aria-label="Quién" style="color:${m.quien ? colorPersona(m.quien) : 'var(--ink-3)'}">
+      <option value="">— quién</option>
+      ${gente.map(p => `<option value="${escA(p.id)}"${m.quien === p.id ? ' selected' : ''}>${esc(p.nombre)}</option>`).join('')}
+    </select></td>
+    <td><input class="cinp" data-c="categoria" list="catCaja" value="${escA(m.categoria)}" placeholder="Categoría" aria-label="Categoría"></td>
+    <td><input class="cinp num ${cls}" type="number" step="0.01" data-c="monto" value="${m.monto || 0}" aria-label="Monto"></td>
+    <td><input class="cinp" data-c="notas" value="${escA(m.notas)}" placeholder="Notas" aria-label="Notas"></td>
+    <td>${fijo}</td>
+    <td><button class="caja-del" type="button" title="Borrar movimiento" aria-label="Borrar movimiento">✕</button></td>`;
+
+  if (!document.getElementById('catCaja')) {
+    const dl = document.createElement('datalist');
+    dl.id = 'catCaja';
+    dl.innerHTML = CATEGORIAS.map(c => `<option value="${escA(c)}">`).join('');
+    document.body.appendChild(dl);
+  }
+
+  tr.querySelectorAll('[data-c]').forEach(inp => {
+    const escribir = () => {
+      const campo = inp.dataset.c;
+      let val = inp.value;
+      if (campo === 'monto') {
+        val = parseFloat(inp.value) || 0;
+        inp.classList.remove('pos', 'neg');
+        if (val) inp.classList.add(val > 0 ? 'pos' : 'neg');
       }
-      editCaja(m, campo, val);
-      if(campo==='monto') actualizarSaldos();
+      if (campo === 'quien') inp.style.color = val ? colorPersona(val) : 'var(--ink-3)';
+      editarCaja(m, campo, val);
+      if (campo === 'monto' || campo === 'quien') actualizarTotalesCaja();
     };
+    inp.oninput = escribir;
+    if (inp.tagName === 'SELECT') inp.onchange = escribir;
+
+    // Navegación tipo planilla: flechas para moverse por la columna, Enter para bajar
+    // (y crear fila nueva si ya estás en la última).
+    inp.addEventListener('keydown', e => {
+      if (!['ArrowUp', 'ArrowDown', 'Enter'].includes(e.key)) return;
+      if (inp.tagName === 'SELECT' && e.key !== 'Enter') return;
+      const filas = [...board.querySelectorAll('tbody tr[data-id]')];
+      const i = filas.indexOf(tr);
+      const destino = e.key === 'ArrowUp' ? i - 1 : i + 1;
+      if (destino >= filas.length) {
+        if (e.key === 'Enter') { e.preventDefault(); nuevoMovimiento(); }
+        return;
+      }
+      if (destino < 0) return;
+      e.preventDefault();
+      filas[destino].querySelector(`[data-c="${inp.dataset.c}"]`)?.focus();
+    });
   });
-  tr.querySelector('.caja-del').onclick=async ()=>{
-    if(!confirm('Se borra el movimiento. ¿Seguir?')) return;
-    const idx=estado.caja.findIndex(x=>x.id===m.id);
-    estado.caja=estado.caja.filter(x=>x.id!==m.id); renderCaja();
-    await conEstadoDeCarga(()=>RoadmapSync.borrarMovimiento(m.id), {
-      onEstado:onEstadoGlobal,
-      revertir:()=>{ estado.caja.splice(idx,0,m); renderCaja(); },
-    }).then(ok=>{ if(ok) marcarEcoPropio(RoadmapSync.TABLAS.caja, m.id); });
+
+  const btnRep = tr.querySelector('button.caja-rep');
+  if (btnRep) btnRep.onclick = () => {
+    const antes = m.repite || '';
+    m.repite = antes === 'mensual' ? '' : 'mensual';
+    if (m.repite === 'mensual' && !m.fecha) { m.repite = ''; aviso('Ponele fecha al movimiento antes de marcarlo como fijo'); return; }
+    renderCaja();
+    aviso(m.repite ? 'Gasto fijo: se va a repetir todos los meses' : 'Ya no se repite');
+    persistirMovimiento(m, { revertir: () => { m.repite = antes; renderCaja(); } });
+  };
+
+  tr.querySelector('.caja-del').onclick = async () => {
+    if (!confirm('Se borra el movimiento. ¿Seguir?')) return;
+    const idx = datos.caja.findIndex(x => x.id === m.id);
+    datos.caja = datos.caja.filter(x => x.id !== m.id);
+    renderCaja();
+    const ok = await conEstadoDeCarga(() => RoadmapSync.borrarMovimiento(m.id), {
+      onEstado: onEstadoGlobal,
+      revertir: () => { datos.caja.splice(idx, 0, m); renderCaja(); },
+    });
+    if (ok) marcarEcoPropio(RoadmapSync.TABLAS.caja, m.id);
   };
   return tr;
 }
 
-function actualizarSaldos(){
-  if(!vistaCaja) return;
-  const ingresos=estado.caja.filter(m=>m.monto>0).reduce((a,m)=>a+m.monto,0);
-  const egresos =estado.caja.filter(m=>m.monto<0).reduce((a,m)=>a+m.monto,0);
-  const set=(sel,v)=>{ const el=vistaCaja.querySelector(sel+' .val'); if(el) el.textContent=fmtMoney(v); };
-  set('.saldo-card.total', ingresos+egresos);
-  set('.saldo-card.ingresos', ingresos);
-  set('.saldo-card.egresos', Math.abs(egresos));
-}
-
-function pintarTodo(){ render(); renderCaja(); }
-
-/* ---------- pestañas ---------- */
-function activarTab(nombre){
-  document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-selected', t.dataset.tab===nombre));
-  if(vistaFlujo) vistaFlujo.hidden = nombre!=='flujo';
-  if(vistaCaja)  vistaCaja.hidden  = nombre!=='caja';
-  if(filtrosFlujo) filtrosFlujo.hidden = nombre!=='flujo';
-}
-
-/* ---------- menús / atajos globales ---------- */
-function cerrarMenus(){
-  document.querySelectorAll('.menu:not([hidden])').forEach(m=>{
-    m.hidden=true; m.closest('.sec')?.classList.remove('menu-open');
-    m.parentElement.querySelector('[data-menu]')?.setAttribute('aria-expanded','false');
+function editarCaja(m, campo, valor){
+  const clave = 'caja:' + m.id;
+  if (!snaps.has(clave)) snaps.set(clave, JSON.stringify(m));
+  m[campo] = valor;
+  guardarDebounced(clave, () => {
+    persistirMovimiento(m, {
+      revertir: () => {
+        try { Object.assign(m, JSON.parse(snaps.get(clave))); } catch (e) {}
+        if (!estaEditando()) renderCaja();
+      },
+    }).then(() => { if (!pendientesGuardado.has(clave)) snaps.delete(clave); });
   });
 }
 
-/* ---------- utilidades ---------- */
-function aviso(txt){
-  toast.textContent=txt; toast.classList.add('on');
-  clearTimeout(toast._x); toast._x=setTimeout(()=>toast.classList.remove('on'),2800);
-}
-function bajar(nombre,contenido,tipo){
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob([contenido],{type:tipo}));
-  a.download=nombre; a.click(); URL.revokeObjectURL(a.href);
-}
-const hoy=()=>new Date().toISOString().slice(0,10);
-const slug=(CFG.proyecto||'plan');
+// Recalcula solo los números de arriba, para no repintar la planilla mientras se escribe.
+function actualizarTotalesCaja(){
+  const tarjetas = board.querySelectorAll('.saldo-card');
+  if (!tarjetas.length) return;
+  const { cuentas, total, aFavor, enContra } = saldoCaja(datos.caja);
 
-/* ---------- arranque ---------- */
-q.oninput=e=>{ filtros.q=e.target.value.trim().toLowerCase(); render(); };
-if(oh) oh.onchange=e=>{ filtros.ocultarHechas=e.target.checked; render(); };
-bPlegar.onclick=()=>{
-  const algoAbierto = abiertas.size>0 || cerradas.size<estado.secciones.length;
-  if(algoAbierto){
-    abiertas.clear(); estado.secciones.forEach(s=>cerradas.add(s.id));
-    bPlegar.textContent='Desplegar todo';
-  }else{
-    cerradas.clear(); bPlegar.textContent='Plegar todo';
+  const enPaz = !aFavor || Math.abs(aFavor.saldo) < 0.005;
+  tarjetas[0].querySelector('.val').textContent = enPaz ? 'Están a mano' : `${aFavor.p.nombre} · ${fmtMoney(aFavor.saldo)}`;
+  tarjetas[0].querySelector('.sub').textContent = enPaz
+    ? `puesto entre los dos: ${fmtMoney(total)}`
+    : `${enContra.p.nombre} le debe esa diferencia · puesto entre los dos: ${fmtMoney(total)}`;
+
+  cuentas.forEach((c, i) => {
+    const card = tarjetas[i + 1]; if (!card) return;
+    card.querySelector('.val').textContent = fmtMoney(c.puesto);
+    card.querySelector('.sub').textContent = `puso · ${datos.caja.filter(m => m.quien === c.p.id).length} mov.`;
+  });
+}
+
+/* ============================================================
+   Barra superior, atajos y cierre de modales
+   ============================================================ */
+function cerrarModales(){
+  // Antes de cerrar: si quedó algo escrito en la conversación, se guarda. Cerrar con
+  // Escape no dispara el `blur` del campo, y perder lo tipeado sería imperdonable.
+  if (tareaAbierta) guardarLoEscrito();
+  $$('.scrim').forEach(s => s.classList.remove('on'));
+  tareaAbierta = null;
+  if (refrescoPendiente) { refrescoPendiente = false; refrescar(); }
+}
+document.addEventListener('click', e => {
+  if (e.target.matches('[data-close]') || e.target.classList.contains('scrim')) cerrarModales();
+});
+document.addEventListener('keydown', e => {
+  const tag = document.activeElement?.tagName;
+  if (e.key === 'Escape') { cerrarModales(); return; }
+  if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
+    e.preventDefault(); $('#q').focus();
   }
-  render();
-};
-bNuevoBloque.onclick=()=>{
-  const id=nuevoId('s', estado.secciones.map(x=>x.id));
-  const ultima=estado.secciones.length ? estado.secciones[estado.secciones.length-1].orden : null;
-  const nueva={id,titulo:'',orden:RoadmapSync.calcularOrden(ultima,null)};
-  estado.secciones.push(nueva);
-  cerradas.delete(id); render();
-  persistirSeccion(nueva, {
-    revertir: () => { estado.secciones=estado.secciones.filter(x=>x.id!==id); render(); },
-  });
-  const el=document.querySelector(`.sec[data-id="${id}"] .sec-name`);
-  if(el){ el.scrollIntoView({block:'center',behavior:'smooth'}); el.focus(); }
-};
+});
 
-if(bHtml) bHtml.onclick=()=>{
-  bajar(slug+'-respaldo-'+hoy()+'.json', JSON.stringify(estado,null,2), 'application/json;charset=utf-8');
-  aviso('Respaldo JSON guardado.');
+$('#q').addEventListener('input', e => { UI.f.q = e.target.value.trim().toLowerCase(); render(); });
+['Prioridad','Tipo','Tematica'].forEach(k => {
+  $('#f' + k).addEventListener('change', e => { UI.f[k.toLowerCase()] = e.target.value; render(); });
+});
+$$('[data-layout]').forEach(b => b.onclick = () => { UI.layout = b.dataset.layout; guardarUI(); render(); });
+$('#bNueva').onclick = () => {
+  // Desde la Caja no hay tablero donde mostrarla: se vuelve a una vista de tareas para
+  // que la tarea recién creada quede a la vista al cerrar el detalle.
+  const v = vistaActual();
+  if (v.caja) { UI.vista = 'estado'; guardarUI(); render(); }
+  nuevaTarea(vistaActual(), null);
 };
-if(bCsv) bCsv.onclick=()=>{
-  const sec={}; estado.secciones.forEach(s=>sec[s.id]=s.titulo);
-  const e=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-  const cab=['ID','Bloque','Modulo','Tarea','Explicacion','Responsable','Estado','Enlace','Archivos','Chat','Subtareas','Fecha limite'];
-  const filas=estado.tareas.map(t=>[t.id,sec[t.sec]||'',t.modulo,t.tarea,t.expl,t.resp,t.estado,t.img,
-    (t.files||[]).map(f=>f.n).join(' | '),
-    (t.chat||[]).map(m=>(m.autor||'?')+': '+m.texto).join('  ||  '),
-    (t.subtareas||[]).map(s=>(s.estado==='Hecho'?'[x] ':'[ ] ')+s.titulo+(s.resp?' ('+s.resp+')':'')).join('  ||  '),
-    t.fecha].map(e).join(';'));
-  bajar(slug+'-'+hoy()+'.csv','﻿'+[cab.map(e).join(';'),...filas].join('\r\n'),'text/csv;charset=utf-8');
+$('#bTem').onclick = () => { pintarTem(); $('#scrimTem').classList.add('on'); };
+$('#temAdd').onclick = agregarTem;
+$('#temNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregarTem(); } });
+
+$('#bCsv').onclick = () => {
+  const nombreSec = {}; datos.secciones.forEach(s => { nombreSec[s.id] = s.titulo; });
+  const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+  const cab = ['ID','Titulo','Tematica','Estado','Prioridad','Tipo','Pendiente de','Hoy','Notas','Subtareas','Conversacion','Archivos'];
+  const filas = datos.tareas.map(t => [
+    t.id, t.tarea, nombreSec[t.sec] || '',
+    estadoDe(t.estado).label, prioridadDe(t.prioridad).label, tipoDe(t.tipo).label,
+    (t.pend || []).map(nombrePersona).join(' | '),
+    t.hoy ? 'si' : '', t.expl,
+    (t.subtareas || []).map(s => (s.estado === HECHO ? '[x] ' : '[ ] ') + s.titulo + (s.resp ? ' (' + nombrePersona(s.resp) + ')' : '')).join('  ||  '),
+    (t.chat || []).map(m => nombrePersona(m.autor) + ': ' + m.texto).join('  ||  '),
+    (t.files || []).map(f => f.n).join(' | '),
+  ].map(q).join(';'));
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob(['﻿' + [cab.map(q).join(';'), ...filas].join('\r\n')], { type:'text/csv;charset=utf-8' }));
+  a.download = 'tablero-' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
   aviso('CSV guardado. Se abre en Excel con doble clic.');
 };
 
-document.addEventListener('click',()=>cerrarMenus());
-document.addEventListener('dragend',()=>{ arrastre=null; limpiarZonas(); });
-document.addEventListener('keydown',e=>{
-  const t=document.activeElement.tagName;
-  if(e.key==='Escape'){ cerrarMenus(); }
-  if(e.key==='/' && t!=='INPUT' && t!=='TEXTAREA'){ e.preventDefault(); q.focus(); }
-  if(e.key==='Escape' && t!=='INPUT' && t!=='TEXTAREA' && abiertas.size){ abiertas.clear(); render(); }
-});
-document.querySelectorAll('.tab').forEach(tab=>{ tab.onclick=()=>activarTab(tab.dataset.tab); });
-
-/* ---------- login / sesión ---------- */
-const loginOverlay = document.getElementById('loginOverlay');
-const loginForm = document.getElementById('loginForm');
-const loginError = document.getElementById('loginError');
-const loginEmail = document.getElementById('loginEmail');
-const loginPassword = document.getElementById('loginPassword');
-const sinAccesoOverlay = document.getElementById('sinAccesoOverlay');
-const bSinAccesoSalir = document.getElementById('bSinAccesoSalir');
-
-function mostrarModalLogin(){ loginOverlay.hidden = false; }
-function ocultarModalLogin(){ loginOverlay.hidden = true; }
-function mostrarSinAcceso(){ sinAccesoOverlay.hidden = false; }
-function ocultarSinAcceso(){ sinAccesoOverlay.hidden = true; }
-
-// Guard de ruta: aunque la RLS ya protege los datos, una cuenta autenticada pero no
-// miembro de CFG.proyecto no debe ver ni el esqueleto del tablero (bloques, botones, etc).
-// Si la página define CFG.rutaPublica (ej.: index.html -> captalia.html), la cuenta no
-// autorizada se manda ahí en silencio, sin mostrar ningún mensaje de "sin acceso".
-function verificarAcceso(){
-  if((YO.proyectos||[]).includes(CFG.proyecto)){ ocultarSinAcceso(); return true; }
-  if(CFG.rutaPublica){ location.replace(CFG.rutaPublica); return false; }
-  mostrarSinAcceso();
-  return false;
-}
+/* ============================================================
+   Sesión
+   ============================================================ */
+const loginOverlay = $('#loginOverlay');
+const sinAccesoOverlay = $('#sinAccesoOverlay');
 
 async function resolverIdentidad(){
-  let email=null;
-  try{ email=await RoadmapSync.emailActual(); }catch(e){}
-  // Membresía por proyecto: viene de app_miembros en Supabase (RoadmapSync.misProyectos),
-  // no de un mapa hardcodeado. `usuarios` acá solo aporta nombre/color para el chat.
-  let proyectos=[];
-  try{ proyectos = email ? await RoadmapSync.misProyectos() : []; }catch(e){}
-  const u = email && USUARIOS[email.toLowerCase()];
-  if(u){ YO={ nombre:u.nombre, color:u.color||colorDe(u.nombre), proyectos }; }
-  else if(email){ YO={ nombre:email.split('@')[0], color:'none', proyectos }; }
-  else { YO={ nombre:'', color:'none', proyectos:[] }; }
+  let email = null;
+  try { email = await RoadmapSync.emailActual(); } catch (e) {}
+  let esMiembro = false;
+  try { esMiembro = email ? await RoadmapSync.esMiembro() : false; } catch (e) {}
+  const p = email ? PERSONAS.find(x => x.email && x.email === email.toLowerCase()) : null;
+  YO = p
+    ? { id:p.id, nombre:p.nombre, esMiembro }
+    : { id:'', nombre:email ? email.split('@')[0] : '', esMiembro };
 }
 
-async function cargarYArrancar(){
-  try{
-    estado = await RoadmapSync.cargarEstado();
-  }catch(e){
-    aviso('No se pudo conectar con la base: '+e.message);
-    estado = { secciones: [], tareas: [], caja: [] };
+async function arrancar(){
+  try { datos = await RoadmapSync.cargarEstado(); }
+  catch (e) {
+    aviso('No se pudo conectar con la base: ' + e.message);
+    datos = { secciones:[], tareas:[], caja:[] };
   }
-  pintarTodo();
+  normalizarDatos();
+  render();
+  revisarEsquema();
+  if (!YO.id) {
+    aviso('Tu cuenta todavía no está asociada a una persona del tablero. Avisale a Antonio.');
+  }
 }
 
-loginForm.addEventListener('submit', async e => {
+// Si falta correr supabase/schema-v3.sql, el tablero se ve pero no puede guardar los
+// campos nuevos. Mejor decirlo en pantalla que dejar que falle en silencio al guardar.
+// Va en el ícono del encabezado: el detalle se lee al pasar el cursor por encima.
+async function revisarEsquema(){
+  let faltan = [];
+  try { faltan = await RoadmapSync.faltantesDeEsquema(); } catch (e) { return; }
+  if (!faltan.length) { elAviso.hidden = true; return; }
+  elAviso.hidden = false;
+  elAvisoTexto.innerHTML = `<b>Falta un paso en la base de datos.</b> Todavía no se puede guardar: ${esc(faltan.join(', '))}. `
+    + `Hay que correr <b>supabase/schema-v3.sql</b> y <b>schema-v4.sql</b> en el SQL Editor de Supabase (lo hace Antonio).`;
+}
+
+$('#loginForm').addEventListener('submit', async e => {
   e.preventDefault();
-  loginError.hidden = true;
-  const submitBtn = loginForm.querySelector('button[type=submit]');
-  const marcar = onEstadoBoton(submitBtn, 'Entrando...');
+  $('#loginError').hidden = true;
+  const btn = $('#loginForm button[type=submit]');
+  const marcar = onEstadoBoton(btn, 'Entrando...');
   marcar('cargando');
-  try{
-    await RoadmapSync.iniciarSesion(loginEmail.value.trim(), loginPassword.value);
-    marcar('ok');
-  }catch(err){
+  try { await RoadmapSync.iniciarSesion($('#loginEmail').value.trim(), $('#loginPassword').value); marcar('ok'); }
+  catch (err) {
     marcar('error');
-    loginError.textContent = 'Email o contraseña incorrectos.';
-    loginError.hidden = false;
+    $('#loginError').textContent = 'Email o contraseña incorrectos.';
+    $('#loginError').hidden = false;
   }
 });
-
-bCerrarSesion.onclick = async () => {
-  const marcar = onEstadoBoton(bCerrarSesion, 'Saliendo...');
+const salir = async btn => {
+  const marcar = onEstadoBoton(btn, 'Saliendo...');
   marcar('cargando');
-  try{ await RoadmapSync.cerrarSesion(); marcar('ok'); }
-  catch(e){ marcar('error'); aviso('No se pudo cerrar sesión: '+e.message); }
+  try { await RoadmapSync.cerrarSesion(); marcar('ok'); }
+  catch (e) { marcar('error'); aviso('No se pudo cerrar sesión: ' + e.message); }
 };
+$('#bCerrarSesion').onclick = () => salir($('#bCerrarSesion'));
+$('#bSinAccesoSalir').onclick = () => salir($('#bSinAccesoSalir'));
 
-bSinAccesoSalir.onclick = async () => {
-  const marcar = onEstadoBoton(bSinAccesoSalir, 'Saliendo...');
-  marcar('cargando');
-  try{ await RoadmapSync.cerrarSesion(); marcar('ok'); }
-  catch(e){ marcar('error'); aviso('No se pudo cerrar sesión: '+e.message); }
-};
+async function entrar(){
+  await resolverIdentidad();
+  if (!YO.esMiembro) { sinAccesoOverlay.hidden = false; return; }
+  sinAccesoOverlay.hidden = true;
+  await arrancar();
+}
 
 (async function iniciar(){
-  activarTab('flujo');
   let activa = false;
-  try{ activa = await RoadmapSync.sesionActiva(); }
-  catch(e){ aviso('No se pudo verificar la sesión: '+e.message); }
-  if(activa){
-    await resolverIdentidad(); construirBarras();
-    if(verificarAcceso()) await cargarYArrancar();
-  }
-  else { construirBarras(); mostrarModalLogin(); }
+  try { activa = await RoadmapSync.sesionActiva(); }
+  catch (e) { aviso('No se pudo verificar la sesión: ' + e.message); }
+
+  if (activa) { loginOverlay.hidden = true; await entrar(); }
+  else { pintarChrome(); loginOverlay.hidden = false; }
 
   RoadmapSync.onCambioSesion(async sesionOk => {
-    if(sesionOk){
-      ocultarModalLogin(); await resolverIdentidad(); construirBarras();
-      if(verificarAcceso()) await cargarYArrancar();
+    if (sesionOk) { loginOverlay.hidden = true; await entrar(); }
+    else {
+      datos = { secciones:[], tareas:[], caja:[] };
+      YO = { id:'', nombre:'', esMiembro:false };
+      cerrarModales();
+      sinAccesoOverlay.hidden = true;
+      board.innerHTML = '';
+      pintarChrome();
+      loginOverlay.hidden = false;
     }
-    else { estado = { secciones: [], tareas: [], caja: [] }; YO={nombre:'',color:'none'}; pintarTodo(); ocultarSinAcceso(); mostrarModalLogin(); }
   });
 
-  RoadmapSync.suscribir(refrescarDesdeSupabase);
+  RoadmapSync.suscribir(refrescar);
 })();
