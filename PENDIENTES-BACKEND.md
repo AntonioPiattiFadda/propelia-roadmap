@@ -1,22 +1,23 @@
 # Pendientes de back-end — tablero unificado
 
-Todo lo de esta lista es trabajo contra Supabase. El tablero (HTML/CSS/JS) ya está hecho
-y no hay nada más que tocar del lado del front salvo el punto 3, que son tres líneas.
+**Al 8/8/2026 no queda nada pendiente para que el tablero funcione.** Los puntos 1 a 3
+están hechos y verificados contra la base; el 4 es opcional y conviene dejarlo reposar.
+El archivo se conserva como registro de qué se tocó y por qué.
 
 **Contexto en una frase:** los dos tableros que había (Propelia y Captalia) se unificaron
 en uno solo, con tres personas: Lorenzo, Antonio y Luis. Diego queda fuera del sistema.
 
 ---
 
-## 1. Correr `supabase/schema-v3.sql` — BLOQUEANTE
+## 1. Correr `supabase/schema-v3.sql` — ✅ HECHO (8/8/2026)
 
-SQL Editor del proyecto `propelia` (`gvkdyxhxsnpumxlhvhsm`) → pegar el archivo entero →
-Run. Es idempotente: se puede correr más de una vez sin romper nada.
+Aplicado sobre `propelia` (`gvkdyxhxsnpumxlhvhsm`) como migración
+`roadmap_schema_v3_unificacion`. Resultado verificado: las 10 tareas y la sección de
+Captalia quedaron copiadas con prefijo `c-` (140 tareas y 6 temáticas en total), 117
+tareas con `pend` cargado desde el viejo `resp`, y `app_miembros` quedó solo con Lorenzo
+y Antonio en `propelia`. Es idempotente: se puede volver a correr sin romper nada.
 
-**Hasta que esto no corra**, el tablero abre y muestra las tareas, pero al guardar falla
-en todo lo nuevo. El propio tablero avisa arriba, en una franja amarilla, qué falta.
-
-Lo que hace, en orden:
+Lo que hizo, en orden:
 
 | Paso | Qué toca |
 |---|---|
@@ -36,51 +37,60 @@ Lo que hace, en orden:
 
 ---
 
-## 1 bis. Correr `supabase/schema-v4.sql` — BLOQUEANTE para la caja
+## 1 bis. Correr `supabase/schema-v4.sql` — ✅ HECHO (8/8/2026)
 
-Mismo procedimiento, después del anterior. Agrega dos columnas a `roadmap_caja`
-(`repite` y `origen`) para los gastos fijos: los que se repiten todos los meses y ahora
-el tablero vuelve a cargar solo.
+Aplicado después del anterior, como migración `roadmap_schema_v4_gastos_fijos`. Agregó a
+`roadmap_caja` las columnas `repite` y `origen` para los gastos fijos: los que se repiten
+todos los meses y el tablero vuelve a cargar solo.
 
-Hasta que no corra, la caja se ve pero **no guarda ningún movimiento**, porque el
-tablero manda esas dos columnas en cada alta. El triangulito del encabezado lo avisa.
+Con esto el triangulito de aviso del encabezado ya no aparece: las tres comprobaciones
+que hace `RoadmapSync.faltantesDeEsquema()` pasan.
 
 ---
 
-## 2. Crear las cuentas en Supabase Auth
+## 2. Crear las cuentas en Supabase Auth — ✅ HECHO
 
 `Authentication → Users → Add user`, una por persona, con su email real.
 
-Ya existen las de Lorenzo y Antonio. **Falta la de Luis.**
+Las tres existen, confirmadas:
+
+| Persona | Cuenta |
+|---|---|
+| Lorenzo | `lorenzopiattifadda@gmail.com` |
+| Antonio | `antonio.piattifadda@gmail.com` |
+| Luis | `rubioluis13@gmail.com` (programador; confirmado por Antonio el 8/8/2026) |
+
+Ojo con esa última: en las tablas del producto figura como `agent` de «Organization
+Antonio», el mismo perfil que tiene Diego, que **no** es del tablero. El perfil del
+producto no dice nada sobre quién entra al roadmap — eso se confirma con una persona,
+no se deduce de la base.
 
 ---
 
-## 3. Dar acceso: `app_miembros` + `personas` del HTML
+## 3. Dar acceso: `app_miembros` + `personas` del HTML — ✅ HECHO (8/8/2026)
 
 Son **dos** cosas separadas y hacen falta las dos. Es el error más fácil de cometer acá.
 
 **a) El acceso** lo da una fila en `app_miembros`. Sin esta fila la persona entra, ve
 «Sin acceso» y no lee un solo dato — la RLS se lo impide en la base, no en la pantalla.
 
+Las tres filas ya están cargadas (`propelia` las tres). Si algún día entra alguien más:
+
 ```sql
-insert into public.app_miembros (email, proyecto) values
-  ('lorenzopiattifadda@gmail.com',  'propelia'),
-  ('antonio.piattifadda@gmail.com', 'propelia'),
-  ('luis@ejemplo.com',              'propelia')
+insert into public.app_miembros (email, proyecto)
+values ('<email real, en minúscula>', 'propelia')
 on conflict do nothing;
 ```
 
-Está al final de `schema-v3.sql`, comentado. Descomentalo con los emails reales.
 Los emails van **en minúscula** y tienen que coincidir exactos con los de Auth.
 
-**b) El nombre y el color** salen del bloque `personas` en `index.html`. Ahí hay que
-completar el campo `email` de cada uno:
+**b) El nombre y el color** salen del bloque `personas` en `index.html`. Ya está completo:
 
 ```js
 personas: [
   { id: 'Loro', nombre: 'Lorenzo', ini: 'LO', color: '#6E6BA0', email: 'lorenzopiattifadda@gmail.com', caja: true },
-  { id: 'Toni', nombre: 'Antonio', ini: 'AN', color: '#4F7F79', email: '', caja: true },  // ← falta el email
-  { id: 'Luis', nombre: 'Luis',    ini: 'LU', color: '#A87A3F', email: '' },               // ← falta el email
+  { id: 'Toni', nombre: 'Antonio', ini: 'AN', color: '#4F7F79', email: 'antonio.piattifadda@gmail.com', caja: true },
+  { id: 'Luis', nombre: 'Luis',    ini: 'LU', color: '#A87A3F', email: 'rubioluis13@gmail.com' },
 ],
 ```
 

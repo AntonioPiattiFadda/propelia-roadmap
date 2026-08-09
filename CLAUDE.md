@@ -44,9 +44,9 @@ Bucket de adjuntos: `roadmap-adjuntos`.
   pero el front la expone como `quien` (persona que puso o gastó).
 
 `roadmap_notas` ya no se usa. Era la vista Visión (dos hojas de texto libre); Visión pasó
-a ser un documento de Notion y la pestaña es solo un acceso directo. **La tabla y su
-contenido siguen en Supabase**, intactos, por si hace falta recuperar lo que se escribió;
-el front no la lee ni la escribe.
+a ser un documento de Notion y la pestaña es solo un acceso directo. La tabla existe en
+Supabase (la crea `schema-v3.sql`) pero está **vacía**: nunca llegó a usarse, porque el
+esquema se corrió cuando Visión ya era Notion. El front no la lee ni la escribe.
 
 ### Vistas y accesos directos
 
@@ -73,9 +73,11 @@ reciben **el objeto entero**, no el `path`, justamente para poder leer esa clave
 
 ### Supabase / migraciones
 
-`schema.sql` → `schema-v2.sql` → `schema-v3.sql`, en ese orden, todos idempotentes.
-`schema-v3.sql` es el que unifica los dos tableros y agrega los campos del diseño actual.
-Los pendientes de base y cuentas están en `PENDIENTES-BACKEND.md` (raíz).
+`schema.sql` → `schema-v2.sql` → `schema-v3.sql` → `schema-v4.sql`, en ese orden, todos
+idempotentes. `schema-v3.sql` unifica los dos tableros y agrega los campos del diseño
+actual; `schema-v4.sql` agrega `repite` y `origen` a la caja (gastos fijos). Las cuatro
+están corridas en `propelia` (`gvkdyxhxsnpumxlhvhsm`) desde el 8/8/2026. Lo que queda
+pendiente de base y cuentas está en `PENDIENTES-BACKEND.md` (raíz).
 
 ### Preview local
 
