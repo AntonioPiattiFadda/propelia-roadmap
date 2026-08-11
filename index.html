@@ -31,7 +31,6 @@
         <div class="nota-pop" id="avisoEsquemaTexto" role="tooltip"></div>
       </div>
       <span class="me" id="yoNombre"></span>
-      <button class="btn ghost" id="bTem">Temáticas</button>
       <button class="btn ghost" id="bCsv">Exportar</button>
       <button class="btn ghost" id="bCerrarSesion">Cerrar sesión</button>
       <button class="btn primary" id="bNueva">+ Nueva tarea</button>
@@ -51,7 +50,6 @@
       <div class="chips" id="chipsPend"></div>
       <select class="sel" id="fPrioridad" aria-label="Filtrar por prioridad"></select>
       <select class="sel" id="fTipo" aria-label="Filtrar por tipo"></select>
-      <select class="sel" id="fTematica" aria-label="Filtrar por temática"></select>
       <span class="spacer"></span>
       <div class="seg-layout" id="layout">
         <button data-layout="cols" title="Ver en columnas" aria-label="Ver en columnas">
@@ -87,53 +85,50 @@
         <select id="tEstado" aria-label="Estado"></select>
         <select id="tPrioridad" aria-label="Prioridad"></select>
         <select id="tTipo" aria-label="Tipo de actividad"></select>
-        <select id="tTematica" aria-label="Temática"></select>
         <span class="sep"></span>
         <div class="pend" id="tPend" role="group" aria-label="Pendiente de acción"></div>
       </div>
 
-      <div class="field grande">
-        <label for="tDesc">Explicación</label>
-        <textarea id="tDesc" placeholder="Qué hay que hacer y por qué. El detalle completo: qué pasa hoy, cómo tendría que quedar, y con qué se da por terminada."></textarea>
+      <!-- Explicación. No es un textarea: acá se pegan capturas y quedan adentro del
+           texto, en el lugar donde estaba el cursor. Lo demás de la ficha se pliega para
+           dejarle el alto a este campo, que es donde se trabaja de verdad. -->
+      <div class="field">
+        <label id="tDescLbl">Explicación</label>
+        <div class="rico" id="tDesc" contenteditable="true" role="textbox" aria-multiline="true"
+             aria-labelledby="tDescLbl"
+             data-ph="Qué hay que hacer y por qué. El detalle completo: qué pasa hoy, cómo tendría que quedar, y con qué se da por terminada. Pegá capturas con Ctrl+V y entran acá mismo."></div>
       </div>
+
+      <!-- Checklist: una línea por paso, sin responsable ni detalle. Es una lista para
+           tachar mientras se trabaja, no una tarea adentro de otra tarea. -->
+      <details class="field sec" id="tSecPasos">
+        <summary>Checklist <span class="sec-n" id="tPasosCount"></span></summary>
+        <div class="pasos" id="tPasos"></div>
+        <input class="paso-new" type="text" id="tPasoNew" aria-label="Agregar un paso al checklist" placeholder="Agregar paso y Enter">
+      </details>
 
       <!-- Conversación: se lee como un texto corrido. Lo único que distingue a una
            persona de otra es el color de su letra. -->
-      <div class="field grande">
-        <label for="tMsg">Conversación</label>
+      <details class="field sec" id="tSecChat">
+        <summary>Conversación <span class="sec-n" id="tChatCount"></span></summary>
         <div class="conver">
           <div class="conver-log" id="tChat"></div>
-          <textarea class="conver-in" id="tMsg" placeholder="Escribí acá. Enter guarda lo escrito; Shift+Enter baja de línea."></textarea>
+          <textarea class="conver-in" id="tMsg" aria-label="Escribir en la conversación" placeholder="Escribí acá. Enter guarda lo escrito; Shift+Enter baja de línea."></textarea>
         </div>
-      </div>
+      </details>
 
-      <div class="field">
-        <label>Archivos e imágenes</label>
+      <details class="field sec" id="tSecFiles">
+        <summary>Archivos <span class="sec-n" id="tFilesCount"></span></summary>
         <div class="files" id="tFiles"></div>
-        <div class="drop-files" id="tDrop">Arrastrá archivos acá, pegá con <kbd>Ctrl</kbd>+<kbd>V</kbd>, o hacé clic para elegirlos</div>
+        <div class="drop-files" id="tDrop">Arrastrá archivos acá o hacé clic para elegirlos</div>
         <input type="file" id="tFileIn" multiple hidden>
-      </div>
+      </details>
     </div>
     <div class="m-f">
       <button class="btn danger" id="tDel">Eliminar tarea</button>
       <span class="spacer"></span>
       <span class="hint" id="tMeta"></span>
       <button class="btn primary" data-close>Listo</button>
-    </div>
-  </div>
-</div>
-
-<!-- ===== Modal: temáticas ===== -->
-<div class="scrim" id="scrimTem">
-  <div class="modal modal-sm" role="dialog" aria-modal="true" aria-label="Temáticas">
-    <div class="m-h"><strong class="m-t">Temáticas del sistema</strong><button class="btn ghost" data-close aria-label="Cerrar">✕</button></div>
-    <div class="m-b">
-      <div class="tem-list" id="temList"></div>
-      <div class="tem-add">
-        <input type="text" id="temNew" placeholder="Nueva temática y Enter">
-        <button class="btn" id="temAdd">Agregar</button>
-      </div>
-      <p class="hint">Al borrar una temática, sus tareas quedan en «Sin temática».</p>
     </div>
   </div>
 </div>
@@ -183,14 +178,15 @@ window.APP_CONFIG = {
   titulo: 'Tablero de tareas',
   subtitulo: 'Lorenzo · Antonio · Luis',
   tablas: {
-    secciones: 'roadmap_secciones',
     tareas: 'roadmap_tareas',
     caja: 'roadmap_caja',
+    vision: 'roadmap_vision',
   },
   bucket: 'roadmap-adjuntos',
   canal: 'roadmap-sync',
-  // Visión ya no es una vista del tablero: la pestaña es un acceso directo al documento
-  // de Notion. Si acá queda vacío, la pestaña directamente no se dibuja.
+  // El documento original de Visión en Notion. La hoja del tablero es la que se usa; esto
+  // es solo un enlace para ir al documento viejo cuando hace falta consultarlo. Si queda
+  // vacío, el botón directamente no se dibuja.
   visionUrl: 'https://app.notion.com/p/ROAD-MAP-DESARROLLOS-3b624dc715c8803db321cfa7ce315b5e',
   // `caja: true` marca a quien pone plata. La planilla de la caja solo muestra a esa
   // gente y el saldo se reparte entre ellos; el resto usa el tablero igual que siempre.

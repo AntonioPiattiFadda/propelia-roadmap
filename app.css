@@ -49,13 +49,6 @@ kbd{font:600 10.5px var(--font);background:var(--rail);border-radius:4px;padding
 .view-tab.on{color:#fff;background:var(--ink)}
 .view-tab small{display:inline-block;margin-left:5px;font-size:10px;color:var(--ink-3);font-weight:700;background:var(--rail);padding:0 5px;border-radius:20px}
 .view-tab.on small{background:rgba(255,255,255,.2);color:#fff}
-/* Accesos directos: se ven como una pestaña más, pero llevan afuera. La flechita lo
-   avisa antes del clic, para que nadie espere que el tablero cambie y se lleve una
-   pestaña nueva de sorpresa. Nunca se marcan como activos: no son una vista. */
-a.view-tab{text-decoration:none;display:inline-flex;align-items:center;gap:6px}
-a.view-tab svg{opacity:.5;transition:.12s}
-a.view-tab:hover svg{opacity:1;transform:translate(1px,-1px)}
-
 /* ---------- Filtros ---------- */
 .filters{display:flex;gap:7px;align-items:center;flex-wrap:wrap;flex:1;min-width:0}
 .filters[hidden]{display:none}
@@ -109,14 +102,17 @@ a.view-tab:hover svg{opacity:1;transform:translate(1px,-1px)}
    Estilo tablero de fichas: tarjetas chicas para ver muchas tareas de una, y columnas de
    alto completo (así toda la columna es zona de destino al arrastrar).
 
-   El scroll es UNO SOLO y es el del tablero entero: se baja con la rueda y las columnas
-   bajan juntas. Nada de un scroll por columna — obliga a rascar dentro de cada una para
-   descubrir qué hay abajo, y esconde justo lo que se quiere ver de un vistazo.
+   Cada columna scrollea por su cuenta: la rueda baja las tarjetas de la columna que está
+   bajo el puntero y las demás quedan quietas. Así se puede recorrer Nuevas a fondo sin
+   mover En curso ni Bloqueadas. La cabecera (título, contador, barra) y el pie
+   («+ Agregar tarea») no scrollean: el scroll corre solo por las bandas de tarjetas
+   (`.grupos`), y como esa banda se encoge, la columna nunca pasa del alto del tablero —
+   por eso el tablero termina moviéndose solo en horizontal, sin necesidad de prohibirle
+   el scroll vertical (queda de red por si la ventana es tan baja que ni la cabecera entra).
 
    Las columnas reparten el ancho en partes iguales (`flex:1 1 0`) hasta que dejan de
    entrar: ahí cada una toma su `min-width` y el tablero pasa a moverse en horizontal.
-   Con las 4 columnas de Estado eso significa ocupar toda la pantalla; con 12 temáticas,
-   columnas legibles y scroll lateral. */
+   Con las 4 columnas de Estado eso significa ocupar toda la pantalla. */
 .board{flex:1;overflow:auto;display:flex;gap:11px;padding:12px 16px 14px;align-items:stretch}
 .col{flex:1 1 0;min-width:236px;min-height:100%;background:var(--col);border-radius:12px;display:flex;flex-direction:column;border:1px solid transparent;transition:background .15s,border-color .15s}
 .col.drop{border-color:#C6C5D8;background:#E7E7EC}
@@ -129,10 +125,17 @@ a.view-tab:hover svg{opacity:1;transform:translate(1px,-1px)}
 /* Bandas de prioridad dentro de la columna. Las vacías no se dibujan, salvo mientras
    hay un arrastre: ahí aparecen todas, porque son el destino para cambiarle la
    prioridad a una tarjeta soltándola en la banda que corresponde. */
-/* `flex:1` sin scroll propio: la banda crece con su contenido y, cuando sobra lugar,
-   estira igual para empujar el "+ Agregar tarea" al pie y dejar toda la columna como
-   zona donde soltar. */
-.grupos{flex:1;overflow:visible;padding:0 8px 8px;display:flex;flex-direction:column;gap:2px;min-height:26px}
+/* `flex:1` + `min-height:26px`: la banda estira para empujar el "+ Agregar tarea" al pie
+   y dejar toda la columna como zona donde soltar, pero puede encogerse por debajo de su
+   contenido — que es lo que habilita el scroll propio de cada columna. `flex-basis:0`
+   (implícito en `flex:1`) es lo que evita que el contenido infle la altura de la columna. */
+.grupos{flex:1;overflow-y:auto;overflow-x:hidden;padding:0 8px 8px;display:flex;flex-direction:column;gap:2px;min-height:26px;
+  overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#D3D4DC transparent}
+/* Barra de scroll discreta: la columna ya es gris, una barra fuerte la ensuciaría. */
+.grupos::-webkit-scrollbar{width:9px}
+.grupos::-webkit-scrollbar-track{background:transparent}
+.grupos::-webkit-scrollbar-thumb{background:#D3D4DC;border-radius:9px;border:3px solid transparent;background-clip:padding-box}
+.grupos::-webkit-scrollbar-thumb:hover{background:#BFC1C9;background-clip:padding-box}
 .grupo{border-radius:8px;padding:1px 2px 3px;transition:background .12s}
 .grupo.vacio{display:none}
 body.arrastrando .grupo.vacio{display:block}
@@ -188,7 +191,7 @@ body.arrastrando .grupo{background:rgba(255,255,255,.42)}
 
 /* ---------- Tarjeta ---------- */
 .card{background:var(--card);border-radius:8px;box-shadow:0 1px 1px rgba(21,22,28,.05),0 1px 3px rgba(21,22,28,.07);padding:5px 8px 5px 19px;position:relative;cursor:grab;border:1px solid transparent;transition:box-shadow .15s,transform .1s}
-/* Agarre: la franja de puntitos a la izquierda, entre la barra de temática y el texto.
+/* Agarre: la franja de puntitos a la izquierda, contra el borde de la tarjeta.
    La tarjeta entera se arrastra igual; esto es la señal de que se puede, y el único lugar
    que nunca falla (arrancar el arrastre desde un botón del pie el navegador no lo permite). */
 .grip{position:absolute;left:5px;top:3px;bottom:3px;width:10px;border-radius:3px;cursor:grab;
@@ -205,15 +208,10 @@ body.arrastrando .grupo{background:rgba(255,255,255,.42)}
 .card.today{box-shadow:inset 0 0 0 1px var(--hoy-line),0 1px 3px rgba(21,22,28,.07);background:var(--hoy-bg)}
 .title{font-size:12px;font-weight:600;line-height:1.35;margin:0 0 4px;word-break:break-word}
 .title em{color:var(--ink-3);font-style:normal}
-/* Prioridad y tipo se leen escritos. La temática va como barrita de color (`.barra`):
-   su nombre es largo y le comería la ficha, así que se lee en el tooltip. El texto
-   igual está en el DOM, oculto, para lectores de pantalla y para el Ctrl+F. */
 .tags{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0 0 4px}
 .tags:empty{display:none}
 .tag{font-size:10px;font-weight:600;padding:1.5px 5px;border-radius:5px;display:inline-flex;align-items:center;white-space:nowrap;letter-spacing:.01em}
 .tag.fuerte{font-weight:700}
-.tag.barra{width:20px;height:9px;padding:0;border-radius:3px;flex:0 0 auto;cursor:help}
-.tag b{position:absolute;width:1px;height:1px;margin:-1px;overflow:hidden;clip-path:inset(50%)}
 .card-f{display:flex;align-items:center;gap:5px;min-height:23px}
 /* Botón de "para hoy": lleva la palabra escrita. Un sol suelto no dice qué hace hasta
    que lo probás una vez; con la palabra al lado se entiende sin tocarlo. */
@@ -250,8 +248,7 @@ body.arrastrando .empty-col{display:none}
 /* ---------- Modal ---------- */
 .scrim{position:fixed;inset:0;background:rgba(18,19,26,.42);backdrop-filter:blur(2px);display:none;z-index:60;padding:26px 16px;overflow:auto}
 .scrim.on{display:block}
-.modal{max-width:720px;margin:0 auto;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(10,11,18,.28);overflow:hidden;animation:pop .16s ease-out}
-.modal-sm{max-width:460px}
+.modal{max-width:860px;margin:0 auto;background:#fff;border-radius:16px;box-shadow:0 24px 70px rgba(10,11,18,.28);overflow:hidden;animation:pop .16s ease-out}
 @keyframes pop{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
 .m-h{padding:14px 18px;border-bottom:1px solid var(--line-soft);display:flex;gap:12px;align-items:flex-start;background:#FAFAFB}
 .m-h textarea{flex:1;border:none;background:none;resize:none;font-family:var(--display);font-size:17px;font-weight:700;letter-spacing:-.015em;line-height:1.3;padding:2px 0;overflow:hidden}
@@ -260,16 +257,67 @@ body.arrastrando .empty-col{display:none}
 .today-btn{height:30px;padding:0 11px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:12.5px;font-weight:700;color:var(--ink-3);display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex:0 0 auto}
 .today-btn:hover{border-color:var(--hoy-line);color:var(--hoy)}
 .today-btn.on{background:var(--hoy-bg);border-color:var(--hoy-line);color:var(--hoy)}
-.m-b{padding:14px 18px 18px;display:grid;gap:13px}
+.m-b{padding:12px 18px 16px;display:grid;gap:9px}
 .field label{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);margin-bottom:5px}
 .field select,.field textarea,.field input[type=text]{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:13px;background:#fff}
 .field textarea{resize:vertical;min-height:58px;line-height:1.55}
 .field select:focus,.field textarea:focus,.field input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(110,107,160,.14)}
-/* Los dos campos donde se escribe de verdad arrancan altos: si el cuadro es chico, se
-   escribe corto. Igual se pueden estirar a mano desde la esquina. */
-.field.grande textarea{min-height:210px}
+
+/* ---------- Explicación ----------
+   El campo donde se escribe de verdad, y por eso arranca alto: si el cuadro es chico, se
+   escribe corto. Es un `contenteditable` y no un textarea porque adentro conviven texto e
+   imágenes pegadas, y un textarea no sabe mostrar una imagen.
+   `white-space:pre-wrap` es lo que hace que las explicaciones viejas —texto plano con
+   saltos de línea— se sigan viendo igual sin convertirlas a `<br>`. */
+.rico{width:100%;min-height:46vh;border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+  font-size:13px;line-height:1.6;background:#fff;white-space:pre-wrap;overflow-wrap:anywhere}
+.rico:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(110,107,160,.14)}
+/* El placeholder no puede ser el atributo de siempre: lo dibuja esta regla, y la clase la
+   pone JS porque un contenteditable con un `<br>` fantasma adentro ya no es `:empty`. */
+.rico.vacio::before{content:attr(data-ph);color:#BCBEC7;pointer-events:none}
+.rico img{max-width:100%;height:auto;display:block;margin:7px 0;border-radius:8px;border:1px solid var(--line)}
+/* Mientras sube apunta a un `blob:` local: se ve, pero todavía no está guardada. */
+.rico img.cargando{opacity:.5;filter:grayscale(.35)}
+
+/* ---------- Fichas plegables del detalle ----------
+   Checklist, conversación y archivos se pliegan a un renglón cuando no tienen nada
+   adentro. Ese alto que dejan libre es el de la explicación. El número del rótulo está
+   para que plegado igual se sepa qué hay. */
+.sec{border-top:1px solid var(--line-soft);padding-top:8px}
+.sec>summary{list-style:none;cursor:pointer;user-select:none;display:flex;align-items:center;gap:7px;
+  padding:2px 0;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3)}
+.sec>summary::-webkit-details-marker{display:none}
+.sec>summary::before{content:"›";font-size:14px;line-height:1;color:#C2C5D0;transition:transform .12s}
+.sec[open]>summary::before{transform:rotate(90deg)}
+.sec>summary:hover{color:var(--ink-2)}
+.sec>*:not(summary){margin-top:7px}
+.sec-n{color:var(--ink-3);font-weight:600;text-transform:none;letter-spacing:0;font-variant-numeric:tabular-nums}
 .x{color:var(--ink-3);padding:2px 5px;font-size:14px;line-height:1;border-radius:6px}
 .x:hover{color:var(--crit);background:#F7EDEC}
+
+/* ---------- Checklist ----------
+   Una línea por paso y nada de cajas: el texto se escribe directo sobre el fondo, sin
+   recuadro propio. Cinco pasos ocupan lo mismo que un campo de texto de los normales. */
+.pasos{display:flex;flex-direction:column}
+.pasos:empty{display:none}
+.paso{display:flex;align-items:center;gap:8px;height:26px;border-radius:6px;padding:0 2px}
+.paso:hover{background:#F7F7FA}
+.paso input[type=checkbox]{width:14px;height:14px;accent-color:var(--ok);flex:0 0 auto;cursor:pointer}
+/* Los selectores llevan `input` a propósito: sin eso los pisa la regla general de
+   `.field input[type=text]`, que le pone recuadro y relleno a todo campo del modal. */
+.paso input.pt{flex:1;width:auto;min-width:0;border:none;background:none;padding:0;font-size:13px;line-height:1.3}
+.paso input.pt:focus{outline:none;box-shadow:none;border:none}
+.paso.done input.pt{color:var(--ink-3);text-decoration:line-through;text-decoration-color:#C6CAD6}
+.paso .x{opacity:0;font-size:12px;padding:1px 4px}
+.paso:hover .x,.paso:focus-within .x{opacity:1}
+.field input.paso-new{border:none;border-top:1px dashed var(--line);border-radius:0;background:none;
+  padding:7px 2px 0;font-size:12.5px;color:var(--ink-2);margin-top:2px}
+.field input.paso-new:focus{outline:none;box-shadow:none;border-color:transparent;border-top-color:var(--accent)}
+.field input.paso-new::placeholder{color:#B9BCC7}
+
+/* Avance del checklist en la tarjeta del tablero */
+.subbar{width:20px;height:3px;border-radius:2px;background:#E4E6EE;overflow:hidden}
+.subbar i{display:block;height:100%;background:var(--ok)}
 
 /* ---------- Barra de clasificación (una sola línea) ---------- */
 .barra-campos{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:7px 8px;
@@ -298,7 +346,7 @@ body.arrastrando .empty-col{display:none}
   white-space:pre-wrap;word-break:break-word;padding-right:20px}
 .linea .x{position:absolute;top:-2px;right:-4px;opacity:0;font-size:12px;transition:.12s}
 .linea:hover .x,.linea:focus-within .x{opacity:1}
-.conver-in{flex:1;min-height:62px;width:100%;border:none;resize:none;background:none;padding:9px 11px;
+.conver-in{flex:1;min-height:44px;width:100%;border:none;resize:none;background:none;padding:9px 11px;
   font-family:var(--font);font-size:13px;line-height:1.55;color:var(--yo,var(--ink))}
 .conver-in:focus{outline:none}
 .conver-in::placeholder{color:#BCBEC7;font-weight:500}
@@ -314,19 +362,10 @@ body.arrastrando .empty-col{display:none}
 .fx.armar{opacity:1;background:var(--crit)}
 .thumb:hover .fx,.filewrap:hover .fx{opacity:1}
 .filewrap{position:relative;display:inline-flex}
-.drop-files{border:1.5px dashed var(--line);border-radius:10px;padding:11px;text-align:center;font-size:12.5px;font-weight:600;color:var(--ink-3);cursor:pointer;transition:.15s;margin-top:7px}
+.drop-files{border:1.5px dashed var(--line);border-radius:9px;padding:7px;text-align:center;font-size:12px;font-weight:600;color:var(--ink-3);cursor:pointer;transition:.15s}
 .drop-files:hover,.drop-files.over{border-color:#C6C5D8;color:var(--ink-2);background:#F7F7FA}
 .m-f{padding:12px 18px;border-top:1px solid var(--line-soft);display:flex;gap:8px;align-items:center;background:#FAFAFC}
 .hint{font-size:11.5px;color:var(--ink-3);margin:0}
-.tem-list{display:flex;flex-direction:column;gap:6px}
-.tem-list:empty{display:none}
-.tem-add{display:flex;gap:8px;margin-top:6px}
-.tem-add input{flex:1;min-width:0;border:1px dashed var(--line);border-radius:9px;padding:8px 10px;font-size:13px;background:#fff}
-.tem-add input:focus{outline:none;border-style:solid;border-color:var(--accent);box-shadow:0 0 0 3px rgba(110,107,160,.14)}
-.tem-row{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line-soft);border-radius:10px;background:#FAFAFC}
-.tem-row input[type=text]{flex:1;border:none;background:none;font-size:13px;font-weight:600;min-width:0}
-.tem-row input[type=text]:focus{outline:none}
-.tem-row input[type=color]{width:26px;height:26px;border:1px solid var(--line);border-radius:7px;padding:0;background:none;cursor:pointer;flex:0 0 auto}
 
 /* lightbox */
 .lightbox{z-index:80;place-items:center;padding:0}
@@ -380,6 +419,107 @@ tr.generada td:first-child{box-shadow:inset 3px 0 0 -1px #DCDEE8}
 .caja-add:hover{border-color:#C6C5D8;color:var(--ink-2)}
 .caja-tip{font-size:11.5px;color:var(--ink-3);margin:10px 2px 0;line-height:1.6}
 
+/* ---------- Visión: la hoja ----------
+   Una hoja en blanco de ancho completo, como Notion o Word. Renglones y nada más: sin
+   encabezado, sin barra de progreso, sin contadores, sin tarjetas, sin bordes, sin pie de
+   ayuda. Todo lo que se agregue acá le come lugar a lo único que importa, que es la lista.
+
+   Por eso el fondo es blanco y no el gris del tablero: es una hoja, no un tablero.
+
+   OJO CON LOS NOMBRES: acá va todo con prefijo `hoja-`/`v`. `.doc` NO se puede usar,
+   ya es el chip de adjuntos del detalle de tarea (más arriba en este archivo). Se usó una
+   vez y dejó la hoja entera dibujada como una pastilla de 34px de alto. */
+.board.dmode{background:#fff;padding:22px 0 0}
+/* El padding izquierdo es la canaleta donde viven el ⋮⋮ y el triangulito: van montados
+   ahí con `position:absolute` y valores negativos. Sin este espacio se saldrían de la hoja
+   y el board largaría una barra de scroll horizontal. */
+.hoja{padding:0 26px 0 52px}
+
+/* El único adorno de la hoja: el enlace al documento viejo de Notion. Va arriba a la
+   derecha y queda pegado ahí al bajar —de otro modo, con un backlog largo habría que
+   volver hasta arriba cada vez—. El fondo blanco es el mismo de la hoja, así los renglones
+   le pasan por debajo sin que se lea nada encima. */
+.hoja-top{position:sticky;top:0;z-index:20;display:flex;justify-content:flex-end;
+  background:#fff;padding-bottom:5px;margin:0 -26px 0 -52px;padding-right:26px}
+.hoja-notion{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;
+  border-radius:7px;font-size:11.5px;font-weight:600;color:var(--ink-3);text-decoration:none;transition:.12s}
+.hoja-notion:hover{color:var(--ink);background:var(--rail)}
+.hoja-notion svg{opacity:.55;transition:.12s}
+.hoja-notion:hover svg{opacity:1;transform:translate(1px,-1px)}
+
+.vrow{position:relative;display:flex;align-items:flex-start;gap:3px;
+  padding-left:calc(var(--d) * 22px)}
+
+/* Los tres controles de la izquierda viven fuera del renglón, montados sobre el margen:
+   si ocuparan lugar en la fila, el texto de cada nivel arrancaría más adentro que el
+   anterior y la sangría dejaría de leerse. Aparecen solo al pasar por encima. */
+.vtipo{position:absolute;left:-46px;top:1px;width:16px;height:22px;display:grid;place-items:center;
+  font-size:10px;letter-spacing:-2px;color:#C6C9D4;border-radius:4px;opacity:0;transition:.12s}
+.vrow:hover .vtipo,.vrow.menu-abierto .vtipo{opacity:1}
+.vtipo:hover,.vrow.menu-abierto .vtipo{color:var(--ink);background:var(--rail)}
+
+/* El triangulito solo aparece al pasar por encima, salvo cuando el bloque está cerrado:
+   ahí queda fijo, porque es lo único que avisa que abajo hay algo escondido. */
+.vtwist{position:absolute;left:-26px;top:1px;width:15px;height:22px;display:grid;place-items:center;
+  font-size:9px;color:#B9BCC8;border-radius:4px;opacity:0;transform:rotate(90deg);transition:.12s}
+.vrow:hover .vtwist,.vtwist.cerrado{opacity:1}
+.vtwist.cerrado{transform:none;color:var(--ink-3)}
+.vtwist.vacio{opacity:0!important;pointer-events:none}
+.vtwist:hover{color:var(--ink);background:var(--rail)}
+
+.vchk{flex:0 0 auto;width:13px;height:13px;margin-top:4px;position:relative;
+  border:1.5px solid #C6C9D4;border-radius:3.5px;transition:.12s}
+.vchk:hover{border-color:var(--accent)}
+.vrow.ok .vchk{background:var(--ok);border-color:var(--ok)}
+.vrow.ok .vchk::after{content:"";position:absolute;left:3.2px;top:.4px;width:3.2px;height:6.6px;
+  border:solid #fff;border-width:0 1.8px 1.8px 0;transform:rotate(43deg)}
+/* Los renglones sin tilde igual reservan su lugar: si no, títulos y tareas arrancarían en
+   columnas distintas y la hoja quedaría con el borde izquierdo en zigzag. */
+.vbullet{flex:0 0 auto;width:13px;height:13px;margin-top:4px}
+
+/* El texto ocupa todo el ancho que le queda. Al recibir el foco no le pasa nada: sin
+   recuadro, sin fondo, sin sombra — igual que en Notion, donde lo único que aparece es el
+   cursor. Un borde por renglón enfocado convierte la hoja en un formulario. */
+.vtxt{flex:1;min-width:0;border:none;background:none;resize:none;overflow:hidden;
+  font-size:13.5px;line-height:1.55;letter-spacing:-.005em;padding:1px 4px}
+.vtxt:focus{outline:none}
+.vtxt::placeholder{color:#D2D5DE}
+.vrow.ok .vtxt{color:var(--ink-3);text-decoration:line-through;text-decoration-color:#C6C9D4}
+
+/* Los cuatro tipos de renglón. La jerarquía se lee por peso y tamaño, no por color: la
+   hoja tiene que verse tranquila aunque mezcle títulos, tareas y texto. */
+.vrow.t-titulo{margin-top:15px}
+.vrow.t-titulo .vtxt{font-family:var(--display);font-size:16px;font-weight:700;letter-spacing:-.02em;line-height:1.35}
+.vrow.t-subtitulo{margin-top:9px}
+.vrow.t-subtitulo .vtxt{font-size:13px;font-weight:700;color:var(--ink-2);letter-spacing:-.01em}
+.vrow.t-texto .vtxt{color:var(--ink-2)}
+.hoja-list>.vrow:first-child{margin-top:0}
+
+/* El menú de tipos: cuelga del ⋮⋮, cuatro opciones y nada más. */
+.vmenu{position:absolute;left:-46px;top:24px;z-index:30;width:152px;padding:4px;
+  background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(15,16,25,.14)}
+.vmenu[hidden]{display:none}
+.vmenu button{width:100%;display:flex;align-items:center;gap:9px;height:29px;padding:0 8px;
+  border-radius:7px;font-size:12.5px;font-weight:600;color:var(--ink-2);text-align:left}
+.vmenu button:hover{background:var(--rail);color:var(--ink)}
+.vmenu button.on{color:var(--accent)}
+.vmenu button i{flex:0 0 auto;width:17px;font-style:normal;font-size:11px;font-weight:700;
+  color:var(--ink-3);text-align:center}
+.vmenu button.on i{color:var(--accent)}
+
+.vdel{flex:0 0 auto;width:20px;height:22px;border-radius:5px;font-size:11px;color:#C6C9D4;opacity:0;transition:.12s}
+.vrow:hover .vdel{opacity:1}
+.vdel:hover{color:var(--crit);background:#F7EDEC}
+
+/* El vacío de abajo es clickeable y ocupa lo que sobra de pantalla: hacer clic ahí abre un
+   renglón, como en Notion. Eso reemplaza a un botón de «agregar», que sería una cosa más
+   dibujada en una hoja que se quiere en blanco. Con la hoja vacía, este mismo espacio es
+   el que dice qué hacer — no hace falta ningún recuadro de bienvenida. */
+.hoja-fin{min-height:55vh;cursor:text}
+.hoja-fin[data-vacia]::before{content:"Escribí acá, o pegá tu página de Notion — la sangría arma los niveles y los # quedan como títulos";
+  display:block;padding:1px 4px;font-size:13.5px;line-height:1.55;color:#D2D5DE}
+.hoja-fin:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+
 /* ---------- Login / sin acceso ---------- */
 .login-overlay{position:fixed;inset:0;background:rgba(18,19,26,.55);backdrop-filter:blur(3px);display:grid;place-items:center;z-index:100;padding:20px}
 .login-overlay[hidden]{display:none}
@@ -410,4 +550,14 @@ tr.generada td:first-child{box-shadow:inset 3px 0 0 -1px #DCDEE8}
   .bar{padding-left:14px;padding-right:14px;gap:8px}
   .views{width:100%}
   .estado-guardado{min-width:0}
+  /* En un teléfono, 22px por nivel se come la hoja: una rama de cuatro niveles dejaría
+     el texto contra el borde derecho. */
+  .board.dmode{padding:14px 0 0}
+  .hoja{padding:0 12px 0 42px}
+  .vrow{padding-left:calc(var(--d) * 15px)}
+  /* En un teléfono no hay «pasar por encima»: los controles quedan siempre a la vista. */
+  .vtipo{left:-40px;opacity:1}
+  .vtwist{left:-21px;opacity:1}
+  .vmenu{left:-40px}
+  .vdel{opacity:1}
 }

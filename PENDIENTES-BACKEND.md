@@ -1,8 +1,13 @@
 # Pendientes de back-end — tablero unificado
 
-**Al 8/8/2026 no queda nada pendiente para que el tablero funcione.** Los puntos 1 a 3
-están hechos y verificados contra la base; el 4 es opcional y conviene dejarlo reposar.
-El archivo se conserva como registro de qué se tocó y por qué.
+**Al 11/8/2026 quedan dos puntos abiertos, y no pesan lo mismo:**
+
+- **El 6 (`schema-v6.sql`, la hoja de Visión) hace falta.** Sin correrlo, la pestaña Visión
+  se abre pero no guarda una línea.
+- **El 5 (sacar las temáticas de la base) es limpieza.** El tablero anda igual sin correrlo.
+
+Los puntos 1 a 3 están hechos y verificados contra la base; el 4 es opcional y conviene
+dejarlo reposar. El archivo se conserva como registro de qué se tocó y por qué.
 
 **Contexto en una frase:** los dos tableros que había (Propelia y Captalia) se unificaron
 en uno solo, con tres personas: Lorenzo, Antonio y Luis. Diego queda fuera del sistema.
@@ -125,6 +130,59 @@ las tareas copiadas.
 
 ---
 
+## 5. Correr `supabase/schema-v5.sql` — ⏳ PENDIENTE (11/8/2026)
+
+Las temáticas salieron del tablero: no se ven en la tarjeta, no filtran, no se eligen en
+la tarea y no hay pantalla para administrarlas. El front ya no lee ni escribe `sec_id`,
+así que **sin correr esto el tablero funciona igual**.
+
+Lo que sí conviene desarmar es la trampa que queda en la base: `roadmap_tareas.sec_id`
+apunta a `roadmap_secciones` con `on delete cascade`. Hoy nadie puede borrar una temática
+desde el tablero, pero si alguien borra una fila a mano desde el panel de Supabase, se
+lleva puestas todas las tareas de esa temática. El archivo suelta la columna y borra la
+tabla.
+
+No tiene vuelta atrás: se pierde qué tarea estaba en qué temática. Si esa clasificación
+vieja se quiere guardar como registro, al final del SQL hay un bloque comentado que solo
+saca la cascada y deja los datos donde están.
+
+Después de correrlo, **no volver a correr `schema.sql`, `v2` ni `v3`**: dan por hecho que
+la tabla y la columna existen.
+
+---
+
+## 6. Correr `supabase/schema-v6.sql` — ⏳ PENDIENTE (11/8/2026)
+
+**Este sí hace falta.** Visión dejó de ser un enlace a Notion y volvió a ser una hoja del
+tablero: una lista de tildes donde cada línea puede tener líneas adentro. Sin correr esto,
+la pestaña se abre y se puede escribir, pero **no guarda nada** — el triangulito del
+encabezado lo avisa en pantalla.
+
+Crea `roadmap_vision`: una fila por renglón, con `padre` apuntando a otra fila de la misma
+tabla (nulo = primer nivel), más `texto`, `hecho`, `tipo` y `orden`. `tipo` es lo que hace
+que un renglón sea título, subtítulo, tarea o texto suelto. Lleva la misma RLS que el resto
+(`es_miembro('propelia')`) y entra al realtime, así la hoja se edita entre varios y se ve
+al toque.
+
+No borra ni toca nada de lo que ya existe. Se puede correr las veces que haga falta.
+
+Dos detalles del archivo que conviene no cambiar sin pensarlo:
+
+- El borrado es **en cascada**: borrar una línea se lleva todas las que tenía adentro. Es lo
+  que uno espera al tachar un bloque entero, y evita que el front tenga que ir una por una.
+- La clave foránea es `deferrable initially deferred`. Pegar una página entera manda decenas
+  de filas en un solo upsert, y así no importa si la de adentro llega antes que la que la
+  contiene: la comprobación corre al cerrar la transacción, cuando ya están las dos.
+
+Al final hay un `drop table roadmap_notas` **comentado**. Esa tabla es de la Visión vieja y
+nunca se escribió una fila. Descomentalo solo después de confirmarlo en la base:
+
+```sql
+select count(*) from public.roadmap_notas;
+```
+
+---
+
 ## Lo que quedó afuera del tablero nuevo
 
 Cosas que existían antes y que el diseño nuevo no tiene. Ninguna rompe nada: los datos
@@ -135,5 +193,11 @@ siguen guardados, simplemente no hay pantalla que los muestre.
   cargado sigue en la base y no se pisa, pero no se ve ni se edita.
 - **Los campos `modulo`, `img` y `com`** de las tareas. Ya casi no se usaban y el diseño
   nuevo no los contempla. Quedan guardados.
+- **Las temáticas.** Se sacaron el 11/8/2026 (ver el punto 5). En la base siguen hasta que
+  se corra `schema-v5.sql`; en pantalla no queda nada de ellas.
+- **El documento de Notion de Visión.** El tablero ya no lo enlaza: la Visión vive adentro
+  (ver el punto 6). El documento sigue existiendo en Notion, nadie lo tocó — para traerlo,
+  se copia la página entera y se pega en la hoja vacía, que arma la rama sola con la
+  sangría que traiga.
 
-Si alguna de las dos hace falta, se agrega — decilo y lo hago.
+Si algo de esto hace falta, se agrega — decilo y lo hago.

@@ -11,9 +11,9 @@ const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_
 const _CFG = window.APP_CONFIG || {};
 const TABLAS = Object.assign(
   {
-    secciones: 'roadmap_secciones',
     tareas: 'roadmap_tareas',
     caja: 'roadmap_caja',
+    vision: 'roadmap_vision',
   },
   _CFG.tablas || {}
 );
@@ -29,23 +29,21 @@ const RoadmapSync = {
   BUCKET,
 
   async cargarEstado() {
-    const [secRes, tarRes, cajaRes] = await Promise.all([
-      supabaseClient.from(TABLAS.secciones).select('*').order('orden'),
+    const [tarRes, cajaRes, visRes] = await Promise.all([
       supabaseClient.from(TABLAS.tareas).select('*').order('orden'),
       supabaseClient.from(TABLAS.caja).select('*').order('orden'),
+      supabaseClient.from(TABLAS.vision).select('*').order('orden'),
     ]);
-    if (secRes.error) throw secRes.error;
     if (tarRes.error) throw tarRes.error;
     // La caja puede no existir todavía si falta correr schema-v3.sql: seguimos con una
-    // lista vacía en vez de dejar el tablero entero sin cargar.
+    // lista vacía en vez de dejar el tablero entero sin cargar. Lo mismo con la hoja de
+    // Visión, que llega recién con schema-v6.sql.
     const caja = cajaRes.error ? [] : (cajaRes.data || []);
+    const vision = visRes.error ? [] : (visRes.data || []);
 
     return {
-      secciones: (secRes.data || []).map(s => ({
-        id: s.id, titulo: s.titulo, color: s.color || '', orden: s.orden,
-      })),
       tareas: (tarRes.data || []).map(t => ({
-        id: t.id, sec: t.sec_id || '', modulo: t.modulo || '', tarea: t.tarea || '',
+        id: t.id, modulo: t.modulo || '', tarea: t.tarea || '',
         expl: t.expl || '', estado: t.estado, img: t.img || '', com: t.com || '',
         fecha: t.fecha || '', orden: t.orden,
         files: arr(t.files),
@@ -69,6 +67,16 @@ const RoadmapSync = {
         // igual, solo que sin repetir nada.
         repite: m.repite || '', origen: m.origen || '',
       })),
+      // Hoja de Visión: una fila por línea. `padre` vacío = línea de primer nivel; el
+      // front trabaja siempre con cadena vacía y recién al guardar lo vuelve a `null`,
+      // así no hay que preguntar por `null` en cada comparación.
+      // `tipo` decide cómo se dibuja el renglón (título, subtítulo, tarea o texto). Las
+      // filas guardadas antes de que existiera vienen sin él: se leen como tarea, que es
+      // lo único que había, y así no hace falta migrar nada.
+      vision: vision.map(i => ({
+        id: i.id, padre: i.padre || '', texto: i.texto || '',
+        hecho: !!i.hecho, tipo: i.tipo || 'check', orden: Number(i.orden) || 0,
+      })),
     };
   },
 
@@ -76,32 +84,20 @@ const RoadmapSync = {
   // en pantalla en vez de fallar en silencio al guardar.
   async faltantesDeEsquema() {
     const faltan = [];
-    const [tareas, secciones, caja] = await Promise.all([
+    const [tareas, caja, vision] = await Promise.all([
       supabaseClient.from(TABLAS.tareas).select('prioridad,tipo,hoy,pend,creada').limit(1),
-      supabaseClient.from(TABLAS.secciones).select('color').limit(1),
       supabaseClient.from(TABLAS.caja).select('repite,origen').limit(1),
+      supabaseClient.from(TABLAS.vision).select('id,padre,texto,hecho,tipo').limit(1),
     ]);
     if (tareas.error) faltan.push('los campos nuevos de las tareas (prioridad, tipo, hoy, responsables)');
-    if (secciones.error) faltan.push('el color de las temáticas');
     if (caja.error) faltan.push('los gastos fijos de la caja (schema-v4.sql)');
+    if (vision.error) faltan.push('la hoja de Visión (schema-v6.sql)');
     return faltan;
-  },
-
-  async guardarSeccion(s) {
-    const { error } = await supabaseClient.from(TABLAS.secciones)
-      .upsert({ id: s.id, titulo: s.titulo, color: s.color || '', orden: s.orden });
-    if (error) throw error;
-  },
-
-  async borrarSeccion(id) {
-    const { error } = await supabaseClient.from(TABLAS.secciones).delete().eq('id', id);
-    if (error) throw error;
   },
 
   async guardarTarea(t) {
     const { error } = await supabaseClient.from(TABLAS.tareas).upsert({
       id: t.id,
-      sec_id: t.sec || null,
       modulo: t.modulo || '',
       tarea: t.tarea || '',
       expl: t.expl || '',
@@ -142,7 +138,41 @@ const RoadmapSync = {
     const { error } = await supabaseClient.from(TABLAS.caja).delete().eq('id', id);
     if (error) throw error;
   },
+
+  async guardarItemVision(i) {
+    const { error } = await supabaseClient.from(TABLAS.vision).upsert(filaVision(i));
+    if (error) throw error;
+  },
+
+  // Pegar una página entera son decenas de líneas: van en un solo viaje. La clave es que
+  // los padres estén antes que sus hijos en la lista — la de arriba antes que la de
+  // adentro, que es el orden natural de una hoja leída de arriba abajo.
+  async guardarItemsVision(items) {
+    if (!items.length) return;
+    const { error } = await supabaseClient.from(TABLAS.vision).upsert(items.map(filaVision));
+    if (error) throw error;
+  },
+
+  // El borrado es en cascada en la base: se borra la línea y se van con ella todas las
+  // que tenía adentro, sin que el front tenga que ir una por una.
+  async borrarItemVision(id) {
+    const { error } = await supabaseClient.from(TABLAS.vision).delete().eq('id', id);
+    if (error) throw error;
+  },
 };
+
+// El front usa cadena vacía para «sin padre» porque es más cómodo de comparar; la base
+// quiere `null`, que es lo que la clave foránea sabe leer.
+function filaVision(i) {
+  return {
+    id: i.id,
+    padre: i.padre || null,
+    texto: i.texto || '',
+    hecho: !!i.hecho,
+    tipo: i.tipo || 'check',
+    orden: i.orden,
+  };
+}
 
 RoadmapSync.subirArchivo = async function (refId, blob, nombreArchivo) {
   const path = `${refId}/${Date.now()}-${nombreArchivo}`;
@@ -201,7 +231,7 @@ RoadmapSync.onCambioSesion = function (cb) {
 
 RoadmapSync.suscribir = function (onCambio) {
   const canal = supabaseClient.channel(CANAL);
-  [TABLAS.secciones, TABLAS.tareas, TABLAS.caja].forEach(tabla => {
+  [TABLAS.tareas, TABLAS.caja, TABLAS.vision].forEach(tabla => {
     canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla }, onCambio);
   });
   canal.subscribe(estadoCanal => {

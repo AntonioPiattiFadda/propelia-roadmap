@@ -39,20 +39,20 @@ const TIPOS = [
 ];
 // El tablero agrupa siempre por estado: las columnas son los estados y, dentro de cada
 // una, las tareas se apilan por prioridad. Las otras formas de mirar el tablero
-// (prioridad, tipo, temática) quedaron como filtros de la barra, no como vistas.
-// Una entrada con `enlace` no es una vista: es un acceso directo. No cambia lo que se ve
-// en el tablero, se dibuja como enlace y abre en otra pestaña. Visión dejó de vivir acá
-// —ahora es un documento de Notion— y esta es la puerta a ese documento.
+// (prioridad, tipo) quedaron como filtros de la barra, no como vistas.
 //
-// La marca es `enlace:true` y no «tiene url»: si la dirección viene vacía, la pestaña no
-// se dibuja, en vez de volverse una vista que al tocarla no lleva a ninguna parte.
+// No todas las vistas pintan tarjetas. `caja` es una planilla y `doc` es una hoja de
+// texto —Visión—: las dos ocupan el board entero, esconden los filtros y no saben nada
+// de tareas. La marca la lleva la vista, no el render, así el resto del archivo pregunta
+// `v.doc` en vez de comparar contra el id 'vision' en diez lugares distintos.
 const VISTAS = [
   { id:'hoy',    label:'☀ Hoy',    soloHoy:true },
   { id:'estado', label:'Estado' },
-  { id:'vision', label:'◦ Visión', enlace:true, url:CFG.visionUrl || '' },
+  { id:'vision', label:'◦ Visión', doc:true },
   { id:'caja',   label:'Caja',     caja:true },
 ];
-const esVista = v => !v.enlace;   // lo que sí se puede pintar en el board
+// Vistas que no muestran tareas: ni filtros, ni contador, ni «+ Nueva tarea» con sentido.
+const sinTareas = v => !!(v.caja || v.doc);
 
 // Personas del tablero. El `id` es lo que se guarda en la base (responsables, autor
 // del chat, quién puso la plata); `email` es lo que ata cada persona a su cuenta.
@@ -72,26 +72,21 @@ const colorPersona = id => persona(id)?.color || '#858A99';
 const iniPersona = id => persona(id)?.ini || '?';
 const nombrePersona = id => persona(id)?.nombre || id || '—';
 
-// Paleta de reserva para temáticas sin color elegido.
-const PALETA = ['#6E6BA0','#5F6B96','#4F7F79','#A87A3F','#9C6480','#5A7E8C','#6B7079','#5E8467'];
-
 // Identidad de quien está usando el tablero (se resuelve al iniciar sesión).
 let YO = { id:'', nombre:'', esMiembro:false };
 
 /* ---------- datos y estado de pantalla ---------- */
-let datos = { secciones: [], tareas: [], caja: [] };
+let datos = { tareas: [], caja: [], vision: [] };
 let UI = {
   vista: 'estado',
   layout: 'cols',
   // La columna de Terminadas arranca plegada: es lo que ya no hay que mirar.
   terminadasAbiertas: false,
-  f: { q:'', pend:[], prioridad:'', tipo:'', tematica:'' },
+  f: { q:'', pend:[], prioridad:'', tipo:'' },
 };
 try {
   const guardado = JSON.parse(localStorage.getItem('tablero-ui') || '{}');
-  // `esVista` en el filtro: a quien le haya quedado 'vision' guardada de cuando era una
-  // vista de verdad, no lo dejamos arrancar en una pestaña que ya no pinta nada.
-  if (guardado.vista && VISTAS.some(v => esVista(v) && v.id === guardado.vista)) UI.vista = guardado.vista;
+  if (guardado.vista && VISTAS.some(v => v.id === guardado.vista)) UI.vista = guardado.vista;
   if (guardado.layout === 'rows' || guardado.layout === 'cols') UI.layout = guardado.layout;
   UI.terminadasAbiertas = !!guardado.terminadasAbiertas;
 } catch (e) { /* preferencia local, si no se puede leer no importa */ }
@@ -181,12 +176,6 @@ async function persistirTarea(t, opts = {}){
   if (ok) marcarEcoPropio(RoadmapSync.TABLAS.tareas, t.id);
   return ok;
 }
-async function persistirSeccion(s, opts = {}){
-  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarSeccion(s),
-    { onEstado: onEstadoGlobal, ...opts });
-  if (ok) marcarEcoPropio(RoadmapSync.TABLAS.secciones, s.id);
-  return ok;
-}
 async function persistirMovimiento(m, opts = {}){
   const ok = await conEstadoDeCarga(() => RoadmapSync.guardarMovimiento(m),
     { onEstado: onEstadoGlobal, ...opts });
@@ -202,6 +191,11 @@ function normalizarDatos(){
   datos.tareas.forEach(t => {
     if (PRIORIDADES_VIEJAS[t.prioridad]) t.prioridad = PRIORIDADES_VIEJAS[t.prioridad];
   });
+  // Visión: una línea cuyo padre ya no está se volvería invisible, y con ella toda su
+  // rama. Sube a primer nivel en vez de desaparecer — la base la borra en cascada, así
+  // que esto solo pasa si dos personas borran y escriben al mismo tiempo.
+  const ids = new Set(datos.vision.map(i => i.id));
+  datos.vision.forEach(i => { if (i.padre && !ids.has(i.padre)) i.padre = ''; });
 }
 
 /* ---------- refresco en tiempo real ---------- */
@@ -268,14 +262,7 @@ function llenarSelect(el, items, placeholder){
 const prioridadDe = id => porId(PRIORIDADES, PRIORIDADES_VIEJAS[id] || id) || PRIORIDADES[2];
 const tipoDe      = id => porId(TIPOS, id) || TIPOS[0];
 const estadoDe    = id => porId(ESTADOS, id) || ESTADOS[0];
-const tematicaDe  = id => porId(datos.secciones, id);
 const vistaActual = () => porId(VISTAS, UI.vista) || VISTAS[1];
-function colorTematica(s){
-  if (!s) return '#A9ABB4';
-  if (s.color) return s.color;
-  const i = datos.secciones.findIndex(x => x.id === s.id);
-  return PALETA[(i < 0 ? 0 : i) % PALETA.length];
-}
 
 /* ============================================================
    Archivos adjuntos
@@ -326,12 +313,21 @@ async function adjuntar(t, files){
     });
   } else onEstadoGlobal('ok');
   pintarArchivos(t); render();
+  // La ficha de archivos puede estar plegada: si acaba de entrar algo, se abre sola. Un
+  // adjunto que se guarda sin que se vea es un adjunto que nadie sabe que está.
+  if (n) $('#tSecFiles').open = true;
   if (saltados.length) aviso('No pude adjuntar: ' + saltados.join(', ') + '. Subilo a Drive y pegá el enlace.');
   else if (n) aviso((n === 1 ? '1 archivo adjuntado' : n + ' archivos adjuntados') + (ahorro > 512000 ? ' · ' + kb(ahorro) + ' ahorrados al comprimir' : ''));
 }
 
 async function borrarTodosLosArchivos(t){
-  const files = [...(t.files || []), ...((t.subtareas || []).flatMap(s => s.files || []))];
+  // Las imágenes pegadas dentro de la explicación no están en `t.files` —viven en el
+  // propio texto—, pero ocupan lugar en el bucket igual que cualquier adjunto.
+  const files = [
+    ...(t.files || []),
+    ...((t.subtareas || []).flatMap(s => s.files || [])),
+    ...imagenesDeExpl(t.expl),
+  ];
   for (const f of files) { try { await RoadmapSync.borrarArchivo(f); } catch (e) { /* ya no existe */ } }
 }
 
@@ -361,26 +357,23 @@ function pintarChrome(){
   }
   elCampana.onclick = () => {
     UI.f.prioridad = UI.f.prioridad === CRITICA ? '' : CRITICA;
-    const v = vistaActual();
-    if (UI.f.prioridad && v.caja) { UI.vista = 'estado'; guardarUI(); }
+    // Filtrar desde una vista que no muestra tareas no se vería en ningún lado: se
+    // vuelve al tablero, que es donde ese filtro tiene efecto.
+    if (UI.f.prioridad && sinTareas(vistaActual())) { UI.vista = 'estado'; guardarUI(); }
     render();
   };
 
   const nHoy = datos.tareas.filter(t => t.hoy).length;
+  const pendVision = datos.vision.filter(i => esTarea(i) && !i.hecho).length;
   elVistas.innerHTML = VISTAS.map(v => {
-    // Los accesos directos son `<a>`, no botones: así el navegador da lo que ya sabe dar
-    // con un enlace —abrir en pestaña nueva con el medio, copiar la dirección, ver a
-    // dónde va abajo a la izquierda—, cosas que un botón con JavaScript encima no tiene.
-    if (!esVista(v)) {
-      if (!v.url) return '';
-      return `<a class="view-tab link" href="${escA(v.url)}" target="_blank" rel="noopener noreferrer"
-        title="Se abre en otra pestaña">${esc(v.label)}<svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
-        ><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>`;
-    }
     const on = UI.vista === v.id;
+    // El contador de cada pestaña dice lo que esa pestaña sabe contar: Hoy muestra
+    // siempre lo marcado para hoy, Visión lo que le queda sin tildar, y Estado el
+    // resultado del filtro —solo cuando está activa, porque fuera de ella el número
+    // sería el de un filtro que no se está viendo.
     let badge = '';
     if (v.soloHoy) badge = `<small>${nHoy}</small>`;
+    else if (v.doc) badge = pendVision ? `<small>${pendVision}</small>` : '';
     else if (on && !v.caja) badge = `<small>${datos.tareas.filter(visible).length}</small>`;
     return `<button class="view-tab${on ? ' on' : ''}" data-vista="${v.id}">${esc(v.label)}${badge}</button>`;
   }).join('');
@@ -407,15 +400,12 @@ function sincronizarFiltros(){
   // aparte arriba y toda la barra entra en una sola línea.
   sel($('#fPrioridad'), PRIORIDADES, 'Prioridad', UI.f.prioridad);
   sel($('#fTipo'), TIPOS, 'Tipo', UI.f.tipo);
-  sel($('#fTematica'),
-    datos.secciones.map(s => ({ id:s.id, label:s.titulo || 'Sin nombre' })).concat([{ id:'__sin__', label:'Sin temática' }]),
-    'Temática', UI.f.tematica);
   $$('#filtros .sel').forEach(s => s.classList.toggle('activo', !!s.value));
 }
 
 function textoBuscable(t){
   return [
-    t.tarea, t.expl, t.id,
+    t.tarea, explATexto(t.expl), t.id,
     (t.subtareas || []).map(s => s.titulo + ' ' + (s.expl || '')).join(' '),
     (t.chat || []).map(m => m.texto).join(' '),
   ].join(' ').toLowerCase();
@@ -425,17 +415,13 @@ function visible(t){
   if (vistaActual().soloHoy && !t.hoy) return false;
   if (f.prioridad && t.prioridad !== f.prioridad) return false;
   if (f.tipo && t.tipo !== f.tipo) return false;
-  if (f.tematica) {
-    if (f.tematica === '__sin__') { if (t.sec) return false; }
-    else if (t.sec !== f.tematica) return false;
-  }
   if (f.pend.length && !f.pend.some(p => (t.pend || []).includes(p))) return false;
   if (f.q && !textoBuscable(t).includes(f.q)) return false;
   return true;
 }
 const filtrando = () => {
   const f = UI.f;
-  return !!f.q || f.pend.length > 0 || !!f.prioridad || !!f.tipo || !!f.tematica;
+  return !!f.q || f.pend.length > 0 || !!f.prioridad || !!f.tipo;
 };
 
 /* ============================================================
@@ -446,11 +432,15 @@ function render(){
   sincronizarFiltros();
   const v = vistaActual();
 
-  elFiltros.hidden = !!v.caja;
-  board.classList.toggle('cmode', !!v.caja);
-  board.classList.toggle('rows', !v.caja && UI.layout === 'rows');
+  // La caja y la hoja de Visión ocupan el board entero y no se filtran: `cmode` les
+  // saca la grilla de columnas y les da un scroll de página normal.
+  elFiltros.hidden = sinTareas(v);
+  board.classList.toggle('cmode', sinTareas(v));
+  board.classList.toggle('dmode', !!v.doc);
+  board.classList.toggle('rows', !sinTareas(v) && UI.layout === 'rows');
 
   if (v.caja) return renderCaja();
+  if (v.doc) return renderVision();
   renderTablero(v);
 }
 
@@ -519,23 +509,18 @@ function renderTablero(v){
 }
 
 function tarjetaHTML(t){
-  const p = prioridadDe(t.prioridad), ty = tipoDe(t.tipo), tm = tematicaDe(t.sec);
+  const p = prioridadDe(t.prioridad), ty = tipoDe(t.tipo);
 
-  // Prioridad y tipo se leen en la tarjeta. La temática no: los nombres son largos y se
-  // comen la ficha, así que va como barrita de color. El tooltip arranca con la palabra
-  // "Temática" para que se entienda qué es esa barra sin tener que adivinarlo; el texto
-  // completo igual queda en el DOM, para lectores de pantalla y para Ctrl+F.
   const etiqueta = (c, txt, fuerte) =>
     `<span class="tag${fuerte ? ' fuerte' : ''}" style="background:${tint(c,.13)};color:${c}">${esc(txt)}</span>`;
-  const barra = (c, txt) =>
-    `<span class="tag barra" style="background:${c}" title="Temática: ${escA(txt)}"><b>Temática: ${esc(txt)}</b></span>`;
 
   const tags = [etiqueta(p.color, p.label, p.id === CRITICA || p.id === 'urgente'), etiqueta(ty.color, ty.label)];
-  if (tm) tags.push(barra(colorTematica(tm), tm.titulo || 'Sin nombre'));
 
   const bits = [`<button class="sun${t.hoy ? ' on' : ''}" data-hoy="${escA(t.id)}" aria-pressed="${t.hoy ? 'true' : 'false'}" title="${t.hoy ? 'Sacarla de hoy' : 'Marcarla para hacerla hoy'}">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4"/></svg>Hoy
     </button>`];
+  const pasos = t.subtareas || [], hechos = pasos.filter(s => s.estado === HECHO).length;
+  if (pasos.length) bits.push(`<span class="meta" title="Checklist: ${hechos} de ${pasos.length} ${pasos.length === 1 ? 'paso hecho' : 'pasos hechos'}"><span class="subbar"><i style="width:${Math.round(hechos / pasos.length * 100)}%"></i></span>${hechos}/${pasos.length}</span>`);
   if ((t.chat || []).length) bits.push(`<span class="meta" title="Intervenciones en la conversación"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21 12a8 8 0 0 1-11.5 7.2L3.5 20.5l1.3-6A8 8 0 1 1 21 12z"/></svg>${t.chat.length}</span>`);
   if ((t.files || []).length) bits.push(`<span class="meta" title="Adjuntos"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 11l-8.5 8.5a4.5 4.5 0 1 1-6.4-6.4L13 4.8a3 3 0 1 1 4.2 4.2l-8 8a1.5 1.5 0 0 1-2.1-2.1L14.5 7"/></svg>${t.files.length}</span>`);
 
@@ -713,7 +698,7 @@ function nuevaTarea(v, colId){
   const id = nuevoId('T', datos.tareas.map(x => x.id));
   const ultimo = datos.tareas.length ? datos.tareas[datos.tareas.length - 1].orden : null;
   const t = {
-    id, sec:'', modulo:'', tarea:'', expl:'', estado:'Pendiente', img:'', com:'', fecha:'',
+    id, modulo:'', tarea:'', expl:'', estado:'Pendiente', img:'', com:'', fecha:'',
     files:[], chat:[], subtareas:[], prioridad:'semanal', tipo:'nuevo',
     hoy: !!(v && v.soloHoy), pend:[], creada:new Date().toISOString(),
     orden: RoadmapSync.calcularOrden(ultimo, null),
@@ -739,21 +724,148 @@ function abrirTarea(id, foco){
   llenarSelect($('#tEstado'), ESTADOS); $('#tEstado').value = t.estado;
   llenarSelect($('#tPrioridad'), PRIORIDADES); $('#tPrioridad').value = t.prioridad;
   llenarSelect($('#tTipo'), TIPOS); $('#tTipo').value = t.tipo;
-  llenarSelect($('#tTematica'),
-    datos.secciones.map(s => ({ id:s.id, label:s.titulo || 'Sin nombre' })), 'Sin temática');
-  $('#tTematica').value = tematicaDe(t.sec) ? t.sec : '';
 
   $('#tTitulo').value = t.tarea;
-  $('#tDesc').value = t.expl || '';
+  pintarExpl(t);
   // Se vacía siempre: lo tipeado y no guardado en una tarea no puede aparecer en otra.
   $('#tMsg').value = '';
   $('#tMeta').textContent = t.creada
     ? 'Creada el ' + new Date(t.creada).toLocaleDateString('es-ES', { day:'2-digit', month:'short', year:'numeric' })
     : '';
-  pintarHoy(t); pintarPend(t); pintarConversacion(t); pintarArchivos(t);
+  $('#tPasoNew').value = '';
+  // Lo que está vacío arranca plegado: el alto que no gasta es el de la explicación. Se
+  // decide solo acá, al abrir — si se decidiera en cada repintado, cerrar una ficha a mano
+  // duraría hasta el próximo tilde.
+  $('#tSecPasos').open = !!(t.subtareas || []).length;
+  $('#tSecChat').open  = !!(t.chat || []).length;
+  $('#tSecFiles').open = !!(t.files || []).length;
+  pintarHoy(t); pintarPend(t); pintarPasos(t); pintarConversacion(t); pintarArchivos(t);
   $('#scrimTarea').classList.add('on');
   autoGrow($('#tTitulo'));
   if (foco) setTimeout(() => $('#tTitulo').focus(), 40);
+}
+
+/* ---------- explicación: texto con las imágenes adentro ----------
+   El campo dejó de ser un `<textarea>`: pegar una captura en el medio de lo escrito era el
+   pedido, y un textarea pinta texto y nada más. Ahora es un `contenteditable`.
+
+   Lo guardado sigue siendo la misma columna `expl` de siempre, pero puede venir en dos
+   formas: texto plano (todo lo escrito hasta el 11/8/2026) o HTML nuestro. Se distinguen
+   por una marca al principio y no adivinando si hay un `<` suelto: una explicación vieja
+   que hable de `<div>` no tiene por qué volverse markup de golpe.
+
+   Lo que se pega y no es una imagen entra SIEMPRE como texto plano. Esa es la razón por la
+   que acá no hay un sanitizador: si nunca entra HTML ajeno, no hay nada que limpiar. */
+const MARCA_HTML = '<!--h-->';
+const esExplHtml = s => typeof s === 'string' && s.startsWith(MARCA_HTML);
+const explAHtml  = s => esExplHtml(s) ? s.slice(MARCA_HTML.length) : esc(s || '');
+
+// Un `<template>` y no un div suelto: su contenido es inerte, así que leer el texto de una
+// explicación no dispara la descarga de todas sus imágenes.
+function fragmentoExpl(s){
+  const tpl = document.createElement('template');
+  tpl.innerHTML = s;
+  return tpl.content;
+}
+// Para el buscador y el CSV, donde una imagen no significa nada pero un salto de línea sí.
+function explATexto(s){
+  if (!esExplHtml(s)) return s || '';
+  const frag = fragmentoExpl(s.slice(MARCA_HTML.length).replace(/<(?:br|\/div|\/p)\b[^>]*>/gi, '\n'));
+  frag.querySelectorAll('img').forEach(i => i.replaceWith(document.createTextNode(' [imagen] ')));
+  return frag.textContent;
+}
+// Las imágenes pegadas no están en `t.files`: se las reconoce por los datos del archivo que
+// quedaron colgados del propio `<img>`.
+function imagenesDeExpl(s){
+  if (!esExplHtml(s)) return [];
+  return [...fragmentoExpl(s.slice(MARCA_HTML.length)).querySelectorAll('img[data-path]')]
+    .map(i => ({ path: i.dataset.path, b: i.dataset.b || '', n: i.alt || '', t: '', size: 0 }));
+}
+
+function pintarExpl(t){
+  $('#tDesc').innerHTML = explAHtml(t.expl);
+  marcarExplVacia();
+}
+// El placeholder lo dibuja el CSS, pero la condición no la puede escribir: un
+// contenteditable donde se escribió y se borró queda con un `<br>` adentro y deja de ser
+// `:empty` para siempre.
+function marcarExplVacia(){
+  const el = $('#tDesc');
+  el.classList.toggle('vacio', !el.textContent.trim() && !el.querySelector('img'));
+}
+// Lo que todavía está subiendo apunta a un `blob:` que muere al recargar la página: se
+// guarda el texto sin esas imágenes y cada una entra sola cuando su subida termina.
+function leerExpl(){
+  const copia = $('#tDesc').cloneNode(true);
+  copia.querySelectorAll('img.cargando').forEach(i => i.remove());
+  return MARCA_HTML + copia.innerHTML;
+}
+function guardarExpl(){
+  const t = actual(); if (!t) return;
+  campoTareaDebounced(t, 'expl', leerExpl());
+}
+
+function insertarEnCursor(nodo){
+  const el = $('#tDesc'), sel = document.getSelection();
+  let r = sel && sel.rangeCount && el.contains(sel.anchorNode) ? sel.getRangeAt(0) : null;
+  // Sin cursor adentro del campo (pegado con el foco recién puesto, por ejemplo) va al
+  // final, que es donde uno esperaría que caiga.
+  if (!r) { r = document.createRange(); r.selectNodeContents(el); r.collapse(false); }
+  r.deleteContents();
+  r.insertNode(nodo);
+  r.setStartAfter(nodo); r.collapse(true);
+  if (sel) { sel.removeAllRanges(); sel.addRange(r); }
+}
+
+// La imagen se ve al instante con el archivo local y recién después se cambia por la que
+// quedó en el bucket: esperar la subida mirando un hueco sería peor que el adjunto de antes.
+async function pegarImagenesEnExpl(t, files){
+  // Primero entran todas las miniaturas, en orden y de una sola vez: si cada una esperara
+  // su subida, la segunda imagen de un pegado aparecería recién cuando termina la primera.
+  const pendientes = files.map(f => {
+    const img = document.createElement('img');
+    img.className = 'cargando';
+    img.alt = f.name || 'imagen pegada';
+    img.src = URL.createObjectURL(f);
+    insertarEnCursor(img);
+    return { f, img };
+  });
+  marcarExplVacia();
+
+  for (const { f, img } of pendientes) {
+    onEstadoGlobal('cargando');
+    let archivo = null;
+    try {
+      const blob = await comprimirImagen(f);
+      if (blob.size > MAX_ARCHIVO) throw new Error('pesa ' + kb(blob.size) + ' ya comprimida');
+      archivo = await RoadmapSync.subirArchivo(t.id, blob,
+        f.name || ('captura-' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.webp'));
+    } catch (e) {
+      URL.revokeObjectURL(img.src);
+      img.remove(); marcarExplVacia(); onEstadoGlobal('ok');
+      aviso('No pude pegar la imagen: ' + (e.message || 'error al subir'));
+      continue;
+    }
+    // Si el detalle se cerró o se cambió de tarea mientras subía, el `<img>` ya no está en
+    // pantalla: no hay dónde guardarla, así que se borra en vez de dejarla huérfana.
+    if (!img.isConnected || actual() !== t) {
+      URL.revokeObjectURL(img.src);
+      RoadmapSync.borrarArchivo(archivo).catch(() => {});
+      onEstadoGlobal('ok');
+      aviso('Se cerró la tarea antes de que terminara de subir la imagen. Pegala de nuevo.');
+      continue;
+    }
+    const provisoria = img.src;
+    img.src = RoadmapSync.urlPublica(archivo);
+    img.dataset.path = archivo.path;
+    img.dataset.b = archivo.b || '';
+    img.alt = archivo.n;
+    img.classList.remove('cargando');
+    URL.revokeObjectURL(provisoria);
+    // Cierra el 'cargando' de la subida; el guardado del texto abre y cierra el suyo.
+    onEstadoGlobal('ok');
+    guardarExpl();
+  }
 }
 
 function pintarHoy(t){
@@ -791,6 +903,7 @@ function pintarPend(t){
    en el tooltip: sirve para reconstruir cuándo se dijo algo sin ensuciar la lectura. */
 function pintarConversacion(t){
   const log = $('#tChat'), msgs = t.chat || [];
+  $('#tChatCount').textContent = msgs.length || '';
   log.innerHTML = msgs.map((m, i) => {
     const quien = m.autor ? nombrePersona(m.autor) : 'Alguien';
     const cuando = fmtTs(m.ts);
@@ -838,6 +951,7 @@ function guardarLoEscrito(){
 
 function pintarArchivos(t){
   const cont = $('#tFiles');
+  $('#tFilesCount').textContent = (t.files || []).length || '';
   cont.innerHTML = (t.files || []).map((f, i) => {
     const url = RoadmapSync.urlPublica(f);
     return /^image\//.test(f.t)
@@ -877,6 +991,73 @@ function pintarArchivos(t){
   });
 }
 
+/* ============================================================
+   Checklist de la tarea
+   ------------------------------------------------------------
+   Una línea por paso: tilde, texto y nada más. Lo que antes hacía engorrosa esta parte
+   era que cada paso tenía responsable, explicación, chat y archivos propios — una tarea
+   metida adentro de otra. Eso queda guardado en la base y no se pisa (por eso cada paso
+   nuevo se crea con la forma completa), pero acá se trabaja con lo único que se usa a
+   diario: marcar hecho y tachar.
+   ============================================================ */
+function pintarPasos(t){
+  const pasos = t.subtareas || [];
+  const hechos = pasos.filter(s => s.estado === HECHO).length;
+
+  $('#tPasosCount').textContent = pasos.length ? `${hechos}/${pasos.length}` : '';
+  $('#tPasos').innerHTML = pasos.map((s, i) => `
+    <div class="paso${s.estado === HECHO ? ' done' : ''}">
+      <input type="checkbox" data-pchk="${i}"${s.estado === HECHO ? ' checked' : ''} aria-label="${escA(s.titulo || 'Paso')} — marcar como hecho">
+      <input class="pt" data-ptxt="${i}" value="${escA(s.titulo)}" placeholder="Sin nombre" aria-label="Texto del paso">
+      <button class="x" data-pdel="${i}" title="Borrar el paso" aria-label="Borrar el paso">✕</button>
+    </div>`).join('');
+
+  $$('#tPasos [data-pchk]').forEach(el => el.onchange = () => {
+    cambiarPasos(t, () => { pasos[el.dataset.pchk].estado = el.checked ? HECHO : 'Pendiente'; });
+    pintarPasos(t); render();
+  });
+
+  $$('#tPasos [data-ptxt]').forEach(el => el.oninput = () => {
+    cambiarPasos(t, () => { pasos[el.dataset.ptxt].titulo = el.value; });
+  });
+
+  $$('#tPasos [data-pdel]').forEach(el => el.onclick = () => {
+    cambiarPasos(t, () => { pasos.splice(Number(el.dataset.pdel), 1); });
+    pintarPasos(t); render();
+  });
+}
+
+// Snapshot antes de tocar, guardado en diferido después: si el guardado falla tras los
+// reintentos, la lista entera vuelve a como estaba y no queda un tilde que no era.
+function cambiarPasos(t, mutar){
+  const clave = 'tarea:' + t.id + ':subtareas';
+  if (!snaps.has(clave)) snaps.set(clave, JSON.stringify(t.subtareas || []));
+  t.subtareas = t.subtareas || [];
+  mutar();
+  guardarDebounced(clave, () => {
+    persistirTarea(t, {
+      revertir: () => {
+        try { t.subtareas = JSON.parse(snaps.get(clave)); } catch (e) { /* se pierde el revert, no los datos */ }
+        if (actual() === t) pintarPasos(t);
+        render();
+      },
+    }).then(() => { if (!pendientesGuardado.has(clave)) snaps.delete(clave); });
+  });
+}
+
+$('#tPasoNew').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const t = actual(); if (!t) return;
+  const titulo = e.target.value.trim(); if (!titulo) return;
+  const id = nuevoId('S', (t.subtareas || []).map(s => s.id));
+  // Se conserva la forma completa que ya usa la base (resp / expl / chat / files) aunque
+  // el checklist no los muestre: así los pasos viejos no se rompen ni pierden lo suyo.
+  cambiarPasos(t, () => t.subtareas.push({ id, titulo, resp:'', estado:'Pendiente', expl:'', chat:[], files:[] }));
+  e.target.value = '';
+  pintarPasos(t); render();
+});
+
 /* ---------- enganches del modal de tarea ---------- */
 function campoTareaDebounced(t, campo, valor){
   const clave = 'tarea:' + t.id + ':' + campo;
@@ -895,9 +1076,39 @@ $('#tTitulo').addEventListener('input', e => {
   campoTareaDebounced(t, 'tarea', e.target.value);
   render();
 });
-$('#tDesc').addEventListener('input', e => {
+$('#tDesc').addEventListener('input', () => { marcarExplVacia(); guardarExpl(); });
+
+/* Pegar y soltar sobre la explicación. Las imágenes van adentro del texto, donde estaba el
+   cursor; cualquier otro archivo no se puede dibujar en un renglón, así que sigue yendo a
+   los adjuntos de abajo. Lo demás entra como texto plano —a propósito: es lo que mantiene
+   fuera el HTML de otras páginas, con sus estilos, sus scripts y su ruido. */
+function repartirPegado(t, dt){
+  const files = [...(dt?.files || [])].filter(f => f.size);
+  const imgs  = files.filter(f => /^image\//.test(f.type));
+  const otros = files.filter(f => !/^image\//.test(f.type));
+  if (otros.length) adjuntar(t, otros);
+  if (imgs.length) { pegarImagenesEnExpl(t, imgs); return; }
+  if (files.length) return;
+  const txt = dt?.getData('text/plain') || '';
+  // `insertText` porque es lo único que deja el pegado en la pila de deshacer del navegador.
+  // Está deprecado y algún día no va a estar: si devuelve false, se inserta a mano.
+  if (txt && !document.execCommand?.('insertText', false, txt)) {
+    insertarEnCursor(document.createTextNode(txt));
+  }
+  marcarExplVacia(); guardarExpl();
+}
+$('#tDesc').addEventListener('paste', e => {
   const t = actual(); if (!t) return;
-  campoTareaDebounced(t, 'expl', e.target.value);
+  e.preventDefault();
+  // Frena el manejador del modal, que adjuntaría la misma imagen abajo por segunda vez.
+  e.stopPropagation();
+  repartirPegado(t, e.clipboardData);
+});
+$('#tDesc').addEventListener('dragover', e => e.preventDefault());
+$('#tDesc').addEventListener('drop', e => {
+  const t = actual(); if (!t) return;
+  e.preventDefault(); e.stopPropagation();
+  repartirPegado(t, e.dataTransfer);
 });
 [['tEstado','estado'], ['tPrioridad','prioridad'], ['tTipo','tipo']].forEach(([elId, campo]) => {
   $('#' + elId).addEventListener('change', e => {
@@ -906,12 +1117,6 @@ $('#tDesc').addEventListener('input', e => {
     t[campo] = e.target.value; render();
     persistirTarea(t, { revertir: () => { t[campo] = antes; render(); if (actual() === t) abrirTarea(t.id); } });
   });
-});
-$('#tTematica').addEventListener('change', e => {
-  const t = actual(); if (!t) return;
-  const antes = t.sec;
-  t.sec = e.target.value || ''; render();
-  persistirTarea(t, { revertir: () => { t.sec = antes; render(); if (actual() === t) abrirTarea(t.id); } });
 });
 $('#tHoy').onclick = () => {
   const t = actual(); if (!t) return;
@@ -959,78 +1164,6 @@ $('#tDel').onclick = async () => {
   });
   if (ok) { marcarEcoPropio(RoadmapSync.TABLAS.tareas, t.id); aviso('Tarea eliminada'); }
 };
-
-/* ============================================================
-   Temáticas
-   ============================================================ */
-function pintarTem(){
-  $('#temList').innerHTML = datos.secciones.map(s => `
-    <div class="tem-row">
-      <input type="color" value="${escA(colorTematica(s))}" data-tc="${escA(s.id)}" aria-label="Color de la temática">
-      <input type="text" value="${escA(s.titulo)}" data-tl="${escA(s.id)}" placeholder="Nombre de la temática">
-      <span class="hint">${datos.tareas.filter(t => t.sec === s.id).length}</span>
-      <button class="x" data-td="${escA(s.id)}" title="Borrar" aria-label="Borrar temática">✕</button>
-    </div>`).join('') || '<p class="hint">Todavía no hay temáticas.</p>';
-
-  $$('[data-tc]').forEach(el => el.oninput = () => {
-    const s = tematicaDe(el.dataset.tc); if (!s) return;
-    const antes = s.color;
-    s.color = el.value; render();
-    guardarDebounced('sec-color:' + s.id, () =>
-      persistirSeccion(s, { revertir: () => { s.color = antes; render(); pintarTem(); } }));
-  });
-  $$('[data-tl]').forEach(el => el.oninput = () => {
-    const s = tematicaDe(el.dataset.tl); if (!s) return;
-    const clave = 'sec:' + s.id;
-    if (!snaps.has(clave)) snaps.set(clave, s.titulo);
-    s.titulo = el.value; render();
-    guardarDebounced(clave, () => {
-      persistirSeccion(s, { revertir: () => { s.titulo = snaps.get(clave); render(); pintarTem(); } })
-        .then(() => { if (!pendientesGuardado.has(clave)) snaps.delete(clave); });
-    });
-  });
-  $$('[data-td]').forEach(el => el.onclick = async () => {
-    const s = tematicaDe(el.dataset.td); if (!s) return;
-    const suyas = datos.tareas.filter(t => t.sec === s.id);
-    if (!confirm(suyas.length
-      ? `La temática «${s.titulo || 'sin nombre'}» tiene ${suyas.length} tarea(s). Se borra la temática y esas tareas quedan en «Sin temática». ¿Seguir?`
-      : `¿Borrar la temática «${s.titulo || 'sin nombre'}»?`)) return;
-
-    const idx = datos.secciones.findIndex(x => x.id === s.id);
-    const antesSec = suyas.map(t => t.sec);
-    datos.secciones = datos.secciones.filter(x => x.id !== s.id);
-    suyas.forEach(t => { t.sec = ''; });
-    pintarTem(); render();
-    // Las tareas se desenganchan primero: si no, el borrado en cascada de la base se
-    // las lleva puestas junto con la temática.
-    const ok = await conEstadoDeCarga(async () => {
-      for (const t of suyas) await RoadmapSync.guardarTarea(t);
-      await RoadmapSync.borrarSeccion(s.id);
-    }, {
-      onEstado: onEstadoGlobal,
-      revertir: () => {
-        datos.secciones.splice(idx, 0, s);
-        suyas.forEach((t, i) => { t.sec = antesSec[i]; });
-        pintarTem(); render();
-      },
-    });
-    if (ok) marcarEcoPropio(RoadmapSync.TABLAS.secciones, s.id);
-  });
-}
-
-function agregarTem(){
-  const inp = $('#temNew'), v = inp.value.trim();
-  if (!v) return;
-  const id = nuevoId('s', datos.secciones.map(x => x.id));
-  const ultima = datos.secciones.length ? datos.secciones[datos.secciones.length - 1].orden : null;
-  const s = { id, titulo:v, color:PALETA[datos.secciones.length % PALETA.length], orden:RoadmapSync.calcularOrden(ultima, null) };
-  datos.secciones.push(s);
-  inp.value = '';
-  pintarTem(); render();
-  persistirSeccion(s, {
-    revertir: () => { datos.secciones = datos.secciones.filter(x => x.id !== id); pintarTem(); render(); },
-  });
-}
 
 /* ============================================================
    Caja · planilla de movimientos
@@ -1294,6 +1427,557 @@ function actualizarTotalesCaja(){
 }
 
 /* ============================================================
+   Visión · la hoja
+   ------------------------------------------------------------
+   Una página del estilo de Notion: renglones apretados, letra chica y todo el documento
+   a la vista de una. Cada renglón es de un tipo —título, subtítulo, tarea o texto— y
+   cualquiera puede tener renglones adentro. Una tarea con tareas adentro es una checklist
+   con subchecklist; no hace falta nada más para armarla.
+
+   Cuatro decisiones que explican casi todo el código de acá abajo:
+
+   1. **El tipo y la jerarquía son cosas distintas.** El tipo dice cómo se ve el renglón
+      (`tipo`); la jerarquía, de quién cuelga (`padre`). Son ortogonales a propósito: una
+      tarea puede colgar de un título, y un título puede colgar de una tarea. Atarlas
+      —"lo que cuelga de un título es siempre una tarea"— obligaría a inventar reglas para
+      cada mezcla y ninguna sería la que uno quiere el día que la necesita.
+   2. La jerarquía vive en `padre`, no en una lista anidada. Mover una línea es cambiarle
+      una cadena y un número, y se guarda esa fila sola — no la rama entera.
+   3. El plegado NO se guarda en la base. Que alguien cierre un bloque para leer cómodo
+      no tiene por qué cerrárselo a los demás: eso es del navegador de cada uno.
+   4. Se repinta la hoja completa ante cualquier cambio de estructura, y se devuelve el
+      foco a mano con `foco`. Es más simple de sostener que ir moviendo nodos del DOM, y
+      la hoja es chica. El tilde y el texto, en cambio, se pintan quirúrgicamente: ahí
+      hay un cursor en juego.
+
+   Las clases CSS de acá van todas con prefijo `hoja-`/`v`. **No usar `.doc`**: esa clase
+   ya es el chip de adjuntos del detalle de tarea, y pisarla deja la hoja entera dibujada
+   como una pastilla de 34px.
+   ============================================================ */
+
+/* Los tipos de renglón. `id` es lo que se guarda en la base; `atajo` es lo que se escribe
+   al principio de la línea para convertirla, como en Markdown. El orden importa: se prueba
+   de arriba abajo, así '## ' gana antes de que '# ' se lo lleve. */
+const TIPOS_HOJA = [
+  { id:'titulo',    label:'Título',    glifo:'H₁', atajo:/^#\s/,          nuevo:'texto' },
+  { id:'subtitulo', label:'Subtítulo', glifo:'H₂', atajo:/^##\s/,         nuevo:'texto' },
+  { id:'check',     label:'Tarea',     glifo:'☐',  atajo:/^(\[[ xX]?\]|[-*])\s/, nuevo:'check' },
+  { id:'texto',     label:'Texto',     glifo:'¶',  atajo:/^\|\s/,         nuevo:'texto' },
+];
+// Las filas guardadas antes de que existieran los tipos no tienen `tipo`: son tareas, que
+// es lo único que había. Por eso el valor por defecto es 'check' y no 'texto'.
+const tipoHoja = i => TIPOS_HOJA.find(t => t.id === (i.tipo || 'check')) || TIPOS_HOJA[2];
+const esTarea  = i => (i.tipo || 'check') === 'check';
+
+/* Qué bloques quedaron cerrados. Es preferencia de lectura, no dato del tablero. */
+let plegados = new Set();
+try { plegados = new Set(JSON.parse(localStorage.getItem('vision-plegados') || '[]')); }
+catch (e) { /* si no se puede leer, la hoja abre entera y listo */ }
+function guardarPlegados(){
+  try { localStorage.setItem('vision-plegados', JSON.stringify([...plegados])); }
+  catch (e) { /* modo privado o storage lleno: no es crítico */ }
+}
+
+const itemVision = id => datos.vision.find(i => i.id === id) || null;
+const hijosVision = padre => datos.vision
+  .filter(i => (i.padre || '') === (padre || ''))
+  .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+
+function descendientesVision(id, acc = []){
+  hijosVision(id).forEach(h => { acc.push(h); descendientesVision(h.id, acc); });
+  return acc;
+}
+
+/* La hoja aplanada en el orden en que se lee, con el nivel de cada línea. Los bloques
+   cerrados no aportan sus hijos: no están en pantalla y no hay que dibujarlos.
+   `vistos` es un cinturón de seguridad contra una rama que apunte a sí misma: no debería
+   poder pasar desde el tablero, pero un ciclo acá sería un cuelgue del navegador. */
+function hojaVision(){
+  const filas = [], vistos = new Set();
+  const bajar = (padre, nivel) => {
+    hijosVision(padre).forEach(i => {
+      if (vistos.has(i.id)) return;
+      vistos.add(i.id);
+      const hijos = hijosVision(i.id).length;
+      filas.push({ i, nivel, hijos });
+      if (hijos && !plegados.has(i.id)) bajar(i.id, nivel + 1);
+    });
+  };
+  bajar('', 0);
+  return filas;
+}
+
+async function persistirItemVision(i, opts = {}){
+  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarItemVision(i),
+    { onEstado: onEstadoGlobal, ...opts });
+  if (ok) marcarEcoPropio(RoadmapSync.TABLAS.vision, i.id);
+  return ok;
+}
+
+/* ---------- pintado ---------- */
+
+/* La hoja no tiene encabezado, ni barra de progreso, ni pie de ayuda, ni recuadro para
+   empezar. Es una hoja en blanco de ancho completo: renglones y nada más. Todo lo que se
+   agregue acá arriba le come lugar a lo único que importa, que es la lista.
+
+   Abajo de todo hay una zona de clic alta: es el «hacer clic en el vacío para seguir
+   escribiendo» de Notion, y hace innecesario un botón de «agregar». Cuando la hoja está
+   vacía, esa misma zona es la que invita a escribir o pegar. */
+function renderVision(foco){
+  const filas = hojaVision();
+  const vacia = !datos.vision.length;
+
+  board.innerHTML = `<div class="hoja">
+    ${CFG.visionUrl ? `<div class="hoja-top"><a class="hoja-notion" href="${escA(CFG.visionUrl)}"
+      target="_blank" rel="noopener noreferrer" title="Se abre en otra pestaña">Ver en Notion<svg width="10" height="10"
+      viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"
+      stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a></div>` : ''}
+    <div class="hoja-list">${filas.map(filaVisionHTML).join('')}</div>
+    <div class="hoja-fin"${vacia ? ' data-vacia="1"' : ''} role="button" tabindex="0"
+      aria-label="Escribir un renglón nuevo"></div>
+  </div>`;
+
+  filas.forEach(f => engancharFila(board.querySelector(`.vrow[data-id="${CSS.escape(f.i.id)}"]`), f.i));
+
+  const fin = board.querySelector('.hoja-fin');
+  fin.onclick = () => nuevaLineaVision(null);
+  fin.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); nuevaLineaVision(null); } };
+
+  if (foco) {
+    const ta = board.querySelector(`.vrow[data-id="${CSS.escape(foco.id)}"] .vtxt`);
+    if (ta) { ta.focus(); const p = foco.pos == null ? ta.value.length : Math.min(foco.pos, ta.value.length); ta.setSelectionRange(p, p); }
+  }
+}
+
+/* Un renglón. Lo único que cambia entre tipos es si lleva tilde y con qué letra se pinta
+   —el resto de los controles son los mismos—, así que el tipo viaja como clase y el CSS
+   hace la diferencia. El menú de tipos se dibuja siempre, pero está oculto hasta que se
+   abre: son cuatro botones por fila, no vale la pena construirlos a mano en cada clic. */
+const filaVisionHTML = f => {
+  const t = tipoHoja(f.i), cerrado = plegados.has(f.i.id);
+  const tildable = esTarea(f.i);
+  return `<div class="vrow t-${t.id}${f.i.hecho && tildable ? ' ok' : ''}" data-id="${escA(f.i.id)}" style="--d:${f.nivel}">
+    <button class="vtipo" type="button" tabindex="-1" title="Cambiar el tipo de renglón"
+      aria-label="Cambiar el tipo de renglón" aria-haspopup="menu" aria-expanded="false">⋮⋮</button>
+    <button class="vtwist${f.hijos ? '' : ' vacio'}${cerrado ? ' cerrado' : ''}" type="button" tabindex="-1"
+      aria-label="${f.hijos ? (cerrado ? 'Desplegar' : 'Plegar') : ''}" aria-expanded="${f.hijos ? String(!cerrado) : 'false'}">▸</button>
+    ${tildable
+      ? `<button class="vchk" type="button" role="checkbox" tabindex="-1" aria-checked="${!!f.i.hecho}" aria-label="Marcar como hecha"></button>`
+      : `<span class="vbullet" aria-hidden="true"></span>`}
+    <textarea class="vtxt" rows="1" spellcheck="false" aria-label="${esc(t.label)}"
+      placeholder="${esc(t.id === 'check' ? 'Tarea…' : t.label + '…')}">${esc(f.i.texto)}</textarea>
+    <button class="vdel" type="button" tabindex="-1" title="Borrar renglón" aria-label="Borrar renglón">✕</button>
+    <div class="vmenu" role="menu" hidden>${TIPOS_HOJA.map(x =>
+      `<button type="button" role="menuitem" data-tipo="${x.id}"${x.id === t.id ? ' class="on"' : ''}
+        ><i>${esc(x.glifo)}</i>${esc(x.label)}</button>`).join('')}</div>
+  </div>`;
+};
+
+function engancharFila(row, i){
+  if (!row) return;
+  const ta = row.querySelector('.vtxt');
+  autoGrow(ta);
+
+  row.querySelector('.vtwist').onclick = () => {
+    if (!hijosVision(i.id).length) return;
+    plegados.has(i.id) ? plegados.delete(i.id) : plegados.add(i.id);
+    guardarPlegados();
+    renderVision();
+  };
+  row.querySelector('.vchk')?.addEventListener('click', () => tildarVision(i));
+  row.querySelector('.vdel').onclick = () => borrarLineaVision(i);
+
+  const btnTipo = row.querySelector('.vtipo'), menu = row.querySelector('.vmenu');
+  btnTipo.onclick = e => { e.stopPropagation(); abrirMenuTipo(row, menu, btnTipo); };
+  menu.querySelectorAll('[data-tipo]').forEach(b => {
+    b.onclick = e => { e.stopPropagation(); cerrarMenuTipo(); cambiarTipo(i, b.dataset.tipo); };
+  });
+
+  ta.addEventListener('input', () => {
+    // Un atajo de Markdown se aplica al escribirlo y se lo come: lo que queda es el
+    // renglón ya convertido, sin el '#' ni el '[]' colgando adelante.
+    const atajo = TIPOS_HOJA.find(t => t.atajo.test(ta.value));
+    if (atajo && atajo.id !== (i.tipo || 'check')) {
+      const resto = ta.value.replace(atajo.atajo, '');
+      ta.value = resto;
+      i.texto = resto;
+      // El cursor va al final de lo que quedó, no al principio: escribiendo a mano el
+      // resto está vacío y da igual, pero si el renglón entró pegado de una («# Norte»)
+      // el cursor tiene que quedar donde uno seguiría escribiendo.
+      cambiarTipo(i, atajo.id, resto.length);
+      return;
+    }
+    autoGrow(ta);
+    editarLineaVision(i, ta.value);
+  });
+  ta.addEventListener('keydown', e => teclasVision(e, i, ta));
+  ta.addEventListener('paste', e => pegarEnVision(e, i, ta));
+}
+
+/* ---------- menú de tipos ---------- */
+
+// Uno solo abierto a la vez, y se cierra con un clic en cualquier lado o con Escape. Se
+// guarda el nodo abierto en vez de recorrer el DOM buscando el que quedó suelto.
+let menuTipoAbierto = null;
+function abrirMenuTipo(row, menu, btn){
+  const yaEstaba = menuTipoAbierto?.menu === menu;
+  cerrarMenuTipo();
+  if (yaEstaba) return;
+  menu.hidden = false;
+  btn.setAttribute('aria-expanded', 'true');
+  row.classList.add('menu-abierto');
+  menuTipoAbierto = { row, menu, btn };
+}
+function cerrarMenuTipo(){
+  if (!menuTipoAbierto) return;
+  const { row, menu, btn } = menuTipoAbierto;
+  menu.hidden = true;
+  btn.setAttribute('aria-expanded', 'false');
+  row.classList.remove('menu-abierto');
+  menuTipoAbierto = null;
+}
+document.addEventListener('click', cerrarMenuTipo);
+
+/* Cambiar el tipo de un renglón. Lo único que se pierde en el camino es el tilde de una
+   tarea que deja de serlo: un título «hecho» no significa nada, y si volviera a tarea más
+   tarde reaparecería tildado sin que nadie lo haya tildado. */
+function cambiarTipo(i, tipo, pos){
+  const antes = { tipo: i.tipo, hecho: i.hecho, texto: i.texto };
+  i.tipo = tipo;
+  if (tipo !== 'check') i.hecho = false;
+  renderVision({ id: i.id, pos: pos == null ? null : pos });
+  persistirItemVision(i, { revertir: () => { Object.assign(i, antes); renderVision(); } });
+}
+
+/* Lo único que se recalcula al tildar es el número de la pestaña, que vive afuera de la
+   hoja. Adentro no hay ni un contador: tildar mueve el tilde y nada más, sin repintar y
+   sin sacarle el cursor a nadie. */
+const actualizarProgresoVision = () => pintarChrome();
+
+/* ---------- cambios ---------- */
+
+function tildarVision(i){
+  // Un título o un texto no se tildan: no tienen tilde que tocar.
+  if (!esTarea(i)) return;
+  i.hecho = !i.hecho;
+  const row = board.querySelector(`.vrow[data-id="${CSS.escape(i.id)}"]`);
+  if (row) {
+    row.classList.toggle('ok', i.hecho);
+    row.querySelector('.vchk').setAttribute('aria-checked', String(i.hecho));
+  }
+  actualizarProgresoVision();
+  persistirItemVision(i, { revertir: () => { i.hecho = !i.hecho; renderVision(); } });
+}
+
+function editarLineaVision(i, texto){
+  const clave = 'vision:' + i.id;
+  if (!snaps.has(clave)) snaps.set(clave, JSON.stringify(i));
+  i.texto = texto;
+  guardarDebounced(clave, () => {
+    persistirItemVision(i, {
+      revertir: () => {
+        try { Object.assign(i, JSON.parse(snaps.get(clave))); } catch (e) {}
+        if (!estaEditando()) renderVision();
+      },
+    }).then(() => { if (!pendientesGuardado.has(clave)) snaps.delete(clave); });
+  });
+}
+
+/* Dónde cae una línea nueva: si la de arriba tiene cosas adentro y está abierta, entra
+   como su primera hija. Es lo que se ve en pantalla —el renglón de abajo es el primer
+   hijo—, así que meterla como hermana la mandaría varios renglones más abajo. */
+function nuevaLineaVision(desde){
+  let padre = '', antes = null, despues = null, tipo = 'check';
+
+  if (desde && hijosVision(desde.id).length && !plegados.has(desde.id)) {
+    padre = desde.id;
+    const dentro = hijosVision(desde.id);
+    despues = dentro[0].orden;
+    // Entra arriba de todo dentro del bloque: hereda el tipo del que hoy es primero, que
+    // es al lado de quién va a quedar. Abrir un renglón encima de una lista de tareas y
+    // que salga texto suelto sería justo lo que no se quiere.
+    tipo = dentro[0].tipo || 'check';
+  } else {
+    padre = desde ? (desde.padre || '') : '';
+    const hermanos = hijosVision(padre);
+    const idx = desde ? hermanos.findIndex(h => h.id === desde.id) : hermanos.length - 1;
+    antes = hermanos[idx] ? hermanos[idx].orden : null;
+    despues = hermanos[idx + 1] ? hermanos[idx + 1].orden : null;
+    // Enter sobre una tarea da otra tarea —así se escribe una lista de corrido—; sobre un
+    // título da texto, porque nadie escribe dos títulos seguidos.
+    if (desde) tipo = tipoHoja(desde).nuevo;
+  }
+
+  const i = {
+    id: nuevoId('V', datos.vision.map(x => x.id)),
+    padre, texto:'', hecho:false, tipo,
+    orden: RoadmapSync.calcularOrden(antes, despues),
+  };
+  datos.vision.push(i);
+  renderVision({ id: i.id, pos: 0 });
+  persistirItemVision(i, {
+    revertir: () => { datos.vision = datos.vision.filter(x => x.id !== i.id); renderVision(); },
+  });
+}
+
+// Meter una línea adentro de la de arriba. Sin hermana arriba no hay de quién colgarla:
+// no se puede indentar la primera línea de un bloque, igual que en Notion.
+function indentarVision(i, pos){
+  const hermanos = hijosVision(i.padre || '');
+  const idx = hermanos.findIndex(h => h.id === i.id);
+  if (idx <= 0) return;
+  const nuevoPadre = hermanos[idx - 1];
+  const sub = hijosVision(nuevoPadre.id);
+  const antes = { padre: i.padre, orden: i.orden };
+  i.padre = nuevoPadre.id;
+  i.orden = RoadmapSync.calcularOrden(sub.length ? sub[sub.length - 1].orden : null, null);
+  // Si el bloque que la recibe estaba cerrado, la línea desaparecería al escribirla.
+  if (plegados.delete(nuevoPadre.id)) guardarPlegados();
+  moverLinea(i, antes, pos);
+}
+
+// Sacarla del bloque: queda como hermana de su padre, justo debajo de él.
+function desindentarVision(i, pos){
+  const padre = itemVision(i.padre);
+  if (!padre) return;
+  const tios = hijosVision(padre.padre || '');
+  const idx = tios.findIndex(h => h.id === padre.id);
+  const antes = { padre: i.padre, orden: i.orden };
+  i.padre = padre.padre || '';
+  i.orden = RoadmapSync.calcularOrden(padre.orden, tios[idx + 1] ? tios[idx + 1].orden : null);
+  moverLinea(i, antes, pos);
+}
+
+// Subir o bajar entre hermanas. Lo que tenga adentro viaja con ella: cuelga de su `padre`
+// y no de su posición, así que no hay nada más que tocar.
+function moverVision(i, delta, pos){
+  const hermanos = hijosVision(i.padre || '');
+  const idx = hermanos.findIndex(h => h.id === i.id);
+  const j = idx + delta;
+  if (idx < 0 || j < 0 || j >= hermanos.length) return;
+  const antes = { padre: i.padre, orden: i.orden };
+  const cruza = hermanos[j];
+  const siguiente = hermanos[j + delta];
+  i.orden = delta > 0
+    ? RoadmapSync.calcularOrden(cruza.orden, siguiente ? siguiente.orden : null)
+    : RoadmapSync.calcularOrden(siguiente ? siguiente.orden : null, cruza.orden);
+  moverLinea(i, antes, pos);
+}
+
+function moverLinea(i, antes, pos){
+  renderVision({ id: i.id, pos });
+  persistirItemVision(i, { revertir: () => { Object.assign(i, antes); renderVision(); } });
+}
+
+async function borrarLineaVision(i, foco){
+  const dentro = descendientesVision(i.id);
+  if (dentro.length && !confirm(`«${i.texto || 'Sin texto'}» tiene ${dentro.length} ${dentro.length === 1 ? 'línea' : 'líneas'} adentro. Se borran también. ¿Seguir?`)) return;
+
+  const rama = [i, ...dentro];
+  const ids = new Set(rama.map(x => x.id));
+  datos.vision = datos.vision.filter(x => !ids.has(x.id));
+  renderVision(foco);
+
+  const ok = await conEstadoDeCarga(() => RoadmapSync.borrarItemVision(i.id), {
+    onEstado: onEstadoGlobal,
+    revertir: () => { datos.vision.push(...rama); renderVision(); },
+  });
+  if (ok) marcarEcoPropio(RoadmapSync.TABLAS.vision, i.id);
+}
+
+/* ---------- teclado ---------- */
+
+function teclasVision(e, i, ta){
+  const filas = [...board.querySelectorAll('.vrow')];
+  const idx = filas.findIndex(r => r.dataset.id === i.id);
+  const pos = ta.selectionStart;
+  const irA = (n, alFinal) => {
+    const t = filas[n]?.querySelector('.vtxt');
+    if (!t) return;
+    t.focus();
+    const p = alFinal ? t.value.length : 0;
+    t.setSelectionRange(p, p);
+  };
+
+  // Ctrl/⌘+Enter va primero: si no, lo agarraría el Enter de abajo y abriría una línea.
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); tildarVision(i); return; }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); nuevaLineaVision(i); return; }
+
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    e.shiftKey ? desindentarVision(i, pos) : indentarVision(i, pos);
+    return;
+  }
+
+  // Borrar con Backspace solo si la línea está vacía y no se lleva nada puesto: que una
+  // tecla de corrección haga desaparecer un bloque entero sería una trampa.
+  if (e.key === 'Backspace' && !ta.value && pos === 0 && !hijosVision(i.id).length) {
+    e.preventDefault();
+    const anterior = filas[idx - 1]?.dataset.id;
+    borrarLineaVision(i, anterior ? { id: anterior, pos: null } : null);
+    return;
+  }
+
+  if (e.key === 'ArrowUp' && (e.altKey || pos === 0)) {
+    e.preventDefault();
+    e.altKey ? moverVision(i, -1, pos) : irA(idx - 1, true);
+    return;
+  }
+  if (e.key === 'ArrowDown' && (e.altKey || pos === ta.value.length)) {
+    e.preventDefault();
+    e.altKey ? moverVision(i, 1, pos) : irA(idx + 1, false);
+  }
+}
+
+/* ---------- traer una hoja de afuera ---------- */
+
+/* Convierte el texto pegado en líneas con nivel. La sangría llega distinta según de dónde
+   se copie —tabulaciones, dos espacios, cuatro—, y un mismo pegado puede traer las tres
+   mezcladas si se armó juntando pedazos.
+
+   Por eso no se mide la sangría contra una tabla de anchos, ni se ordenan todas las que
+   aparecen: se lleva una pila con la sangría de cada antepasado de la línea que se está
+   leyendo. Más sangría que la de arriba entra un escalón; menos, sale los que hagan falta.
+   Es la única cuenta que sale bien cuando una rama usa tabulaciones y otra usa espacios,
+   y además hace imposible bajar dos niveles de golpe. */
+function parsearHoja(txt){
+  const sangria = l => l.match(/^[\t ]*/)[0].replace(/\t/g, '    ').length;
+  const lineas = [];
+  const pila = [0];   // sangría de cada nivel abierto; el 0 es el primer nivel
+
+  String(txt || '').replace(/\r/g, '').split('\n').forEach(l => {
+    if (!l.trim()) return;
+
+    let t = l.trim(), hecho = false, tipo;
+
+    // El orden de las pruebas es el que decide: primero el tilde (puede venir detrás de
+    // una viñeta), después los títulos por cantidad de almohadillas, y lo que no es nada
+    // de eso queda como texto — salvo que traiga viñeta, que es la marca de una lista.
+    const tilde = t.match(/^(?:[-*•]\s*)?\[([ xX])\]\s*(.*)$/);
+    const titulo = t.match(/^(#{1,6})\s+(.*)$/);
+    if (tilde) { hecho = tilde[1].toLowerCase() === 'x'; t = tilde[2]; tipo = 'check'; }
+    else if (titulo) { tipo = titulo[1].length === 1 ? 'titulo' : 'subtitulo'; t = titulo[2]; }
+    else if (/^[-*•]\s+/.test(t)) { tipo = 'check'; t = t.replace(/^[-*•]\s+/, ''); }
+    else if (/^\d+[.)]\s+/.test(t)) { tipo = 'check'; t = t.replace(/^\d+[.)]\s+/, ''); }
+    else tipo = 'texto';
+
+    t = t.trim();
+    // Una línea que quedó vacía al sacarle la viñeta no cuenta, y tampoco toca la pila:
+    // no puede abrir ni cerrar un nivel algo que no se va a dibujar.
+    if (!t) return;
+
+    const s = sangria(l);
+    while (pila.length > 1 && pila[pila.length - 1] > s) pila.pop();
+    if (s > pila[pila.length - 1]) pila.push(s);
+
+    lineas.push({ ind: pila.length - 1, texto: t, hecho, tipo });
+  });
+  return anidarBajoTitulos(lineas);
+}
+
+/* La sangría sola no alcanza para armar la página, y esta es la razón: Notion NO sangra lo
+   que va abajo de un título. Una página con dos títulos y sus tareas se copia con todo al
+   mismo margen, así que tomando solo la sangría entraría plana, sin un solo nivel.
+
+   Entonces un encabezado se queda abierto y adopta lo que viene después, hasta que aparece
+   otro encabezado de rango igual o mayor a su misma sangría —ahí cierra— o algo menos
+   sangrado que él. La sangría no se ignora: se suma a la profundidad que aporta el título,
+   así una subtarea sangrada dentro de una tarea que está bajo un título queda dos niveles
+   adentro, que es donde tiene que estar. */
+function anidarBajoTitulos(lineas){
+  const RANGO = { titulo:1, subtitulo:2 };
+  const abiertos = [];   // encabezados que todavía pueden adoptar: { ind, rango, nivel }
+  let previo = -1;
+
+  return lineas.map(l => {
+    const rango = RANGO[l.tipo] || 3;   // 3 = no es encabezado, no adopta a nadie
+
+    while (abiertos.length) {
+      const t = abiertos[abiertos.length - 1];
+      if (l.ind < t.ind || (l.ind === t.ind && rango <= t.rango)) abiertos.pop();
+      else break;
+    }
+
+    const padre = abiertos[abiertos.length - 1];
+    // El clamp es el mismo de siempre: nadie baja más de un escalón por renglón. Sin él,
+    // un título seguido de algo ya sangrado saltaría dos niveles y la línea quedaría
+    // colgando de un padre que no existe.
+    const crudo = padre ? padre.nivel + 1 + (l.ind - padre.ind) : l.ind;
+    const nivel = Math.min(crudo, previo + 1);
+    previo = nivel;
+
+    if (rango < 3) abiertos.push({ ind: l.ind, rango, nivel });
+    return { nivel, texto: l.texto, hecho: l.hecho, tipo: l.tipo };
+  });
+}
+
+function pegarEnVision(e, i, ta){
+  const txt = (e.clipboardData || window.clipboardData)?.getData('text/plain') || '';
+  // Pegar una sola línea es pegar texto: que lo haga el navegador, con su cursor y todo.
+  if (!/\n/.test(txt.trim())) return;
+  const lineas = parsearHoja(txt);
+  if (lineas.length < 2) return;
+  e.preventDefault();
+  importarLineas(lineas, i);
+}
+
+function importarLineas(lineas, desde){
+  const padreBase = desde ? (desde.padre || '') : '';
+  const hermanos = hijosVision(padreBase);
+  const idx = desde ? hermanos.findIndex(h => h.id === desde.id) : hermanos.length - 1;
+  const despues = hermanos[idx + 1] ? hermanos[idx + 1].orden : null;
+  let antes = hermanos[idx] ? hermanos[idx].orden : null;
+
+  // `ultimoDe[n]` es la última línea creada en el nivel n: de ahí cuelgan las del n+1.
+  const ultimoDe = [], nuevos = [];
+  lineas.forEach(l => {
+    const padre = l.nivel === 0 ? padreBase : (ultimoDe[l.nivel - 1] || padreBase);
+    let orden;
+    if (padre === padreBase) {
+      orden = RoadmapSync.calcularOrden(antes, despues);
+      antes = orden;
+    } else {
+      const previos = hijosVision(padre);
+      orden = RoadmapSync.calcularOrden(previos.length ? previos[previos.length - 1].orden : null, null);
+    }
+    const i = {
+      id: nuevoId('V', datos.vision.map(x => x.id)),
+      padre, texto: l.texto, hecho: l.hecho, tipo: l.tipo || 'check', orden,
+    };
+    datos.vision.push(i);
+    nuevos.push(i);
+    ultimoDe[l.nivel] = i.id;
+    ultimoDe.length = l.nivel + 1;
+  });
+
+  // Si se pegó sobre una línea en blanco, esa línea sobra: lo pegado ocupa su lugar.
+  const sobra = desde && !desde.texto.trim() && !hijosVision(desde.id).length ? desde : null;
+  if (sobra) datos.vision = datos.vision.filter(x => x.id !== sobra.id);
+
+  renderVision({ id: nuevos[nuevos.length - 1].id, pos: null });
+  guardarLoTraido(nuevos, sobra);
+}
+
+async function guardarLoTraido(nuevos, sobra){
+  onEstadoGlobal('cargando');
+  try {
+    await RoadmapSync.guardarItemsVision(nuevos);
+    if (sobra) await RoadmapSync.borrarItemVision(sobra.id);
+    nuevos.forEach(n => marcarEcoPropio(RoadmapSync.TABLAS.vision, n.id));
+    if (sobra) marcarEcoPropio(RoadmapSync.TABLAS.vision, sobra.id);
+    onEstadoGlobal('ok');
+    aviso(nuevos.length === 1 ? 'Se trajo 1 línea' : `Se trajeron ${nuevos.length} líneas`);
+  } catch (e) {
+    onEstadoGlobal('error');
+    const ids = new Set(nuevos.map(n => n.id));
+    datos.vision = datos.vision.filter(x => !ids.has(x.id));
+    if (sobra) datos.vision.push(sobra);
+    renderVision();
+    aviso('No se pudo guardar lo pegado. Revisá tu conexión y probá de nuevo.');
+  }
+}
+
+/* ============================================================
    Barra superior, atajos y cierre de modales
    ============================================================ */
 function cerrarModales(){
@@ -1309,14 +1993,14 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
-  if (e.key === 'Escape') { cerrarModales(); return; }
+  if (e.key === 'Escape') { cerrarMenuTipo(); cerrarModales(); return; }
   if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
     e.preventDefault(); $('#q').focus();
   }
 });
 
 $('#q').addEventListener('input', e => { UI.f.q = e.target.value.trim().toLowerCase(); render(); });
-['Prioridad','Tipo','Tematica'].forEach(k => {
+['Prioridad','Tipo'].forEach(k => {
   $('#f' + k).addEventListener('change', e => { UI.f[k.toLowerCase()] = e.target.value; render(); });
 });
 $$('[data-layout]').forEach(b => b.onclick = () => { UI.layout = b.dataset.layout; guardarUI(); render(); });
@@ -1324,22 +2008,17 @@ $('#bNueva').onclick = () => {
   // Desde la Caja no hay tablero donde mostrarla: se vuelve a una vista de tareas para
   // que la tarea recién creada quede a la vista al cerrar el detalle.
   const v = vistaActual();
-  if (v.caja) { UI.vista = 'estado'; guardarUI(); render(); }
+  if (sinTareas(v)) { UI.vista = 'estado'; guardarUI(); render(); }
   nuevaTarea(vistaActual(), null);
 };
-$('#bTem').onclick = () => { pintarTem(); $('#scrimTem').classList.add('on'); };
-$('#temAdd').onclick = agregarTem;
-$('#temNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); agregarTem(); } });
-
 $('#bCsv').onclick = () => {
-  const nombreSec = {}; datos.secciones.forEach(s => { nombreSec[s.id] = s.titulo; });
   const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const cab = ['ID','Titulo','Tematica','Estado','Prioridad','Tipo','Pendiente de','Hoy','Notas','Subtareas','Conversacion','Archivos'];
+  const cab = ['ID','Titulo','Estado','Prioridad','Tipo','Pendiente de','Hoy','Notas','Subtareas','Conversacion','Archivos'];
   const filas = datos.tareas.map(t => [
-    t.id, t.tarea, nombreSec[t.sec] || '',
+    t.id, t.tarea,
     estadoDe(t.estado).label, prioridadDe(t.prioridad).label, tipoDe(t.tipo).label,
     (t.pend || []).map(nombrePersona).join(' | '),
-    t.hoy ? 'si' : '', t.expl,
+    t.hoy ? 'si' : '', explATexto(t.expl),
     (t.subtareas || []).map(s => (s.estado === HECHO ? '[x] ' : '[ ] ') + s.titulo + (s.resp ? ' (' + nombrePersona(s.resp) + ')' : '')).join('  ||  '),
     (t.chat || []).map(m => nombrePersona(m.autor) + ': ' + m.texto).join('  ||  '),
     (t.files || []).map(f => f.n).join(' | '),
@@ -1373,7 +2052,7 @@ async function arrancar(){
   try { datos = await RoadmapSync.cargarEstado(); }
   catch (e) {
     aviso('No se pudo conectar con la base: ' + e.message);
-    datos = { secciones:[], tareas:[], caja:[] };
+    datos = { tareas:[], caja:[], vision:[] };
   }
   normalizarDatos();
   render();
@@ -1383,16 +2062,17 @@ async function arrancar(){
   }
 }
 
-// Si falta correr supabase/schema-v3.sql, el tablero se ve pero no puede guardar los
-// campos nuevos. Mejor decirlo en pantalla que dejar que falle en silencio al guardar.
-// Va en el ícono del encabezado: el detalle se lee al pasar el cursor por encima.
+// Si falta correr alguno de los archivos de `supabase/`, el tablero se ve pero no puede
+// guardar lo que ese archivo trae. Mejor decirlo en pantalla que dejar que falle en
+// silencio al guardar. Va en el ícono del encabezado: el detalle se lee al pasar el
+// cursor por encima.
 async function revisarEsquema(){
   let faltan = [];
   try { faltan = await RoadmapSync.faltantesDeEsquema(); } catch (e) { return; }
   if (!faltan.length) { elAviso.hidden = true; return; }
   elAviso.hidden = false;
   elAvisoTexto.innerHTML = `<b>Falta un paso en la base de datos.</b> Todavía no se puede guardar: ${esc(faltan.join(', '))}. `
-    + `Hay que correr <b>supabase/schema-v3.sql</b> y <b>schema-v4.sql</b> en el SQL Editor de Supabase (lo hace Antonio).`;
+    + `Hay que correr los archivos de <b>supabase/</b> que falten, en orden, en el SQL Editor de Supabase (lo hace Antonio).`;
 }
 
 $('#loginForm').addEventListener('submit', async e => {
@@ -1435,7 +2115,7 @@ async function entrar(){
   RoadmapSync.onCambioSesion(async sesionOk => {
     if (sesionOk) { loginOverlay.hidden = true; await entrar(); }
     else {
-      datos = { secciones:[], tareas:[], caja:[] };
+      datos = { tareas:[], caja:[], vision:[] };
       YO = { id:'', nombre:'', esMiembro:false };
       cerrarModales();
       sinAccesoOverlay.hidden = true;
