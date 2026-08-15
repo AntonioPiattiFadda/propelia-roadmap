@@ -6,7 +6,7 @@
 <title>Tablero de tareas</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -85,6 +85,14 @@
         <select id="tEstado" aria-label="Estado"></select>
         <select id="tPrioridad" aria-label="Prioridad"></select>
         <select id="tTipo" aria-label="Tipo de actividad"></select>
+        <select id="tSprint" aria-label="Sprint"></select>
+        <!-- El Loom va acá arriba y no en una ficha aparte: sin él la tarea no puede salir
+             al tablero, así que es parte de la clasificación, no un dato de más. -->
+        <label class="bar-loom">
+          <span>Loom</span>
+          <input type="url" id="tLoom" placeholder="Pegá el enlace del video" aria-label="Enlace del Loom">
+          <a id="tLoomVer" href="#" target="_blank" rel="noopener" title="Ver el Loom" hidden>↗</a>
+        </label>
         <span class="sep"></span>
         <div class="pend" id="tPend" role="group" aria-label="Pendiente de acción"></div>
       </div>
@@ -126,6 +134,8 @@
     </div>
     <div class="m-f">
       <button class="btn danger" id="tDel">Eliminar tarea</button>
+      <!-- El mismo botón para los dos lados: dice a dónde va la tarea, no dónde está. -->
+      <button class="btn" id="tBacklog"></button>
       <span class="spacer"></span>
       <span class="hint" id="tMeta"></span>
       <button class="btn primary" data-close>Listo</button>
@@ -180,14 +190,13 @@ window.APP_CONFIG = {
   tablas: {
     tareas: 'roadmap_tareas',
     caja: 'roadmap_caja',
-    vision: 'roadmap_vision',
   },
   bucket: 'roadmap-adjuntos',
   canal: 'roadmap-sync',
-  // El documento original de Visión en Notion. La hoja del tablero es la que se usa; esto
-  // es solo un enlace para ir al documento viejo cuando hace falta consultarlo. Si queda
-  // vacío, el botón directamente no se dibuja.
-  visionUrl: 'https://app.notion.com/p/ROAD-MAP-DESARROLLOS-3b624dc715c8803db321cfa7ce315b5e',
+  // Cuántos sprints muestra el backlog aunque estén vacíos. Los que tengan tareas se
+  // dibujan igual, así que esto es solo el piso: los casilleros que están listos para
+  // recibir algo el día que se abre la pestaña por primera vez.
+  sprints: 3,
   // `caja: true` marca a quien pone plata. La planilla de la caja solo muestra a esa
   // gente y el saldo se reparte entre ellos; el resto usa el tablero igual que siempre.
   personas: [

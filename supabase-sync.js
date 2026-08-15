@@ -13,7 +13,6 @@ const TABLAS = Object.assign(
   {
     tareas: 'roadmap_tareas',
     caja: 'roadmap_caja',
-    vision: 'roadmap_vision',
   },
   _CFG.tablas || {}
 );
@@ -29,17 +28,14 @@ const RoadmapSync = {
   BUCKET,
 
   async cargarEstado() {
-    const [tarRes, cajaRes, visRes] = await Promise.all([
+    const [tarRes, cajaRes] = await Promise.all([
       supabaseClient.from(TABLAS.tareas).select('*').order('orden'),
       supabaseClient.from(TABLAS.caja).select('*').order('orden'),
-      supabaseClient.from(TABLAS.vision).select('*').order('orden'),
     ]);
     if (tarRes.error) throw tarRes.error;
     // La caja puede no existir todavía si falta correr schema-v3.sql: seguimos con una
-    // lista vacía en vez de dejar el tablero entero sin cargar. Lo mismo con la hoja de
-    // Visión, que llega recién con schema-v6.sql.
+    // lista vacía en vez de dejar el tablero entero sin cargar.
     const caja = cajaRes.error ? [] : (cajaRes.data || []);
-    const vision = visRes.error ? [] : (visRes.data || []);
 
     return {
       tareas: (tarRes.data || []).map(t => ({
@@ -58,6 +54,13 @@ const RoadmapSync = {
         // como semilla para no perder las asignaciones ya hechas.
         pend: arr(t.pend).length ? arr(t.pend) : (t.resp ? [t.resp] : []),
         creada: t.creada || null,
+        // Backlog (schema-v7.sql). Sin el esquema corrido llegan `undefined`: toda tarea
+        // se lee como del tablero y sin sprint, que es exactamente como estaba antes.
+        backlog: !!t.backlog,
+        sprint: Number(t.sprint) || 0,
+        dep: t.dep || '',
+      loom: t.loom || '',
+        loom: t.loom || '',
       })),
       caja: caja.map(m => ({
         id: m.id, fecha: m.fecha || '', concepto: m.concepto || '', categoria: m.categoria || '',
@@ -67,16 +70,6 @@ const RoadmapSync = {
         // igual, solo que sin repetir nada.
         repite: m.repite || '', origen: m.origen || '',
       })),
-      // Hoja de Visión: una fila por línea. `padre` vacío = línea de primer nivel; el
-      // front trabaja siempre con cadena vacía y recién al guardar lo vuelve a `null`,
-      // así no hay que preguntar por `null` en cada comparación.
-      // `tipo` decide cómo se dibuja el renglón (título, subtítulo, tarea o texto). Las
-      // filas guardadas antes de que existiera vienen sin él: se leen como tarea, que es
-      // lo único que había, y así no hace falta migrar nada.
-      vision: vision.map(i => ({
-        id: i.id, padre: i.padre || '', texto: i.texto || '',
-        hecho: !!i.hecho, tipo: i.tipo || 'check', orden: Number(i.orden) || 0,
-      })),
     };
   },
 
@@ -84,14 +77,14 @@ const RoadmapSync = {
   // en pantalla en vez de fallar en silencio al guardar.
   async faltantesDeEsquema() {
     const faltan = [];
-    const [tareas, caja, vision] = await Promise.all([
+    const [tareas, caja, backlog] = await Promise.all([
       supabaseClient.from(TABLAS.tareas).select('prioridad,tipo,hoy,pend,creada').limit(1),
       supabaseClient.from(TABLAS.caja).select('repite,origen').limit(1),
-      supabaseClient.from(TABLAS.vision).select('id,padre,texto,hecho,tipo').limit(1),
+      supabaseClient.from(TABLAS.tareas).select('backlog,sprint,dep,loom').limit(1),
     ]);
     if (tareas.error) faltan.push('los campos nuevos de las tareas (prioridad, tipo, hoy, responsables)');
     if (caja.error) faltan.push('los gastos fijos de la caja (schema-v4.sql)');
-    if (vision.error) faltan.push('la hoja de Visión (schema-v6.sql)');
+    if (backlog.error) faltan.push('el backlog y los sprints (schema-v7.sql)');
     return faltan;
   },
 
@@ -116,6 +109,10 @@ const RoadmapSync = {
       tipo: t.tipo || 'nuevo',
       hoy: !!t.hoy,
       pend: t.pend || [],
+      backlog: !!t.backlog,
+      // `0` es "sin sprint" para el front, pero en la base eso es un hueco, no un cero.
+      sprint: Number(t.sprint) || null,
+      dep: t.dep || '',
     });
     if (error) throw error;
   },
@@ -139,40 +136,7 @@ const RoadmapSync = {
     if (error) throw error;
   },
 
-  async guardarItemVision(i) {
-    const { error } = await supabaseClient.from(TABLAS.vision).upsert(filaVision(i));
-    if (error) throw error;
-  },
-
-  // Pegar una página entera son decenas de líneas: van en un solo viaje. La clave es que
-  // los padres estén antes que sus hijos en la lista — la de arriba antes que la de
-  // adentro, que es el orden natural de una hoja leída de arriba abajo.
-  async guardarItemsVision(items) {
-    if (!items.length) return;
-    const { error } = await supabaseClient.from(TABLAS.vision).upsert(items.map(filaVision));
-    if (error) throw error;
-  },
-
-  // El borrado es en cascada en la base: se borra la línea y se van con ella todas las
-  // que tenía adentro, sin que el front tenga que ir una por una.
-  async borrarItemVision(id) {
-    const { error } = await supabaseClient.from(TABLAS.vision).delete().eq('id', id);
-    if (error) throw error;
-  },
 };
-
-// El front usa cadena vacía para «sin padre» porque es más cómodo de comparar; la base
-// quiere `null`, que es lo que la clave foránea sabe leer.
-function filaVision(i) {
-  return {
-    id: i.id,
-    padre: i.padre || null,
-    texto: i.texto || '',
-    hecho: !!i.hecho,
-    tipo: i.tipo || 'check',
-    orden: i.orden,
-  };
-}
 
 RoadmapSync.subirArchivo = async function (refId, blob, nombreArchivo) {
   const path = `${refId}/${Date.now()}-${nombreArchivo}`;
@@ -231,7 +195,7 @@ RoadmapSync.onCambioSesion = function (cb) {
 
 RoadmapSync.suscribir = function (onCambio) {
   const canal = supabaseClient.channel(CANAL);
-  [TABLAS.tareas, TABLAS.caja, TABLAS.vision].forEach(tabla => {
+  [TABLAS.tareas, TABLAS.caja].forEach(tabla => {
     canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla }, onCambio);
   });
   canal.subscribe(estadoCanal => {

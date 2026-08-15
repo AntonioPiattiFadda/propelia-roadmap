@@ -1,9 +1,9 @@
 # Pendientes de back-end — tablero unificado
 
-**Al 11/8/2026 quedan dos puntos abiertos, y no pesan lo mismo:**
+**Al 15/8/2026 quedan dos puntos abiertos, y no pesan lo mismo:**
 
-- **El 6 (`schema-v6.sql`, la hoja de Visión) hace falta.** Sin correrlo, la pestaña Visión
-  se abre pero no guarda una línea.
+- **El 7 (`schema-v7.sql`, el Backlog) hace falta.** Sin correrlo, lo que anotes en el
+  backlog aparece también en el tablero.
 - **El 5 (sacar las temáticas de la base) es limpieza.** El tablero anda igual sin correrlo.
 
 Los puntos 1 a 3 están hechos y verificados contra la base; el 4 es opcional y conviene
@@ -151,37 +151,44 @@ la tabla y la columna existen.
 
 ---
 
-## 6. Correr `supabase/schema-v6.sql` — ⏳ PENDIENTE (11/8/2026)
+## 6. `supabase/schema-v6.sql` — ❌ YA NO EXISTE (15/8/2026)
 
-**Este sí hace falta.** Visión dejó de ser un enlace a Notion y volvió a ser una hoja del
-tablero: una lista de tildes donde cada línea puede tener líneas adentro. Sin correr esto,
-la pestaña se abre y se puede escribir, pero **no guarda nada** — el triangulito del
-encabezado lo avisa en pantalla.
+Creaba `roadmap_vision`, la hoja de texto libre de la pestaña Visión. Esa pestaña pasó a ser
+el **Backlog** antes de que el archivo se corriera en ningún lado, así que se borró: dejarlo
+ahí era invitar a crear una tabla que ya no usa nadie.
 
-Crea `roadmap_vision`: una fila por renglón, con `padre` apuntando a otra fila de la misma
-tabla (nulo = primer nivel), más `texto`, `hecho`, `tipo` y `orden`. `tipo` es lo que hace
-que un renglón sea título, subtítulo, tarea o texto suelto. Lleva la misma RLS que el resto
-(`es_miembro('propelia')`) y entra al realtime, así la hoja se edita entre varios y se ve
-al toque.
-
-No borra ni toca nada de lo que ya existe. Se puede correr las veces que haga falta.
-
-Dos detalles del archivo que conviene no cambiar sin pensarlo:
-
-- El borrado es **en cascada**: borrar una línea se lleva todas las que tenía adentro. Es lo
-  que uno espera al tachar un bloque entero, y evita que el front tenga que ir una por una.
-- La clave foránea es `deferrable initially deferred`. Pegar una página entera manda decenas
-  de filas en un solo upsert, y así no importa si la de adentro llega antes que la que la
-  contiene: la comprobación corre al cerrar la transacción, cuando ya están las dos.
-
-Al final hay un `drop table roadmap_notas` **comentado**. Esa tabla es de la Visión vieja y
-nunca se escribió una fila. Descomentalo solo después de confirmarlo en la base:
-
-```sql
-select count(*) from public.roadmap_notas;
-```
+Si alcanzaste a correrlo, la tabla quedó y no molesta: el tablero no la lee ni la escribe.
+El paso 3 de `schema-v7.sql` trae el `drop` comentado para cuando quieras limpiarla.
 
 ---
+
+## 7. Correr `supabase/schema-v7.sql` — ⏳ PENDIENTE (15/8/2026)
+
+**Este hace falta.** Es el Backlog: la pestaña donde se anota lo que todavía no entra al
+tablero, clasificado por sprint. Sin correr esto, la pestaña se ve y se puede escribir,
+pero **cada tarea que anotes ahí aparece también en el tablero** — la marca que las separa
+no se guarda. El triangulito del encabezado lo avisa en pantalla.
+
+Agrega dos columnas a `roadmap_tareas`:
+
+| Columna | Qué es |
+|---|---|
+| `backlog` (bool, default `false`) | Lo único que separa el backlog del tablero. Pasar una tarea al roadmap es apagar esta marca. |
+| `sprint` (smallint, nulo) | A qué sprint pertenece. Nulo es «sin clasificar». Se guarda también en las tareas que ya están en el tablero: es lo que las deja seguir apareciendo en su bloque, apagadas, para poder mirar el sprint entero al cerrarlo. |
+| `dep` (text) | De qué depende, escrito a mano («T04», «diseño cerrado»). Texto libre y no una relación entre tareas: la mitad de las dependencias reales no son otra tarea del tablero, y obligarlas a serlo hace que nadie las anote. |
+| `loom` (text) | El enlace al Loom de la tarea. Texto y no un booleano: saber que «hay video» sin poder abrirlo obliga a ir a buscarlo a mano. El tilde de la lista se prende solo cuando esta columna tiene algo. |
+
+Más un índice por `(backlog, sprint, orden)`, que es exactamente cómo se pide la lista.
+
+No borra ni toca nada de lo que ya existe, y no hace falta tocar RLS ni realtime: son
+columnas de una tabla que ya tiene las dos cosas desde `schema-v3.sql`. Se puede correr las
+veces que haga falta.
+
+**Por qué no hay una tabla de backlog aparte:** una tarea que se manda al tablero tiene que
+llegar con su explicación, su checklist, sus archivos y su conversación. Con dos tablas eso
+es copiar filas y mover adjuntos cada vez, y se hace seguido. Con una marca es un booleano.
+
+**Por qué no hay una tabla de sprints:** un sprint no tiene más datos que su número.
 
 ## Lo que quedó afuera del tablero nuevo
 
@@ -195,9 +202,8 @@ siguen guardados, simplemente no hay pantalla que los muestre.
   nuevo no los contempla. Quedan guardados.
 - **Las temáticas.** Se sacaron el 11/8/2026 (ver el punto 5). En la base siguen hasta que
   se corra `schema-v5.sql`; en pantalla no queda nada de ellas.
-- **El documento de Notion de Visión.** El tablero ya no lo enlaza: la Visión vive adentro
-  (ver el punto 6). El documento sigue existiendo en Notion, nadie lo tocó — para traerlo,
-  se copia la página entera y se pega en la hoja vacía, que arma la rama sola con la
-  sangría que traiga.
+- **La pestaña Visión.** Fue un enlace a Notion y después una hoja de texto libre con
+  renglones anidados. El 15/8/2026 pasó a ser el **Backlog**. El documento de Notion sigue
+  existiendo, nadie lo tocó; el tablero ya no lo enlaza.
 
 Si algo de esto hace falta, se agrega — decilo y lo hago.

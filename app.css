@@ -9,6 +9,10 @@
   --r:12px; --shadow:0 1px 2px rgba(21,22,28,.06), 0 4px 14px rgba(21,22,28,.05);
   --font:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
   --display:'Space Grotesk','Inter',system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  /* Propias del backlog: su papel es un punto más claro que el del tablero (es una hoja de
+     trabajo, no un tablero de fichas) y la cinta de prioridad de cada fila. */
+  --paper-bl:#FBFBFD; --cinta:3px;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
@@ -257,6 +261,8 @@ body.arrastrando .empty-col{display:none}
 .today-btn{height:30px;padding:0 11px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:12.5px;font-weight:700;color:var(--ink-3);display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex:0 0 auto}
 .today-btn:hover{border-color:var(--hoy-line);color:var(--hoy)}
 .today-btn.on{background:var(--hoy-bg);border-color:var(--hoy-line);color:var(--hoy)}
+/* `display:inline-flex` le gana al `[hidden]` del navegador si no se dice esto. */
+.today-btn[hidden]{display:none}
 .m-b{padding:12px 18px 16px;display:grid;gap:9px}
 .field label{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);margin-bottom:5px}
 .field select,.field textarea,.field input[type=text]{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:13px;background:#fff}
@@ -326,6 +332,24 @@ body.arrastrando .empty-col{display:none}
   background:#fff;padding:0 6px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer}
 .barra-campos select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(110,107,160,.14)}
 .barra-campos .sep{flex:1;min-width:6px}
+/* El Loom, en la misma línea de la clasificación: sin él la tarea no puede salir al
+   tablero, así que es parte de cómo está clasificada y no un dato de más abajo. */
+.bar-loom{display:inline-flex;align-items:center;gap:6px;height:29px;padding:0 4px 0 9px;
+  border:1px solid var(--line);border-radius:8px;background:#fff;flex:1 1 190px;min-width:150px}
+.bar-loom:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(110,107,160,.14)}
+.bar-loom > span{font-family:var(--mono);font-size:9px;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink-3);flex:0 0 auto}
+.bar-loom input{flex:1;min-width:0;border:none;background:none;padding:0;font-size:12.5px}
+.bar-loom input:focus{outline:none}
+.bar-loom input.cargado{font-weight:600;color:var(--accent)}
+.bar-loom a{flex:0 0 auto;width:22px;height:22px;display:grid;place-items:center;border-radius:6px;
+  color:var(--accent);text-decoration:none;font-size:12px}
+.bar-loom a:hover{background:var(--rail)}
+.bar-loom a[hidden]{display:none}
+
+/* En la ficha, el botón de mandar al tablero también avisa que falta el Loom. */
+.btn.falta{opacity:.55}
+.btn.falta:hover{border-color:var(--line);color:var(--ink-2)}
 .pend{display:flex;gap:5px;flex-wrap:wrap}
 .pend button{display:inline-flex;align-items:center;gap:6px;height:29px;padding:0 10px 0 4px;border-radius:20px;
   border:1px solid var(--line);background:#fff;font-size:12.5px;font-weight:600;color:var(--ink-2);transition:.12s}
@@ -389,13 +413,13 @@ body.arrastrando .empty-col{display:none}
 .pos{color:var(--ok)}
 .neg{color:var(--crit)}
 
-.caja-tabla-wrap{background:#fff;border:1px solid var(--line);border-radius:var(--r);overflow:auto;box-shadow:var(--shadow)}
-table.caja{width:100%;border-collapse:separate;border-spacing:0;min-width:980px}
-table.caja th{position:sticky;top:0;z-index:2;background:#FAFAFD;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
-table.caja th.num{text-align:right}
-table.caja td{padding:0;border-bottom:1px solid var(--line-soft);vertical-align:middle}
-table.caja tr:last-child td{border-bottom:none}
-table.caja tr:hover td{background:#FCFCFE}
+.planilla-wrap{background:#fff;border:1px solid var(--line);border-radius:var(--r);overflow:auto;box-shadow:var(--shadow)}
+table.planilla{width:100%;border-collapse:separate;border-spacing:0;min-width:980px}
+table.planilla th{position:sticky;top:0;z-index:2;background:#FAFAFD;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+table.planilla th.num{text-align:right}
+table.planilla td{padding:0;border-bottom:1px solid var(--line-soft);vertical-align:middle}
+table.planilla tr:last-child td{border-bottom:none}
+table.planilla tr:hover td{background:#FCFCFE}
 .cinp{width:100%;height:36px;border:1px solid transparent;border-radius:0;background:none;padding:0 10px;font-size:13px}
 .cinp:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:inset 0 0 0 2px rgba(110,107,160,.12)}
 .cinp.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
@@ -419,106 +443,216 @@ tr.generada td:first-child{box-shadow:inset 3px 0 0 -1px #DCDEE8}
 .caja-add:hover{border-color:#C6C5D8;color:var(--ink-2)}
 .caja-tip{font-size:11.5px;color:var(--ink-3);margin:10px 2px 0;line-height:1.6}
 
-/* ---------- Visión: la hoja ----------
-   Una hoja en blanco de ancho completo, como Notion o Word. Renglones y nada más: sin
-   encabezado, sin barra de progreso, sin contadores, sin tarjetas, sin bordes, sin pie de
-   ayuda. Todo lo que se agregue acá le come lugar a lo único que importa, que es la lista.
+/* ---------- Backlog: la rejilla de planificación ----------
+   Once columnas de ancho fijo y una fila por tarea, con el bloque de planificación colgando
+   de la misma fila. Es un `grid` y no una `<table>` a propósito: con tabla, el panel de cada
+   fila tendría que ir en un `<tr>` aparte con `colspan`, y la fila abierta dejaría de ser un
+   solo bloque que se pinta, se arrastra y se marca entero.
 
-   Por eso el fondo es blanco y no el gris del tablero: es una hoja, no un tablero.
+   Renglones de 31px y letra chica: lo que se busca acá es la foto completa del sprint, y
+   cada píxel de alto es una tarea menos en pantalla. */
+.board.bmode{display:block;overflow:auto;background:var(--paper-bl)}
+/* `--bpad` está acá y no escrito a mano en cada regla porque la banda de cada sprint se
+   sale del margen para ocupar todo el ancho: necesita saber cuánto margen tiene que
+   descontar, y en pantalla angosta ese margen cambia. */
+.bwrap{--bpad:24px;max-width:1460px;margin:0 auto;padding:6px var(--bpad) 120px}
 
-   OJO CON LOS NOMBRES: acá va todo con prefijo `hoja-`/`v`. `.doc` NO se puede usar,
-   ya es el chip de adjuntos del detalle de tarea (más arriba en este archivo). Se usó una
-   vez y dejó la hoja entera dibujada como una pastilla de 34px de alto. */
-.board.dmode{background:#fff;padding:22px 0 0}
-/* El padding izquierdo es la canaleta donde viven el ⋮⋮ y el triangulito: van montados
-   ahí con `position:absolute` y valores negativos. Sin este espacio se saldrían de la hoja
-   y el board largaría una barra de scroll horizontal. */
-.hoja{padding:0 26px 0 52px}
+/* marca · agarre · id · tarea · área · prioridad · quién · sprint · tablero · loom · ficha
+   · panel · borrar */
+.bgrid{
+  display:grid;
+  grid-template-columns:20px 16px 54px minmax(180px,1fr) 110px 98px 86px 110px 110px 68px 20px 20px 20px;
+  align-items:center;
+}
+.bgrid > *{padding-right:8px;min-width:0}
 
-/* El único adorno de la hoja: el enlace al documento viejo de Notion. Va arriba a la
-   derecha y queda pegado ahí al bajar —de otro modo, con un backlog largo habría que
-   volver hasta arriba cada vez—. El fondo blanco es el mismo de la hoja, así los renglones
-   le pasan por debajo sin que se lea nada encima. */
-.hoja-top{position:sticky;top:0;z-index:20;display:flex;justify-content:flex-end;
-  background:#fff;padding-bottom:5px;margin:0 -26px 0 -52px;padding-right:26px}
-.hoja-notion{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;
-  border-radius:7px;font-size:11.5px;font-weight:600;color:var(--ink-3);text-decoration:none;transition:.12s}
-.hoja-notion:hover{color:var(--ink);background:var(--rail)}
-.hoja-notion svg{opacity:.55;transition:.12s}
-.hoja-notion:hover svg{opacity:1;transform:translate(1px,-1px)}
+/* El puntito de color de los menús colgantes. */
+.bdot{width:6px;height:6px;border-radius:50%;flex:none}
+.bdot.vacio{background:transparent}
 
-.vrow{position:relative;display:flex;align-items:flex-start;gap:3px;
-  padding-left:calc(var(--d) * 22px)}
+/* ---------- bloque de sprint ----------
+   Es una banda maciza de lado a lado, no un título suelto: sin las filas de rótulos ni la
+   franja de totales, esto es lo único que corta la lista, y un corte tiene que verse como
+   un corte. Se pega arriba al bajar porque es lo único que dice en qué sprint estás parado.
 
-/* Los tres controles de la izquierda viven fuera del renglón, montados sobre el margen:
-   si ocuparan lugar en la fila, el texto de cada nivel arrancaría más adentro que el
-   anterior y la sangría dejaría de leerse. Aparecen solo al pasar por encima. */
-.vtipo{position:absolute;left:-46px;top:1px;width:16px;height:22px;display:grid;place-items:center;
-  font-size:10px;letter-spacing:-2px;color:#C6C9D4;border-radius:4px;opacity:0;transition:.12s}
-.vrow:hover .vtipo,.vrow.menu-abierto .vtipo{opacity:1}
-.vtipo:hover,.vrow.menu-abierto .vtipo{color:var(--ink);background:var(--rail)}
+   Se sale del margen del `.bwrap` con un margen negativo para llegar a los dos bordes; el
+   relleno de la izquierda lo devuelve, así el texto queda alineado con las filas. */
+.bghead{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;
+  margin:26px calc(var(--bpad) * -1) 0;
+  padding:9px var(--bpad) 9px calc(var(--bpad) + var(--cinta) + 7px);
+  background:#ECECF2;border-top:1px solid #DBDCE4;border-bottom:1px solid #DBDCE4}
+.bbloque:first-child .bghead{margin-top:0}
+.bgtog{font-family:var(--display);font-size:13.5px;font-weight:700;letter-spacing:-.01em;
+  color:var(--ink);display:flex;align-items:center;gap:7px}
+.bgtog:hover{color:var(--accent)}
+.bcaret{color:var(--ink-3);font-size:9px;transition:transform .12s ease;display:inline-block}
+.bbloque.plegado .bgtog .bcaret{transform:rotate(-90deg)}
+.bgmeta{font-family:var(--mono);font-size:10px;color:var(--ink-3);white-space:nowrap}
+/* Reparto por persona: una barra y no tres números, porque lo que importa es si está
+   torcido, no cuánto exactamente. */
+.bcarga{display:flex;height:5px;flex:1;max-width:300px;min-width:80px;border-radius:3px;
+  overflow:hidden;background:var(--line-soft)}
+.bcarga span{height:100%;transition:width .25s ease}
+.bgadd{margin-left:auto;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
+.bgadd:hover{color:var(--accent)}
+.bfilas{border-top:1px solid var(--line-soft)}
+.bbloque.plegado .bfilas{display:none}
 
-/* El triangulito solo aparece al pasar por encima, salvo cuando el bloque está cerrado:
-   ahí queda fijo, porque es lo único que avisa que abajo hay algo escondido. */
-.vtwist{position:absolute;left:-26px;top:1px;width:15px;height:22px;display:grid;place-items:center;
-  font-size:9px;color:#B9BCC8;border-radius:4px;opacity:0;transform:rotate(90deg);transition:.12s}
-.vrow:hover .vtwist,.vtwist.cerrado{opacity:1}
-.vtwist.cerrado{transform:none;color:var(--ink-3)}
-.vtwist.vacio{opacity:0!important;pointer-events:none}
-.vtwist:hover{color:var(--ink);background:var(--rail)}
+/* ---------- fila ---------- */
+.brow{position:relative;background:#fff;border-bottom:1px solid var(--line-soft)}
+/* La cinta de color es la prioridad. Va pegada al borde y no adentro: así la columna de
+   colores se lee de arriba abajo de un vistazo, sin buscarla renglón por renglón. */
+.brow::before{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--cinta);background:var(--rc,var(--line))}
+.brmain{min-height:31px;padding-left:calc(var(--cinta) + 7px)}
+.brow:hover{background:#F8F7FE}
+.brow.marcada{background:#F3F1FD}
+.brow.marcada::after{content:"";position:absolute;inset:0;pointer-events:none;
+  border-top:1px solid #DAD6F7;border-bottom:1px solid #DAD6F7}
+.brow.arrastrando{opacity:.35}
+.brow.antes{box-shadow:inset 0 2px 0 -.5px var(--accent)}
+.brow.despues{box-shadow:inset 0 -2px 0 -.5px var(--accent)}
+.brow.abierta{background:#FCFCFE}
 
-.vchk{flex:0 0 auto;width:13px;height:13px;margin-top:4px;position:relative;
-  border:1.5px solid #C6C9D4;border-radius:3.5px;transition:.12s}
-.vchk:hover{border-color:var(--accent)}
-.vrow.ok .vchk{background:var(--ok);border-color:var(--ok)}
-.vrow.ok .vchk::after{content:"";position:absolute;left:3.2px;top:.4px;width:3.2px;height:6.6px;
-  border:solid #fff;border-width:0 1.8px 1.8px 0;transform:rotate(43deg)}
-/* Los renglones sin tilde igual reservan su lugar: si no, títulos y tareas arrancarían en
-   columnas distintas y la hoja quedaría con el borde izquierdo en zigzag. */
-.vbullet{flex:0 0 auto;width:13px;height:13px;margin-top:4px}
+/* Ya mandada al tablero: no se va de la lista, se apaga. Al cerrar un sprint uno quiere ver
+   el sprint entero, no lo que le queda. */
+.brow.salida{background:#F8FBFA}
+.brow.salida::before{background:repeating-linear-gradient(180deg,var(--ok) 0 3px,transparent 3px 6px)}
+.brow.salida .btitle{color:var(--ink-3)}
+.brow.salida .bcode{color:var(--ok)}
 
-/* El texto ocupa todo el ancho que le queda. Al recibir el foco no le pasa nada: sin
-   recuadro, sin fondo, sin sombra — igual que en Notion, donde lo único que aparece es el
-   cursor. Un borde por renglón enfocado convierte la hoja en un formulario. */
-.vtxt{flex:1;min-width:0;border:none;background:none;resize:none;overflow:hidden;
-  font-size:13.5px;line-height:1.55;letter-spacing:-.005em;padding:1px 4px}
-.vtxt:focus{outline:none}
-.vtxt::placeholder{color:#D2D5DE}
-.vrow.ok .vtxt{color:var(--ink-3);text-decoration:line-through;text-decoration-color:#C6C9D4}
+.bcheck{width:13px;height:13px;border:1.5px solid #CBCFDA;border-radius:3px;
+  display:grid;place-items:center;font-size:8px;color:#fff;line-height:1}
+.bcheck:hover{border-color:var(--accent)}
+.brow.marcada .bcheck{background:var(--accent);border-color:var(--accent)}
 
-/* Los cuatro tipos de renglón. La jerarquía se lee por peso y tamaño, no por color: la
-   hoja tiene que verse tranquila aunque mezcle títulos, tareas y texto. */
-.vrow.t-titulo{margin-top:15px}
-.vrow.t-titulo .vtxt{font-family:var(--display);font-size:16px;font-weight:700;letter-spacing:-.02em;line-height:1.35}
-.vrow.t-subtitulo{margin-top:9px}
-.vrow.t-subtitulo .vtxt{font-size:13px;font-weight:700;color:var(--ink-2);letter-spacing:-.01em}
-.vrow.t-texto .vtxt{color:var(--ink-2)}
-.hoja-list>.vrow:first-child{margin-top:0}
+.bhandle{color:#CFD2DC;cursor:grab;font-size:11px;line-height:1;opacity:0;transition:opacity .1s;user-select:none}
+.brow:hover .bhandle{opacity:1}
+.bhandle:active{cursor:grabbing}
 
-/* El menú de tipos: cuelga del ⋮⋮, cuatro opciones y nada más. */
-.vmenu{position:absolute;left:-46px;top:24px;z-index:30;width:152px;padding:4px;
-  background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px rgba(15,16,25,.14)}
-.vmenu[hidden]{display:none}
-.vmenu button{width:100%;display:flex;align-items:center;gap:9px;height:29px;padding:0 8px;
-  border-radius:7px;font-size:12.5px;font-weight:600;color:var(--ink-2);text-align:left}
-.vmenu button:hover{background:var(--rail);color:var(--ink)}
-.vmenu button.on{color:var(--accent)}
-.vmenu button i{flex:0 0 auto;width:17px;font-style:normal;font-size:11px;font-weight:700;
-  color:var(--ink-3);text-align:center}
-.vmenu button.on i{color:var(--accent)}
+/* El código es la puerta de entrada a la ficha, como el número de un ticket. */
+.bcode{font-family:var(--mono);font-size:10px;color:#A5A9B8;text-align:left}
+.bcode:hover{color:var(--accent);text-decoration:underline}
 
-.vdel{flex:0 0 auto;width:20px;height:22px;border-radius:5px;font-size:11px;color:#C6C9D4;opacity:0;transition:.12s}
-.vrow:hover .vdel{opacity:1}
-.vdel:hover{color:var(--crit);background:#F7EDEC}
+.btitle{font-size:13px;font-weight:450;color:var(--ink);padding:7px 8px 7px 0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Al escribir se suelta el recorte: si no, editar una tarea larga sería escribir a ciegas
+   contra el borde derecho. */
+.btitle:focus{white-space:normal;overflow:visible;outline:none;box-shadow:inset 0 -1px 0 var(--accent)}
+.barea{font-size:11.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.barea:focus{outline:none;box-shadow:inset 0 -1px 0 var(--accent)}
+.btitle:empty::before,.barea:empty::before{content:attr(data-ph);color:#C6C9D4}
 
-/* El vacío de abajo es clickeable y ocupa lo que sobra de pantalla: hacer clic ahí abre un
-   renglón, como en Notion. Eso reemplaza a un botón de «agregar», que sería una cosa más
-   dibujada en una hoja que se quiere en blanco. Con la hoja vacía, este mismo espacio es
-   el que dice qué hacer — no hace falta ningún recuadro de bienvenida. */
-.hoja-fin{min-height:55vh;cursor:text}
-.hoja-fin[data-vacia]::before{content:"Escribí acá, o pegá tu página de Notion — la sangría arma los niveles y los # quedan como títulos";
-  display:block;padding:1px 4px;font-size:13.5px;line-height:1.55;color:#D2D5DE}
-.hoja-fin:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.bchip{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9.5px;
+  letter-spacing:.05em;text-transform:uppercase;padding:2px 6px;border-radius:3px;
+  background:var(--chb);color:var(--chc);white-space:nowrap;max-width:100%}
+.bchip:hover{filter:brightness(.95)}
+
+/* Quién hace la actividad: los mismos tres botones del detalle, siempre a la vista. Un
+   menú colgante escondía justo lo que más se toca, y con `pend` admitiendo varias personas
+   había que abrirlo tres veces para asignar a tres. Van con las iniciales y el nombre en el
+   tooltip: los tres completos no entran en un renglón sin comerse la columna del título. */
+.bpend{display:flex;gap:4px}
+/* `.bpend .av.mini` y no `.bpend button`: `.av.mini` fija 19px con dos clases y le ganaría
+   a una clase más un elemento. Redondos como en el detalle, no cuadrados. */
+.bpend .av.mini{width:22px;height:22px;font-size:9.5px}
+.bpend .av.off:hover{box-shadow:inset 0 0 0 1.5px var(--accent);color:var(--accent)}
+
+.bsprintsel{display:inline-flex;align-items:center;gap:5px;max-width:100%;font-size:11.5px;
+  color:var(--ink-2);border:1px solid transparent;border-radius:4px;padding:2px 5px;
+  white-space:nowrap;overflow:hidden}
+.brow:hover .bsprintsel{border-color:var(--line)}
+.bsprintsel:hover{background:#fff;border-color:#CFD2DC}
+.bsprintsel .bcaret{font-size:7px;color:#B0B4C2;margin-left:auto}
+
+/* El botón que manda al tablero. Aparece al pasar por encima salvo cuando ya salió: ahí es
+   el cartel que dice dónde está. */
+.bship{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9px;
+  letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);border-radius:4px;
+  padding:3px 7px;color:var(--ink-3);background:#fff;white-space:nowrap;opacity:0;transition:opacity .1s}
+.brow:hover .bship,.brow.salida .bship{opacity:1}
+.bship:hover{border-color:var(--ok);color:var(--ok)}
+.brow.salida .bship{background:#E8F1EA;border-color:#C6DDCC;color:#3F6B4B}
+
+/* El cartel de Loom. Lleva la palabra escrita y no solo un tilde: sin la fila de rótulos de
+   columna, un cuadradito suelto no dice de qué es. Prendido cuando el campo tiene enlace;
+   apagado, es el hueco que se ve vacío al recorrer la columna, que es para lo que está. */
+.bloom{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:9px;
+  letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:4px;
+  border:1px solid var(--line);background:#fff;color:#B6B9C4;white-space:nowrap;transition:.12s}
+.bloom:hover{border-color:var(--accent);color:var(--accent)}
+.bloom.on{background:#EDECFA;border-color:#D5D2F3;color:var(--accent);font-weight:700}
+
+/* Sin Loom no sale al tablero: el botón lo dice antes de que lo toques. */
+.bship.falta{opacity:.45}
+.bship.falta:hover{border-color:var(--line);color:var(--ink-3);cursor:not-allowed}
+
+.bfull,.bexp,.bdel{color:#C8CBD6;font-size:11px;line-height:1;text-align:center;width:100%}
+.bfull:hover,.bexp:hover,.bdel:hover{color:var(--ink)}
+.bfull,.bdel{opacity:0;transition:opacity .1s}
+.brow:hover .bfull,.brow:hover .bdel{opacity:1}
+.bfull:hover{color:var(--accent)}
+.brow.abierta .bexp{color:var(--accent);transform:rotate(90deg);display:inline-block}
+
+.bnueva{width:100%;text-align:left;padding:7px 0 7px calc(var(--cinta) + 65px);
+  font-size:12px;color:#B0B4C2}
+.bnueva:hover{color:var(--accent)}
+.bsprint{margin-top:18px;padding:7px 12px;border-radius:8px;border:1.5px dashed var(--line);
+  font-size:12.5px;font-weight:600;color:var(--ink-3);background:#fff}
+.bsprint:hover{border-color:#C6C5D8;color:var(--ink-2)}
+
+/* ---------- panel de planificación ---------- */
+.bplan{padding:2px 16px 14px calc(var(--cinta) + 101px);background:inherit}
+.bplan-grid{display:grid;grid-template-columns:1fr 230px;gap:16px}
+.bplan label{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:#A5A9B8;margin-bottom:4px}
+/* Hereda de `.rico`, que es el mismo editor del detalle: mismo campo, mismo formato, mismas
+   imágenes pegadas. Solo se le baja el alto — acá no puede ocupar media pantalla. */
+.bplan-txt{min-height:76px;font-size:12px;border-radius:4px;padding:7px 9px}
+.bcampo{margin-bottom:9px}
+.bplan input,.bplan select{width:100%;font-size:12px;color:var(--ink);background:#fff;
+  border:1px solid var(--line);border-radius:4px;padding:6px 8px}
+.bplan input:focus,.bplan select:focus{outline:none;border-color:var(--accent)}
+.bplan input::placeholder{color:#BFC3CE}
+.bficha{margin-top:3px;width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:4px;
+  background:#fff;font-size:11.5px;font-weight:600;color:var(--ink-2)}
+.bficha:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- menú colgante ----------
+   Va pegado al `<body>` y no a la fila: una fila recorta lo que se sale, y desde el body el
+   mismo clic de afuera lo cierra siempre. */
+.bpop{position:absolute;z-index:70;background:#fff;border:1px solid var(--line);border-radius:7px;
+  box-shadow:0 10px 28px rgba(20,21,28,.13),0 1px 2px rgba(20,21,28,.06);padding:4px;min-width:172px}
+.bpop button{display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border-radius:5px;
+  font-size:12.5px;text-align:left;color:var(--ink-2)}
+.bpop button:hover{background:#F6F5FE;color:var(--ink)}
+.bpop button.on{color:var(--ink);font-weight:600}
+.btick{margin-left:auto;color:var(--accent);font-size:11px}
+
+/* ---------- barra de las marcadas ---------- */
+.bbulk{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(140%);
+  display:flex;align-items:center;gap:13px;background:#16171F;color:#fff;border-radius:9px;
+  padding:9px 14px;box-shadow:0 12px 32px rgba(20,21,28,.26);z-index:50;
+  transition:transform .18s cubic-bezier(.2,.8,.3,1)}
+.bbulk.on{transform:translateX(-50%) translateY(0)}
+.bcount{font-family:var(--mono);font-size:11px}
+.bsep{width:1px;height:18px;background:#33353F}
+.bbulk button{font-size:12.5px;color:#D3D4DC}
+.bbulk button:hover{color:#fff}
+.bbulk .bprimary{background:var(--ok);color:#fff;padding:5px 11px;border-radius:6px;font-size:12px;font-weight:600}
+.bbulk .bprimary:hover{background:#6E9878;color:#fff}
+
+/* En pantallas angostas se cae la columna de Área antes que ninguna: es la única que se
+   puede leer del título, y encogerlas todas deja nueve celdas ilegibles en vez de ocho
+   legibles. `display:none` la saca de la rejilla, así que la plantilla pasa a diez. */
+@media(max-width:1180px){
+  .bgrid{grid-template-columns:20px 16px 52px minmax(150px,1fr) 92px 86px 100px 100px 68px 20px 20px 20px}
+  .b-area{display:none}
+  .bplan-grid{grid-template-columns:1fr}
+  .bplan{padding-left:calc(var(--cinta) + 28px)}
+  /* La banda del sprint lee `--bpad` para saber cuánto margen descontar: se cambia acá y
+     se acomoda sola. */
+  .bwrap{--bpad:12px}
+}
 
 /* ---------- Login / sin acceso ---------- */
 .login-overlay{position:fixed;inset:0;background:rgba(18,19,26,.55);backdrop-filter:blur(3px);display:grid;place-items:center;z-index:100;padding:20px}
@@ -550,14 +684,5 @@ tr.generada td:first-child{box-shadow:inset 3px 0 0 -1px #DCDEE8}
   .bar{padding-left:14px;padding-right:14px;gap:8px}
   .views{width:100%}
   .estado-guardado{min-width:0}
-  /* En un teléfono, 22px por nivel se come la hoja: una rama de cuatro niveles dejaría
-     el texto contra el borde derecho. */
-  .board.dmode{padding:14px 0 0}
-  .hoja{padding:0 12px 0 42px}
-  .vrow{padding-left:calc(var(--d) * 15px)}
-  /* En un teléfono no hay «pasar por encima»: los controles quedan siempre a la vista. */
-  .vtipo{left:-40px;opacity:1}
-  .vtwist{left:-21px;opacity:1}
-  .vmenu{left:-40px}
-  .vdel{opacity:1}
+  .board.cmode{padding:12px}
 }

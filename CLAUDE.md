@@ -46,14 +46,11 @@ Bucket de adjuntos: `roadmap-adjuntos`.
   lee `expl` para otra cosa que no sea pintarlo (buscador, CSV) pasa por `explATexto()`.
 - `roadmap_caja`: planilla de movimientos. Ojo: la columna se llama `cuenta` en la base
   pero el front la expone como `quien` (persona que puso o gastó).
-- `roadmap_vision`: la hoja de Visión. Una fila por renglón (`texto`, `hecho`, `tipo`,
-  `orden`) y la jerarquía en `padre`, que apunta a otra fila de la misma tabla — nulo =
-  primer nivel. `tipo` es `'titulo' | 'subtitulo' | 'check' | 'texto'`, con `'check'` por
-  defecto porque la hoja arrancó siendo solo tareas. El
-  front trabaja con `padre: ''` en vez de `null` porque es más cómodo de comparar, y lo
-  vuelve a `null` recién al guardar. Borrar una línea es **en cascada**: se van con ella
-  todas las que tenía adentro. La clave foránea es `deferrable initially deferred` para que
-  pegar una página entera entre en un solo upsert sin importar el orden de las filas.
+- `roadmap_tareas.backlog` (bool), `.sprint` (smallint, nulo = sin sprint), `.dep` (texto) y
+  `.loom` (texto, el enlace al video) son el Backlog. El front usa `0` para «sin sprint» porque es más cómodo de comparar y lo
+  vuelve a `null` recién al guardar. **No hay tabla de backlog ni tabla de sprints**: mirá la
+  sección del Backlog para el porqué. La columna «Área» de esa vista es `modulo`, un campo
+  del tablero viejo que estaba muerto y se reusó.
 
 `roadmap_secciones` ya no se usa. Eran las **temáticas**: se sacaron del tablero el
 11/8/2026 porque no aportaban nada. El front no la lee ni la escribe, y tampoco toca
@@ -62,79 +59,109 @@ Bucket de adjuntos: `roadmap-adjuntos`.
 fila de secciones a mano desde el panel se lleva puestas sus tareas.
 
 `roadmap_notas` no se usa nunca. La creó `schema-v3.sql` para la Visión vieja (dos hojas de
-texto libre) y quedó **vacía**: para cuando el esquema se corrió, Visión ya era un documento
-de Notion. La hoja de hoy usa `roadmap_vision`, no esta. `schema-v6.sql` trae el `drop`
-comentado por si se quiere limpiar.
+texto libre) y quedó **vacía**. Ninguna pantalla la lee.
 
 ### Vistas
 
-`VISTAS` en `app.js` no son todas iguales: `estado` y `hoy` pintan tarjetas, `caja` es una
-planilla y `vision` es una hoja de texto. Las dos últimas ocupan el board entero y no saben
-nada de tareas — el helper `sinTareas(v)` es el que decide, en un solo lugar, si esconder los
-filtros, si el botón «+ Nueva tarea» tiene que rebotar al tablero y si el contador de la
-pestaña significa algo. **La marca la lleva la vista (`caja:true`, `doc:true`), no el
-render**: nadie compara contra el id `'vision'` suelto por el archivo.
+`VISTAS` en `app.js` no son todas iguales, y las diferencias son dos, no una:
 
-### La hoja de Visión
+- **Quién se come el board entero** (`anchoCompleto`): la caja (clase `cmode`) y el backlog
+  (clase `bmode`), que en vez de columnas son una planilla y una rejilla.
+- **Quién no sabe nada de tareas** (`sinTareas`): solo la caja. El backlog **sí** son
+  tareas, así que tiene filtros, buscador y contador; la caja no.
 
-Fue un enlace a Notion; desde el 11/8/2026 es una vista de verdad: una página con renglones
-de cuatro tipos —título, subtítulo, tarea y texto— donde cualquiera puede tener renglones
-adentro. Una tarea con tareas adentro **es** la checklist con subchecklist; no hay una
-entidad aparte para eso.
+Confundir las dos fue el error de la versión anterior, cuando había un solo helper para
+todo. **La marca la lleva la vista (`caja:true`, `backlog:true`), no el render**: nadie
+compara contra un id suelto por el archivo.
 
-**Es una hoja en blanco de ancho completo, y eso es un requisito, no una casualidad.** No
-lleva encabezado, ni barra de progreso, ni contadores por bloque, ni pie de ayuda, ni caja
-de bienvenida, ni columna centrada: se pidió explícitamente que fuera «como Notion o Word»
-y que no hubiera contenedores. Se construyó con todo eso y hubo que sacarlo. Antes de
-agregar cualquier cosa acá arriba, tener presente que le come lugar a lo único que importa,
-que es la lista. Lo que reemplaza al botón de «agregar» es `.hoja-fin`: el vacío de abajo
-es clickeable y ocupa lo que queda de pantalla, como en Notion.
+### El Backlog
 
-La única excepción a esa regla es `.hoja-notion`, el enlace al documento original de Notion
-(`APP_CONFIG.visionUrl`, en `index.html`): va arriba a la derecha, pegado al bajar, y si la
-dirección viene vacía no se dibuja. Lo pidió Lorenzo después de la limpieza — la hoja del
-tablero es la que se usa, ese documento queda como consulta.
+La pestaña que antes fue Visión. Es la planificación: se anota, se clasifica por sprint, se
+reparte, y cuando llega el momento se manda al tablero.
 
-- **El tipo y la jerarquía son ortogonales.** `tipo` dice cómo se ve el renglón; `padre`, de
-  quién cuelga. Una tarea puede colgar de un título y un título de una tarea. Atarlas
-  obligaría a inventar una regla por cada mezcla, y ninguna sería la que uno quiere el día
-  que la necesita.
-- **`tipo` por defecto es `'check'`, no `'texto'`.** La hoja arrancó siendo solo tareas, así
-  que una fila sin `tipo` es una tarea. Cambiar ese default reinterpreta lo ya guardado.
-- **Solo las tareas cuentan.** El único número que quedó es el de la pestaña, y filtra por
-  `esTarea()`: los títulos y los textos no suman pendientes.
-- **La jerarquía vive en `padre`, no en una lista anidada.** Mover un renglón es cambiarle
-  una cadena y un número, y se guarda esa fila sola — nunca la rama entera.
-- **El plegado no se guarda en la base**, va a `localStorage` (`vision-plegados`). Que
-  alguien cierre un bloque para leer cómodo no tiene por qué cerrárselo a los demás.
-- **Se repinta la hoja entera ante cualquier cambio de estructura** y el foco se devuelve a
-  mano con `renderVision({id, pos})`. El tilde y el texto, en cambio, se pintan
-  quirúrgicamente (`actualizarProgresoVision`): ahí hay un cursor en juego.
+**Son tareas de verdad, no otra entidad.** La misma fila de `roadmap_tareas`, los mismos
+campos y la misma ficha. Lo único que las separa es la columna `backlog`. Mandar una al
+tablero es apagar esa marca — llega con su explicación, su checklist, sus archivos y su
+conversación intactos, porque nunca dejó de ser la misma fila. Con dos tablas, cada pasaje
+sería copiar filas y mover adjuntos; con una marca es un booleano.
 
-**No usar la clase `.doc` para nada de la hoja.** Ya es el chip de adjuntos del detalle de
-tarea. Se usó una vez y dejó la hoja entera dibujada como una pastilla de 34px de alto: la
-regla nueva solo pisaba `max-width` y `margin`, y el `display:inline-flex`, el `height` y el
-borde se filtraron. Todo lo de la hoja va con prefijo `hoja-`/`v`.
+**Lo que ya se mandó no desaparece de acá.** Una tarea con sprint sigue en su bloque,
+apagada y con la cinta rayada. Al cerrar un sprint uno quiere ver el sprint entero, no lo
+que le queda. Eso es `enBacklog(t)`: pendiente, **o** ya salida pero planificada. La que
+nunca tuvo sprint y se manda al tablero sí se va — nunca estuvo planificada.
 
-#### Por qué pegar una página de Notion necesita dos pasadas
+**El filtro vive en un solo lugar**: la primera línea de `visible(t)`. Todo lo que pinta
+tareas pasa por ahí. Lo que hay que excluir a mano es lo que no pasa por `visible()`: el
+contador de «Hoy» y la campana de críticas.
 
-`parsearHoja()` corre dos veces sobre lo pegado, y las dos hacen falta:
+- **`sprint` es un número y el `0` es «Sin planificar»**, último bloque y solo visible si
+  tiene algo. Existe para que anotar a las apuradas no obligue a clasificar en el momento:
+  si clasificar fuera obligatorio, nadie anotaría nada.
+- **Los bloques son siempre `1..N`, sin huecos.** `sprintsVisibles()` toma el piso de
+  `APP_CONFIG.sprints`, lo sube si alguien apretó «+ Sprint» (queda en `localStorage`) y lo
+  sube igual si hay una tarea en un sprint más alto — un sprint con tareas no se esconde.
+- **`modulo` es la columna «Área».** Era un campo muerto del tablero viejo, ya estaba en la
+  base y ya lo guardaba `guardarTarea()`: revivirlo no costó una migración.
+- **`dep` («Depende de») es texto libre a propósito**, no una relación entre tareas. La
+  mitad de las dependencias reales no son otra tarea del tablero, y obligarlas a serlo hace
+  que nadie las anote.
+- **`loom` guarda el enlace, no un booleano.** El cartel de la columna no se prende a mano:
+  se prende solo cuando el campo tiene algo, y con el enlace adentro el mismo cartel abre el
+  video. Un booleano suelto diría «hay video» sin dejarte llegar a él, que es justo lo que
+  se quería evitar. Lleva la palabra «Loom» escrita porque, sin fila de rótulos de columna,
+  un cuadradito suelto no dice de qué es. Se carga desde el panel de la fila o desde la
+  ficha, y el cartel se actualiza en el acto, sin repintar: hay un cursor en el campo.
+- **Sin Loom, la tarea no sale al tablero.** El corte está adentro de `pasarAlRoadmap()` y
+  no en cada botón: hay tres caminos hasta ahí —la fila, la ficha y la barra de marcadas— y
+  olvidarse en uno solo alcanzaría para que la regla no valga. Los botones lo avisan antes
+  de que los toques (clase `falta`), no después. En lote, las que no tienen Loom se quedan
+  **y quedan marcadas**, para poder ir a cargárselo sin volver a buscarlas una por una.
+  Por eso `pasarAlRoadmap()` devuelve `true`/`false`.
+- **Quién hace la actividad son los tres botones del detalle, siempre a la vista**, no un
+  menú colgante: escondía justo lo que más se toca, y como `pend` admite varias personas
+  había que abrirlo tres veces para asignar a tres. Van con las iniciales y el nombre en el
+  tooltip — los tres nombres completos no entran en un renglón sin comerse la columna del
+  título. Se pintan a mano (`alternarPersona` recibe el botón) en vez de repintar la lista:
+  es un botón que cambia de color, y repintar cien filas para eso se siente lento.
+- **A la ficha completa —el mismo modal del tablero, con checklist, conversación y
+  archivos— se entra desde la fila por tres lados**: el código de la izquierda (como el
+  número de un ticket), el `⤢` de la derecha y el botón del panel. Los tres son
+  `[data-ficha]` y llaman a `abrirTarea()`. El panel de la fila es el plan rápido; la ficha
+  es todo lo demás.
+- **Plegado, paneles abiertos y filas marcadas son del navegador de cada uno**, no del
+  tablero. Que alguien pliegue el Sprint 3 para leer cómodo no tiene por qué plegárselo a
+  los demás.
 
-1. Una **pila con la sangría de cada antepasado**, en vez de medir contra una tabla de
-   anchos. Es la única cuenta que sale bien cuando un mismo pegado trae tabulaciones en una
-   rama y espacios en otra, y de paso hace imposible bajar dos niveles de golpe.
-2. `anidarBajoTitulos()`, porque **Notion no sangra lo que va abajo de un título**. Una
-   página con dos títulos y sus tareas se copia con todo al mismo margen: tomando solo la
-   sangría entraría plana, sin un solo nivel. Un encabezado queda abierto y adopta lo que
-   viene después, hasta que aparece otro de rango igual o mayor a su misma sangría. La
-   sangría de verdad no se ignora, se suma a lo que aporta el título.
+**No lleva encabezado ni franja de totales, y es un requisito.** Se construyó con una barra
+de panorama arriba (totales por prioridad y por persona, «desplegar todo») y una fila de
+rótulos de columna pegada, y hubo que sacarlas el 15/8/2026. Antes de agregar algo acá
+arriba, tener presente que le come alto a lo único que importa, que es la lista.
 
-**Los valores guardados no son los que se leen en pantalla.** En `app.js` cada catálogo
-tiene `id` (lo que va a la base) y `label` (lo que se ve). Los estados siguen siendo
-`'Pendiente' | 'En curso' | 'Bloqueado' | 'Hecho'` aunque en pantalla digan Nueva / En
-curso / Bloqueada / Terminada — así las tareas viejas no necesitan migración. Lo mismo con
-las personas: el `id` es `'Loro'`, `'Toni'`, `'Luis'`, que es lo que ya está escrito en las
-tareas. **Cambiar esos `id` deja huérfanas las asignaciones y los mensajes existentes.**
+**El diseño es una rejilla `grid` de once columnas, no una `<table>`.** Con tabla, el panel
+de planificación de cada fila tendría que ir en un `<tr>` aparte con `colspan`, y la fila
+abierta dejaría de ser un solo bloque que se pinta, se arrastra y se marca entero. Las
+clases van todas con prefijo `b`; la vista se marca con `bmode` en el board.
+
+- **La Explicación del panel es la misma que la de la ficha**, no una nota aparte: el mismo
+  campo, el mismo formato con marca `<!--h-->`, las mismas imágenes pegadas. Por eso
+  `pintarExpl` / `leerExpl` / `guardarExpl` / `insertarEnCursor` reciben el elemento — hay
+  dos cajas sobre el mismo dato.
+- **Los manejadores del backlog se cuelgan del board entero, por delegación**, y `render()`
+  los suelta al salir de la vista. Si no, siguen escuchando encima del tablero y de la caja.
+  Ojo con usar `addEventListener` ahí: la lista se repinta entera ante cualquier cambio y se
+  acumularía un listener por repintado (por eso son `board.onclick`, `board.oninput`…).
+- **Un `<select>` dispara `input` y `change`**: se atiende solo el segundo, si no cada
+  elección se guarda y repinta dos veces.
+- **Marcar varias y moverlas juntas es la razón de ser de esta pantalla**: de a una,
+  repartir un sprint entre tres personas son treinta clics. Las acciones en lote corren en
+  silencio y repintan una sola vez al final.
+
+**Historial de la pestaña**, para no volver a caminarlo: fue un enlace a Notion, después una
+hoja de texto libre con renglones anidados (`roadmap_vision`, borrada el 15/8/2026 sin haber
+llegado a correrse), después una lista tipo Notion con los controles escondidos, después una
+`<table>` estilo planilla, y ahora esta rejilla. Las dos últimas se descartaron el mismo día:
+lo que se pide acá es un cuadro con todo a la vista, editable en la celda, y con lugar para
+planificar sin salir de la fila.
 
 ### Adjuntos y buckets
 
@@ -173,17 +200,25 @@ próximo tilde.
 ### Supabase / migraciones
 
 `schema.sql` → `schema-v2.sql` → `schema-v3.sql` → `schema-v4.sql` → `schema-v5.sql` →
-`schema-v6.sql`, en ese orden, todos idempotentes. `schema-v3.sql` unifica los dos tableros
+`schema-v7.sql`, en ese orden, todos idempotentes. `schema-v3.sql` unifica los dos tableros
 y agrega los campos del diseño actual; `schema-v4.sql` agrega `repite` y `origen` a la caja
-(gastos fijos); `schema-v5.sql` borra las temáticas; `schema-v6.sql` crea `roadmap_vision`.
-Las primeras cuatro están corridas en `propelia` (`gvkdyxhxsnpumxlhvhsm`) desde el 8/8/2026;
-**v5 y v6 están pendientes**. Después de correr la v5 no se pueden volver a correr las
-anteriores: dan por hecho que `roadmap_secciones` y `sec_id` existen.
+(gastos fijos); `schema-v5.sql` borra las temáticas; `schema-v7.sql` agrega `backlog`,
+`sprint`, `dep` y `loom` a las tareas. Las primeras cuatro están corridas en `propelia`
+(`gvkdyxhxsnpumxlhvhsm`) desde el 8/8/2026; **v5 y v7 están pendientes**. Después de correr
+la v5 no se pueden volver a correr las anteriores: dan por hecho que `roadmap_secciones` y
+`sec_id` existen.
+
+**No hay `schema-v6.sql`, y el hueco es a propósito.** Existió un día: creaba
+`roadmap_vision` para la hoja de texto libre. Esa pestaña pasó a ser el Backlog antes de que
+el archivo se corriera en ningún lado, así que se borró en vez de dejarlo invitando a crear
+una tabla que ya no usa nadie. La v7 trae el `drop` comentado por si alguien alcanzó a
+correrlo.
 
 La diferencia entre las dos pendientes: sin la v5 el tablero funciona igual (es limpieza),
-sin la v6 la pestaña Visión se abre pero no puede guardar nada. Las dos las avisa en
-pantalla `RoadmapSync.faltantesDeEsquema()`, en el triangulito del encabezado. Lo que queda
-pendiente de base y cuentas está en `PENDIENTES-BACKEND.md` (raíz).
+sin la v7 la pestaña Backlog se ve pero cada tarea que anotes ahí aparece también en el
+tablero — la marca no se guarda. Las dos las avisa en pantalla
+`RoadmapSync.faltantesDeEsquema()`, en el triangulito del encabezado. Lo que queda pendiente
+de base y cuentas está en `PENDIENTES-BACKEND.md` (raíz).
 
 ### Preview local
 

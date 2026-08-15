@@ -41,18 +41,24 @@ const TIPOS = [
 // una, las tareas se apilan por prioridad. Las otras formas de mirar el tablero
 // (prioridad, tipo) quedaron como filtros de la barra, no como vistas.
 //
-// No todas las vistas pintan tarjetas. `caja` es una planilla y `doc` es una hoja de
-// texto —Visión—: las dos ocupan el board entero, esconden los filtros y no saben nada
-// de tareas. La marca la lleva la vista, no el render, así el resto del archivo pregunta
-// `v.doc` en vez de comparar contra el id 'vision' en diez lugares distintos.
+// No todas las vistas pintan tarjetas. `caja` es una planilla y `backlog` es una hoja de
+// renglones: las dos ocupan el board entero en vez de repartirlo en columnas. La marca la
+// lleva la vista, no el render, así el resto del archivo pregunta `v.backlog` en vez de
+// comparar contra el id en diez lugares distintos.
+//
+// Ojo con la diferencia: la caja no sabe nada de tareas, pero el backlog son tareas —solo
+// que del otro lado de la marca `backlog`—. Por eso el backlog sí tiene filtros, buscador
+// y contador, y la caja no.
 const VISTAS = [
-  { id:'hoy',    label:'☀ Hoy',    soloHoy:true },
-  { id:'estado', label:'Estado' },
-  { id:'vision', label:'◦ Visión', doc:true },
-  { id:'caja',   label:'Caja',     caja:true },
+  { id:'hoy',     label:'☀ Hoy',     soloHoy:true },
+  { id:'estado',  label:'Estado' },
+  { id:'backlog', label:'◦ Backlog', backlog:true },
+  { id:'caja',    label:'Caja',      caja:true },
 ];
 // Vistas que no muestran tareas: ni filtros, ni contador, ni «+ Nueva tarea» con sentido.
-const sinTareas = v => !!(v.caja || v.doc);
+const sinTareas = v => !!v.caja;
+// Vistas que se comen el board entero en vez de repartirlo en columnas.
+const anchoCompleto = v => !!(v.caja || v.backlog);
 
 // Personas del tablero. El `id` es lo que se guarda en la base (responsables, autor
 // del chat, quién puso la plata); `email` es lo que ata cada persona a su cuenta.
@@ -76,12 +82,14 @@ const nombrePersona = id => persona(id)?.nombre || id || '—';
 let YO = { id:'', nombre:'', esMiembro:false };
 
 /* ---------- datos y estado de pantalla ---------- */
-let datos = { tareas: [], caja: [], vision: [] };
+let datos = { tareas: [], caja: [] };
 let UI = {
   vista: 'estado',
   layout: 'cols',
   // La columna de Terminadas arranca plegada: es lo que ya no hay que mirar.
   terminadasAbiertas: false,
+  // Cuántos casilleros de sprint mostrar en el backlog. 0 = lo que diga la config.
+  sprints: 0,
   f: { q:'', pend:[], prioridad:'', tipo:'' },
 };
 try {
@@ -89,11 +97,13 @@ try {
   if (guardado.vista && VISTAS.some(v => v.id === guardado.vista)) UI.vista = guardado.vista;
   if (guardado.layout === 'rows' || guardado.layout === 'cols') UI.layout = guardado.layout;
   UI.terminadasAbiertas = !!guardado.terminadasAbiertas;
+  UI.sprints = Number(guardado.sprints) || 0;
 } catch (e) { /* preferencia local, si no se puede leer no importa */ }
 function guardarUI(){
   try {
     localStorage.setItem('tablero-ui', JSON.stringify({
       vista: UI.vista, layout: UI.layout, terminadasAbiertas: UI.terminadasAbiertas,
+      sprints: UI.sprints,
     }));
   } catch (e) { /* modo privado o storage lleno: no es crítico */ }
 }
@@ -191,11 +201,6 @@ function normalizarDatos(){
   datos.tareas.forEach(t => {
     if (PRIORIDADES_VIEJAS[t.prioridad]) t.prioridad = PRIORIDADES_VIEJAS[t.prioridad];
   });
-  // Visión: una línea cuyo padre ya no está se volvería invisible, y con ella toda su
-  // rama. Sube a primer nivel en vez de desaparecer — la base la borra en cascada, así
-  // que esto solo pasa si dos personas borran y escriben al mismo tiempo.
-  const ids = new Set(datos.vision.map(i => i.id));
-  datos.vision.forEach(i => { if (i.padre && !ids.has(i.padre)) i.padre = ''; });
 }
 
 /* ---------- refresco en tiempo real ---------- */
@@ -205,7 +210,10 @@ let refrescoPendiente = false;
 function estaEditando(){
   if ($('#scrimTarea').classList.contains('on')) return true;
   const f = document.activeElement;
-  return !!f && ['INPUT','TEXTAREA','SELECT'].includes(f.tagName) && board.contains(f);
+  if (!f || !board.contains(f)) return false;
+  // `isContentEditable` también: en el backlog el título y el área son divs editables, no
+  // inputs, y repintarlos encima de quien está escribiendo le come lo tipeado.
+  return ['INPUT','TEXTAREA','SELECT'].includes(f.tagName) || f.isContentEditable;
 }
 async function refrescar(payload){
   if (payload?.table) {
@@ -315,7 +323,7 @@ async function adjuntar(t, files){
   pintarArchivos(t); render();
   // La ficha de archivos puede estar plegada: si acaba de entrar algo, se abre sola. Un
   // adjunto que se guarda sin que se vea es un adjunto que nadie sabe que está.
-  if (n) $('#tSecFiles').open = true;
+  if (n && actual() === t) $('#tSecFiles').open = true;
   if (saltados.length) aviso('No pude adjuntar: ' + saltados.join(', ') + '. Subilo a Drive y pegá el enlace.');
   else if (n) aviso((n === 1 ? '1 archivo adjuntado' : n + ' archivos adjuntados') + (ahorro > 512000 ? ' · ' + kb(ahorro) + ' ahorrados al comprimir' : ''));
 }
@@ -346,7 +354,9 @@ function pintarChrome(){
 
   // Campana de críticas: mientras haya algo crítico sin terminar, late en rojo y lleva
   // de un clic al tablero filtrado por esas tareas.
-  const criticas = datos.tareas.filter(t => prioridadDe(t.prioridad).id === CRITICA && t.estado !== HECHO);
+  // Lo guardado en el backlog no cuenta: todavía no está en juego, por más crítico que sea.
+  const criticas = datos.tareas.filter(t =>
+    !t.backlog && prioridadDe(t.prioridad).id === CRITICA && t.estado !== HECHO);
   elCampana.hidden = !criticas.length;
   if (criticas.length) {
     elCampana.querySelector('b').textContent = criticas.length;
@@ -363,17 +373,19 @@ function pintarChrome(){
     render();
   };
 
-  const nHoy = datos.tareas.filter(t => t.hoy).length;
-  const pendVision = datos.vision.filter(i => esTarea(i) && !i.hecho).length;
+  const nHoy = datos.tareas.filter(t => t.hoy && !t.backlog).length;
+  // El contador del Backlog cuenta lo que todavía no salió, no todo lo que se ve ahí: lo ya
+  // mandado sigue en la lista pero ya no es pendiente de nadie.
+  const nBacklog = datos.tareas.filter(t => t.backlog).length;
   elVistas.innerHTML = VISTAS.map(v => {
     const on = UI.vista === v.id;
     // El contador de cada pestaña dice lo que esa pestaña sabe contar: Hoy muestra
-    // siempre lo marcado para hoy, Visión lo que le queda sin tildar, y Estado el
+    // siempre lo marcado para hoy, Backlog todo lo que tiene guardado, y Estado el
     // resultado del filtro —solo cuando está activa, porque fuera de ella el número
     // sería el de un filtro que no se está viendo.
     let badge = '';
     if (v.soloHoy) badge = `<small>${nHoy}</small>`;
-    else if (v.doc) badge = pendVision ? `<small>${pendVision}</small>` : '';
+    else if (v.backlog) badge = nBacklog ? `<small>${nBacklog}</small>` : '';
     else if (on && !v.caja) badge = `<small>${datos.tareas.filter(visible).length}</small>`;
     return `<button class="view-tab${on ? ' on' : ''}" data-vista="${v.id}">${esc(v.label)}${badge}</button>`;
   }).join('');
@@ -411,8 +423,12 @@ function textoBuscable(t){
   ].join(' ').toLowerCase();
 }
 function visible(t){
-  const f = UI.f;
-  if (vistaActual().soloHoy && !t.hoy) return false;
+  const f = UI.f, v = vistaActual();
+  // El tablero muestra lo que ya salió del backlog. El backlog muestra lo que todavía no
+  // salió y, además, lo ya mandado que tenga sprint: al cerrar un sprint uno quiere ver el
+  // sprint entero. Una sola línea acá porque todo lo que pinta tareas pasa por este filtro.
+  if (v.backlog ? !enBacklog(t) : !!t.backlog) return false;
+  if (v.soloHoy && !t.hoy) return false;
   if (f.prioridad && t.prioridad !== f.prioridad) return false;
   if (f.tipo && t.tipo !== f.tipo) return false;
   if (f.pend.length && !f.pend.some(p => (t.pend || []).includes(p))) return false;
@@ -432,15 +448,20 @@ function render(){
   sincronizarFiltros();
   const v = vistaActual();
 
-  // La caja y la hoja de Visión ocupan el board entero y no se filtran: `cmode` les
-  // saca la grilla de columnas y les da un scroll de página normal.
+  // La caja y el backlog ocupan el board entero en vez de repartirlo en columnas. Los
+  // filtros solo se esconden en la caja — en el backlog buscar y filtrar sirve igual que en
+  // el tablero.
   elFiltros.hidden = sinTareas(v);
-  board.classList.toggle('cmode', sinTareas(v));
-  board.classList.toggle('dmode', !!v.doc);
-  board.classList.toggle('rows', !sinTareas(v) && UI.layout === 'rows');
+  board.classList.toggle('cmode', !!v.caja);
+  board.classList.toggle('bmode', !!v.backlog);
+  board.classList.toggle('rows', !anchoCompleto(v) && UI.layout === 'rows');
+  // El backlog engancha sus manejadores sobre el board entero. Al salir de la vista hay que
+  // soltarlos: si no, siguen escuchando encima del tablero y de la caja.
+  if (!v.backlog) { board.onclick = board.oninput = board.onchange = board.onkeydown = null;
+                    board.onpaste = board.ondragover = board.ondrop = null; cerrarMenu(); }
 
   if (v.caja) return renderCaja();
-  if (v.doc) return renderVision();
+  if (v.backlog) return renderBacklog();
   renderTablero(v);
 }
 
@@ -694,15 +715,24 @@ function soltarTarea(t, zona){
   });
 }
 
+// La forma completa de una tarea recién nacida, en un solo lugar: la usan el tablero y el
+// backlog, que crean exactamente la misma fila y solo difieren en dónde la muestran.
+function tareaVacia(id){
+  return {
+    id, modulo:'', tarea:'', expl:'', estado:'Pendiente', img:'', com:'', fecha:'',
+    files:[], chat:[], subtareas:[], prioridad:'semanal', tipo:'nuevo',
+    hoy:false, pend:[], creada:new Date().toISOString(), orden:0,
+    backlog:false, sprint:SIN_SPRINT, dep:'', loom:'',
+  };
+}
+
 function nuevaTarea(v, colId){
   const id = nuevoId('T', datos.tareas.map(x => x.id));
   const ultimo = datos.tareas.length ? datos.tareas[datos.tareas.length - 1].orden : null;
-  const t = {
-    id, modulo:'', tarea:'', expl:'', estado:'Pendiente', img:'', com:'', fecha:'',
-    files:[], chat:[], subtareas:[], prioridad:'semanal', tipo:'nuevo',
-    hoy: !!(v && v.soloHoy), pend:[], creada:new Date().toISOString(),
+  const t = Object.assign(tareaVacia(id), {
+    hoy: !!(v && v.soloHoy),
     orden: RoadmapSync.calcularOrden(ultimo, null),
-  };
+  });
   if (colId && !(v && v.soloHoy)) t.estado = colId;
   datos.tareas.push(t);
   render();
@@ -724,6 +754,13 @@ function abrirTarea(id, foco){
   llenarSelect($('#tEstado'), ESTADOS); $('#tEstado').value = t.estado;
   llenarSelect($('#tPrioridad'), PRIORIDADES); $('#tPrioridad').value = t.prioridad;
   llenarSelect($('#tTipo'), TIPOS); $('#tTipo').value = t.tipo;
+  // El sprint se guarda igual en las tareas que ya están en el tablero: sirve para mirar,
+  // al cerrar un sprint, qué salió de cada uno.
+  llenarSelect($('#tSprint'), opcionesSprint(), 'Sin sprint');
+  $('#tSprint').value = t.sprint ? String(t.sprint) : '';
+  $('#tLoom').value = t.loom || '';
+  pintarLoom(t);
+  pintarBotonBacklog(t);
 
   $('#tTitulo').value = t.tarea;
   pintarExpl(t);
@@ -782,31 +819,35 @@ function imagenesDeExpl(s){
     .map(i => ({ path: i.dataset.path, b: i.dataset.b || '', n: i.alt || '', t: '', size: 0 }));
 }
 
-function pintarExpl(t){
-  $('#tDesc').innerHTML = explAHtml(t.expl);
-  marcarExplVacia();
+// Todo lo de acá abajo recibe el campo: el mismo editor lo usan el detalle de la tarea y
+// el panel de planificación del backlog, que son dos cajas distintas sobre el mismo dato.
+function pintarExpl(t, el){
+  el = el || $('#tDesc');
+  el.innerHTML = explAHtml(t.expl);
+  marcarExplVacia(el);
 }
 // El placeholder lo dibuja el CSS, pero la condición no la puede escribir: un
 // contenteditable donde se escribió y se borró queda con un `<br>` adentro y deja de ser
 // `:empty` para siempre.
-function marcarExplVacia(){
-  const el = $('#tDesc');
+function marcarExplVacia(el){
+  el = el || $('#tDesc');
   el.classList.toggle('vacio', !el.textContent.trim() && !el.querySelector('img'));
 }
 // Lo que todavía está subiendo apunta a un `blob:` que muere al recargar la página: se
 // guarda el texto sin esas imágenes y cada una entra sola cuando su subida termina.
-function leerExpl(){
-  const copia = $('#tDesc').cloneNode(true);
+function leerExpl(el){
+  const copia = (el || $('#tDesc')).cloneNode(true);
   copia.querySelectorAll('img.cargando').forEach(i => i.remove());
   return MARCA_HTML + copia.innerHTML;
 }
-function guardarExpl(){
-  const t = actual(); if (!t) return;
-  campoTareaDebounced(t, 'expl', leerExpl());
+function guardarExpl(t, el){
+  t = t || actual(); if (!t) return;
+  campoTareaDebounced(t, 'expl', leerExpl(el));
 }
 
-function insertarEnCursor(nodo){
-  const el = $('#tDesc'), sel = document.getSelection();
+function insertarEnCursor(nodo, el){
+  el = el || $('#tDesc');
+  const sel = document.getSelection();
   let r = sel && sel.rangeCount && el.contains(sel.anchorNode) ? sel.getRangeAt(0) : null;
   // Sin cursor adentro del campo (pegado con el foco recién puesto, por ejemplo) va al
   // final, que es donde uno esperaría que caiga.
@@ -819,7 +860,7 @@ function insertarEnCursor(nodo){
 
 // La imagen se ve al instante con el archivo local y recién después se cambia por la que
 // quedó en el bucket: esperar la subida mirando un hueco sería peor que el adjunto de antes.
-async function pegarImagenesEnExpl(t, files){
+async function pegarImagenesEnExpl(t, files, el){
   // Primero entran todas las miniaturas, en orden y de una sola vez: si cada una esperara
   // su subida, la segunda imagen de un pegado aparecería recién cuando termina la primera.
   const pendientes = files.map(f => {
@@ -827,10 +868,10 @@ async function pegarImagenesEnExpl(t, files){
     img.className = 'cargando';
     img.alt = f.name || 'imagen pegada';
     img.src = URL.createObjectURL(f);
-    insertarEnCursor(img);
+    insertarEnCursor(img, el);
     return { f, img };
   });
-  marcarExplVacia();
+  marcarExplVacia(el);
 
   for (const { f, img } of pendientes) {
     onEstadoGlobal('cargando');
@@ -842,13 +883,13 @@ async function pegarImagenesEnExpl(t, files){
         f.name || ('captura-' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.webp'));
     } catch (e) {
       URL.revokeObjectURL(img.src);
-      img.remove(); marcarExplVacia(); onEstadoGlobal('ok');
+      img.remove(); marcarExplVacia(el); onEstadoGlobal('ok');
       aviso('No pude pegar la imagen: ' + (e.message || 'error al subir'));
       continue;
     }
     // Si el detalle se cerró o se cambió de tarea mientras subía, el `<img>` ya no está en
     // pantalla: no hay dónde guardarla, así que se borra en vez de dejarla huérfana.
-    if (!img.isConnected || actual() !== t) {
+    if (!img.isConnected) {
       URL.revokeObjectURL(img.src);
       RoadmapSync.borrarArchivo(archivo).catch(() => {});
       onEstadoGlobal('ok');
@@ -864,7 +905,7 @@ async function pegarImagenesEnExpl(t, files){
     URL.revokeObjectURL(provisoria);
     // Cierra el 'cargando' de la subida; el guardado del texto abre y cierra el suyo.
     onEstadoGlobal('ok');
-    guardarExpl();
+    guardarExpl(t, el);
   }
 }
 
@@ -872,6 +913,30 @@ function pintarHoy(t){
   const b = $('#tHoy');
   b.classList.toggle('on', !!t.hoy);
   b.textContent = t.hoy ? '☀ Hoy' : '☀ Realizar hoy';
+  // Guardada en el backlog todavía no se trabaja: marcarla para hoy no querría decir nada.
+  b.hidden = !!t.backlog;
+}
+
+// Un solo botón para los dos sentidos, y dice a dónde va la tarea, no dónde está.
+function pintarBotonBacklog(t){
+  const b = $('#tBacklog');
+  const falta = t.backlog && !tieneLoom(t);
+  b.textContent = t.backlog ? '→ Pasar al tablero' : '← Guardar en el backlog';
+  // Se avisa antes de tocarlo, no después: un botón que rebota sin decir por qué es peor
+  // que uno que ya avisa qué le falta.
+  b.classList.toggle('falta', !!falta);
+  b.title = falta ? 'Primero cargá el Loom, es obligatorio para mandarla al tablero'
+    : t.backlog ? 'Sale del backlog y aparece en el tablero con todo lo que tenga adentro'
+    : 'Sale del tablero y queda guardada en el backlog, sin perder nada';
+}
+
+// El enlace de al lado del campo: se ve solo cuando hay algo que abrir.
+function pintarLoom(t){
+  const url = (t.loom || '').trim();
+  const ver = $('#tLoomVer'), abrible = /^https?:\/\//i.test(url);
+  ver.hidden = !abrible;
+  if (abrible) ver.href = url;
+  $('#tLoom').classList.toggle('cargado', !!url);
 }
 
 function pintarPend(t){
@@ -950,6 +1015,9 @@ function guardarLoEscrito(){
 }
 
 function pintarArchivos(t){
+  // Se puede adjuntar desde el panel del backlog, con el detalle cerrado o mostrando otra
+  // tarea: pintar ahí los archivos de esta sería mostrar los de quien no es.
+  if (actual() !== t) return;
   const cont = $('#tFiles');
   $('#tFilesCount').textContent = (t.files || []).length || '';
   cont.innerHTML = (t.files || []).map((f, i) => {
@@ -1082,20 +1150,20 @@ $('#tDesc').addEventListener('input', () => { marcarExplVacia(); guardarExpl(); 
    cursor; cualquier otro archivo no se puede dibujar en un renglón, así que sigue yendo a
    los adjuntos de abajo. Lo demás entra como texto plano —a propósito: es lo que mantiene
    fuera el HTML de otras páginas, con sus estilos, sus scripts y su ruido. */
-function repartirPegado(t, dt){
+function repartirPegado(t, dt, el){
   const files = [...(dt?.files || [])].filter(f => f.size);
   const imgs  = files.filter(f => /^image\//.test(f.type));
   const otros = files.filter(f => !/^image\//.test(f.type));
   if (otros.length) adjuntar(t, otros);
-  if (imgs.length) { pegarImagenesEnExpl(t, imgs); return; }
+  if (imgs.length) { pegarImagenesEnExpl(t, imgs, el); return; }
   if (files.length) return;
   const txt = dt?.getData('text/plain') || '';
   // `insertText` porque es lo único que deja el pegado en la pila de deshacer del navegador.
   // Está deprecado y algún día no va a estar: si devuelve false, se inserta a mano.
   if (txt && !document.execCommand?.('insertText', false, txt)) {
-    insertarEnCursor(document.createTextNode(txt));
+    insertarEnCursor(document.createTextNode(txt), el);
   }
-  marcarExplVacia(); guardarExpl();
+  marcarExplVacia(el); guardarExpl(t, el);
 }
 $('#tDesc').addEventListener('paste', e => {
   const t = actual(); if (!t) return;
@@ -1118,11 +1186,25 @@ $('#tDesc').addEventListener('drop', e => {
     persistirTarea(t, { revertir: () => { t[campo] = antes; render(); if (actual() === t) abrirTarea(t.id); } });
   });
 });
+$('#tSprint').addEventListener('change', e => {
+  const t = actual(); if (!t) return;
+  cambiarSprint(t, Number(e.target.value) || SIN_SPRINT);
+});
+$('#tLoom').addEventListener('input', e => {
+  const t = actual(); if (!t) return;
+  campoTareaDebounced(t, 'loom', e.target.value);
+  pintarLoom(t); pintarBotonBacklog(t);
+});
 $('#tHoy').onclick = () => {
   const t = actual(); if (!t) return;
   const antes = t.hoy;
   t.hoy = !t.hoy; pintarHoy(t); render();
   persistirTarea(t, { revertir: () => { t.hoy = antes; pintarHoy(t); render(); } });
+};
+$('#tBacklog').onclick = () => {
+  const t = actual(); if (!t) return;
+  t.backlog ? pasarAlRoadmap(t) : mandarAlBacklog(t);
+  pintarBotonBacklog(t); pintarHoy(t);
 };
 $('#tMsg').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); guardarLoEscrito(); }
@@ -1219,8 +1301,8 @@ function renderCaja(){
       </div>
       ${cuentas.map(tarjetaPersona).join('')}
     </div>
-    <div class="caja-tabla-wrap">
-      <table class="caja">
+    <div class="planilla-wrap">
+      <table class="planilla">
         <thead><tr>
           <th style="width:130px">Fecha</th>
           <th>Concepto</th>
@@ -1427,556 +1509,620 @@ function actualizarTotalesCaja(){
 }
 
 /* ============================================================
-   Visión · la hoja
+   Backlog · la planificación
    ------------------------------------------------------------
-   Una página del estilo de Notion: renglones apretados, letra chica y todo el documento
-   a la vista de una. Cada renglón es de un tipo —título, subtítulo, tarea o texto— y
-   cualquiera puede tener renglones adentro. Una tarea con tareas adentro es una checklist
-   con subchecklist; no hace falta nada más para armarla.
+   Son tareas de verdad: la misma fila de `roadmap_tareas`, los mismos campos y la misma
+   ficha que las del tablero. Lo único que las separa es la columna `backlog`. Mandar una
+   al tablero es apagar esa marca y nada más — llega con su explicación, su checklist, sus
+   archivos y su conversación, porque nunca dejó de ser la misma fila. Con dos tablas, cada
+   pasaje sería copiar filas y mover adjuntos; con una marca es un booleano.
 
-   Cuatro decisiones que explican casi todo el código de acá abajo:
+   **Lo que ya se mandó no desaparece de acá.** Una tarea con sprint sigue apareciendo en su
+   bloque, apagada y con la cinta rayada: al cerrar un sprint uno quiere ver el sprint
+   entero, no el resto. Eso es `enBacklog()`: pendiente, o ya salida pero planificada. La
+   que nunca tuvo sprint y se manda al tablero sí se va — nunca estuvo planificada.
 
-   1. **El tipo y la jerarquía son cosas distintas.** El tipo dice cómo se ve el renglón
-      (`tipo`); la jerarquía, de quién cuelga (`padre`). Son ortogonales a propósito: una
-      tarea puede colgar de un título, y un título puede colgar de una tarea. Atarlas
-      —"lo que cuelga de un título es siempre una tarea"— obligaría a inventar reglas para
-      cada mezcla y ninguna sería la que uno quiere el día que la necesita.
-   2. La jerarquía vive en `padre`, no en una lista anidada. Mover una línea es cambiarle
-      una cadena y un número, y se guarda esa fila sola — no la rama entera.
-   3. El plegado NO se guarda en la base. Que alguien cierre un bloque para leer cómodo
-      no tiene por qué cerrárselo a los demás: eso es del navegador de cada uno.
-   4. Se repinta la hoja completa ante cualquier cambio de estructura, y se devuelve el
-      foco a mano con `foco`. Es más simple de sostener que ir moviendo nodos del DOM, y
-      la hoja es chica. El tilde y el texto, en cambio, se pintan quirúrgicamente: ahí
-      hay un cursor en juego.
+   El sprint es un número y el `0` es «Sin planificar», el último bloque. Existe para que
+   anotar a las apuradas no obligue a clasificar en el momento: si clasificar fuera
+   obligatorio, nadie anotaría nada.
 
-   Las clases CSS de acá van todas con prefijo `hoja-`/`v`. **No usar `.doc`**: esa clase
-   ya es el chip de adjuntos del detalle de tarea, y pisarla deja la hoja entera dibujada
-   como una pastilla de 34px.
+   Sobre el diseño: la rejilla es un `grid` de once columnas y no una `<table>`. Con tabla,
+   el panel de planificación de cada fila tendría que vivir en un `<tr>` aparte con
+   `colspan`, y la fila abierta dejaría de ser un solo bloque que se puede pintar, arrastrar
+   y seleccionar entero. Las clases van todas con prefijo `b`.
    ============================================================ */
+const SIN_SPRINT = 0;
+const sprintDe = t => Number(t.sprint) || SIN_SPRINT;
+const nombreSprint = n => (n ? 'Sprint ' + n : 'Sin planificar');
+const enBacklog = t => !!t.backlog || sprintDe(t) > 0;
 
-/* Los tipos de renglón. `id` es lo que se guarda en la base; `atajo` es lo que se escribe
-   al principio de la línea para convertirla, como en Markdown. El orden importa: se prueba
-   de arriba abajo, así '## ' gana antes de que '# ' se lo lleve. */
-const TIPOS_HOJA = [
-  { id:'titulo',    label:'Título',    glifo:'H₁', atajo:/^#\s/,          nuevo:'texto' },
-  { id:'subtitulo', label:'Subtítulo', glifo:'H₂', atajo:/^##\s/,         nuevo:'texto' },
-  { id:'check',     label:'Tarea',     glifo:'☐',  atajo:/^(\[[ xX]?\]|[-*])\s/, nuevo:'check' },
-  { id:'texto',     label:'Texto',     glifo:'¶',  atajo:/^\|\s/,         nuevo:'texto' },
-];
-// Las filas guardadas antes de que existieran los tipos no tienen `tipo`: son tareas, que
-// es lo único que había. Por eso el valor por defecto es 'check' y no 'texto'.
-const tipoHoja = i => TIPOS_HOJA.find(t => t.id === (i.tipo || 'check')) || TIPOS_HOJA[2];
-const esTarea  = i => (i.tipo || 'check') === 'check';
+/* Los bloques que se dibujan aunque estén vacíos: siempre del 1 al N, sin huecos. El piso
+   lo pone la config; sube si alguien agregó sprints con el botón, y sube igual si hay una
+   tarea guardada en un sprint más alto — un sprint con tareas no se puede esconder. */
+function sprintsVisibles(){
+  const conTareas = datos.tareas.filter(enBacklog).map(sprintDe);
+  const piso = Math.max(1, Number(CFG.sprints) || 3, UI.sprints || 0, ...conTareas);
+  return Array.from({ length: piso }, (_, i) => i + 1);
+}
+const tareasDeSprint = n => datos.tareas
+  .filter(t => enBacklog(t) && sprintDe(t) === n)
+  .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+// Para el selector de la ficha, que sí es un `<select>` común.
+const opcionesSprint = () => sprintsVisibles().map(n => ({ id: String(n), label: nombreSprint(n) }));
 
-/* Qué bloques quedaron cerrados. Es preferencia de lectura, no dato del tablero. */
-let plegados = new Set();
-try { plegados = new Set(JSON.parse(localStorage.getItem('vision-plegados') || '[]')); }
-catch (e) { /* si no se puede leer, la hoja abre entera y listo */ }
+/* Tres cosas que son del navegador de cada uno y no del tablero: qué bloques dejó cerrados,
+   qué paneles dejó abiertos y qué filas tiene marcadas. Que alguien pliegue el Sprint 3 para
+   leer cómodo no tiene por qué plegárselo a los demás. */
+let sprintsPlegados = new Set();
+try { sprintsPlegados = new Set(JSON.parse(localStorage.getItem('backlog-plegados') || '[]')); }
+catch (e) { /* si no se puede leer, abre todo y listo */ }
 function guardarPlegados(){
-  try { localStorage.setItem('vision-plegados', JSON.stringify([...plegados])); }
+  try { localStorage.setItem('backlog-plegados', JSON.stringify([...sprintsPlegados])); }
   catch (e) { /* modo privado o storage lleno: no es crítico */ }
 }
-
-const itemVision = id => datos.vision.find(i => i.id === id) || null;
-const hijosVision = padre => datos.vision
-  .filter(i => (i.padre || '') === (padre || ''))
-  .sort((a, b) => (a.orden || 0) - (b.orden || 0));
-
-function descendientesVision(id, acc = []){
-  hijosVision(id).forEach(h => { acc.push(h); descendientesVision(h.id, acc); });
-  return acc;
-}
-
-/* La hoja aplanada en el orden en que se lee, con el nivel de cada línea. Los bloques
-   cerrados no aportan sus hijos: no están en pantalla y no hay que dibujarlos.
-   `vistos` es un cinturón de seguridad contra una rama que apunte a sí misma: no debería
-   poder pasar desde el tablero, pero un ciclo acá sería un cuelgue del navegador. */
-function hojaVision(){
-  const filas = [], vistos = new Set();
-  const bajar = (padre, nivel) => {
-    hijosVision(padre).forEach(i => {
-      if (vistos.has(i.id)) return;
-      vistos.add(i.id);
-      const hijos = hijosVision(i.id).length;
-      filas.push({ i, nivel, hijos });
-      if (hijos && !plegados.has(i.id)) bajar(i.id, nivel + 1);
-    });
-  };
-  bajar('', 0);
-  return filas;
-}
-
-async function persistirItemVision(i, opts = {}){
-  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarItemVision(i),
-    { onEstado: onEstadoGlobal, ...opts });
-  if (ok) marcarEcoPropio(RoadmapSync.TABLAS.vision, i.id);
-  return ok;
-}
+const planAbierto = new Set();
+const marcadas = new Set();
 
 /* ---------- pintado ---------- */
 
-/* La hoja no tiene encabezado, ni barra de progreso, ni pie de ayuda, ni recuadro para
-   empezar. Es una hoja en blanco de ancho completo: renglones y nada más. Todo lo que se
-   agregue acá arriba le come lugar a lo único que importa, que es la lista.
+function renderBacklog(){
+  const mostradas = datos.tareas.filter(visible);
+  const grupos = [...sprintsVisibles(), SIN_SPRINT];
+  const siguiente = sprintsVisibles().length + 1;
 
-   Abajo de todo hay una zona de clic alta: es el «hacer clic en el vacío para seguir
-   escribiendo» de Notion, y hace innecesario un botón de «agregar». Cuando la hoja está
-   vacía, esa misma zona es la que invita a escribir o pegar. */
-function renderVision(foco){
-  const filas = hojaVision();
-  const vacia = !datos.vision.length;
+  // Sin franja de totales ni cabecera de columnas: la lista es lo único que importa acá, y
+  // cada cosa que se agregue arriba le come alto. Lo que cada columna es se entiende de lo
+  // que tiene adentro.
+  board.innerHTML = `<div class="bwrap">
+    <div class="bbloques"></div>
+    <button class="bsprint" type="button" data-sprint-nuevo>+ ${esc(nombreSprint(siguiente))}</button>
+  </div>
+  ${barraMarcadasHTML()}`;
 
-  board.innerHTML = `<div class="hoja">
-    ${CFG.visionUrl ? `<div class="hoja-top"><a class="hoja-notion" href="${escA(CFG.visionUrl)}"
-      target="_blank" rel="noopener noreferrer" title="Se abre en otra pestaña">Ver en Notion<svg width="10" height="10"
-      viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"
-      stroke-linejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a></div>` : ''}
-    <div class="hoja-list">${filas.map(filaVisionHTML).join('')}</div>
-    <div class="hoja-fin"${vacia ? ' data-vacia="1"' : ''} role="button" tabindex="0"
-      aria-label="Escribir un renglón nuevo"></div>
-  </div>`;
-
-  filas.forEach(f => engancharFila(board.querySelector(`.vrow[data-id="${CSS.escape(f.i.id)}"]`), f.i));
-
-  const fin = board.querySelector('.hoja-fin');
-  fin.onclick = () => nuevaLineaVision(null);
-  fin.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); nuevaLineaVision(null); } };
-
-  if (foco) {
-    const ta = board.querySelector(`.vrow[data-id="${CSS.escape(foco.id)}"] .vtxt`);
-    if (ta) { ta.focus(); const p = foco.pos == null ? ta.value.length : Math.min(foco.pos, ta.value.length); ta.setSelectionRange(p, p); }
-  }
-}
-
-/* Un renglón. Lo único que cambia entre tipos es si lleva tilde y con qué letra se pinta
-   —el resto de los controles son los mismos—, así que el tipo viaja como clase y el CSS
-   hace la diferencia. El menú de tipos se dibuja siempre, pero está oculto hasta que se
-   abre: son cuatro botones por fila, no vale la pena construirlos a mano en cada clic. */
-const filaVisionHTML = f => {
-  const t = tipoHoja(f.i), cerrado = plegados.has(f.i.id);
-  const tildable = esTarea(f.i);
-  return `<div class="vrow t-${t.id}${f.i.hecho && tildable ? ' ok' : ''}" data-id="${escA(f.i.id)}" style="--d:${f.nivel}">
-    <button class="vtipo" type="button" tabindex="-1" title="Cambiar el tipo de renglón"
-      aria-label="Cambiar el tipo de renglón" aria-haspopup="menu" aria-expanded="false">⋮⋮</button>
-    <button class="vtwist${f.hijos ? '' : ' vacio'}${cerrado ? ' cerrado' : ''}" type="button" tabindex="-1"
-      aria-label="${f.hijos ? (cerrado ? 'Desplegar' : 'Plegar') : ''}" aria-expanded="${f.hijos ? String(!cerrado) : 'false'}">▸</button>
-    ${tildable
-      ? `<button class="vchk" type="button" role="checkbox" tabindex="-1" aria-checked="${!!f.i.hecho}" aria-label="Marcar como hecha"></button>`
-      : `<span class="vbullet" aria-hidden="true"></span>`}
-    <textarea class="vtxt" rows="1" spellcheck="false" aria-label="${esc(t.label)}"
-      placeholder="${esc(t.id === 'check' ? 'Tarea…' : t.label + '…')}">${esc(f.i.texto)}</textarea>
-    <button class="vdel" type="button" tabindex="-1" title="Borrar renglón" aria-label="Borrar renglón">✕</button>
-    <div class="vmenu" role="menu" hidden>${TIPOS_HOJA.map(x =>
-      `<button type="button" role="menuitem" data-tipo="${x.id}"${x.id === t.id ? ' class="on"' : ''}
-        ><i>${esc(x.glifo)}</i>${esc(x.label)}</button>`).join('')}</div>
-  </div>`;
-};
-
-function engancharFila(row, i){
-  if (!row) return;
-  const ta = row.querySelector('.vtxt');
-  autoGrow(ta);
-
-  row.querySelector('.vtwist').onclick = () => {
-    if (!hijosVision(i.id).length) return;
-    plegados.has(i.id) ? plegados.delete(i.id) : plegados.add(i.id);
-    guardarPlegados();
-    renderVision();
-  };
-  row.querySelector('.vchk')?.addEventListener('click', () => tildarVision(i));
-  row.querySelector('.vdel').onclick = () => borrarLineaVision(i);
-
-  const btnTipo = row.querySelector('.vtipo'), menu = row.querySelector('.vmenu');
-  btnTipo.onclick = e => { e.stopPropagation(); abrirMenuTipo(row, menu, btnTipo); };
-  menu.querySelectorAll('[data-tipo]').forEach(b => {
-    b.onclick = e => { e.stopPropagation(); cerrarMenuTipo(); cambiarTipo(i, b.dataset.tipo); };
+  const cont = board.querySelector('.bbloques');
+  grupos.forEach(n => {
+    const lista = mostradas.filter(t => sprintDe(t) === n).sort((a, b) => (a.orden || 0) - (b.orden || 0));
+    // «Sin planificar» solo aparece si tiene algo: es el cajón de lo que cayó sin
+    // clasificar, no un casillero que haya que llenar.
+    if (n === SIN_SPRINT && !lista.length) return;
+    cont.appendChild(bloqueSprint(n, lista));
   });
 
-  ta.addEventListener('input', () => {
-    // Un atajo de Markdown se aplica al escribirlo y se lo come: lo que queda es el
-    // renglón ya convertido, sin el '#' ni el '[]' colgando adelante.
-    const atajo = TIPOS_HOJA.find(t => t.atajo.test(ta.value));
-    if (atajo && atajo.id !== (i.tipo || 'check')) {
-      const resto = ta.value.replace(atajo.atajo, '');
-      ta.value = resto;
-      i.texto = resto;
-      // El cursor va al final de lo que quedó, no al principio: escribiendo a mano el
-      // resto está vacío y da igual, pero si el renglón entró pegado de una («# Norte»)
-      // el cursor tiene que quedar donde uno seguiría escribiendo.
-      cambiarTipo(i, atajo.id, resto.length);
+  board.querySelector('[data-sprint-nuevo]').onclick = () => {
+    UI.sprints = siguiente; guardarUI(); render();
+  };
+  engancharBacklog();
+}
+
+function bloqueSprint(n, lista){
+  const sec = document.createElement('section');
+  sec.className = 'bbloque' + (sprintsPlegados.has(String(n)) ? ' plegado' : '');
+  sec.dataset.g = n;
+
+  const pend = lista.filter(t => t.backlog);
+  const reparto = PERSONAS.map(p => ({ p, n: pend.filter(x => (x.pend || []).includes(p.id)).length }))
+    .filter(x => x.n > 0);
+  const total = reparto.reduce((s, x) => s + x.n, 0) || 1;
+
+  sec.innerHTML = `<div class="bghead">
+      <button class="bgtog" type="button" data-plegar="${n}"><span class="bcaret">▾</span>${esc(nombreSprint(n))}</button>
+      <span class="bgmeta">${pend.length} por hacer${lista.length - pend.length ? ` · ${lista.length - pend.length} en el tablero` : ''}</span>
+      <div class="bcarga" title="Reparto por persona">${
+        reparto.map(x => `<span style="width:${x.n / total * 100}%;background:${x.p.color}" title="${escA(x.p.nombre)}: ${x.n}"></span>`).join('')}</div>
+      <button class="bgadd" type="button" data-agregar="${n}">+ Tarea</button>
+    </div>
+    <div class="bfilas" data-filas="${n}">
+      ${lista.map(filaBacklogHTML).join('')}
+      <button class="bnueva" type="button" data-agregar="${n}">+ Añadir tarea</button>
+    </div>`;
+  return sec;
+}
+
+function filaBacklogHTML(t){
+  const p = prioridadDe(t.prioridad);
+  const abierta = planAbierto.has(t.id);
+  // El ⋯ se marca cuando la ficha tiene algo que la rejilla no muestra. Sin eso no habría
+  // forma de saber, mirando la lista, cuáles están pensadas y cuáles son un título suelto.
+  const conFicha = explATexto(t.expl).trim() || (t.subtareas || []).length
+    || (t.chat || []).length || (t.files || []).length;
+
+  return `<div class="brow${abierta ? ' abierta' : ''}${t.backlog ? '' : ' salida'}${marcadas.has(t.id) ? ' marcada' : ''}"
+      data-id="${escA(t.id)}" style="--rc:${p.color}">
+    <div class="brmain bgrid">
+      <div><button class="bcheck" type="button" data-marcar aria-pressed="${marcadas.has(t.id)}" aria-label="Marcar la tarea">${marcadas.has(t.id) ? '✓' : ''}</button></div>
+      <div class="bhandle" draggable="true" title="Arrastrar para reordenar">⠿</div>
+      <div><button class="bcode" type="button" data-ficha title="Abrir la ficha completa">${esc(t.id)}</button></div>
+      <div class="btitle" contenteditable="true" spellcheck="false" data-f="tarea"
+        data-ph="Sin título">${esc(t.tarea)}</div>
+      <div class="b-area barea" contenteditable="true" spellcheck="false" data-f="modulo"
+        data-ph="—">${esc(t.modulo || '')}</div>
+      <div><button class="bchip" type="button" data-pop="prioridad"
+        style="--chb:${tint(p.color, .12)};--chc:${p.color}">${esc(p.label)}</button></div>
+      <div class="bpend">${PERSONAS.map(p => {
+        const on = (t.pend || []).includes(p.id);
+        return `<button type="button" class="av mini${on ? '' : ' off'}" data-p="${escA(p.id)}"
+          style="${on ? `background:${p.color}` : ''}" aria-pressed="${on}"
+          title="${escA(p.nombre)}">${esc(p.ini)}</button>`;
+      }).join('')}</div>
+      <div><button class="bsprintsel" type="button" data-pop="sprint">${esc(nombreSprint(sprintDe(t)))}<span class="bcaret">▾</span></button></div>
+      <div><button class="bship${t.backlog && !tieneLoom(t) ? ' falta' : ''}" type="button" data-ir
+        ${t.backlog && !tieneLoom(t) ? 'title="Primero cargá el Loom"' : ''}>${t.backlog ? '→ Al tablero' : '✓ En el tablero'}</button></div>
+      <div><button class="bloom${tieneLoom(t) ? ' on' : ''}" type="button" data-loom
+        title="${tieneLoom(t) ? escA('Ver el Loom: ' + t.loom) : 'Sin Loom — hace falta para mandarla al tablero'}"
+        aria-pressed="${tieneLoom(t)}">${tieneLoom(t) ? '✓' : '○'} Loom</button></div>
+      <div><button class="bfull" type="button" data-ficha title="Abrir la ficha completa" aria-label="Abrir la ficha completa">⤢</button></div>
+      <div><button class="bexp" type="button" data-plan title="Espacio de planificación">›</button></div>
+      <div><button class="bdel" type="button" data-borrar title="Eliminar">✕</button></div>
+    </div>
+    ${abierta ? panelPlanHTML(t) : ''}
+  </div>`;
+}
+
+/* El panel de cada fila. La Explicación es la misma que la de la ficha —el mismo campo, el
+   mismo formato, las mismas imágenes pegadas—; no es una nota aparte que después haya que
+   ir a buscar a otro lado. */
+function panelPlanHTML(t){
+  const opciones = (items, val) => items.map(i =>
+    `<option value="${escA(i.id)}"${i.id === val ? ' selected' : ''}>${esc(i.label)}</option>`).join('');
+  return `<div class="bplan">
+    <div class="bplan-grid">
+      <div>
+        <label>Plan · pasos · decisiones</label>
+        <div class="rico bplan-txt" contenteditable="true" role="textbox" aria-multiline="true"
+          data-plan-expl data-ph="Cómo se ataca: pasos, criterio de terminado, dudas abiertas…"></div>
+      </div>
+      <div>
+        <div class="bcampo"><label>Loom</label>
+          <input data-f="loom" value="${escA(t.loom || '')}" placeholder="Pegá el enlace del video"></div>
+        <div class="bcampo"><label>Depende de</label>
+          <input data-f="dep" value="${escA(t.dep || '')}" placeholder="T04, diseño cerrado…"></div>
+        <div class="bcampo"><label>Estado</label>
+          <select data-f="estado">${opciones(ESTADOS, t.estado)}</select></div>
+        <div class="bcampo"><label>Tipo de actividad</label>
+          <select data-f="tipo">${opciones(TIPOS, tipoDe(t.tipo).id)}</select></div>
+        <button class="bficha" type="button" data-ficha>Abrir la ficha completa</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function barraMarcadasHTML(){
+  return `<div class="bbulk${marcadas.size ? ' on' : ''}">
+    <span class="bcount">${marcadas.size} ${marcadas.size === 1 ? 'marcada' : 'marcadas'}</span>
+    <span class="bsep"></span>
+    <button type="button" data-lote="sprint">Mover a sprint ▾</button>
+    <button type="button" data-lote="prioridad">Prioridad ▾</button>
+    <button type="button" data-lote="pend">Asignar a ▾</button>
+    <span class="bsep"></span>
+    <button class="bprimary" type="button" data-lote="ir">Mandar al tablero</button>
+    <button type="button" data-lote="limpiar">Quitar marcas</button>
+  </div>`;
+}
+
+/* ---------- enganches ----------
+   Todo por delegación sobre el board: la lista se repinta entera ante cualquier cambio de
+   estructura, y colgar cien manejadores en cada repintado para tirarlos al siguiente no
+   tiene sentido. */
+function engancharBacklog(){
+  board.onclick = e => {
+    const enc = s => e.target.closest(s);
+
+    const plegar = enc('[data-plegar]');
+    if (plegar) {
+      const g = plegar.dataset.plegar;
+      sprintsPlegados.has(g) ? sprintsPlegados.delete(g) : sprintsPlegados.add(g);
+      guardarPlegados();
+      return renderBacklog();
+    }
+    const agregar = enc('[data-agregar]');
+    if (agregar) return nuevaEnBacklog(Number(agregar.dataset.agregar), null);
+
+    const lote = enc('[data-lote]');
+    if (lote) return accionEnLote(lote.dataset.lote, lote);
+
+    const fila = enc('.brow');
+    if (!fila) return;
+    const t = tarea(fila.dataset.id); if (!t) return;
+
+    if (enc('[data-marcar]')) {
+      marcadas.has(t.id) ? marcadas.delete(t.id) : marcadas.add(t.id);
+      return renderBacklog();
+    }
+    if (enc('[data-ir]'))     return t.backlog ? pasarAlRoadmap(t) : mandarAlBacklog(t);
+    if (enc('[data-borrar]')) return borrarDeBacklog(t);
+    // La ficha es exactamente la misma que la del tablero: el mismo modal, los mismos
+    // campos. Se entra por el código de la izquierda, por el ⤢ o desde el panel.
+    if (enc('[data-ficha]'))  return abrirTarea(t.id);
+    if (enc('[data-loom]'))   return verLoom(t);
+    const quien = enc('.bpend [data-p]');
+    if (quien) return alternarPersona(t, quien.dataset.p, quien);
+    if (enc('[data-plan]')) {
+      planAbierto.has(t.id) ? planAbierto.delete(t.id) : planAbierto.add(t.id);
+      renderBacklog();
+      const campo = board.querySelector(`.brow[data-id="${CSS.escape(t.id)}"] [data-plan-expl]`);
+      if (campo) campo.focus();
       return;
     }
-    autoGrow(ta);
-    editarLineaVision(i, ta.value);
-  });
-  ta.addEventListener('keydown', e => teclasVision(e, i, ta));
-  ta.addEventListener('paste', e => pegarEnVision(e, i, ta));
-}
-
-/* ---------- menú de tipos ---------- */
-
-// Uno solo abierto a la vez, y se cierra con un clic en cualquier lado o con Escape. Se
-// guarda el nodo abierto en vez de recorrer el DOM buscando el que quedó suelto.
-let menuTipoAbierto = null;
-function abrirMenuTipo(row, menu, btn){
-  const yaEstaba = menuTipoAbierto?.menu === menu;
-  cerrarMenuTipo();
-  if (yaEstaba) return;
-  menu.hidden = false;
-  btn.setAttribute('aria-expanded', 'true');
-  row.classList.add('menu-abierto');
-  menuTipoAbierto = { row, menu, btn };
-}
-function cerrarMenuTipo(){
-  if (!menuTipoAbierto) return;
-  const { row, menu, btn } = menuTipoAbierto;
-  menu.hidden = true;
-  btn.setAttribute('aria-expanded', 'false');
-  row.classList.remove('menu-abierto');
-  menuTipoAbierto = null;
-}
-document.addEventListener('click', cerrarMenuTipo);
-
-/* Cambiar el tipo de un renglón. Lo único que se pierde en el camino es el tilde de una
-   tarea que deja de serlo: un título «hecho» no significa nada, y si volviera a tarea más
-   tarde reaparecería tildado sin que nadie lo haya tildado. */
-function cambiarTipo(i, tipo, pos){
-  const antes = { tipo: i.tipo, hecho: i.hecho, texto: i.texto };
-  i.tipo = tipo;
-  if (tipo !== 'check') i.hecho = false;
-  renderVision({ id: i.id, pos: pos == null ? null : pos });
-  persistirItemVision(i, { revertir: () => { Object.assign(i, antes); renderVision(); } });
-}
-
-/* Lo único que se recalcula al tildar es el número de la pestaña, que vive afuera de la
-   hoja. Adentro no hay ni un contador: tildar mueve el tilde y nada más, sin repintar y
-   sin sacarle el cursor a nadie. */
-const actualizarProgresoVision = () => pintarChrome();
-
-/* ---------- cambios ---------- */
-
-function tildarVision(i){
-  // Un título o un texto no se tildan: no tienen tilde que tocar.
-  if (!esTarea(i)) return;
-  i.hecho = !i.hecho;
-  const row = board.querySelector(`.vrow[data-id="${CSS.escape(i.id)}"]`);
-  if (row) {
-    row.classList.toggle('ok', i.hecho);
-    row.querySelector('.vchk').setAttribute('aria-checked', String(i.hecho));
-  }
-  actualizarProgresoVision();
-  persistirItemVision(i, { revertir: () => { i.hecho = !i.hecho; renderVision(); } });
-}
-
-function editarLineaVision(i, texto){
-  const clave = 'vision:' + i.id;
-  if (!snaps.has(clave)) snaps.set(clave, JSON.stringify(i));
-  i.texto = texto;
-  guardarDebounced(clave, () => {
-    persistirItemVision(i, {
-      revertir: () => {
-        try { Object.assign(i, JSON.parse(snaps.get(clave))); } catch (e) {}
-        if (!estaEditando()) renderVision();
-      },
-    }).then(() => { if (!pendientesGuardado.has(clave)) snaps.delete(clave); });
-  });
-}
-
-/* Dónde cae una línea nueva: si la de arriba tiene cosas adentro y está abierta, entra
-   como su primera hija. Es lo que se ve en pantalla —el renglón de abajo es el primer
-   hijo—, así que meterla como hermana la mandaría varios renglones más abajo. */
-function nuevaLineaVision(desde){
-  let padre = '', antes = null, despues = null, tipo = 'check';
-
-  if (desde && hijosVision(desde.id).length && !plegados.has(desde.id)) {
-    padre = desde.id;
-    const dentro = hijosVision(desde.id);
-    despues = dentro[0].orden;
-    // Entra arriba de todo dentro del bloque: hereda el tipo del que hoy es primero, que
-    // es al lado de quién va a quedar. Abrir un renglón encima de una lista de tareas y
-    // que salga texto suelto sería justo lo que no se quiere.
-    tipo = dentro[0].tipo || 'check';
-  } else {
-    padre = desde ? (desde.padre || '') : '';
-    const hermanos = hijosVision(padre);
-    const idx = desde ? hermanos.findIndex(h => h.id === desde.id) : hermanos.length - 1;
-    antes = hermanos[idx] ? hermanos[idx].orden : null;
-    despues = hermanos[idx + 1] ? hermanos[idx + 1].orden : null;
-    // Enter sobre una tarea da otra tarea —así se escribe una lista de corrido—; sobre un
-    // título da texto, porque nadie escribe dos títulos seguidos.
-    if (desde) tipo = tipoHoja(desde).nuevo;
-  }
-
-  const i = {
-    id: nuevoId('V', datos.vision.map(x => x.id)),
-    padre, texto:'', hecho:false, tipo,
-    orden: RoadmapSync.calcularOrden(antes, despues),
+    const pop = enc('[data-pop]');
+    if (pop) return abrirMenu(pop, pop.dataset.pop, t);
   };
-  datos.vision.push(i);
-  renderVision({ id: i.id, pos: 0 });
-  persistirItemVision(i, {
-    revertir: () => { datos.vision = datos.vision.filter(x => x.id !== i.id); renderVision(); },
+
+  // Texto editable de la rejilla y campos del panel: el mismo camino que cualquier otro
+  // campo de una tarea, con su guardado diferido y su revert.
+  board.oninput = e => {
+    // Un `<select>` dispara `input` y `change`: se atiende solo el segundo, si no cada
+    // elección se guardaría y repintaría dos veces.
+    if (e.target.tagName === 'SELECT' && e.type === 'input') return;
+    const campo = e.target.dataset.f;
+    const fila = e.target.closest('.brow'); if (!fila) return;
+    const t = tarea(fila.dataset.id); if (!t) return;
+    if (e.target.hasAttribute('data-plan-expl')) {
+      marcarExplVacia(e.target); guardarExpl(t, e.target);
+      return;
+    }
+    if (!campo) return;
+    const valor = e.target.isContentEditable ? e.target.textContent : e.target.value;
+    campoTareaDebounced(t, campo, valor);
+    // El tilde de Loom se prende en el acto, sin repintar: hay un cursor en el campo y
+    // repintar la lista entera lo tiraría a la primera letra.
+    if (campo === 'loom') {
+      const tilde = fila.querySelector('.bloom');
+      tilde.classList.toggle('on', !!valor.trim());
+      tilde.textContent = valor.trim() ? '✓' : '';
+    }
+    // El estado y el tipo cambian cómo se ve la tarea en el tablero, no acá.
+    if (campo === 'estado' || campo === 'tipo') render();
+  };
+  // `onchange` y no `addEventListener`: esto se vuelve a enganchar en cada repintado, y un
+  // listener acumulado por repintado dispararía el guardado veinte veces seguidas.
+  board.onchange = e => { if (e.target.tagName === 'SELECT') board.oninput(e); };
+
+  // Lo pegado en el título o en el área entra siempre como texto plano: son campos de una
+  // línea, y el HTML de otra página ahí adentro no tiene ningún sentido. La Explicación del
+  // panel tiene su propio manejador —con imágenes— y frena este.
+  board.onpaste = e => {
+    const el = e.target;
+    if (!el.isContentEditable || !el.dataset.f) return;
+    e.preventDefault();
+    const txt = (e.clipboardData?.getData('text/plain') || '').replace(/\s*\n\s*/g, ' ');
+    if (txt && !document.execCommand?.('insertText', false, txt)) {
+      insertarEnCursor(document.createTextNode(txt), el);
+    }
+    board.oninput({ target: el, type: 'input' });
+  };
+
+  board.onkeydown = e => {
+    // Enter en el título cierra la edición y abre una fila nueva en el mismo bloque:
+    // escribir una lista de corrido es el 90% de lo que se hace en esta pantalla.
+    if (e.key === 'Enter' && e.target.dataset.f === 'tarea') {
+      e.preventDefault();
+      const fila = e.target.closest('.brow');
+      const t = fila && tarea(fila.dataset.id);
+      if (t) nuevaEnBacklog(sprintDe(t), t);
+      return;
+    }
+    if (e.key === 'Enter' && e.target.dataset.f === 'modulo') { e.preventDefault(); e.target.blur(); }
+    if (e.key === 'Escape' && marcadas.size) { marcadas.clear(); renderBacklog(); }
+  };
+
+  // El editor de la Explicación del panel: se llena por JS y no por HTML porque lo guardado
+  // puede ser HTML nuestro, y `innerHTML` en la plantilla lo escaparía.
+  board.querySelectorAll('[data-plan-expl]').forEach(el => {
+    const t = tarea(el.closest('.brow').dataset.id);
+    if (t) pintarExpl(t, el);
+    el.addEventListener('paste', ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      const tt = tarea(el.closest('.brow').dataset.id);
+      if (tt) repartirPegado(tt, ev.clipboardData, el);
+    });
+  });
+
+  engancharArrastreBacklog();
+}
+
+/* ---------- menús ----------
+   Uno solo para los tres selectores. Se cuelga del `<body>` y no de la fila porque una fila
+   tiene `overflow` y lo recortaría, y porque así se cierra siempre con el mismo clic. */
+function cerrarMenu(){ $$('.bpop').forEach(p => p.remove()); }
+document.addEventListener('click', e => { if (!e.target.closest('.bpop,[data-pop],[data-lote]')) cerrarMenu(); });
+
+function abrirMenu(anclaje, tipo, t){
+  const abierto = $('.bpop');
+  cerrarMenu();
+  if (abierto && abierto.dataset.de === (t ? t.id : 'lote') + tipo) return;
+
+  const pop = document.createElement('div');
+  pop.className = 'bpop';
+  pop.dataset.de = (t ? t.id : 'lote') + tipo;
+  const marcado = v =>
+    tipo === 'prioridad' ? t && prioridadDe(t.prioridad).id === v
+    : tipo === 'pend'    ? t && (t.pend || []).includes(v)
+    : tipo === 'sprint'  ? t && String(sprintDe(t)) === v
+    : false;
+
+  const items =
+    tipo === 'prioridad' ? PRIORIDADES.map(p => ({ v:p.id, label:p.label, color:p.color }))
+    : tipo === 'pend'    ? PERSONAS.map(p => ({ v:p.id, label:p.nombre, color:p.color }))
+    : [...sprintsVisibles().map(n => ({ v:String(n), label:nombreSprint(n) })),
+       { v:'0', label:nombreSprint(SIN_SPRINT) }];
+
+  pop.innerHTML = items.map(i =>
+    `<button type="button" data-v="${escA(i.v)}"${marcado(i.v) ? ' class="on"' : ''}>
+      ${i.color ? `<i class="bdot" style="background:${i.color}"></i>` : '<i class="bdot vacio"></i>'}${esc(i.label)}
+      <span class="btick">${marcado(i.v) ? '✓' : ''}</span>
+    </button>`).join('');
+  document.body.appendChild(pop);
+
+  const r = anclaje.getBoundingClientRect();
+  const arriba = r.bottom + 6 + pop.offsetHeight > window.innerHeight;
+  pop.style.top = (window.scrollY + (arriba ? r.top - pop.offsetHeight - 6 : r.bottom + 6)) + 'px';
+  pop.style.left = Math.max(8, Math.min(
+    window.scrollX + r.left,
+    window.scrollX + window.innerWidth - pop.offsetWidth - 12)) + 'px';
+
+  pop.onclick = ev => {
+    const b = ev.target.closest('button'); if (!b) return;
+    const v = b.dataset.v;
+    // Con `t` en nulo el menú es el de la barra de marcadas, no el de una fila. Los
+    // responsables solo llegan por ahí: en la fila son tres botones, no un menú.
+    if (!t) { aplicarEnLote(tipo, v); cerrarMenu(); return; }
+    if (tipo === 'prioridad') campoTarea(t, 'prioridad', v);
+    if (tipo === 'sprint') cambiarSprint(t, Number(v) || SIN_SPRINT);
+    cerrarMenu();
+  };
+}
+
+/* ---------- cambios de una fila ---------- */
+
+// Un campo simple, con revert: es lo mismo que hace el detalle, sin el debounce (acá se
+// elige de una lista, no se tipea).
+function campoTarea(t, campo, valor, silencio){
+  const antes = t[campo];
+  if (antes === valor) return;
+  t[campo] = valor;
+  if (!silencio) render();
+  persistirTarea(t, { revertir: () => { t[campo] = antes; render(); } });
+}
+
+/* El tilde de Loom no se prende a mano: se prende solo cuando el campo tiene un enlace.
+   Un booleano suelto diría «hay video» sin dejarte abrirlo, que es justo lo que se quiere
+   evitar. Si todavía no hay nada, el clic lleva al campo donde se carga. */
+const tieneLoom = t => !!(t.loom || '').trim();
+
+function verLoom(t){
+  const url = (t.loom || '').trim();
+  if (/^https?:\/\//i.test(url)) { window.open(url, '_blank', 'noopener'); return; }
+  // Desde la ficha abierta el campo es el del modal; desde la lista, el del panel de la
+  // fila. Se manda al que esté en pantalla, no al que no se ve.
+  if (actual() === t) { $('#tLoom').focus(); $('#tLoom').select(); return; }
+  if (!vistaActual().backlog) return;
+  planAbierto.add(t.id);
+  renderBacklog();
+  const campo = board.querySelector(`.brow[data-id="${CSS.escape(t.id)}"] [data-f="loom"]`);
+  if (campo) { campo.focus(); campo.select(); }
+}
+
+/* Los tres botones de la fila son los mismos del detalle: siempre a la vista, un clic los
+   prende y los apaga. Se pintan a mano en vez de repintar la lista entera — es un botón que
+   cambia de color, y repintar cien filas para eso hace que el clic se sienta lento. */
+function alternarPersona(t, id, boton){
+  const antes = [...(t.pend || [])];
+  t.pend = t.pend || [];
+  const i = t.pend.indexOf(id);
+  i > -1 ? t.pend.splice(i, 1) : t.pend.push(id);
+  const on = i < 0;
+  if (boton) {
+    boton.classList.toggle('off', !on);
+    boton.style.background = on ? colorPersona(id) : '';
+    boton.setAttribute('aria-pressed', String(on));
+  }
+  // Con un filtro de personas puesto, cambiar el responsable puede sacar la fila de la
+  // lista: ahí sí hay que repintar, si no queda a la vista una fila que ya no cumple.
+  if (UI.f.pend.length) render();
+  persistirTarea(t, { revertir: () => { t.pend = antes; render(); } });
+}
+
+function nuevaEnBacklog(sprint, despuesDe){
+  const id = nuevoId('T', datos.tareas.map(x => x.id));
+  const hermanas = tareasDeSprint(sprint);
+  const i = despuesDe ? hermanas.findIndex(x => x.id === despuesDe.id) : hermanas.length - 1;
+  const t = Object.assign(tareaVacia(id), {
+    backlog: true,
+    sprint,
+    orden: RoadmapSync.calcularOrden(
+      i >= 0 && hermanas[i] ? hermanas[i].orden : null,
+      hermanas[i + 1] ? hermanas[i + 1].orden : null),
+  });
+  datos.tareas.push(t);
+  sprintsPlegados.delete(String(sprint)); guardarPlegados();
+  render();
+  const campo = board.querySelector(`.brow[data-id="${CSS.escape(id)}"] [data-f="tarea"]`);
+  if (campo) campo.focus();
+  persistirTarea(t, {
+    revertir: () => { datos.tareas = datos.tareas.filter(x => x.id !== id); render(); },
   });
 }
 
-// Meter una línea adentro de la de arriba. Sin hermana arriba no hay de quién colgarla:
-// no se puede indentar la primera línea de un bloque, igual que en Notion.
-function indentarVision(i, pos){
-  const hermanos = hijosVision(i.padre || '');
-  const idx = hermanos.findIndex(h => h.id === i.id);
-  if (idx <= 0) return;
-  const nuevoPadre = hermanos[idx - 1];
-  const sub = hijosVision(nuevoPadre.id);
-  const antes = { padre: i.padre, orden: i.orden };
-  i.padre = nuevoPadre.id;
-  i.orden = RoadmapSync.calcularOrden(sub.length ? sub[sub.length - 1].orden : null, null);
-  // Si el bloque que la recibe estaba cerrado, la línea desaparecería al escribirla.
-  if (plegados.delete(nuevoPadre.id)) guardarPlegados();
-  moverLinea(i, antes, pos);
+function cambiarSprint(t, n, silencio){
+  const antes = { sprint: t.sprint, orden: t.orden };
+  if (antes.sprint === n) return;
+  t.sprint = n;
+  // Al cambiar de bloque se va al final del nuevo: el orden que traía era el de otra lista.
+  const ultima = tareasDeSprint(n).filter(x => x.id !== t.id).pop();
+  t.orden = RoadmapSync.calcularOrden(ultima ? ultima.orden : null, null);
+  if (!silencio) render();
+  persistirTarea(t, { revertir: () => { Object.assign(t, antes); render(); } });
 }
 
-// Sacarla del bloque: queda como hermana de su padre, justo debajo de él.
-function desindentarVision(i, pos){
-  const padre = itemVision(i.padre);
-  if (!padre) return;
-  const tios = hijosVision(padre.padre || '');
-  const idx = tios.findIndex(h => h.id === padre.id);
-  const antes = { padre: i.padre, orden: i.orden };
-  i.padre = padre.padre || '';
-  i.orden = RoadmapSync.calcularOrden(padre.orden, tios[idx + 1] ? tios[idx + 1].orden : null);
-  moverLinea(i, antes, pos);
+/* Los dos sentidos del mismo viaje. No se copia ni se mueve nada: la tarea es la misma fila
+   de siempre y lo único que cambia es de qué lado de la marca queda. */
+function pasarAlRoadmap(t, silencio){
+  if (!t.backlog) return false;
+  // El Loom es la condición para salir: mandarla al tablero es decir «esto está hecho», y
+  // sin el video nadie lo puede verificar. Se corta acá y no en cada botón porque hay tres
+  // caminos hasta este punto —la fila, la ficha y la barra de marcadas— y olvidarse en uno
+  // solo alcanzaría para que la regla no valga.
+  if (!tieneLoom(t)) {
+    if (!silencio) { aviso('Falta el Loom: cargalo antes de mandarla al tablero'); verLoom(t); }
+    return false;
+  }
+  const antes = { backlog: t.backlog, orden: t.orden };
+  // Entra al final del tablero: el orden que traía era el de su sprint y acá no dice nada.
+  const ultimo = datos.tareas.reduce((m, x) => (!x.backlog && (m == null || (x.orden || 0) > m) ? (x.orden || 0) : m), null);
+  t.orden = RoadmapSync.calcularOrden(ultimo, null);
+  t.backlog = false;
+  if (!silencio) { render(); aviso(`«${t.tarea || 'sin título'}» pasó al tablero, en ${estadoDe(t.estado).label}`); }
+  persistirTarea(t, { revertir: () => { Object.assign(t, antes); render(); } });
+  return true;
 }
 
-// Subir o bajar entre hermanas. Lo que tenga adentro viaja con ella: cuelga de su `padre`
-// y no de su posición, así que no hay nada más que tocar.
-function moverVision(i, delta, pos){
-  const hermanos = hijosVision(i.padre || '');
-  const idx = hermanos.findIndex(h => h.id === i.id);
-  const j = idx + delta;
-  if (idx < 0 || j < 0 || j >= hermanos.length) return;
-  const antes = { padre: i.padre, orden: i.orden };
-  const cruza = hermanos[j];
-  const siguiente = hermanos[j + delta];
-  i.orden = delta > 0
-    ? RoadmapSync.calcularOrden(cruza.orden, siguiente ? siguiente.orden : null)
-    : RoadmapSync.calcularOrden(siguiente ? siguiente.orden : null, cruza.orden);
-  moverLinea(i, antes, pos);
+function mandarAlBacklog(t, silencio){
+  if (t.backlog) return;
+  const antes = { backlog: t.backlog, hoy: t.hoy };
+  t.backlog = true;
+  // Marcada para hoy no tiene sentido guardada en el backlog: sale del sol también.
+  t.hoy = false;
+  if (!silencio) { render(); aviso(`«${t.tarea || 'sin título'}» volvió al backlog`); }
+  persistirTarea(t, { revertir: () => { Object.assign(t, antes); render(); } });
 }
 
-function moverLinea(i, antes, pos){
-  renderVision({ id: i.id, pos });
-  persistirItemVision(i, { revertir: () => { Object.assign(i, antes); renderVision(); } });
-}
+/* Una fila vacía se cierra sin preguntar —no hay nada que perder—; una escrita, no. */
+async function borrarDeBacklog(t){
+  const tieneAlgo = (t.tarea || '').trim() || explATexto(t.expl).trim()
+    || (t.files || []).length || (t.chat || []).length || (t.subtareas || []).length;
+  if (tieneAlgo && !confirm(`Se borra «${t.tarea || 'sin título'}» con todo lo que tenga adentro. ¿Seguir?`)) return;
 
-async function borrarLineaVision(i, foco){
-  const dentro = descendientesVision(i.id);
-  if (dentro.length && !confirm(`«${i.texto || 'Sin texto'}» tiene ${dentro.length} ${dentro.length === 1 ? 'línea' : 'líneas'} adentro. Se borran también. ¿Seguir?`)) return;
-
-  const rama = [i, ...dentro];
-  const ids = new Set(rama.map(x => x.id));
-  datos.vision = datos.vision.filter(x => !ids.has(x.id));
-  renderVision(foco);
-
-  const ok = await conEstadoDeCarga(() => RoadmapSync.borrarItemVision(i.id), {
+  const idx = datos.tareas.findIndex(x => x.id === t.id);
+  datos.tareas = datos.tareas.filter(x => x.id !== t.id);
+  planAbierto.delete(t.id); marcadas.delete(t.id);
+  render();
+  const ok = await conEstadoDeCarga(async () => {
+    await borrarTodosLosArchivos(t);
+    await RoadmapSync.borrarTarea(t.id);
+  }, {
     onEstado: onEstadoGlobal,
-    revertir: () => { datos.vision.push(...rama); renderVision(); },
+    revertir: () => { datos.tareas.splice(idx, 0, t); render(); },
   });
-  if (ok) marcarEcoPropio(RoadmapSync.TABLAS.vision, i.id);
+  if (ok) marcarEcoPropio(RoadmapSync.TABLAS.tareas, t.id);
 }
 
-/* ---------- teclado ---------- */
+/* ---------- varias a la vez ----------
+   Marcar diez y moverlas juntas es la razón de ser de una pantalla de planificación: de a
+   una, repartir un sprint entre tres personas son treinta clics. */
+const marcadasComoTareas = () => [...marcadas].map(tarea).filter(Boolean);
 
-function teclasVision(e, i, ta){
-  const filas = [...board.querySelectorAll('.vrow')];
-  const idx = filas.findIndex(r => r.dataset.id === i.id);
-  const pos = ta.selectionStart;
-  const irA = (n, alFinal) => {
-    const t = filas[n]?.querySelector('.vtxt');
-    if (!t) return;
-    t.focus();
-    const p = alFinal ? t.value.length : 0;
-    t.setSelectionRange(p, p);
+function accionEnLote(accion, boton){
+  if (accion === 'limpiar') { marcadas.clear(); return renderBacklog(); }
+  if (accion === 'ir') {
+    const lista = marcadasComoTareas();
+    if (!lista.length) return;
+    // Si están todas afuera, el botón hace el camino de vuelta: un solo control para los
+    // dos sentidos, igual que en la fila.
+    const todasAfuera = lista.every(t => !t.backlog);
+    if (todasAfuera) {
+      lista.forEach(t => mandarAlBacklog(t, true));
+      marcadas.clear(); render();
+      aviso(`${lista.length} ${lista.length === 1 ? 'tarea volvió' : 'tareas volvieron'} al backlog`);
+      return;
+    }
+    // Las que no tienen Loom se quedan, y quedan marcadas: así se ve cuáles fueron y se
+    // puede ir a cargarles el video sin volver a buscarlas una por una.
+    const sinLoom = lista.filter(t => t.backlog && !tieneLoom(t));
+    const fueron = lista.filter(t => t.backlog && tieneLoom(t));
+    fueron.forEach(t => pasarAlRoadmap(t, true));
+    marcadas.clear();
+    sinLoom.forEach(t => marcadas.add(t.id));
+    render();
+    aviso(sinLoom.length
+      ? `${fueron.length} al tablero · ${sinLoom.length} sin Loom ${sinLoom.length === 1 ? 'quedó' : 'quedaron'} marcada${sinLoom.length === 1 ? '' : 's'}`
+      : `${fueron.length} ${fueron.length === 1 ? 'tarea pasó' : 'tareas pasaron'} al tablero`);
+    return;
+  }
+  abrirMenu(boton, accion, null);
+}
+
+function aplicarEnLote(tipo, v){
+  const lista = marcadasComoTareas();
+  if (!lista.length) return;
+  // Todas en silencio y un solo repintado al final: treinta marcadas serían treinta
+  // repintados completos de la pantalla.
+  lista.forEach(t => {
+    if (tipo === 'prioridad') campoTarea(t, 'prioridad', v, true);
+    if (tipo === 'sprint') cambiarSprint(t, Number(v) || SIN_SPRINT, true);
+    // En lote, asignar reemplaza en vez de alternar: marcar diez y que a unas se les prenda
+    // y a otras se les apague la misma persona sería impredecible.
+    if (tipo === 'pend') {
+      const antes = [...(t.pend || [])];
+      t.pend = [v];
+      persistirTarea(t, { revertir: () => { t.pend = antes; render(); } });
+    }
+  });
+  render();
+}
+
+/* ---------- arrastrar y soltar ----------
+   Mueve la fila entre sus hermanas y, si se suelta en otro bloque, le cambia el sprint. El
+   orden es el mismo decimal que usa el tablero: se guarda una fila, no la lista entera. */
+let arrastreBacklog = null;
+
+function engancharArrastreBacklog(){
+  board.querySelectorAll('.bhandle').forEach(h => {
+    h.addEventListener('dragstart', e => {
+      const fila = h.closest('.brow');
+      arrastreBacklog = fila.dataset.id;
+      fila.classList.add('arrastrando');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', arrastreBacklog);
+      e.dataTransfer.setDragImage(fila, 24, 14);
+    });
+    h.addEventListener('dragend', () => {
+      arrastreBacklog = null;
+      board.querySelectorAll('.arrastrando,.antes,.despues')
+        .forEach(x => x.classList.remove('arrastrando', 'antes', 'despues'));
+    });
+  });
+
+  board.ondragover = e => {
+    if (!arrastreBacklog) return;
+    e.preventDefault();
+    board.querySelectorAll('.antes,.despues').forEach(x => x.classList.remove('antes', 'despues'));
+    const fila = e.target.closest('.brow');
+    if (!fila || fila.dataset.id === arrastreBacklog) return;
+    const r = fila.getBoundingClientRect();
+    fila.classList.add(e.clientY < r.top + r.height / 2 ? 'antes' : 'despues');
   };
 
-  // Ctrl/⌘+Enter va primero: si no, lo agarraría el Enter de abajo y abriría una línea.
-  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); tildarVision(i); return; }
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); nuevaLineaVision(i); return; }
-
-  if (e.key === 'Tab') {
+  board.ondrop = e => {
+    if (!arrastreBacklog) return;
     e.preventDefault();
-    e.shiftKey ? desindentarVision(i, pos) : indentarVision(i, pos);
-    return;
-  }
-
-  // Borrar con Backspace solo si la línea está vacía y no se lleva nada puesto: que una
-  // tecla de corrección haga desaparecer un bloque entero sería una trampa.
-  if (e.key === 'Backspace' && !ta.value && pos === 0 && !hijosVision(i.id).length) {
-    e.preventDefault();
-    const anterior = filas[idx - 1]?.dataset.id;
-    borrarLineaVision(i, anterior ? { id: anterior, pos: null } : null);
-    return;
-  }
-
-  if (e.key === 'ArrowUp' && (e.altKey || pos === 0)) {
-    e.preventDefault();
-    e.altKey ? moverVision(i, -1, pos) : irA(idx - 1, true);
-    return;
-  }
-  if (e.key === 'ArrowDown' && (e.altKey || pos === ta.value.length)) {
-    e.preventDefault();
-    e.altKey ? moverVision(i, 1, pos) : irA(idx + 1, false);
-  }
-}
-
-/* ---------- traer una hoja de afuera ---------- */
-
-/* Convierte el texto pegado en líneas con nivel. La sangría llega distinta según de dónde
-   se copie —tabulaciones, dos espacios, cuatro—, y un mismo pegado puede traer las tres
-   mezcladas si se armó juntando pedazos.
-
-   Por eso no se mide la sangría contra una tabla de anchos, ni se ordenan todas las que
-   aparecen: se lleva una pila con la sangría de cada antepasado de la línea que se está
-   leyendo. Más sangría que la de arriba entra un escalón; menos, sale los que hagan falta.
-   Es la única cuenta que sale bien cuando una rama usa tabulaciones y otra usa espacios,
-   y además hace imposible bajar dos niveles de golpe. */
-function parsearHoja(txt){
-  const sangria = l => l.match(/^[\t ]*/)[0].replace(/\t/g, '    ').length;
-  const lineas = [];
-  const pila = [0];   // sangría de cada nivel abierto; el 0 es el primer nivel
-
-  String(txt || '').replace(/\r/g, '').split('\n').forEach(l => {
-    if (!l.trim()) return;
-
-    let t = l.trim(), hecho = false, tipo;
-
-    // El orden de las pruebas es el que decide: primero el tilde (puede venir detrás de
-    // una viñeta), después los títulos por cantidad de almohadillas, y lo que no es nada
-    // de eso queda como texto — salvo que traiga viñeta, que es la marca de una lista.
-    const tilde = t.match(/^(?:[-*•]\s*)?\[([ xX])\]\s*(.*)$/);
-    const titulo = t.match(/^(#{1,6})\s+(.*)$/);
-    if (tilde) { hecho = tilde[1].toLowerCase() === 'x'; t = tilde[2]; tipo = 'check'; }
-    else if (titulo) { tipo = titulo[1].length === 1 ? 'titulo' : 'subtitulo'; t = titulo[2]; }
-    else if (/^[-*•]\s+/.test(t)) { tipo = 'check'; t = t.replace(/^[-*•]\s+/, ''); }
-    else if (/^\d+[.)]\s+/.test(t)) { tipo = 'check'; t = t.replace(/^\d+[.)]\s+/, ''); }
-    else tipo = 'texto';
-
-    t = t.trim();
-    // Una línea que quedó vacía al sacarle la viñeta no cuenta, y tampoco toca la pila:
-    // no puede abrir ni cerrar un nivel algo que no se va a dibujar.
+    const t = tarea(arrastreBacklog);
+    const fila = e.target.closest('.brow');
+    const bloque = e.target.closest('[data-filas]');
+    arrastreBacklog = null;
     if (!t) return;
 
-    const s = sangria(l);
-    while (pila.length > 1 && pila[pila.length - 1] > s) pila.pop();
-    if (s > pila[pila.length - 1]) pila.push(s);
+    const antes = { sprint: t.sprint, orden: t.orden };
+    if (fila && fila.dataset.id !== t.id) {
+      const destino = tarea(fila.dataset.id); if (!destino) return;
+      const r = fila.getBoundingClientRect();
+      const encima = e.clientY < r.top + r.height / 2;
+      const hermanas = tareasDeSprint(sprintDe(destino)).filter(x => x.id !== t.id);
+      const i = hermanas.indexOf(destino);
+      t.sprint = sprintDe(destino);
+      t.orden = RoadmapSync.calcularOrden(
+        encima ? (hermanas[i - 1] ? hermanas[i - 1].orden : null) : destino.orden,
+        encima ? destino.orden : (hermanas[i + 1] ? hermanas[i + 1].orden : null));
+    } else if (bloque) {
+      const n = Number(bloque.dataset.filas) || SIN_SPRINT;
+      const ultima = tareasDeSprint(n).filter(x => x.id !== t.id).pop();
+      t.sprint = n;
+      t.orden = RoadmapSync.calcularOrden(ultima ? ultima.orden : null, null);
+    } else return;
 
-    lineas.push({ ind: pila.length - 1, texto: t, hecho, tipo });
-  });
-  return anidarBajoTitulos(lineas);
+    render();
+    persistirTarea(t, { revertir: () => { Object.assign(t, antes); render(); } });
+  };
 }
-
-/* La sangría sola no alcanza para armar la página, y esta es la razón: Notion NO sangra lo
-   que va abajo de un título. Una página con dos títulos y sus tareas se copia con todo al
-   mismo margen, así que tomando solo la sangría entraría plana, sin un solo nivel.
-
-   Entonces un encabezado se queda abierto y adopta lo que viene después, hasta que aparece
-   otro encabezado de rango igual o mayor a su misma sangría —ahí cierra— o algo menos
-   sangrado que él. La sangría no se ignora: se suma a la profundidad que aporta el título,
-   así una subtarea sangrada dentro de una tarea que está bajo un título queda dos niveles
-   adentro, que es donde tiene que estar. */
-function anidarBajoTitulos(lineas){
-  const RANGO = { titulo:1, subtitulo:2 };
-  const abiertos = [];   // encabezados que todavía pueden adoptar: { ind, rango, nivel }
-  let previo = -1;
-
-  return lineas.map(l => {
-    const rango = RANGO[l.tipo] || 3;   // 3 = no es encabezado, no adopta a nadie
-
-    while (abiertos.length) {
-      const t = abiertos[abiertos.length - 1];
-      if (l.ind < t.ind || (l.ind === t.ind && rango <= t.rango)) abiertos.pop();
-      else break;
-    }
-
-    const padre = abiertos[abiertos.length - 1];
-    // El clamp es el mismo de siempre: nadie baja más de un escalón por renglón. Sin él,
-    // un título seguido de algo ya sangrado saltaría dos niveles y la línea quedaría
-    // colgando de un padre que no existe.
-    const crudo = padre ? padre.nivel + 1 + (l.ind - padre.ind) : l.ind;
-    const nivel = Math.min(crudo, previo + 1);
-    previo = nivel;
-
-    if (rango < 3) abiertos.push({ ind: l.ind, rango, nivel });
-    return { nivel, texto: l.texto, hecho: l.hecho, tipo: l.tipo };
-  });
-}
-
-function pegarEnVision(e, i, ta){
-  const txt = (e.clipboardData || window.clipboardData)?.getData('text/plain') || '';
-  // Pegar una sola línea es pegar texto: que lo haga el navegador, con su cursor y todo.
-  if (!/\n/.test(txt.trim())) return;
-  const lineas = parsearHoja(txt);
-  if (lineas.length < 2) return;
-  e.preventDefault();
-  importarLineas(lineas, i);
-}
-
-function importarLineas(lineas, desde){
-  const padreBase = desde ? (desde.padre || '') : '';
-  const hermanos = hijosVision(padreBase);
-  const idx = desde ? hermanos.findIndex(h => h.id === desde.id) : hermanos.length - 1;
-  const despues = hermanos[idx + 1] ? hermanos[idx + 1].orden : null;
-  let antes = hermanos[idx] ? hermanos[idx].orden : null;
-
-  // `ultimoDe[n]` es la última línea creada en el nivel n: de ahí cuelgan las del n+1.
-  const ultimoDe = [], nuevos = [];
-  lineas.forEach(l => {
-    const padre = l.nivel === 0 ? padreBase : (ultimoDe[l.nivel - 1] || padreBase);
-    let orden;
-    if (padre === padreBase) {
-      orden = RoadmapSync.calcularOrden(antes, despues);
-      antes = orden;
-    } else {
-      const previos = hijosVision(padre);
-      orden = RoadmapSync.calcularOrden(previos.length ? previos[previos.length - 1].orden : null, null);
-    }
-    const i = {
-      id: nuevoId('V', datos.vision.map(x => x.id)),
-      padre, texto: l.texto, hecho: l.hecho, tipo: l.tipo || 'check', orden,
-    };
-    datos.vision.push(i);
-    nuevos.push(i);
-    ultimoDe[l.nivel] = i.id;
-    ultimoDe.length = l.nivel + 1;
-  });
-
-  // Si se pegó sobre una línea en blanco, esa línea sobra: lo pegado ocupa su lugar.
-  const sobra = desde && !desde.texto.trim() && !hijosVision(desde.id).length ? desde : null;
-  if (sobra) datos.vision = datos.vision.filter(x => x.id !== sobra.id);
-
-  renderVision({ id: nuevos[nuevos.length - 1].id, pos: null });
-  guardarLoTraido(nuevos, sobra);
-}
-
-async function guardarLoTraido(nuevos, sobra){
-  onEstadoGlobal('cargando');
-  try {
-    await RoadmapSync.guardarItemsVision(nuevos);
-    if (sobra) await RoadmapSync.borrarItemVision(sobra.id);
-    nuevos.forEach(n => marcarEcoPropio(RoadmapSync.TABLAS.vision, n.id));
-    if (sobra) marcarEcoPropio(RoadmapSync.TABLAS.vision, sobra.id);
-    onEstadoGlobal('ok');
-    aviso(nuevos.length === 1 ? 'Se trajo 1 línea' : `Se trajeron ${nuevos.length} líneas`);
-  } catch (e) {
-    onEstadoGlobal('error');
-    const ids = new Set(nuevos.map(n => n.id));
-    datos.vision = datos.vision.filter(x => !ids.has(x.id));
-    if (sobra) datos.vision.push(sobra);
-    renderVision();
-    aviso('No se pudo guardar lo pegado. Revisá tu conexión y probá de nuevo.');
-  }
-}
-
 /* ============================================================
    Barra superior, atajos y cierre de modales
    ============================================================ */
@@ -1993,7 +2139,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
-  if (e.key === 'Escape') { cerrarMenuTipo(); cerrarModales(); return; }
+  if (e.key === 'Escape') { cerrarModales(); return; }
   if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
     e.preventDefault(); $('#q').focus();
   }
@@ -2005,19 +2151,23 @@ $('#q').addEventListener('input', e => { UI.f.q = e.target.value.trim().toLowerC
 });
 $$('[data-layout]').forEach(b => b.onclick = () => { UI.layout = b.dataset.layout; guardarUI(); render(); });
 $('#bNueva').onclick = () => {
+  const v = vistaActual();
+  // En el backlog la tarea nace ahí mismo, en el primer sprint y lista para escribirle el
+  // título: abrir el detalle para una línea que todavía no dice nada sería un estorbo.
+  if (v.backlog) return nuevaEnBacklog(sprintsVisibles()[0], null);
   // Desde la Caja no hay tablero donde mostrarla: se vuelve a una vista de tareas para
   // que la tarea recién creada quede a la vista al cerrar el detalle.
-  const v = vistaActual();
   if (sinTareas(v)) { UI.vista = 'estado'; guardarUI(); render(); }
   nuevaTarea(vistaActual(), null);
 };
 $('#bCsv').onclick = () => {
   const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const cab = ['ID','Titulo','Estado','Prioridad','Tipo','Pendiente de','Hoy','Notas','Subtareas','Conversacion','Archivos'];
+  const cab = ['ID','Titulo','Estado','Prioridad','Tipo','Pendiente de','Sprint','Donde','Hoy','Notas','Subtareas','Conversacion','Archivos'];
   const filas = datos.tareas.map(t => [
     t.id, t.tarea,
     estadoDe(t.estado).label, prioridadDe(t.prioridad).label, tipoDe(t.tipo).label,
     (t.pend || []).map(nombrePersona).join(' | '),
+    t.sprint || '', t.backlog ? 'backlog' : 'tablero',
     t.hoy ? 'si' : '', explATexto(t.expl),
     (t.subtareas || []).map(s => (s.estado === HECHO ? '[x] ' : '[ ] ') + s.titulo + (s.resp ? ' (' + nombrePersona(s.resp) + ')' : '')).join('  ||  '),
     (t.chat || []).map(m => nombrePersona(m.autor) + ': ' + m.texto).join('  ||  '),
@@ -2052,7 +2202,7 @@ async function arrancar(){
   try { datos = await RoadmapSync.cargarEstado(); }
   catch (e) {
     aviso('No se pudo conectar con la base: ' + e.message);
-    datos = { tareas:[], caja:[], vision:[] };
+    datos = { tareas:[], caja:[] };
   }
   normalizarDatos();
   render();
@@ -2115,7 +2265,7 @@ async function entrar(){
   RoadmapSync.onCambioSesion(async sesionOk => {
     if (sesionOk) { loginOverlay.hidden = true; await entrar(); }
     else {
-      datos = { tareas:[], caja:[], vision:[] };
+      datos = { tareas:[], caja:[] };
       YO = { id:'', nombre:'', esMiembro:false };
       cerrarModales();
       sinAccesoOverlay.hidden = true;
