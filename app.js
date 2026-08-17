@@ -909,6 +909,73 @@ async function pegarImagenesEnExpl(t, files, el){
   }
 }
 
+/* ---------- imágenes de la explicación: abrirlas y cambiarles el ancho ----------
+   Clic sobre la imagen la abre en el mismo lightbox de los adjuntos. Para el tamaño hay un
+   agarre en la esquina: el ancho queda como % en el `style` del propio <img>, adentro de
+   `expl`, así la misma imagen se ve proporcional en la ficha y en el panel del backlog,
+   que no miden lo mismo. Vale para los dos editores porque comparten `.rico`. */
+const GRIP = $('#grip');
+let gripImg = null, gripActivo = false;
+
+function ponerGrip(img){
+  gripImg = img;
+  const r = img.getBoundingClientRect();
+  GRIP.style.left = (r.right - 9) + 'px';
+  GRIP.style.top  = (r.bottom - 9) + 'px';
+  GRIP.classList.add('on');
+}
+function sacarGrip(){ GRIP.classList.remove('on'); gripImg = null; }
+
+document.addEventListener('pointerover', e => {
+  if (gripActivo) return;
+  if (e.target.matches?.('.rico img')) return ponerGrip(e.target);
+  if (e.target !== GRIP) sacarGrip();
+});
+// El modal y el board scrollean: sin esto el agarre queda flotando donde la imagen ya no está.
+window.addEventListener('scroll', () => { if (!gripActivo) sacarGrip(); }, true);
+
+// Quién es la tarea depende del editor: la ficha edita a la abierta; el panel del backlog,
+// a la de su fila.
+function guardarExplDe(img){
+  const el = img.closest('.rico'); if (!el) return;
+  const fila = el.closest('.brow');
+  guardarExpl(fila ? tarea(fila.dataset.id) : actual(), el);
+}
+
+GRIP.addEventListener('pointerdown', e => {
+  const img = gripImg; if (!img) return;
+  e.preventDefault();
+  const editor = img.closest('.rico'); if (!editor) return;
+  const est = getComputedStyle(editor);
+  const anchoUtil = editor.clientWidth - parseFloat(est.paddingLeft) - parseFloat(est.paddingRight);
+  const x0 = e.clientX, w0 = img.getBoundingClientRect().width;
+  gripActivo = true;
+  GRIP.setPointerCapture(e.pointerId);
+  const mover = ev => {
+    const px = Math.max(60, w0 + ev.clientX - x0);
+    img.style.width = Math.min(100, px / anchoUtil * 100).toFixed(1) + '%';
+    ponerGrip(img);
+  };
+  const soltar = () => {
+    if (!gripActivo) return;
+    gripActivo = false;
+    GRIP.removeEventListener('pointermove', mover);
+    // Si un refresco repintó el editor en medio del arrastre, no queda dónde guardar.
+    if (img.isConnected) guardarExplDe(img);
+  };
+  GRIP.addEventListener('pointermove', mover);
+  GRIP.addEventListener('pointerup', soltar, { once:true });
+  GRIP.addEventListener('pointercancel', soltar, { once:true });
+});
+
+// El agarre es otro elemento: arrastrar para achicar nunca termina abriendo el visor.
+document.addEventListener('click', e => {
+  if (e.target.matches?.('.rico img')) {
+    $('#lbImg').src = e.target.src;
+    $('#lightbox').classList.add('on');
+  }
+});
+
 function pintarHoy(t){
   const b = $('#tHoy');
   b.classList.toggle('on', !!t.hoy);
@@ -2134,12 +2201,22 @@ function cerrarModales(){
   tareaAbierta = null;
   if (refrescoPendiente) { refrescoPendiente = false; refrescar(); }
 }
+// El lightbox se abre encima de la ficha: cerrarlo no puede llevarse puesto el modal que
+// está abajo, así que se atiende antes y solo. Se mira que el clic haya caído adentro del
+// visor porque el clic que lo abre (sobre la imagen chica) también llega hasta acá.
+// La ficha, en cambio, NO se cierra tocando el fondo: un clic que se escapa del modal no
+// puede bajártelo. Se sale con «Listo» o con Escape. El visor sí cierra con clic en
+// cualquier lado — es un visor, no un formulario.
 document.addEventListener('click', e => {
-  if (e.target.matches('[data-close]') || e.target.classList.contains('scrim')) cerrarModales();
+  if (e.target.closest('#lightbox')) { $('#lightbox').classList.remove('on'); return; }
+  if (e.target.matches('[data-close]')) cerrarModales();
 });
 document.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
-  if (e.key === 'Escape') { cerrarModales(); return; }
+  if (e.key === 'Escape') {
+    if ($('#lightbox').classList.contains('on')) { $('#lightbox').classList.remove('on'); return; }
+    cerrarModales(); return;
+  }
   if (e.key === '/' && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') {
     e.preventDefault(); $('#q').focus();
   }
