@@ -1,12 +1,13 @@
 # Pendientes de back-end — tablero unificado
 
-**Al 17/8/2026 quedan dos puntos abiertos:**
+**Al 17/8/2026 queda un solo punto abierto:**
 
-- **El 8 (pasar los buckets a privados) espera al deploy del front.** El código con URLs
-  firmadas ya está; el flip se hace después de publicarlo, no antes (ver el punto 8).
 - **El 5 (sacar las temáticas de la base) es limpieza.** El tablero anda igual sin correrlo.
 - **El 7 (`schema-v7.sql`, el Backlog) — ✅ HECHO (17/8/2026).** Aplicado como migración
   `roadmap_schema_v7_backlog`; columnas e índice verificados contra la base.
+- **El 8 (buckets privados) — ✅ HECHO (17/8/2026).** Front con URLs firmadas deployado y
+  flip aplicado como migración `roadmap_buckets_privados`; verificado que la URL pública
+  rebota con 400.
 
 Los puntos 1 a 3 están hechos y verificados contra la base; el 4 es opcional y conviene
 dejarlo reposar. El archivo se conserva como registro de qué se tocó y por qué.
@@ -194,24 +195,21 @@ es copiar filas y mover adjuntos cada vez, y se hace seguido. Con una marca es u
 
 **Por qué no hay una tabla de sprints:** un sprint no tiene más datos que su número.
 
-## 8. Pasar los buckets de adjuntos a privados — ⏳ ESPERA AL DEPLOY (17/8/2026)
+## 8. Pasar los buckets de adjuntos a privados — ✅ HECHO (17/8/2026)
 
-Los buckets `roadmap-adjuntos` y `captalia-adjuntos` son públicos: cualquiera que tenga
-la URL de un archivo lo abre sin login. El front ya está preparado para el cambio
-(`RoadmapSync.urlFirmada()`, URLs firmadas que se piden al pintar y se cachean por
-sesión), y las políticas de lectura por miembro ya existen en `storage.objects`
-(`adjuntos_read`, gateada por `es_miembro('propelia')`), así que el flip es solo esto:
+Los buckets `roadmap-adjuntos` y `captalia-adjuntos` eran públicos: cualquiera que
+tuviera la URL de un archivo lo abría sin login. Aplicado como migración
+`roadmap_buckets_privados` (`update storage.buckets set public = false`), después de
+deployar el front con URLs firmadas (`RoadmapSync.urlFirmada()`, que firma al pintar y
+cachea por sesión). La lectura por miembro la cubre la política `adjuntos_read` de
+`storage.objects`, gateada por `es_miembro('propelia')`, que ya existía.
 
-```sql
-update storage.buckets set public = false
-where id in ('roadmap-adjuntos', 'captalia-adjuntos');
-```
+Verificado: la URL pública de un objeto real devuelve 400 desde el origen. Ojo que el
+CDN de Supabase puede seguir sirviendo por un rato (hasta ~1 h) los archivos que ya
+tenía cacheados; se vence solo.
 
-**El orden importa: primero publicar el front nuevo, después correr el SQL.** Al revés,
-la versión vieja (que guarda y usa URLs públicas) deja de mostrar todas las imágenes y
-adjuntos hasta que llegue el deploy. El front nuevo funciona igual con el bucket todavía
-público — `createSignedUrl` firma también sobre buckets públicos — así que no hay apuro
-ni ventana rota entre un paso y el otro.
+**El orden importó: primero el deploy, después el flip.** Al revés, la versión vieja
+(URLs públicas) dejaba de mostrar imágenes y adjuntos hasta que llegara el deploy.
 
 Vuelta atrás, si hiciera falta: el mismo `update` con `true`.
 

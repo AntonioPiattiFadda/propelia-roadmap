@@ -175,9 +175,8 @@ es async, cachea por sesión y se llama **al pintar**, nunca para guardar: una U
 guardada es un enlace muerto en unas horas. Por eso `pintarExpl` vuelve a firmar el `src`
 de cada `<img data-path>` en cada pintado — el `src` que quedó escrito dentro de `expl`
 (público de la época del bucket público, o firmado ya vencido) no sirve para pintar y no
-hay que «migrarlo»: se pisa solo. Ojo: mientras el flip del punto 8 de
-`PENDIENTES-BACKEND.md` no se corra, los buckets siguen públicos; el front firmado
-funciona igual en los dos estados.
+hay que «migrarlo»: se pisa solo. El flip a privado se aplicó el 17/8/2026 (migración
+`roadmap_buckets_privados`); la lectura la cubre la política `adjuntos_read` por miembro.
 
 **La clave en el bucket no es el nombre del archivo.** Supabase valida las claves con un
 regex ASCII: «Gestión CIMA.pdf» con su «ó» hacía fallar la subida entera con 400. La clave
