@@ -824,7 +824,17 @@ function imagenesDeExpl(s){
 function pintarExpl(t, el){
   el = el || $('#tDesc');
   el.innerHTML = explAHtml(t.expl);
+  refrescarImagenesDeExpl(el);
   marcarExplVacia(el);
+}
+// El `src` que quedó guardado en `expl` no sirve para pintar: las filas viejas traen la
+// URL pública de cuando el bucket era público y las nuevas una firmada ya vencida. La
+// dirección de verdad se firma de nuevo en cada pintado, a partir de `data-path`.
+async function refrescarImagenesDeExpl(el){
+  for (const img of el.querySelectorAll('img[data-path]')) {
+    try { img.src = await RoadmapSync.urlFirmada({ path: img.dataset.path, b: img.dataset.b }); }
+    catch (e) { /* borrada del bucket o sin permiso: queda el src que estaba */ }
+  }
 }
 // El placeholder lo dibuja el CSS, pero la condición no la puede escribir: un
 // contenteditable donde se escribió y se borró queda con un `<br>` adentro y deja de ser
@@ -897,12 +907,16 @@ async function pegarImagenesEnExpl(t, files, el){
       continue;
     }
     const provisoria = img.src;
-    img.src = RoadmapSync.urlPublica(archivo);
+    // Si la firma falla, la miniatura local queda en pantalla y el próximo pintado —que
+    // vuelve a firmar todo a partir de `data-path`— la repone.
+    try {
+      img.src = await RoadmapSync.urlFirmada(archivo);
+      URL.revokeObjectURL(provisoria);
+    } catch (e) {}
     img.dataset.path = archivo.path;
     img.dataset.b = archivo.b || '';
     img.alt = archivo.n;
     img.classList.remove('cargando');
-    URL.revokeObjectURL(provisoria);
     // Cierra el 'cargando' de la subida; el guardado del texto abre y cierra el suyo.
     onEstadoGlobal('ok');
     guardarExpl(t, el);
@@ -1087,18 +1101,25 @@ function pintarArchivos(t){
   if (actual() !== t) return;
   const cont = $('#tFiles');
   $('#tFilesCount').textContent = (t.files || []).length || '';
+  // El HTML sale sin direcciones: la URL firmada es una promesa, y esperarlas a todas
+  // para recién ahí pintar dejaría la ficha en blanco. Cada src/href entra cuando llega.
   cont.innerHTML = (t.files || []).map((f, i) => {
-    const url = RoadmapSync.urlPublica(f);
     return /^image\//.test(f.t)
-      ? `<div class="thumb" data-fopen="${i}" title="Abrir ${escA(f.n)}"><img src="${escA(url)}" alt="${escA(f.n)}"><button class="fx" data-fdel="${i}" title="Quitar" aria-label="Quitar ${escA(f.n)}">✕</button></div>`
-      : `<span class="filewrap"><a class="doc" href="${escA(url)}" target="_blank" rel="noopener" title="${escA(f.n)} · ${kb(f.size||0)}">
+      ? `<div class="thumb" data-fopen="${i}" title="Abrir ${escA(f.n)}"><img data-furl="${i}" alt="${escA(f.n)}"><button class="fx" data-fdel="${i}" title="Quitar" aria-label="Quitar ${escA(f.n)}">✕</button></div>`
+      : `<span class="filewrap"><a class="doc" data-furl="${i}" target="_blank" rel="noopener" title="${escA(f.n)} · ${kb(f.size||0)}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3v5h5"/><path d="M19 21H5V3h9l5 5v13z"/></svg>
           <span>${esc(f.n)}</span></a><button class="fx" data-fdel="${i}" title="Quitar" aria-label="Quitar ${escA(f.n)}">✕</button></span>`;
   }).join('');
+  cont.querySelectorAll('[data-furl]').forEach(async el => {
+    try {
+      const url = await RoadmapSync.urlFirmada(t.files[Number(el.dataset.furl)]);
+      if (el.tagName === 'IMG') el.src = url; else el.href = url;
+    } catch (e) { /* sin dirección el enlace no abre nada; el archivo sigue listado */ }
+  });
 
-  $$('[data-fopen]').forEach(el => el.onclick = e => {
+  $$('[data-fopen]').forEach(el => el.onclick = async e => {
     if (e.target.closest('.fx')) return;
-    $('#lbImg').src = RoadmapSync.urlPublica(t.files[Number(el.dataset.fopen)]);
+    $('#lbImg').src = await RoadmapSync.urlFirmada(t.files[Number(el.dataset.fopen)]);
     $('#lightbox').classList.add('on');
   });
 

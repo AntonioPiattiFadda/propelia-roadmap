@@ -167,8 +167,22 @@ planificar sin salir de la fila.
 
 Cada archivo se guarda como `{n, t, path, size, b}`, donde `b` es el bucket del que salió.
 Los adjuntos heredados del viejo tablero de Captalia traen `b: 'captalia-adjuntos'`; los
-nuevos, el bucket principal. `RoadmapSync.urlPublica(archivo)` y `.borrarArchivo(archivo)`
+nuevos, el bucket principal. `RoadmapSync.urlFirmada(archivo)` y `.borrarArchivo(archivo)`
 reciben **el objeto entero**, no el `path`, justamente para poder leer esa clave.
+
+**Los buckets son privados y las direcciones, URLs firmadas que vencen.** `urlFirmada()`
+es async, cachea por sesión y se llama **al pintar**, nunca para guardar: una URL firmada
+guardada es un enlace muerto en unas horas. Por eso `pintarExpl` vuelve a firmar el `src`
+de cada `<img data-path>` en cada pintado — el `src` que quedó escrito dentro de `expl`
+(público de la época del bucket público, o firmado ya vencido) no sirve para pintar y no
+hay que «migrarlo»: se pisa solo. Ojo: mientras el flip del punto 8 de
+`PENDIENTES-BACKEND.md` no se corra, los buckets siguen públicos; el front firmado
+funciona igual en los dos estados.
+
+**La clave en el bucket no es el nombre del archivo.** Supabase valida las claves con un
+regex ASCII: «Gestión CIMA.pdf» con su «ó» hacía fallar la subida entera con 400. La clave
+sale de `claveLimpia()` (sin tildes, sin espacios); el nombre real vive en `n` y es el que
+se muestra.
 
 Las imágenes pegadas dentro de la Explicación **no están en `t.files`**: viven en el propio
 texto, y los datos del archivo quedan colgados del `<img>` (`data-path`, `data-b`). Por eso

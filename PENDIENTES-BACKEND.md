@@ -1,10 +1,12 @@
 # Pendientes de back-end — tablero unificado
 
-**Al 15/8/2026 quedan dos puntos abiertos, y no pesan lo mismo:**
+**Al 17/8/2026 quedan dos puntos abiertos:**
 
-- **El 7 (`schema-v7.sql`, el Backlog) hace falta.** Sin correrlo, lo que anotes en el
-  backlog aparece también en el tablero.
+- **El 8 (pasar los buckets a privados) espera al deploy del front.** El código con URLs
+  firmadas ya está; el flip se hace después de publicarlo, no antes (ver el punto 8).
 - **El 5 (sacar las temáticas de la base) es limpieza.** El tablero anda igual sin correrlo.
+- **El 7 (`schema-v7.sql`, el Backlog) — ✅ HECHO (17/8/2026).** Aplicado como migración
+  `roadmap_schema_v7_backlog`; columnas e índice verificados contra la base.
 
 Los puntos 1 a 3 están hechos y verificados contra la base; el 4 es opcional y conviene
 dejarlo reposar. El archivo se conserva como registro de qué se tocó y por qué.
@@ -162,12 +164,14 @@ El paso 3 de `schema-v7.sql` trae el `drop` comentado para cuando quieras limpia
 
 ---
 
-## 7. Correr `supabase/schema-v7.sql` — ⏳ PENDIENTE (15/8/2026)
+## 7. Correr `supabase/schema-v7.sql` — ✅ HECHO (17/8/2026)
 
-**Este hace falta.** Es el Backlog: la pestaña donde se anota lo que todavía no entra al
-tablero, clasificado por sprint. Sin correr esto, la pestaña se ve y se puede escribir,
-pero **cada tarea que anotes ahí aparece también en el tablero** — la marca que las separa
-no se guarda. El triangulito del encabezado lo avisa en pantalla.
+Aplicado sobre `propelia` (`gvkdyxhxsnpumxlhvhsm`) como migración
+`roadmap_schema_v7_backlog`. Verificado: las 4 columnas y el índice quedaron creados.
+
+Es el Backlog: la pestaña donde se anota lo que todavía no entra al tablero, clasificado
+por sprint. Antes de correrlo, la marca que separa backlog de tablero no se guardaba y
+cada tarea anotada ahí aparecía también en el tablero.
 
 Agrega dos columnas a `roadmap_tareas`:
 
@@ -189,6 +193,29 @@ llegar con su explicación, su checklist, sus archivos y su conversación. Con d
 es copiar filas y mover adjuntos cada vez, y se hace seguido. Con una marca es un booleano.
 
 **Por qué no hay una tabla de sprints:** un sprint no tiene más datos que su número.
+
+## 8. Pasar los buckets de adjuntos a privados — ⏳ ESPERA AL DEPLOY (17/8/2026)
+
+Los buckets `roadmap-adjuntos` y `captalia-adjuntos` son públicos: cualquiera que tenga
+la URL de un archivo lo abre sin login. El front ya está preparado para el cambio
+(`RoadmapSync.urlFirmada()`, URLs firmadas que se piden al pintar y se cachean por
+sesión), y las políticas de lectura por miembro ya existen en `storage.objects`
+(`adjuntos_read`, gateada por `es_miembro('propelia')`), así que el flip es solo esto:
+
+```sql
+update storage.buckets set public = false
+where id in ('roadmap-adjuntos', 'captalia-adjuntos');
+```
+
+**El orden importa: primero publicar el front nuevo, después correr el SQL.** Al revés,
+la versión vieja (que guarda y usa URLs públicas) deja de mostrar todas las imágenes y
+adjuntos hasta que llegue el deploy. El front nuevo funciona igual con el bucket todavía
+público — `createSignedUrl` firma también sobre buckets públicos — así que no hay apuro
+ni ventana rota entre un paso y el otro.
+
+Vuelta atrás, si hiciera falta: el mismo `update` con `true`.
+
+---
 
 ## Lo que quedó afuera del tablero nuevo
 

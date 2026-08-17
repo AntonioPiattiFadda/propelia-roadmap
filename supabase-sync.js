@@ -162,11 +162,21 @@ RoadmapSync.borrarArchivo = async function (archivo) {
   if (error) throw error;
 };
 
-RoadmapSync.urlPublica = function (archivo) {
+// Los buckets son privados: la dirección de un archivo es una URL firmada que vence, no
+// una fija que se pueda guardar. Se cachean por sesión para no pedir una firma nueva en
+// cada repintado, con margen para no entregar una que esté por vencer.
+const URL_FIRMADA_TTL = 60 * 60 * 8; // segundos
+const _urlsFirmadas = new Map();
+RoadmapSync.urlFirmada = async function (archivo) {
   const bucket = (typeof archivo === 'string' ? BUCKET : archivo.b) || BUCKET;
   const path = typeof archivo === 'string' ? archivo : archivo.path;
-  const { data } = supabaseClient.storage.from(bucket).getPublicUrl(path);
-  return data.publicUrl;
+  const clave = bucket + '/' + path;
+  const hit = _urlsFirmadas.get(clave);
+  if (hit && hit.vence > Date.now()) return hit.url;
+  const { data, error } = await supabaseClient.storage.from(bucket).createSignedUrl(path, URL_FIRMADA_TTL);
+  if (error) throw error;
+  _urlsFirmadas.set(clave, { url: data.signedUrl, vence: Date.now() + (URL_FIRMADA_TTL - 1800) * 1000 });
+  return data.signedUrl;
 };
 
 RoadmapSync.sesionActiva = async function () {
