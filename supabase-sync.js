@@ -138,8 +138,15 @@ const RoadmapSync = {
 
 };
 
+// Supabase valida las claves del bucket con un regex ASCII: una «ó» en «Gestión.pdf»
+// hace fallar la subida entera con 400. La clave va limpia; el nombre real viaja aparte,
+// en `n`, y es el que se muestra en pantalla.
+function claveLimpia(nombre){
+  return nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '-');
+}
+
 RoadmapSync.subirArchivo = async function (refId, blob, nombreArchivo) {
-  const path = `${refId}/${Date.now()}-${nombreArchivo}`;
+  const path = `${refId}/${Date.now()}-${claveLimpia(nombreArchivo)}`;
   const { error } = await supabaseClient.storage.from(BUCKET)
     .upload(path, blob, { contentType: blob.type || 'application/octet-stream' });
   if (error) throw error;
