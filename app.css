@@ -283,7 +283,10 @@ body.arrastrando .empty-col{display:none}
 .rico.vacio::before{content:attr(data-ph);color:#BCBEC7;pointer-events:none}
 .rico img{max-width:100%;height:auto;display:block;margin:7px 0;border-radius:8px;border:1px solid var(--line);cursor:zoom-in}
 /* Mientras sube apunta a un `blob:` local: se ve, pero todavía no está guardada. */
-.rico img.cargando{opacity:.5;filter:grayscale(.35)}
+.rico img.cargando{opacity:.5;filter:grayscale(.35);animation:subiendo 1.1s ease-in-out infinite alternate}
+/* El mismo latido de «está subiendo» para la imagen pegada y para la miniatura de un
+   adjunto en camino. Con reduced-motion queda el 50% de opacidad fijo, que ya avisa. */
+@keyframes subiendo{to{opacity:.22}}
 
 /* ---------- Fichas plegables del detalle ----------
    Checklist, conversación y archivos se pliegan a un renglón cuando no tienen nada
@@ -386,6 +389,13 @@ body.arrastrando .empty-col{display:none}
 .fx.armar{opacity:1;background:var(--crit)}
 .thumb:hover .fx,.filewrap:hover .fx{opacity:1}
 .filewrap{position:relative;display:inline-flex}
+/* Adjuntos en camino: la miniatura late como la imagen pegada; la ficha de un archivo
+   que no es imagen brilla como el esqueleto de la carga inicial. Ninguno se puede tocar. */
+.thumb.subiendo{cursor:default}
+.thumb.subiendo img{opacity:.5;filter:grayscale(.35);animation:subiendo 1.1s ease-in-out infinite alternate}
+.doc.subiendo{cursor:default;color:var(--ink-3);border-style:dashed;
+  background:linear-gradient(90deg,#E4E4E9 25%,#EFEFF3 37%,#E4E4E9 63%);
+  background-size:400% 100%;animation:sh 1.3s ease-in-out infinite}
 .drop-files{border:1.5px dashed var(--line);border-radius:9px;padding:7px;text-align:center;font-size:12px;font-weight:600;color:var(--ink-3);cursor:pointer;transition:.15s}
 .drop-files:hover,.drop-files.over{border-color:#C6C5D8;color:var(--ink-2);background:#F7F7FA}
 .m-f{padding:12px 18px;border-top:1px solid var(--line-soft);display:flex;gap:8px;align-items:center;background:#FAFAFC}

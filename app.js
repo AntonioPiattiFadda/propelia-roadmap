@@ -296,17 +296,36 @@ async function adjuntar(t, files){
   let n = 0, saltados = [], ahorro = 0;
   const subidos = [];
   onEstadoGlobal('cargando');
+  // Cada archivo se ve desde antes de subir: la imagen como su miniatura local —igual que
+  // en la explicación— y el resto como ficha apagada. `_subiendo` no se persiste (va con
+  // guion bajo y guardarTarea arma su objeto campo por campo); se van yendo de a uno a
+  // medida que cada subida termina o falla.
+  const pendientes = [...files].map(f => ({
+    n: f.name || 'captura',
+    url: /^image\//.test(f.type) ? URL.createObjectURL(f) : '',
+  }));
+  t._subiendo = (t._subiendo || []).concat(pendientes);
+  if (actual() === t) $('#tSecFiles').open = true;
+  pintarArchivos(t);
+  const listo = p => {
+    if (p.url) URL.revokeObjectURL(p.url);
+    const i = t._subiendo.indexOf(p); if (i > -1) t._subiendo.splice(i, 1);
+    pintarArchivos(t);
+  };
+  let idx = 0;
   for (const f of files) {
+    const p = pendientes[idx++];
     const esImg = /^image\//.test(f.type);
-    if (!esImg && f.size > MAX_ARCHIVO) { saltados.push(f.name + ' (' + kb(f.size) + ')'); continue; }
+    if (!esImg && f.size > MAX_ARCHIVO) { saltados.push(f.name + ' (' + kb(f.size) + ')'); listo(p); continue; }
     const blob = esImg ? await comprimirImagen(f) : f;
-    if (blob.size > MAX_ARCHIVO) { saltados.push((f.name || 'captura') + ' (' + kb(blob.size) + ' ya comprimida)'); continue; }
+    if (blob.size > MAX_ARCHIVO) { saltados.push((f.name || 'captura') + ' (' + kb(blob.size) + ' ya comprimida)'); listo(p); continue; }
     if (esImg && f.size > blob.size) ahorro += f.size - blob.size;
     try {
       const nombre = f.name || ('captura-' + new Date().toISOString().slice(0,19).replace(/[:T]/g,'-') + '.webp');
       const archivo = await RoadmapSync.subirArchivo(t.id, blob, nombre);
       t.files.push(archivo); subidos.push(archivo); n++;
     } catch (e) { saltados.push((f.name || 'captura') + ' (error al subir)'); }
+    listo(p);
   }
   if (n) {
     await persistirTarea(t, {
@@ -1109,6 +1128,15 @@ function pintarArchivos(t){
       : `<span class="filewrap"><a class="doc" data-furl="${i}" target="_blank" rel="noopener" title="${escA(f.n)} · ${kb(f.size||0)}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3v5h5"/><path d="M19 21H5V3h9l5 5v13z"/></svg>
           <span>${esc(f.n)}</span></a><button class="fx" data-fdel="${i}" title="Quitar" aria-label="Quitar ${escA(f.n)}">✕</button></span>`;
+  }).join('')
+  // Lo que todavía está subiendo, al final: sin botón de quitar y sin clic, porque
+  // todavía no hay nada que abrir ni que borrar.
+  + (t._subiendo || []).map(p => {
+    return p.url
+      ? `<div class="thumb subiendo" title="Subiendo ${escA(p.n)}…"><img src="${escA(p.url)}" alt="${escA(p.n)}"></div>`
+      : `<span class="filewrap"><span class="doc subiendo" title="Subiendo ${escA(p.n)}…">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3v5h5"/><path d="M19 21H5V3h9l5 5v13z"/></svg>
+          <span>${esc(p.n)}</span></span></span>`;
   }).join('');
   cont.querySelectorAll('[data-furl]').forEach(async el => {
     try {
