@@ -32,8 +32,8 @@ insert en `app_miembros`. Y al revés: una cuenta con membresía pero sin `email
 
 ### Modelo de datos
 
-Tablas: `roadmap_tareas`, `roadmap_caja` y `roadmap_notas` (solo los nombres de los grupos
-del backlog, ver abajo).
+Tablas: `roadmap_tareas`, `roadmap_caja` y `roadmap_notas` (los grupos del backlog y la hoja de
+notas de esa pantalla, ver abajo).
 Bucket de adjuntos: `roadmap-adjuntos`.
 
 - `roadmap_tareas`: además de lo viejo, `prioridad`, `tipo`, `hoy` (bool; era la marca de la
@@ -42,6 +42,30 @@ Bucket de adjuntos: `roadmap-adjuntos`.
   varios responsables), `creada`, `chat` (jsonb `[{autor,ts,texto}]`) y `subtareas`
   (jsonb `[{id,titulo,resp,estado,expl,chat,files}]`). `resp` se mantiene sincronizado
   con `pend[0]` por compatibilidad.
+- **`tipo` ya no se usa** (26/8/2026, por pedido). Era la clasificación de la actividad
+  —«Desarrollo nuevo», «Modificación de lo hecho», «Corrección de errores», «UX / UI»— con su
+  `<select>` en la ficha, su filtro en la barra y su columna en el CSV. Se sacaron los tres:
+  había que elegir uno tarea por tarea y después nadie filtraba por él. **No se migró nada**,
+  misma jugada que con `loom`: la columna sigue en la base con lo que tenía cargado,
+  `guardarTarea()` la escribe igual y toda tarea nueva nace con el `'nuevo'` de fábrica —lo
+  que ya era el default de la columna—. Simplemente no hay pantalla que la edite ni que la
+  lea. Ojo con no confundirla con la constante `TIPOS`, que se borró.
+- **Y ese mismo día `tipo` pasó a guardar otra cosa: cuándo entró la tarea al tablero**
+  (`CAMPO_ENTRADA`, `entroAlTablero()`, `enTableroDesde()`). Es lo que hace que el círculo de
+  días de la fila cuente desde que la tarea está en la cancha y no desde que alguien la anotó.
+  Misma jugada que `modulo` con el «Área», que `hoy` con la chapa de novedad y que
+  `texto`/`orden` de `roadmap_notas` con la columna de cada grupo: reusar un campo muerto que
+  ya está corrido en vez de esperar una migración, que hay dos pendientes hace semanas.
+  - **Se lee estricto, por la forma del dato** (`/^\d{4}-\d{2}-\d{2}/`) y nunca «lo que haya».
+    Ahí adentro está cargado el `'nuevo'` de fábrica y las cuatro categorías viejas, y
+    `new Date('nuevo')` no falla: devuelve `Invalid Date`. Es la misma regla del prefijo
+    `grupo-` de `roadmap_notas` — una columna reusada se corta por la forma y no por confianza.
+  - **Sin fecha guardada la cuenta cae en `creada`**, que es exactamente lo que el número decía
+    antes de que esto existiera: **no se migró nada** y ninguna fila cambió de valor. Cada tarea
+    empieza a contar de verdad la próxima vez que pase por el backlog.
+  - **La escribe `alTablero()` y nadie más**, en cada pase y no solo en el primero: una tarea
+    puede ir y volver, y la vuelta es una llegada nueva. Es la misma regla que ya tenía `hoy`
+    dos líneas más abajo en esa función.
 - **`estado` son cinco y no cuatro desde el 26/8/2026**: entre Bloqueada y Terminada entró
   `Revision` («En revisión»), lo que ya no se está haciendo pero tampoco está cerrado. **No
   hizo falta migración**: la columna es un `text` sin `check`, así que un valor nuevo entra
@@ -63,8 +87,11 @@ Bucket de adjuntos: `roadmap-adjuntos`.
   Las filas anteriores a esta regla siguen sin responsable: no se migraron.
 - `roadmap_tareas.creada` se pinta como **antigüedad**, no como fecha, y sale toda de
   `antiguedad(iso)`: elige la unidad sola (`3 d`, `2 sem`, `4 mes`) y deja la fecha exacta en
-  el `title`. Se ve en la tarjeta del tablero, en la ficha y en el panel de la fila del
-  backlog — en la rejilla del backlog no, que ya tiene trece columnas peleando por el ancho.
+  el `title`. **Desde el 26/8/2026 se ve en un solo lugar**: la ficha y la cabecera de la
+  página de la tarea (`pillEdad()`). En las filas ya no va —en el tablero el círculo cuenta
+  otra cosa (desde que la tarea entró, no desde que se anotó) y en el backlog el dato salió
+  entero, ver los dos cuadros—. Lo que `creada` sigue alimentando en el backlog sin escribir
+  números es el color del riel y el «N sin salir» del grupo.
   El texto lo reescribe un `setInterval` de un minuto sobre cada `[data-edad]`, **no un
   repintado**: repintar el tablero entero cada minuto cortaría lo que alguien esté
   escribiendo. Por eso el número vive en su propio `<i class="edad">` y no suelto al lado
@@ -93,27 +120,45 @@ Bucket de adjuntos: `roadmap-adjuntos`.
 `schema-v5.sql` — mientras tanto, ojo con el `on delete cascade` de `sec_id`: borrar una
 fila de secciones a mano desde el panel se lleva puestas sus tareas.
 
-`roadmap_notas` **guarda los nombres de los grupos del backlog** desde el 26/8/2026, y nada
-más. La creó `schema-v3.sql` para la Visión vieja (dos hojas de texto libre) y quedó vacía;
+`roadmap_notas` **guarda los grupos del backlog y la hoja de notas de esa pantalla**, desde el
+26/8/2026. La creó `schema-v3.sql` para la Visión vieja (dos hojas de texto libre) y quedó vacía;
 se reusó a propósito y no por comodidad: una columna nueva habría dejado los nombres
 esperando a que se corra otra migración —hay dos pendientes hace semanas— y esta tabla ya
 está corrida, ya tiene su RLS por miembro y ya está publicada en realtime. Una fila por
-grupo: `id = 'grupo-3'`, `titulo` = el nombre, `orden` = el número. El prefijo del `id` no
+grupo: `id = 'grupo-3'`, `titulo` = el nombre y, desde que los bloques se acomodan a mano,
+`texto` = en qué columna de la hoja está y `orden` = su lugar dentro de esa columna. Las dos
+últimas son otro campo muerto reusado —`texto` en una fila de grupo se escribía siempre vacío y
+`orden` guardaba el número del grupo, que ya está en el `id`—, la misma jugada que `modulo` con
+el «Área» y `hoy` con la chapa de novedad. **Sin `texto` escrito el grupo no tiene lugar propio y
+la hoja se reparte sola**, que es exactamente lo que valía para cada fila antes: por eso no hubo
+nada que migrar. El prefijo del `id` no
 es decorativo: la tabla es de texto libre y podría volver a usarse para otra cosa, y sin él
-cualquier fila que alguien meta ahí se leería como un grupo del backlog.
+cualquier fila que alguien meta ahí se leería como un grupo del backlog. **Y esa segunda cosa ya
+llegó**: la hoja de notas del backlog es una fila sola con `id = 'nota-backlog'`, donde `texto` es
+lo escrito, `titulo` va vacío y `orden` no ubica nada — o sea, las mismas tres columnas
+significando otra cosa. Es exactamente el caso para el que estaba puesto el prefijo, y leer una
+fila con el significado de la otra pinta un grupo llamado «acordate de llamar al contador».
+Cualquier lector nuevo de esta tabla corta por el `id` y no por la forma del contenido.
 
 ### Vistas
 
 `VISTAS` en `app.js` no son todas iguales, y las diferencias son dos, no una:
 
-- **Quién se come el board entero** (`anchoCompleto`): la caja (clase `cmode`) y el backlog
-  (clase `bmode`), que en vez de columnas son dos listas de renglones.
-- **Quién no sabe nada de tareas** (`sinTareas`): solo la caja. El backlog **sí** son
-  tareas, así que tiene filtros, buscador y contador; la caja no.
+- **Quién no sabe nada de tareas** (`sinTareas`): solo la caja. El backlog y el tablero **sí**
+  son tareas, así que tienen filtros, buscador y contador; la caja no.
+- **Quién se come el board entero** (`anchoCompleto`): la caja y el backlog. **Desde el
+  26/8/2026 este helper ya no separa nada** —las tres vistas son hojas de renglones y las tres
+  ocupan el board entero— y quedó porque el backlog lo usa para otras cosas. Antes era el
+  corte entre «hoja de renglones» y «tablero de tarjetas»; sin tarjetas, ese corte no existe.
 
 Confundir las dos fue el error de la versión anterior, cuando había un solo helper para
 todo. **La marca la lleva la vista (`caja:true`, `backlog:true`), no el render**: nadie
 compara contra un id suelto por el archivo.
+
+**Las clases del board son tres y siguen siendo tres**: `cmode` la caja, `bmode` la hoja de
+renglones —la lleva el backlog y también el tablero, que se dibuja con el mismo componente— y
+`pgmode` la página de una tarea. Ya no cambian el `display`, que ahora lo pone `.board`; lo que
+aportan es el fondo y el scroll de cada una.
 
 **Las vistas ya no son pestañas: viven en la barra lateral** (26/8/2026), y por eso cada
 entrada de `VISTAS` trae un `ico` además del `label`. Con la barra plegada el ícono *es* la
@@ -128,36 +173,49 @@ reusado para el «Área» del backlog: un campo muerto que ya está en la base y
 solo evita una migración, y hay dos pendientes. Ojo con `localStorage`: una sesión vieja puede tener `vista:'hoy'`
 guardada, y de eso se ocupa el `VISTAS.some(...)` que ya filtraba la preferencia al leerla.
 
-### Los tres layouts del tablero
+### El tablero es una lista
 
-`LAYOUTS` (`cols`, `rows`, `lista`) es el segmentado de la barra de filtros y **no es lo mismo
-que `VISTAS`**: la vista dice *qué* se mira, el layout dice *cómo se dibuja*. Por eso vive en
-`UI.layout` y no en `VISTAS`, y por eso solo manda donde hay tarjetas que acomodar — la caja y
-el backlog ya se comen el board enteros (`anchoCompleto`).
+**El tablero se dibuja de una sola forma desde el 26/8/2026** (por pedido): la hoja de
+renglones del Backlog, agrupada por estado en vez de por sprint (`renderListaEstados()`). No es
+una vista aparte: sigue siendo el tablero, con sus filtros, su buscador y su contador; lo único
+que cambia respecto del backlog es el componente que decide de qué se agrupa.
 
-**`lista` (26/8/2026) es la hoja de renglones del Backlog puesta sobre el tablero**, agrupada
-por estado en vez de por sprint. No es una vista nueva: sigue siendo el tablero, con sus
-filtros, su buscador y su contador; lo único que cambia es el componente que lo pinta.
+**Hasta ese día hubo tres formas y un segmentado en la barra para elegirlas** (`LAYOUTS`, con
+`UI.layout` guardado en `localStorage`):
 
-- **Se cruza en un solo lugar**: `const enLista = !anchoCompleto(v) && UI.layout === 'lista'`,
-  arriba de `render()`. Nadie más en el archivo pregunta por `UI.layout`.
+| id | qué era |
+|---|---|
+| `cols` | el kanban: una columna por estado, tarjetas, bandas de prioridad adentro |
+| `rows` | esa misma tarjeta estirada a lo ancho, una debajo de la otra |
+| `lista` | esto |
+
+**Las dos de tarjetas se sacaron enteras, y con ellas el segmentado**: un selector de una sola
+opción no es un selector. Se fueron `renderTablero()`, `tarjetaHTML()`, `conectarTablero()`,
+`soltarTarea()`, `tarjetaDespuesDe()`, el autoscroll del arrastre de tarjetas, `arrastreId` y
+todo el CSS de `.card` / `.col` / `.board.rows`. También `nuevaTarea()`, que era el creador del
+lado de las tarjetas: «+ Nueva tarea» pasa ahora por `nuevaEnEstado()`, el mismo del `＋` de la
+lista, así que las dos puertas calculan el `orden` igual y las dos entran a la página.
+
+- **`UI.layout` no se guarda ni se lee más.** Una sesión vieja puede traerlo en `localStorage` y
+  se ignora, igual que la vista `'hoy'`.
+- **La ficha perdió su última puerta y volvió al menú `⋯`** — ver el cuadro de la ficha.
 - **`bmode` es el envoltorio de la lista de renglones, no «la vista Backlog».** Lo lleva
   cualquiera que dibuje esa hoja, venga de donde venga.
-- **Agrupa por estado y no por prioridad** porque el eje del tablero ES el estado: las columnas
-  son estados y las filas también. Si la tercera agrupara por otra cosa, un mismo botón daría
-  tres ordenamientos distintos. De paso, arrastrar un renglón a otro bloque significa lo mismo
-  que arrastrar una tarjeta a otra columna.
+- **Agrupa por estado y no por prioridad** porque el eje del tablero ES el estado. De paso,
+  arrastrar un renglón a otro bloque significa lo que significaba arrastrar una tarjeta a otra
+  columna.
 - **Y adentro del bloque se apila por prioridad** (26/8/2026, por pedido): primero las
   críticas, después las urgentes, y recién dentro de cada banda manda el `orden` a mano
   (`porPrioridad`, el único comparador, que usan el pintado y `tareasDeEstado()`). No es una
-  regla nueva: en columnas y en filas cada prioridad ya era su propia banda adentro del estado,
-  así que esto es lo que hacía falta para que un mismo tablero se lea igual en los tres
-  layouts. **Acá las bandas no se dibujan**: cinco bloques por cuatro títulos, en una columna
-  de un tercio de pantalla, es más encabezado que tarea — el color del riel de la puerta ya
-  dice la prioridad de cada fila. El backlog no entra en esto, que ahí no hay prioridad.
+  regla nueva: en el kanban cada prioridad ya era su propia banda adentro de la columna, así
+  que esto es lo que hacía falta para que el tablero se leyera igual de las dos formas mientras
+  convivieron. **Acá las bandas no se dibujan**: cinco bloques por cuatro títulos, en una
+  columna de un tercio de pantalla, es más encabezado que tarea — el color del riel de la
+  puerta ya dice la prioridad de cada fila. El backlog no entra en esto, que ahí no hay
+  prioridad.
   - **Y por eso soltar sobre otra banda le cambia la prioridad a la fila** (`adoptarBanda` en
-    el descriptor de la lista). Es lo mismo que ya hacía soltar una tarjeta en la banda
-    «Urgente» de otra columna, que cambia el estado y la prioridad de una. Sin eso, arrastrar
+    el descriptor de la lista). Es lo mismo que hacía soltar una tarjeta en la banda «Urgente»
+    de otra columna, que cambiaba el estado y la prioridad de una. Sin eso, arrastrar
     entre bandas sería un no-op a la vista: la fila caería donde uno la soltó y el apilado la
     devolvería a su lugar en el próximo pintado.
   - **Todo lo que calcula un `orden` lo hace contra las hermanas de SU banda** (el arrastre,
@@ -165,13 +223,27 @@ filtros, su buscador y su contador; lo único que cambia es el componente que lo
     ya no van en el orden en que se ven, y `calcularOrden()` promedia dos vecinos: entre
     bandas distintas eso devuelve un número que no cae donde uno lo vio caer. Por lo mismo,
     lo que va «al final del bloque» va al final de su banda y no al final de la lista.
-- **Terminadas se pliega con `UI.terminadasAbiertas`**, la misma preferencia que la columna
-  plegada. Los otros cuatro estados sí llevan marca propia (`tablero-plegados` en `localStorage`,
-  el gemelo de `backlog-plegados`). Con dos preferencias para lo mismo, plegar Terminadas en
-  columnas y encontrarla abierta en la lista sería la contradicción de siempre.
+- **Terminadas se pliega con `UI.terminadasAbiertas`**, que era la preferencia de la columna
+  plegada del kanban. Los otros cuatro estados sí llevan marca propia (`tablero-plegados` en
+  `localStorage`, el gemelo de `backlog-plegados`). La preferencia sobrevivió a la columna
+  porque es la misma pregunta —¿miro lo terminado?— y renombrarla no arreglaría nada: cambiar
+  la clave dejaría a todos con Terminadas abierta el día que se suba.
 - **Los cinco bloques se dibujan aunque estén vacíos**, al revés que «Sin planificar» del
   backlog: un estado sin tareas es información («nada bloqueado») y además es dónde soltar la
   primera. Y no lleva el `＋ Sprint` del final: los estados son un catálogo cerrado.
+- **La cabecera del bloque es la flecha, el punto de color, el nombre y el contador. Nada más**
+  (26/8/2026, por pedido). A la derecha vivían dos pastillas y se fueron las dos:
+  - **«N críticas»**, que repetía en la cabecera lo que el bloque de abajo ya dice fila por fila
+    y en color: las críticas se apilan arriba de todo (`porPrioridad`) y su riel es rojo.
+    Contarlas otra vez arriba era el mismo dato dos veces en la misma pantalla.
+  - **El «N%»**, que medía cuánto del tablero estaba parado en ese estado. Un número que hay que
+    interpretar —¿32% es mucho?— pegado a un contador que dice la cuenta de verdad. Con él se
+    fue el tercer argumento de `filaEstadoHTML()`, que era el total para calcularlo.
+  - **Contrapartida asumida**: plegado el bloque, lo único que queda a la vista es el nombre y
+    el contador. Es exactamente lo que se pliega para ver, así que se paga barato.
+  - El «N sin salir» del backlog **no** se fue con estos, aunque fuera su gemelo: ese no repite
+    nada de lo de abajo — desde que la antigüedad salió de la fila, es lo único que esa pantalla
+    dice en números sobre qué se está pudriendo.
 - **Los bloques van repartidos en tres columnas** (`COLUMNAS_LISTA`, clase `bkcols`): Nueva,
   En curso, y los tres finales del camino —Bloqueada, En revisión y Terminada— apilados en la
   tercera. El reparto no es parejo a propósito: los dos primeros son los que se miran todo el
@@ -195,8 +267,9 @@ filtros, su buscador y su contador; lo único que cambia es el componente que lo
   título recortado a la mitad, así que la lista vuelve a ser una sola. La única regla del lado
   angosto es devolverle el margen al primer bloque de cada columna: `.bksprint:first-child` lo
   pega al de arriba, y apiladas cada columna tiene un primer bloque.
-- **Cambiar de layout cierra el menú `⋯`.** La fila que lo tenía abierto puede no existir en el
-  dibujo siguiente, y un menú colgado de la nada no se cierra con nada.
+- **Cambiar de vista cierra el menú `⋯`.** La fila que lo tenía abierto puede no existir en el
+  dibujo siguiente, y un menú colgado de la nada no se cierra con nada. La misma regla valía
+  para cambiar de layout, y se fue con el segmentado.
 
 **Las dos listas son un solo componente y un solo juego de manejadores** (`LISTAS`,
 `listaActual`, `engancharLista()`, `engancharArrastreLista()`). Lo único que cambia entre el
@@ -206,27 +279,62 @@ backlog y el tablero-lista está en el descriptor: por qué se agrupa (`grupoDe`
 llega nunca a la otra. Por eso el menú `⋯` dice `data-acc="grupo"` y no `"sprint"` — qué
 bloque es lo decide la lista pintada.
 
-**La fila se dibuja en columnas de ancho fijo** (26/8/2026, por pedido): título, prioridad y
-quién la hace. Antes eran todas pastillas apiladas contra el borde derecho, así que dónde caía
+**La fila se dibuja en columnas de ancho fijo** (26/8/2026, por pedido): título, quién la hace
+y —solo en el tablero— prioridad y cuántos días lleva en el tablero. Antes eran todas pastillas
+apiladas contra el borde derecho, así que dónde caía
 cada una dependía de cuántas tuviera la fila —la prioridad de un renglón quedaba a la altura
 del área del de arriba— y con cuarenta filas eso se lee fila por fila y no bajando por una
 columna.
 
-- **Solo esos tres, y en el backlog la primera cambia de dato.** Ahí no hay prioridad a
-  propósito, así que su columna la ocupa la antigüedad (`.pgcol-edad`, `pillEdad()`): mismo
-  lugar, mismo trato, otro dato. Y tiene que ser justo esa — es lo único que el backlog tiene
-  para decir sobre qué apremia, la misma lectura que ya tiñe el riel de la puerta, escrita en
-  palabras. La razón es la de la prioridad al lado de su riel: el color solo es un dato para el
-  que ya se lo sabe de memoria.
+- **En el backlog la primera columna no existe.** Ahí no hay prioridad a propósito, y hasta el
+  26/8/2026 ese lugar lo ocupaba la antigüedad (`.pgcol-edad`, `pillEdad()`), con el argumento
+  de que las dos listas presentan la misma tarjeta cambiando qué dice el dato. Se sacó ese
+  mismo día, por pedido, por el otro lado del mismo argumento: cuánto lleva algo es una cuenta
+  del tablero, y contarla también en la lista de lo que todavía no empezó era la misma pregunta
+  contestada en dos pantallas con dos relojes distintos. **Lo que el backlog tiene para decir
+  sobre qué se está pudriendo sigue estando y sin números**: el riel de la puerta se tiñe con la
+  antigüedad y la cabecera del grupo cuenta las que ya llevan demasiado («N sin salir»). Un
+  color y un contador por bloque, no cuarenta números.
+- **Y en el tablero está la de los días** (26/8/2026, por pedido; `.pgcol-dias`, `pillDias()`),
+  al final del bloque, después de la prioridad y de quién la hace. **En el backlog no va**, por
+  lo de arriba, y lo decide la fila (`t.backlog`) y no la vista, como todo lo demás acá.
+  - **Cuenta desde que la tarea entró al tablero, no desde que se anotó** (26/8/2026, por
+    pedido). Es la pregunta que el número contesta: hace cuánto que esto está en la cancha y
+    todavía no se cerró. Antes contaba desde `creada` porque la fecha de entrada no existía en
+    ninguna columna; ahora la guarda `entroAlTablero()` — ver el modelo de datos, que ahí está
+    dónde vive y por qué no hubo migración.
+  - **Siempre en días crudos**, que es justo lo que `antiguedad()` NO hace: esa función elige la
+    unidad sola —«3 d», «2 sem», «4 mes»—, que es lo correcto cuando el dato se lee suelto en una
+    frase y lo peor posible en una columna. Bajando por cuarenta filas, «2 sem» contra «12 d» hay
+    que traducirlo renglón por renglón antes de poder compararlo; en días crudos el número más
+    grande es el que lleva más tiempo.
+  - **El número va solo, adentro de un círculo** (`.pgdias`, 26/8/2026, por pedido). Fue «14d»
+    en gris, sin marco y sin fondo, y a esa escala una cifra suelta al final del renglón se lee
+    como el resto de otra pastilla. El círculo es una ficha: la misma forma cerrada en las
+    cuarenta filas, que se cuenta bajando por la columna sin leer ninguna. La `d` se fue con el
+    marco —adentro de una ficha de tamaño fijo una letra es la mitad del ancho— y qué unidad es
+    lo dice el `title` una vez. Sigue tabular: el círculo es fijo y el número tiene que caer
+    centrado igual con una cifra que con tres, y por eso el CSS lleva `min-width` y no `width`
+    —con tres cifras la ficha cede y se estira a cápsula; recortar el número sería peor—.
+  - **Los dos formatos salen de `textoEdad()` y de ningún otro lado.** El texto lo reescribe
+    cada minuto el `setInterval` de `[data-edad]` (ver `creada`), y con el formato escrito en el
+    pintado y otra vez en el refresco, el chip diría una cosa al dibujarse y otra a los sesenta
+    segundos. Cuál de los dos formatos es lo dice `data-edad-fmt` en el propio elemento.
+  - **Se ayuda con `cursor:help` y un `aria-label`**: un número pelado no dice de qué es, ni en
+    pantalla ni en un lector, y toda la frase está en el `title`.
 - **El código, la dependencia y el área NO son columna.** Se dibujan nada más cuando hay algo
   que decir, y una columna reservada para un campo que la mitad de las filas no tiene es puro
   hueco. Van juntas en `.pgpills`, pegadas al título, y partida la hoja en columnas se esconden
   en las dos listas (ver abajo).
 - **El título es el único elástico** (`flex:0 1 auto`) y lo que clava las columnas a la derecha
-  es el `margin-left:auto` de la primera, escrito como `.pgpills + .pgcol` y no como
-  `:first-of-type`: cuál es la primera cambia según el lado —prioridad en el tablero,
-  antigüedad en el backlog—. Escrito contra `.pgpills`, que va siempre, vale para las dos sin
-  una regla por lista.
+  es un espaciador vacío (`.pgesp`) que se come todo el espacio libre. Fue el `margin-left:auto`
+  de la primera columna, escrito como `.pgpills + .pgcol`, y eso valía mientras las dos listas
+  tuvieran una columna visible ahí —prioridad en el tablero, antigüedad en el backlog—. El
+  backlog se quedó sin ninguna el día que la antigüedad salió de la fila, y un `auto` sobre un
+  elemento que el CSS esconde no empuja nada. **Un elemento que va siempre y no depende de qué
+  dibuje cada lista es lo único que no hay que volver a arreglar la próxima vez que una columna
+  cambie** — es la tercera vez que se mueve ese ancla. Se esconde a ≤760px, que ahí las columnas
+  dejan de ser columnas y no hay de qué despegar nada.
 - **El ancho es fijo y no `1fr`.** Son cuatro prioridades posibles y tres nombres: reservar lo
   que miden cuesta menos que hacer que el renglón se recalcule según lo que tenga adentro.
 - **Los nombres van adentro de un `.qn`** y no sueltos en la pastilla: con ancho fijo hace falta
@@ -245,8 +353,9 @@ aprendérselo. Además es la que más se cambia, así que tiene que ser un botó
 - **El `▤` es también la prioridad.** Ese botón deja de ser un glifo y pasa a ser un riel del alto
   del renglón (`.pgriel`), pintado del color de la prioridad. Dice un dato más sin gastar ancho.
   Sigue siendo la puerta a la página: mismo botón, mismo `data-pagina`, mismo lugar.
-  - **El color es el mismo `tint(color,.55)` del lomo de la tarjeta.** Cambiar de layout no
-    puede cambiarle el color a una tarea.
+  - **El color es el mismo `tint(color,.55)` que llevaba el lomo de la tarjeta** cuando había
+    tarjetas. Sobrevivió a propósito: el color de una prioridad es el mismo mire por donde se
+    mire, en la fila, en la pill y en el punto del filtro.
   - **Es una línea continua** (26/8/2026, por pedido). Estuvo unas horas cortado en muescas —una
     por línea de título, con el período atado al `line-height:1.4`, para que el riel dijera
     también cuánto medía la tarea— y se sacó el mismo día: con títulos de una y dos líneas el
@@ -255,7 +364,7 @@ aprendérselo. Además es la que más se cambia, así que tiene que ser un botó
     pero ya no depende de nada: es lo que hace entrar tres renglones en la altura de la fila.
   - **Al hover el riel se pone del color de acento**: un riel pálido y quieto se lee como
     decoración, no como algo que se toca.
-- **Quién la hace se mudó a avatares** (`.bkav`, los mismos `.av.mini` de la tarjeta). Tres
+- **Quién la hace se mudó a avatares** (`.bkav`, los mismos `.av.mini` de la barra lateral y el chat). Tres
   iniciales de color se leen bajando por la columna. Sin nadie, un hueco punteado: es justo el
   caso en el que hay que poder tocarlo, misma regla que el «Sin asignar» de la pastilla. Es el
   mismo `data-pop="pend"` y abre el mismo menú.
@@ -266,11 +375,9 @@ aprendérselo. Además es la que más se cambia, así que tiene que ser un botó
   entera de gente y las iniciales arrancan pegadas a su izquierda. El ancho lo dibuja el CSS
   pero el número sale del JS (`ANCHO_AVATARES` → `--avn`, tomado de `APP_CONFIG.personas`, que
   es el techo real: el menú no ofrece a nadie más).
-- **El ancla del bloque es la primera `.pgcol` después de `.pgpills`, y en las dos listas hay
-  una visible ahí**: la prioridad en el tablero, la antigüedad en el backlog. Hubo un rato en
-  que el backlog no tenía ninguna —la primera era `.pgcol-quien`, escondida en columnas, y un
-  `auto` sobre un `display:none` no empuja nada—, así que las pills se pegaban al título y
-  bailaban con el largo de cada uno. Se arregló solo cuando la antigüedad pasó a ser columna.
+- **El ancla del bloque es `.pgesp` y no una columna**, justamente porque acá el backlog no
+  dibuja ninguna. Ver el punto del título elástico, más arriba: el ancla se movió tres veces
+  antes de dejar de depender de qué columnas tuviera cada lista.
 - **Las dos formas van SIEMPRE en el HTML y el CSS elige cuál se ve.** Cuál corresponde es una
   pregunta de ancho de pantalla, y el ancho no se sabe desde el JS. Es la misma regla que ya
   tenía el recorte del título a tres líneas: todo el tratamiento vive adentro del
@@ -302,17 +409,29 @@ tarea— en la de acertarle a un riel de 3px. Pasar por encima del título prend
 - **El backlog quedó afuera media hora y se descartó por pedido.** El argumento era que escribir
   una lista de corrido es el 90% de esa pantalla —anotar veinte cosas es tipear y apretar Enter
   veinte veces—. El motivo de unificar es más fuerte: dos renglones que se ven idénticos y
-  responden distinto al mismo clic es peor que perder el tipeo, que además se recupera en parte
-  porque la tarea nueva abre su página con el cursor en el título.
+  responden distinto al mismo clic es peor que perder el tipeo.
+- **Salvo la fila que se acaba de crear, que nace con el cursor adentro del título**
+  (26/8/2026, por pedido). Es un `<input>` en el lugar del botón, marcado con `bautizando` —el
+  gemelo de `renombrando`, el estado del grupo que se está bautizando— y vuelve a ser un botón
+  al salir del campo: Enter guarda y cierra, Escape deja la tarea sin nombre (ya está creada,
+  no se borra) y el clic afuera guarda lo que haya. No contradice la regla de arriba: la fila
+  ya dibujada sigue sin editarse, y lo que se recupera es justo lo que se había perdido, anotar
+  sin irse de la lista. **Vale para las dos listas**, que son el mismo componente y crear tiene
+  que hacer lo mismo de los dos lados.
+  - **Se limpia en `engancharTituloNuevo()` cuando el campo no está en pantalla.** Con un
+    filtro o el buscador prendidos, la fila recién creada —que todavía no dice nada— puede no
+    dibujarse: la marca quedaría puesta y le pondría un `<input>` encima del título a esa fila
+    en cuanto el filtro la deje pasar.
 - **Se fueron los tres manejadores del tipeo**, no quedaron mudos: `board.oninput`, `onpaste` y
   `onkeydown` ahora se **anulan** al entrar a la lista, junto con los dos que ya se anulaban.
   Anular es lo que hay que hacer y no borrar: si no, el `oninput` de la caja sigue vivo encima
   del tablero. **Contrapartidas asumidas**: Enter ya no abre una fila nueva —se agrega con el
   `＋` de la canaleta o el del final del bloque— y con él se fue la herencia del responsable de
   la fila de arriba, así que las cuatro puertas de creación preguntan.
-- **`nuevaEnEstado()` y `nuevaEnBacklog()` entran a la página** en vez de dejar el cursor en la
-  fila: sin título editable, quedarse afuera dejaba una tarea sin nombre y sin dónde escribirlo.
-  Es lo que usa el `foco` de `abrirPagina(id, foco)`.
+- **`nuevaEnEstado()` y `nuevaEnBacklog()` dejan el cursor en la fila y NO entran a la página.**
+  Estuvieron unas horas entrando, porque sin título editable quedarse afuera dejaba una tarea
+  sin nombre y sin dónde escribirlo; se corrigió por el otro lado, con el campo de arriba.
+  Con eso se fue también el `foco` de `abrirPagina(id, foco)`: no lo llamaba nadie más.
 
 Cuidado con `filaTareaHTML()`: es compartida y le queda **un solo corte por vista**; el resto lo
 decide la fila.
@@ -325,9 +444,10 @@ decide la fila.
   tarea está en el tablero ni tiene prioridad— pero sí por los avisos sin ver, que valen igual de
   los dos lados. Mismo elemento, mismas reglas: las que no aplican, no encienden. Y entrar desde
   el backlog sigue sin marcarla vista, así que la tarea llega igual de nueva al tablero.
-- **La pill de prioridad y el color del riel los decide la fila** (`t.backlog`), no la vista: así
-  vale igual adentro de la página de una tarea del backlog, que usa las mismas pills. Sin
-  prioridad, la columna la ocupa la antigüedad y el riel se pinta de ella.
+- **La pill de prioridad, el círculo de días y el color del riel los decide la fila**
+  (`t.backlog`), no la vista: así vale igual adentro de la página de una tarea del backlog, que
+  usa las mismas pills. Sin prioridad, esa columna no se dibuja y el riel se pinta de la
+  antigüedad; los días no se dibujan porque de ese lado la cuenta ni siquiera arrancó.
 
 ### La barra lateral
 
@@ -340,7 +460,7 @@ las dos acciones que sí son del tablero —la campana de críticas y «+ Nueva 
   serían dos clics de más para algo que se mira dos segundos.
 - **Lo que se abre es `.side-in`, apoyado ENCIMA del tablero y no dentro del flujo.** Si el
   ancho fuera parte del layout, rozar la barra con el mouse reacomodaría el tablero entero, y
-  en modo columnas eso son cuatro columnas saltando de lugar.
+  y partida la hoja en tres columnas eso son tres columnas saltando de lugar.
 - **Va en `z-index:40`, por debajo de los modales.** Se abre sola: una barra que se despliegue
   encima de una ficha abierta es un manotazo cada vez que el cursor pasa cerca del borde.
 - **El aviso de esquema (`.nota-pop`) es `position:fixed`.** La barra recorta lo que se sale
@@ -499,10 +619,16 @@ campana de críticas.
 - **Los bloques son siempre `1..N`, sin huecos.** `sprintsVisibles()` toma el piso de
   `APP_CONFIG.sprints`, lo sube si alguien apretó «+ Nuevo grupo» (queda en `localStorage`),
   lo sube si hay una tarea en un grupo más alto —un grupo con tareas no se esconde— y lo sube
-  también si alguien bautizó uno: un grupo con nombre es un grupo que alguien creó a
-  propósito, y ese nombre está en la base, así que lo ven todos. Un grupo nuevo nace con el
-  cursor adentro del nombre y sin fila en la base: si al final no se le escribe nada, queda
-  como quedaba antes de todo esto, un casillero de este navegador en `UI.sprints`.
+  también si alguien lo tocó: un grupo con nombre **o con lugar propio en la hoja** es un grupo
+  que alguien creó a propósito, y las dos cosas están en la base, así que las ven todos. Un grupo
+  nuevo nace con el cursor adentro del nombre y sin fila en la base: si al final no se le escribe
+  nada ni se lo acomoda, queda como quedaba antes de todo esto, un casillero de este navegador en
+  `UI.sprints`.
+  - **Y por eso quedarse sin nombre ya no siempre borra la fila.** Sigue valiendo que una fila sin
+    nombre no existe —el bloque vuelve a llamarse «Grupo N»— pero solo si esa fila no guarda
+    además dónde está el bloque: borrarla ahí le movería la columna a un grupo por haberle
+    vaciado el rótulo, que son dos cosas que no tienen nada que ver. Quién decide es
+    `fijarNombreGrupo()`, que es el único que sabe las dos.
 - **`modulo` es la columna «Área».** Era un campo muerto del tablero viejo, ya estaba en la
   base y ya lo guardaba `guardarTarea()`: revivirlo no costó una migración.
 - **`dep` («Depende de») es texto libre a propósito**, no una relación entre tareas. La
@@ -537,58 +663,87 @@ componente. La vista sigue marcándose con `bmode` en el board; lo propio de ac�
 `bkwrap`, `bksprint`, `bktarea` y las pills.
 
 - **Los grupos van repartidos en las mismas tres columnas del tablero** (26/8/2026, por pedido,
-  clase `bkcols`), y esto contradice a propósito lo que valía hasta ese día. Lo que cambió no es
-  la premisa —los grupos siguen siendo una secuencia— sino el corte: **en orden y de a tramos**,
-  así que se lee 1, 2, 3, 4 bajando por la izquierda y siguiendo por la del medio, como las
-  columnas de un diario. Alternando (1, 4 · 2, 5 · 3, 6) sí se rompería la secuencia, y por eso
-  no se alterna. «Sin planificar» queda al pie de la última, que es donde cae solo por ser el
-  último. El resto va a la izquierda: con siete grupos el corte es 3 · 2 · 2, no 2 · 2 · 3.
-  - **Contrapartida asumida**: el corte es por cantidad de bloques y no por altura, así que un
-    grupo de treinta tareas frente a uno de dos deja una columna mucho más larga. Balancear por
-    altura pondría el Grupo 4 arriba del 3, que es justo lo que la secuencia no permite.
+  clase `bkcols`), y esto contradice a propósito lo que valía hasta ese día.
+  - **Y cuál va en cuál lo decide el que acomodó la hoja** (26/8/2026, por pedido): el bloque se
+    arrastra de una columna a otra con el `⠿` de su canaleta y se queda donde lo dejaron
+    (`columnasDeGrupos`, `moverGrupo`). Esto también contradice a propósito lo que valía ese
+    mismo día —el corte era **en orden y de a tramos**, así que se leía 1, 2, 3, 4 bajando por la
+    izquierda y siguiendo por la del medio, como las columnas de un diario—. **Contrapartida
+    asumida y real**: dónde está el Grupo 4 ya no se deduce de nada. Se paga porque los bloques
+    dejaron de ser una cadencia el día que se les puso nombre —«Onboarding», «Lo de la AFIP»— y
+    cuál va al lado de cuál lo sabe el que los escribió, no el orden en que se crearon.
+  - **El lugar es del tablero y no del navegador**, igual que el nombre y al revés que el
+    plegado: acomodar la hoja es una decisión sobre la hoja, y que cada uno la viera acomodada
+    distinto sería justo lo contrario de acomodarla. Va en la misma fila de `roadmap_notas` que
+    ya guarda el nombre (ver el cuadro de la tabla), así que tampoco necesitó migración.
+  - **O están ubicados todos los bloques o no lo está ninguno.** Mientras nadie haya arrastrado
+    nada, el reparto es el viejo, en tramos; el primer arrastre escribe la ubicación de todos de
+    una sola vez, y por eso `moverGrupo()` reescribe el reparto entero y no solo el bloque que se
+    movió. Con la mitad ubicada y la mitad no habría que inventar una segunda regla para decir
+    dónde entra la que no lo está, y esa regla se contradice con la primera al día siguiente. El
+    que aparezca después sin lugar propio —un grupo recién creado, «Sin planificar» cuando se
+    llena— cae al pie de la última columna, que es donde nace todo lo nuevo acá.
+  - **Contrapartida asumida** del reparto viejo, que sigue valiendo mientras nadie acomode nada:
+    el corte es por cantidad de bloques y no por altura, así que un grupo de treinta tareas
+    frente a uno de dos deja una columna mucho más larga. Balancear por altura pondría el Grupo 4
+    arriba del 3, que es justo lo que la secuencia no permite.
   - **El reparto de ancho se copia y no se deduce.** Es 1.18 / 1.18 / 0.64 como el de los
     estados, y ahí ese número sale del contenido —Nueva y En curso contra los tres finales del
     camino—. Acá los grupos son intercambiables entre sí y ninguno merecería menos ancho que
     otro. **Contrapartida asumida**: los últimos entran más angostos sin que eso signifique nada
     sobre ellos. Se paga porque las dos listas tienen que leerse igual; fue un `1fr 1fr` en dos
     columnas durante unas horas y se descartó por pedido.
+  - **El asa del bloque es el mismo `⠿` de una tarea, en el mismo lugar de la canaleta.** Adentro
+    del bloque la fila se arrastra para cambiarla de bloque; acá el bloque se arrastra para
+    cambiarlo de columna. Un asa distinta para lo mismo un nivel más arriba sería un control que
+    hay que aprenderse aparte. **La lista por estado no lo lleva**: ahí la columna de cada bloque
+    la fija `COLUMNAS_LISTA` y no una preferencia de nadie, y es el `data-col` de la columna
+    —que solo dibuja el backlog— lo que hace que el manejador compartido no acomode nada del
+    otro lado.
+  - **El corte se hace contra el bloque entero —cabecera más lo que le cuelga— y no contra la
+    cabecera sola** (`suelteDeGrupo`). Con veinte tareas colgando, el medio de la cabecera cae en
+    el primer centímetro de un bloque de media pantalla y todo lo demás contaría como «abajo de
+    todo». Y mientras dura el arrastre las columnas cortas llevan un piso (`.mueve-grupo .bkcol`):
+    si una termina a media pantalla, lo que se suelte más abajo cae en el hueco de la grilla, que
+    no es de nadie.
   - **Un solo «＋ Nuevo grupo», al pie de la última columna**, aunque el diseño le ponga uno a
-    cada una. Acá el grupo no guarda en qué columna vive —es el número de `sprint` y la columna
-    se calcula al pintar— así que el que nace es siempre el N+1 y aparece siempre abajo a la
-    derecha. Dos botones que hacen lo mismo pero prometen dos lugares distintos son un botón
-    que miente.
+    cada una. El que nace es siempre el N+1 y aparece siempre ahí —después se lo arrastra a donde
+    tenga que ir—, así que dos botones que hacen lo mismo pero prometen dos lugares distintos
+    serían un botón que miente.
   - **El montón de pastillas pegado al título se esconde acá también** (26/8/2026, por pedido).
     Estuvo unas horas quedándose —media pantalla por columna alcanzaba— y se fue: la fila tiene
     que presentarse igual de los dos lados, y un racimo que cambia de largo en cada renglón es
     justo lo que rompe que la lista se lea bajando por la columna. El código, de qué depende y
-    de qué área es se ven entrando a la tarea; la antigüedad, que es la que apremia, dejó el
-    montón y se mudó a su columna fija (ver el cuadro de los tres layouts). La regla es una sola
-    para las dos listas: `.bkcols .bktarea .pgpills{display:none}`.
+    de qué área es se ven entrando a la tarea. La regla es una sola para las dos listas:
+    `.bkcols .bktarea .pgpills{display:none}`. La antigüedad estuvo unas horas saliendo del
+    montón para mudarse a una columna fija, y ese mismo día se fue de la fila entera.
   - **«→ Al tablero» es lo ÚNICO que la fila del backlog tiene de más**, y por eso paga 30px en
     vez de 88: queda en la flecha sola, con el rótulo adentro de un `.irtxt` que el CSS esconde
     —un solo HTML para los dos anchos, como el riel y los avatares—. No se esconde en el menú
     `⋯` como se escondió el resto: mandar tareas al tablero es lo que se viene a hacer acá.
-  - **La pastilla de antigüedad pierde el «hace» en la columna** (`pillEdad(t)` sin el segundo
-    argumento). La prioridad del otro lado mide 58px y esta tiene que medir lo mismo, si no las
-    dos hojas dejan de caer en la misma x. «3 sem» a secas no se malentiende: está en el lugar
-    donde el tablero pone «Crítica» y la frase entera está en el `title`. En la cabecera de la
-    página va con el «hace» —ahí no hay columna que respetar, y un «3 sem» suelto entre el área
-    y la dependencia sí se leería como cualquier otra cosa—.
+  - **La antigüedad no se dibuja en la fila, de ninguna forma** (26/8/2026, por pedido). Estuvo
+    unas horas siendo columna fija —58px, sin el «hace», exactamente en el lugar y con el ancho
+    de la prioridad del otro lado— y se fue el mismo día: contar días es una cuenta del tablero,
+    y hacerla también en la lista de lo que todavía no empezó era la misma pregunta contestada
+    en dos pantallas con dos relojes. Lo que quedó del dato acá es lo que no escribe números: el
+    color del riel y el «N sin salir» del grupo. Con la columna se fue el segundo argumento de
+    `pillEdad()`, que ahora va siempre con el «hace» porque solo se dibuja en la cabecera de la
+    página, donde no hay columna que respetar.
 - **El riel de la puerta dice antigüedad** (26/8/2026, por diseño). En el tablero el riel se
   pinta de la prioridad; acá no hay prioridad a propósito, así que hasta ese día caía en gris y
   no decía nada. Ahora dice lo único que el backlog tiene para decir sobre qué apremia: cuánto
   hace que algo está anotado y todavía no salió. Son dos lecturas del mismo riel según el lado,
   y está bien que lo sean — de un lado se mira qué es urgente, del otro qué se está pudriendo.
-  - **El umbral es uno solo** (`UMBRAL_VIEJA`, 30 días). El color del riel, la pastilla ámbar de
-    la fila (`.pgpill.rancio`, que pisa a `.edad`) y el «N sin salir» de la cabecera del grupo
-    son el mismo dato en tres escalas: con el número escrito en tres lugares se contradicen la
-    primera vez que alguien toque uno, y una fila ámbar dentro de un grupo que dice «0 sin
-    salir» no se le explica a nadie.
+  - **El umbral es uno solo** (`UMBRAL_VIEJA`, 30 días). El color del riel, el «N sin salir» de
+    la cabecera del grupo y la pastilla ámbar de la página de la tarea (`.pgpill.rancio`, que
+    pisa a `.edad`) son el mismo dato en tres escalas: con el número escrito en tres lugares se
+    contradicen la primera vez que alguien toque uno, y un riel ámbar dentro de un grupo que
+    dice «0 sin salir» no se le explica a nadie.
   - **Ámbar y no rojo.** Dos meses anotada no es una alarma, es algo que hay que mirar. El rojo
     ya está tomado por las críticas del tablero y por la chapa de novedad.
-  - **La pastilla se pone ámbar solo en el backlog** (`t.backlog && esVieja(t)`, la marca la da
-    la fila y no la vista). En el tablero la antigüedad es contexto —hace cuánto se creó— y no
-    un reproche: ahí la tarea ya está en la cancha.
+  - **Lo ámbar es solo del backlog** (`t.backlog && esVieja(t)`, la marca la da la fila y no la
+    vista). En el tablero la antigüedad es contexto —hace cuánto se creó— y no un reproche: ahí
+    la tarea ya está en la cancha, y encima el número que se muestra cuenta otra cosa.
   - **No se migró nada**: sale toda de `creada`, que ya estaba en la fila.
 - **La pantalla no tiene encabezado** (26/8/2026). Tenía miga («Backlog»), contador
   («4 tareas · 3 bloques»), título y bajada. Se sacaron los cuatro por pedido: la barra
@@ -607,6 +762,10 @@ componente. La vista sigue marcándose con `bmode` en el board; lo propio de ac�
   flecha, el nombre y el contador de actividades viven adentro de un mismo botón con marco
   propio. El contador va ahí adentro y no en las pills de la derecha porque, plegado, es el
   único dato que queda a la vista.
+  - **Y por eso la pill «N por hacer» de la derecha se sacó** (26/8/2026, por pedido): decía
+    con palabras el mismo número que el `.bkn` del botón, a dos centímetros de distancia y en
+    el mismo renglón. El «N sin salir» se queda, que ese cuenta otra cosa y solo aparece
+    cuando hay algo que decir.
 - **Al abrir un sprint lo que tiene que saltar a la vista es el título de cada actividad**, no
   las catalogaciones: es el dato por el que se abrió el bloque. Por eso `.bktarea .pgtxt` pesa
   más que el texto de un renglón de página común.
@@ -616,12 +775,11 @@ componente. La vista sigue marcándose con `bmode` en el board; lo propio de ac�
   vacío, y de qué se trata la tarea se ve entrando a la página, que está a un clic del `▤`.
   Con eso volvió también la fila sin la clase `conexpl`.
 - **Las catalogaciones van todas a la derecha, en pills**, y desde el 26/8/2026 en dos zonas:
-  las que se comparan entre filas —desde cuándo está anotada, quién la hace, «→ Al tablero»— en
-  columnas de ancho fijo, y las que solo acompañan —código, dependencia y área— juntas contra el
-  título. Las que no tienen valor no dibujan nada: una columna de guiones no dice más que el
-  hueco. La única excepción es quién la hace. Es exactamente el reparto de la fila del tablero,
-  con la antigüedad ocupando la columna de la prioridad: la misma tarjeta de los dos lados,
-  cambiando qué dice el dato. La regla completa está en el cuadro de los tres layouts.
+  las que se comparan entre filas —quién la hace, «→ Al tablero»— en columnas de ancho fijo, y
+  las que solo acompañan —código, dependencia y área— juntas contra el título. Las que no tienen
+  valor no dibujan nada: una columna de guiones no dice más que el hueco. La única excepción es
+  quién la hace. Es el mismo reparto de la fila del tablero, con dos columnas menos: acá no hay
+  prioridad y tampoco días. La regla completa está en el cuadro «El tablero es una lista».
 - **En el backlog no hay prioridad, y no es que esté escondida: no se puede poner**
   (26/8/2026, por pedido). Lo que está anotado todavía no se está haciendo, y ponerle
   «crítica» a algo que nadie empezó es una urgencia inventada que después llega al tablero
@@ -672,24 +830,27 @@ componente. La vista sigue marcándose con `bmode` en el board; lo propio de ac�
   salió de la fila en columnas; volvieron las dos cosas atrás el mismo día.
 - **El menú `⋯` es el equivalente del `＋` del diseño.** Adentro de una página ese botón
   inserta bloques; en la lista, una tarea no tiene bloques que insertar pero sí cosas que
-  cambiar: **son tres —sprint, pase al tablero y borrar—**, que «Ficha completa» salió el
-  26/8/2026 por pedido (ver el cuadro de la ficha).
+  cambiar: **son cuatro —sprint, ficha completa, pase al tablero y borrar—**. «Ficha completa»
+  salió y volvió el 26/8/2026: es la única puerta que le queda a la ficha desde que se fueron
+  las tarjetas, y es también la única entrada del menú que no toca la tarea (ver el cuadro de
+  la ficha).
 - **El botón «→ Al tablero» de la fila se sacó y volvió el mismo día** (26/8/2026, las dos
   veces por pedido). Se había ido por ser un botón por renglón —cuarenta en pantalla— para
   algo que se hace una vez por tarea; volvió porque mandar tareas al tablero es *lo que se
   viene a hacer* al backlog cuando arranca el grupo, y tenerlo en el menú `⋯` son dos clics
   por tarea. La diferencia con la primera versión es dónde vive: ahora es una pill más, al
   lado de la prioridad y de quién la hace, y no un botón suelto al final del renglón.
-  - **Va enganchado a esas dos y no al final de las pills** porque son las únicas que se
-    dibujan siempre: así queda en el mismo lugar en las cuarenta filas, en vez de bailar
-    según la fila tenga o no área, dependencia o antigüedad.
+  - **Va enganchado a las columnas y no al final de las pills** porque las columnas son las
+    únicas que se dibujan siempre: así queda en el mismo lugar en las cuarenta filas, en vez de
+    bailar según la fila tenga o no área o dependencia.
   - **Solo lo dibuja el backlog.** Quién lo dibuja lo decide quien llama y no `pillPase()`
     mirando la vista: la cabecera de la página de la tarea usa estas mismas pills y ya tiene
     su propio «→ Al tablero», así que preguntando por la vista se dibujaría dos veces el mismo
     botón. Que la fila esté ahí ya alcanza para saber que todavía no salió — la que sale se va
     de la lista. Los otros caminos siguen intactos: el menú `⋯` y la cabecera de la página.
 - **El panel de planificación de la fila se eliminó.** Era donde vivían Área, «Depende de»,
-  Estado y Tipo; los cuatro se mudaron a la ficha. La explicación ya no se edita en la lista
+  Estado y Tipo; se mudaron a la ficha —Tipo salió del tablero entero ese mismo día, ver el
+  modelo de datos—. La explicación ya no se edita en la lista
   bajo ningún concepto: dos editores sobre el mismo `expl`, uno de bloques y otro de HTML
   plano, se pisan el formato.
 - **Los manejadores del backlog se cuelgan del board entero, por delegación**, y `render()`
@@ -698,8 +859,45 @@ componente. La vista sigue marcándose con `bmode` en el board; lo propio de ac�
   Ojo con usar `addEventListener` ahí: la lista se repinta entera ante cualquier cambio y se
   acumularía un listener por repintado (por eso son `board.onclick`, `board.oninput`…).
 - **La canaleta tiene dos controles y no tres**: el `⋯` y el `⠿`. El casillero de marcar se
-  sacó el 26/8/2026 con toda la selección múltiple — ver el cuadro de los tres layouts, donde
+  sacó el 26/8/2026 con toda la selección múltiple — ver el cuadro «El tablero es una lista», donde
   vive esa regla.
+
+**Arriba de todos los grupos va la hoja de notas** (26/8/2026, por pedido): un cuadro del ancho
+de la hoja para escribir a mano lo que no es una tarea —un pendiente suelto, algo que hay que
+preguntar—. Existe porque el backlog es lo único que se mira antes de repartir trabajo, y hasta
+ahora la única forma de anotar algo ahí era crear una tarea, que después hay que clasificar,
+asignar y sacar.
+
+- **Es texto plano y no bloques.** Es una nota al margen, no un documento: con bloques habría que
+  decidir dónde vive el árbol, qué pasa al arrastrar y cómo se anida, media pantalla de reglas
+  para algo que se escribe en diez segundos. Lo que se pega entra como texto y por eso tampoco
+  hace falta un sanitizador — la misma regla que la Explicación de la ficha.
+- **No puede robarle la pantalla al backlog**, que es a lo que se vino. El cuadro crece con lo
+  escrito desde tres renglones hasta 148px y de ahí en más se scrollea solo. Un alto fijo dejaría
+  un cuadro grande y vacío la mayor parte del tiempo; sin techo, media pantalla de notas empuja
+  los grupos abajo del pliegue.
+- **Lo escrito es del tablero y el plegado es de cada uno**, el mismo reparto que ya tienen los
+  grupos: el texto en la base (`localStorage` haría que cada uno viera notas distintas, que es lo
+  contrario de dejarle algo anotado al otro) y el plegado en `localStorage` (que alguien la cierre
+  para ver más grupos no tiene por qué cerrársela a los demás).
+- **Vive en `roadmap_notas`, en una fila con id propio (`nota-backlog`)**, y no en una columna
+  nueva: es la segunda cosa que usa esa tabla y para eso estaba el prefijo en el `id` de los
+  grupos. Ojo con las tres columnas: en una fila de grupo `texto` es el número de columna de la
+  hoja y `orden` la posición; en la de la nota `texto` es lo escrito, `titulo` va vacío y `orden`
+  no ubica nada. Leer una por la otra pinta un grupo llamado «acordate de llamar al contador».
+- **Vacía no se borra la fila**, al revés que el nombre de un grupo: el cuadro está siempre en
+  pantalla, así que la fila en blanco y la fila que no existe son el mismo estado.
+- **Va solo en el backlog y no en el tablero-lista**, aunque las dos listas sean el mismo
+  componente: la nota es de la planificación, y arriba del tablero sería un cuadro de texto libre
+  compitiendo con el trabajo del día. Va además **afuera de `.pgbody`** — adentro sería una caja
+  más de la grilla de tres columnas y se metería en una sola.
+- **Se guarda con retraso (700ms) y al salir del campo**, no tecla por tecla, y **lo que todavía
+  no confirmó la base gana sobre lo que llega por realtime** (`notaEnVuelo`). Es la misma regla
+  que la página de una tarea: sin eso, un cambio de otro recarga `datos` y pisa en pantalla lo
+  que estás terminando de escribir.
+- **Se engancha a mano y no por delegación**, igual que el nombre de un grupo: `engancharLista()`
+  anula `oninput`, `onpaste` y `onkeydown` del board a propósito —son de la caja— y hay un solo
+  cuadro, que nace de cero en cada repintado.
 
 **Historial de la pestaña**, para no volver a caminarlo: fue un enlace a Notion, después una
 hoja de texto libre con renglones anidados (`roadmap_vision`, borrada el 15/8/2026 sin haber
@@ -720,6 +918,38 @@ hecho en Claude Design.
 lugar; se cambió por una página aparte porque desplegar tres para compararlas empuja el
 resto del sprint fuera de pantalla, y la lista existe para ver el sprint entero. Los sprints
 sí se despliegan: son cuatro, no cuarenta.
+
+**Y como se entra, el «atrás» del navegador tiene que sacarte** (26/8/2026, por pedido). Hasta
+ese día la app no tocaba el historial —una sola URL, cero entradas—, así que entrar a una tarea
+y apretar atrás te sacaba del tablero entero. Ahora cada nivel al que se entra —la tarea y cada
+subpágina— apila una entrada con la ubicación adentro.
+
+- **`popstate` es la única puerta que mueve dónde estás parado.** Entrar apila y se mueve en el
+  mismo acto (la entrada todavía no existe, no hay nada que esperar); **todo lo que sale
+  —Escape, la miga de pan, el «Tablero» del principio— le pide al navegador que retroceda**
+  (`volverAProfundidad()`) y se mueve recién cuando el navegador contesta. Que las dos formas de
+  salir escriban en el mismo lugar es lo que mantiene el historial y la pantalla diciendo lo
+  mismo. Al revés —que salir con Escape apilara una entrada nueva— «atrás» te volvería a meter
+  en la tarea de la que acabás de salir, que es el defecto clásico de atar un botón de cerrar a
+  un `pushState`.
+- **La ubicación va entera en el `state` (`{t, r}`), no como un número de profundidad.** Así
+  cada entrada sabe sola a qué tarea y a qué subpágina corresponde: adelante funciona igual que
+  atrás, y no hay que reconstruir nada contando saltos.
+- **`cerrarPagina()` fija la entrada en «el tablero»**, y por eso el `replaceState` vive ahí
+  adentro y no en quien llama: los caminos que cierran la página sin que nadie navegue —la tarea
+  borrada, la que desapareció por realtime— dejarían una entrada jurando que estás adentro de
+  algo que ya no existe.
+- **Al arrancar la ubicación sale del historial** (`restaurarUbicacion()`, llamada desde
+  `arrancar()` justo antes del `render()`): recargar adentro de una tarea te deja adentro de esa
+  tarea. Va ahí y no en el `let` de arriba porque necesita los datos cargados — sin ellos no hay
+  cómo saber si la tarea que nombra el historial todavía existe. Sirve también para el
+  logout/login, que vuelve a pasar por `arrancar()`.
+- **`pushState` va con red** (`try`): tira si no hay origen —abrir el `index.html` con doble
+  clic, sin servidor—. Que ahí no ande el «atrás» es aceptable; que no se pueda entrar a una
+  tarea, no.
+- **Ojo con la ficha**: el modal NO participa del historial. Abrirla desde el menú `⋯` de la
+  fila y apretar atrás sigue sacándote de la app, porque nadie apiló nada. Es lo que queda del
+  asunto — ver el cuadro de la ficha.
 
 **La lista y la página son el mismo componente** y comparten las clases `pg`. Lo que cambia
 es qué representa cada renglón: afuera, sprints y tareas; adentro, bloques de texto. Por eso
@@ -743,8 +973,10 @@ hace que una frase de tres renglones se siga leyendo como una frase. Sigue siend
 **La cabecera perdió el grupo y «Ficha completa», y lo que quedó se agrandó** (26/8/2026,
 por pedido). En qué grupo cae la tarea es un dato de la planificación y se mira desde el
 backlog, donde los grupos son la estructura de la pantalla; acá adentro llenaba el renglón
-con algo que nadie viene a ver. La ficha ya se abre desde el menú `⋯` de la fila, así que el
-botón eran dos puertas al mismo modal, una de ellas peleando lugar con lo que sí se toca.
+con algo que nadie viene a ver. Y la ficha se abre desde el menú `⋯` de la fila, así que el
+botón eran dos puertas al mismo modal, una de ellas peleando lugar con lo que sí se toca —
+ese cuadro sigue valiendo aunque «Ficha completa» haya vuelto al menú horas después: desde
+adentro de la tarea, un modal encima de la misma tarea no agrega nada.
 Con la mitad de las pastillas afuera, prioridad, quién la hace y el pase al tablero pueden
 pesar lo que valen: **el aumento vive en `.pgmeta` y no en `.pgpill`**, que es de las dos
 listas —ahí hay cuarenta renglones y las pastillas tienen que ser discretas para que se lea
@@ -812,12 +1044,30 @@ después, sin abrir la conversación de la ficha.
   - **Acá SÍ se puede sacar al último**, al revés que `pend` y que `carga`. Quitar a todos no
     deja el aviso sin dueño: lo devuelve al equipo, que es el estado de fábrica.
   - **Decide a quién le SUENA la chapa, no quién puede leerlo.** El aviso se dibuja igual para
-    cualquiera que entre a la tarea: el cuadro es de la tarea, no un buzón. Por lo mismo el
-    «N sin ver» de adentro los cuenta a todos y no solo a los míos — un contador que no cuadre
-    con los renglones que están a la vista se lee como un error de la pantalla.
-  - **Avatares y no una pill con nombres escritos**, misma razón que la firma: el renglón tiene
-    que leerse de un vistazo. Para todos queda un punto hueco y no un hueco de verdad — la
-    marca vacía es justo la que hay que poder tocar.
+    cualquiera que entre a la tarea: el cuadro es de la tarea, no un buzón.
+
+**Adentro del cuadro no hay contador** (26/8/2026, por pedido). Al lado del rótulo iba la
+pastilla «N sin ver» y se sacó: decía en números lo que la lista de abajo ya muestra renglón por
+renglón y en rojo, y aparecía pegada al campo justo cuando uno va a escribir un aviso nuevo. Que
+hay algo sin ver lo sigue diciendo **el borde rojo del cuadro** (`.pghdr.hay`), que es lo que se
+ve antes de leer nada; para eso alcanza con saber si hay o no hay, así que `sinVer` pasó de
+contar (`.filter().length`) a preguntar (`.some()`). La chapa de la fila, que es la que avisa
+desde afuera, no se tocó.
+  - **El avatar y además el nombre escrito** (26/8/2026, por pedido). Estuvo siendo el avatar
+    solo, con el argumento de que el renglón tiene que leerse de un vistazo y tres nombres al
+    lado pesan más que el aviso; se corrigió por el otro lado. Un círculo con una «L» adentro
+    solo le dice algo al que ya se lo sabe de memoria, y el destinatario es justo lo que hay
+    que poder leer sin pasar el cursor por encima — la misma razón por la que la pastilla de
+    prioridad se quedó al lado del riel en la fila de la lista. El nombre se recorta con puntos
+    suspensivos y la lista entera sigue estando en el `title`, así que el que manda sigue
+    siendo el aviso.
+  - **Sin nadie elegido dice «Sin destinatario», escrito y en ámbar.** Era un punto hueco y
+    tenue que se prendía con el hover del renglón: de los dos estados, el invisible era
+    justamente el que hay que notar. Ámbar y no rojo, la misma escala que lo rancio del
+    backlog: es algo para mirar, no una alarma — y acá el rojo ya significa «sin ver». **Ojo
+    con lo que dice el cartel**: vacío no es que el aviso no le llegue a nadie, es que le suena
+    a todo el equipo (ver dos puntos más arriba), y eso lo aclara el `title` porque en el
+    renglón no entra.
 - **El visto lo pone cualquiera**, no una persona en particular: el aviso es de la tarea, y
   uno ya resuelto en una llamada tiene que poder apagarse sin esperar a nadie. Queda quién lo
   apagó en `vistoPor`.
@@ -896,7 +1146,7 @@ llegaría apagada al tablero, que es justo donde tiene que llamar la atención.
   creó o mandó al tablero: las de antes de esta regla tienen `hoy` en `false` y no se encienden
   nunca. No se migró nada.
 - `avisosSinVer()` mira la marca `"visto":false` **en el texto crudo antes de parsear**: son
-  cientos de tarjetas por repintado y un `JSON.parse` en cada una para no encontrar nada no se
+  cientos de filas por repintado y un `JSON.parse` en cada una para no encontrar nada no se
   paga.
 - Se apaga al **entrar** a la página (`abrirPagina()`), no al salir: ese es el momento en que
   efectivamente la miraste. Y solo si la tarea está en el tablero, por lo de arriba.
@@ -953,14 +1203,28 @@ archivo huérfano: se decidió no llevar la cuenta, como en cualquier editor.
 
 ### El detalle de la tarea
 
-**La ficha tiene una sola puerta: la tarjeta del tablero** (26/8/2026, por pedido). El clic
-sobre una tarjeta la sigue abriendo, en columnas y en filas. Desde una fila ya no se llega —el
-`▤` abre la página, y ni el menú `⋯` ni la cabecera de la página tienen el botón—, así que
-desde el backlog y desde el tablero-lista no hay forma de abrirla. **Contrapartida asumida**:
-la ficha deja de ser el lugar donde se trabaja una tarea y queda como lo que le quedó de propio
-—la conversación, los adjuntos sueltos y los campos que la página no dibuja—. Lo que se toca
-todos los días vive en la página o en las pills de la fila; lo demás se consulta desde la
-tarjeta. Todo lo que sigue vale igual, que la ficha no se tocó por dentro.
+**La ficha tiene una sola puerta: «Ficha completa», en el menú `⋯` de la fila** (26/8/2026). Ese
+día la puerta se mudó dos veces y conviene leer las dos juntas, porque la segunda contradice a
+la primera a propósito:
+
+1. **Salió del menú `⋯` y de la cabecera de la página**, por pedido. El argumento era que eran
+   dos puertas al mismo modal y que la ficha ya colgaba de la tarjeta del tablero, que la abría
+   con un clic. Desde una fila se entra a la tarea por el `▤`, que abre la página: la misma
+   tarea con más lugar y sin un modal encima.
+2. **Volvió al menú `⋯` unas horas después**, cuando se sacaron los dos layouts de tarjeta. Sin
+   tarjeta, esa era la última puerta, y con las tres cerradas la conversación, los adjuntos
+   sueltos y los campos que la página no dibuja quedaban guardados en la base sin ninguna
+   pantalla que los mostrara. El motivo por el que se había ido —dos puertas al mismo modal—
+   dejó de ser cierto justo cuando la otra dejó de existir.
+
+**La cabecera de la página NO la recupera**: desde adentro de la tarea, un modal encima de la
+misma tarea no agrega nada. Y va en el menú y no como pill de la fila porque se abre mucho
+menos que entrar a la tarea, que es el `▤`.
+
+**Contrapartida asumida**: la ficha dejó de ser el lugar donde se trabaja una tarea y quedó como
+lo que le es propio —la conversación, los adjuntos sueltos y los campos que la página no
+dibuja—. Lo que se toca todos los días vive en la página o en las pills de la fila. Todo lo que
+sigue vale igual, que la ficha no se tocó por dentro.
 
 La Explicación es un `contenteditable`, no un `<textarea>`: hace falta que una captura
 pegada quede **adentro del texto**, en el lugar donde estaba el cursor, y un textarea pinta
@@ -1039,7 +1303,10 @@ su propio `onEstado(estado)`.
   combinado con `combinar(...fns)`.
 - **Campos con autoguardado debounced y drag&drop**: solo alimentan el indicador global.
 - **Carga inicial**: esqueleto con shimmer escrito en el HTML dentro de `#board`, sin JS
-  para mostrarlo u ocultarlo — el primer `render()` lo pisa solo.
+  para mostrarlo u ocultarlo — el primer `render()` lo pisa solo. **Tiene la forma de lo que
+  va a llegar**: bloques con renglones, no las tres columnas de tarjetas que fue hasta el
+  26/8/2026. Un esqueleto con la silueta de un tablero que ya no existe promete durante medio
+  segundo una pantalla que después no llega.
 - **No pisar lo que alguien está escribiendo**: `estaEditando()` bloquea el refresco de
   realtime mientras hay un campo con foco dentro del tablero o el detalle de una tarea
   abierto. El refresco pendiente se aplica al salir del campo o al cerrar el modal.

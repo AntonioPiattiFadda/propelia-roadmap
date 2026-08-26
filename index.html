@@ -70,19 +70,10 @@
         <button type="button" class="sel" aria-haspopup="true" aria-expanded="false">Prioridad</button>
         <div class="selmenu" hidden role="group" aria-label="Filtrar por prioridad"></div>
       </div>
-      <select class="sel" id="fTipo" aria-label="Filtrar por tipo"></select>
       <span class="spacer"></span>
-      <div class="seg-layout" id="layout">
-        <button data-layout="cols" title="Ver en columnas" aria-label="Ver en columnas">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="9.5" y="4" width="5" height="16" rx="1.5"/><rect x="16" y="4" width="5" height="16" rx="1.5"/></svg></button>
-        <button data-layout="rows" title="Ver en filas" aria-label="Ver en filas">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="18" height="4.2" rx="1.5"/><rect x="3" y="10" width="18" height="4.2" rx="1.5"/><rect x="3" y="16" width="18" height="4.2" rx="1.5"/></svg></button>
-        <!-- La tercera es la misma lista de renglones del Backlog, pero agrupada por estado
-             en vez de por sprint. El ícono lleva la viñeta a la izquierda de cada renglón
-             justamente para que no se confunda con «filas», que son tarjetas apiladas. -->
-        <button data-layout="lista" title="Ver como lista" aria-label="Ver como lista">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4.6" width="3.2" height="3.2" rx=".9"/><rect x="8.4" y="5" width="12.6" height="2.4" rx="1.2"/><rect x="3" y="10.4" width="3.2" height="3.2" rx=".9"/><rect x="8.4" y="10.8" width="12.6" height="2.4" rx="1.2"/><rect x="3" y="16.2" width="3.2" height="3.2" rx=".9"/><rect x="8.4" y="16.6" width="12.6" height="2.4" rx="1.2"/></svg></button>
-      </div>
+      <!-- Acá vivía el segmentado de layout: columnas, filas y lista. Las dos de tarjetas se
+           sacaron el 26/8/2026 por pedido y quedó una sola forma de dibujar el tablero, así que
+           el segmentado se fue entero: un selector de una opción no es un selector. -->
       <span class="estado-guardado" id="estadoGuardado" aria-live="polite"></span>
     </div>
 
@@ -99,10 +90,14 @@
 </header>
 
 <main class="board" id="board">
+  <!-- Esqueleto de la carga inicial: bloques con renglones, que es la forma que tiene el
+       tablero ahora. Eran tres columnas de tarjetas hasta el 26/8/2026 — un esqueleto con la
+       silueta de un tablero que ya no existe promete durante medio segundo una pantalla que
+       después no llega. No lo prende ni lo apaga el JS: el primer `render()` lo pisa solo. -->
   <div class="esqueleto" aria-hidden="true">
-    <div class="esq-col"><div class="esq-cab shimmer"></div><div class="esq-card shimmer"></div><div class="esq-card shimmer"></div></div>
-    <div class="esq-col"><div class="esq-cab shimmer"></div><div class="esq-card shimmer"></div></div>
-    <div class="esq-col"><div class="esq-cab shimmer"></div><div class="esq-card shimmer"></div><div class="esq-card shimmer"></div></div>
+    <div class="esq-bloq"><div class="esq-cab shimmer"></div><div class="esq-fila shimmer"></div><div class="esq-fila shimmer"></div><div class="esq-fila shimmer"></div></div>
+    <div class="esq-bloq"><div class="esq-cab shimmer"></div><div class="esq-fila shimmer"></div><div class="esq-fila shimmer"></div></div>
+    <div class="esq-bloq"><div class="esq-cab shimmer"></div><div class="esq-fila shimmer"></div></div>
   </div>
 </main>
 </div><!-- /.shell -->
@@ -120,7 +115,6 @@
       <div class="barra-campos">
         <select id="tEstado" aria-label="Estado"></select>
         <select id="tPrioridad" aria-label="Prioridad"></select>
-        <select id="tTipo" aria-label="Tipo de actividad"></select>
         <select id="tSprint" aria-label="Grupo del backlog"></select>
         <!-- Área y «Depende de» vivían en el panel de la fila del backlog. Al pasar la lista
              al formato del diseño, la fila quedó con el título y las catalogaciones y nada

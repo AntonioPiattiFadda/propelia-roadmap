@@ -36,15 +36,24 @@ const CRITICA = 'critica';
 // 'bisemanal' salió del tablero. Lo que quedó cargado con esa prioridad se lee como
 // mensual, que es la que la reemplaza; en la base no se toca nada hasta que se edite.
 const PRIORIDADES_VIEJAS = { bisemanal:'mensual' };
-const TIPOS = [
-  { id:'nuevo',      label:'Desarrollo nuevo',          color:'#5E8467' },
-  { id:'modif',      label:'Modificación de lo hecho',  color:'#5F7A9B' },
-  { id:'correccion', label:'Corrección de errores',     color:'#A0565F' },
-  { id:'uxui',       label:'UX / UI',                   color:'#8A6E9C' },
-];
+/* El tipo de actividad —«Desarrollo nuevo», «Modificación», «Corrección», «UX/UI»— se sacó
+   el 26/8/2026: nadie lo usaba. Era una catalogación que había que elegir tarea por tarea y
+   que después no filtraba nada, porque el filtro de la barra tampoco se tocaba. Con él se
+   fueron el <select> de la ficha, el filtro y la columna del CSV.
+
+   La columna `roadmap_tareas.tipo` sigue en la base con lo que tenía cargado y
+   `guardarTarea()` la escribe igual, como pasó con `loom`: no se migró nada. Toda tarea
+   nueva nace con el `'nuevo'` de fábrica, que es lo que ya tenía la columna por defecto.
+
+   **Y desde el 26/8/2026 esa columna muerta guarda otra cosa: cuándo entró la tarea al
+   tablero** (ver `entroAlTablero()`). Es la misma jugada que `modulo` con el «Área», `hoy` con
+   la chapa de novedad y `texto`/`orden` de `roadmap_notas` con la columna de cada grupo: hay
+   dos migraciones esperando hace semanas y una columna nueva sería condenar la cuenta de días
+   a esperar una tercera. */
+
 // El tablero agrupa siempre por estado: las columnas son los estados y, dentro de cada
-// una, las tareas se apilan por prioridad. Las otras formas de mirar el tablero
-// (prioridad, tipo) quedaron como filtros de la barra, no como vistas.
+// una, las tareas se apilan por prioridad. La otra forma de mirar el tablero —la
+// prioridad— quedó como filtro de la barra, no como vista.
 //
 // No todas las vistas pintan tarjetas. `caja` y `backlog` son hojas de renglones: las dos
 // ocupan el board entero en vez de repartirlo en columnas. La marca la
@@ -77,13 +86,21 @@ const sinTareas = v => !!v.caja;
 // Vistas que se comen el board entero en vez de repartirlo en columnas.
 const anchoCompleto = v => !!(v.caja || v.backlog);
 
-/* Las tres formas de mirar el tablero. `cols` y `rows` son la misma tarjeta acomodada de dos
-   maneras; `lista` es OTRO componente: la lista de renglones del Backlog, con las mismas
-   clases `pg`, pero agrupada por estado en vez de por sprint.
-   Es una preferencia de layout y no una vista: se sigue mirando el tablero —las mismas
-   tareas, los mismos filtros, el mismo contador—, cambia cómo se dibuja. Por eso vive en el
-   segmentado de la barra junto a las otras dos y no en `VISTAS`. */
-const LAYOUTS = ['cols', 'rows', 'lista'];
+/* Acá vivía `LAYOUTS = ['cols','rows','lista']`, el segmentado de la barra: tres formas de
+   dibujar el mismo tablero. `cols` era el kanban de tarjetas y `rows` esa misma tarjeta
+   estirada a lo ancho; `lista` es OTRO componente —la lista de renglones del Backlog, con las
+   mismas clases `pg`, agrupada por estado en vez de por sprint—.
+
+   **Las dos de tarjetas se sacaron el 26/8/2026 por pedido, y con ellas el segmentado
+   entero.** El tablero se dibuja de una sola forma, así que ya no hay preferencia que
+   guardar ni botón que elegirla: `UI.layout` se fue de `localStorage` y una sesión vieja que
+   todavía lo tenga guardado simplemente lo ignora, que es lo mismo que hacía ya con la vista
+   «Hoy». La lista sí sigue siendo un layout y no una vista —las mismas tareas, los mismos
+   filtros, el mismo contador—, por eso no entró en `VISTAS`: es cómo se dibuja el tablero.
+
+   Lo que se fue con ellas: `renderTablero()`, `tarjetaHTML()`, `conectarTablero()`,
+   `soltarTarea()`, `tarjetaDespuesDe()` y el autoscroll del arrastre de tarjetas. El arrastre
+   de la lista es otro y vive en `engancharArrastreLista()`. */
 
 // Personas del tablero. El `id` es lo que se guarda en la base (responsables, autor
 // del chat, quién puso la plata); `email` es lo que ata cada persona a su cuenta.
@@ -107,10 +124,9 @@ const nombrePersona = id => persona(id)?.nombre || id || '—';
 let YO = { id:'', nombre:'', esMiembro:false };
 
 /* ---------- datos y estado de pantalla ---------- */
-let datos = { tareas: [], caja: [], grupos: [] };
+let datos = { tareas: [], caja: [], grupos: [], nota: '' };
 let UI = {
   vista: 'estado',
-  layout: 'cols',
   // La columna de Terminadas arranca plegada: es lo que ya no hay que mirar.
   terminadasAbiertas: false,
   // Cuántos casilleros de sprint mostrar en el backlog. 0 = lo que diga la config.
@@ -118,28 +134,29 @@ let UI = {
   // `prioridades` es una lista, como `pend`: los dos filtros admiten varias opciones a la
   // vez. Nada de esto se guarda en localStorage — un filtro puesto es de este rato, no una
   // preferencia.
-  f: { q:'', pend:[], prioridades:[], tipo:'' },
+  f: { q:'', pend:[], prioridades:[] },
 };
 try {
   const guardado = JSON.parse(localStorage.getItem('tablero-ui') || '{}');
   if (guardado.vista && VISTAS.some(v => v.id === guardado.vista)) UI.vista = guardado.vista;
-  // Contra `LAYOUTS` y no contra dos ids sueltos: agregar un layout no puede obligar a
-  // acordarse de tocar también esta línea.
-  if (LAYOUTS.includes(guardado.layout)) UI.layout = guardado.layout;
+  // `guardado.layout` ya no se lee: el tablero se dibuja de una sola forma. Una sesión vieja
+  // puede traerlo guardado y no molesta a nadie — se ignora, igual que se ignora la vista
+  // «Hoy» que también quedó dando vueltas en `localStorage`.
   UI.terminadasAbiertas = !!guardado.terminadasAbiertas;
   UI.sprints = Number(guardado.sprints) || 0;
 } catch (e) { /* preferencia local, si no se puede leer no importa */ }
 function guardarUI(){
   try {
     localStorage.setItem('tablero-ui', JSON.stringify({
-      vista: UI.vista, layout: UI.layout, terminadasAbiertas: UI.terminadasAbiertas,
+      vista: UI.vista, terminadasAbiertas: UI.terminadasAbiertas,
       sprints: UI.sprints,
     }));
   } catch (e) { /* modo privado o storage lleno: no es crítico */ }
 }
 
 let tareaAbierta = null;
-let arrastreId = null;
+// `arrastreId` se fue con las tarjetas: era la tarjeta que estaba en el aire. El arrastre de
+// la lista lleva el suyo propio, adentro de `engancharArrastreLista()`.
 
 /* ---------- elementos ---------- */
 const $  = s => document.querySelector(s);
@@ -317,13 +334,23 @@ function antiguedad(iso){
   return { txt, exacta, dias };
 }
 
+/* Dos formatos del mismo dato y una sola puerta: la unidad que se elige sola («2 sem»), que
+   es la que se lee en prosa, y los días crudos («14») del círculo del tablero, que se leen
+   bajando por una columna y por eso no pueden cambiar de unidad de una fila a la otra. Los usan
+   el pintado y el refresco del minuto: con el formato escrito en los dos lados, un chip diría
+   una cosa al pintarse y otra a los sesenta segundos.
+
+   El número va pelado desde el 26/8/2026: la `d` que llevaba pegada era la mitad del ancho de
+   una ficha redonda de tamaño fijo, y qué unidad es lo dice el `title` (ver `pillDias()`). */
+const textoEdad = (a, ds) => ds.edadFmt === 'dias' ? String(a.dias) : (ds.edadPre || '') + a.txt;
+
 /* El chip se refresca solo: un tablero abierto toda la tarde no puede seguir diciendo
    «hace 2 h». Se reescribe el texto de cada `[data-edad]` y nada más — repintar el tablero
    entero cada minuto costaría carísimo y encima cortaría lo que alguien esté escribiendo. */
 setInterval(() => {
   $$('[data-edad]').forEach(el => {
     const a = antiguedad(el.dataset.edad);
-    if (a) el.textContent = (el.dataset.edadPre || '') + a.txt;
+    if (a) el.textContent = textoEdad(a, el.dataset);
   });
 }, _MIN);
 
@@ -340,7 +367,6 @@ function llenarSelect(el, items, placeholder){
 }
 
 const prioridadDe = id => porId(PRIORIDADES, PRIORIDADES_VIEJAS[id] || id) || PRIORIDADES[2];
-const tipoDe      = id => porId(TIPOS, id) || TIPOS[0];
 const estadoDe    = id => porId(ESTADOS, id) || ESTADOS[0];
 const vistaActual = () => porId(VISTAS, UI.vista) || VISTAS[1];
 
@@ -493,7 +519,7 @@ function pintarChrome(){
   // Cambiar de pestaña sale de la página: si no, se elegiría una vista que no se ve.
   $$('[data-vista]').forEach(b => b.onclick = () => {
     cerrarPagina();
-    if (UI.vista !== b.dataset.vista) { menuFila = null; renombrando = null; }
+    if (UI.vista !== b.dataset.vista) { menuFila = null; renombrando = null; bautizando = null; }
     UI.vista = b.dataset.vista; guardarUI(); render();
   });
 
@@ -506,8 +532,6 @@ function pintarChrome(){
     i > -1 ? UI.f.pend.splice(i, 1) : UI.f.pend.push(k);
     render();
   });
-
-  $$('[data-layout]').forEach(b => b.classList.toggle('on', b.dataset.layout === UI.layout));
 }
 
 /* El filtro de prioridad admite varias a la vez —el de personas ya lo hacía—, así que no
@@ -542,17 +566,6 @@ function abrirMenuPrioridad(ver){
   boton.setAttribute('aria-expanded', String(mostrar));
 }
 
-function sincronizarFiltros(){
-  const sel = (el, items, ph, val) => { llenarSelect(el, items, ph); el.value = val; };
-  // El texto del placeholder hace de etiqueta: así los filtros no necesitan un rótulo
-  // aparte arriba y toda la barra entra en una sola línea.
-  sel($('#fTipo'), TIPOS, 'Tipo', UI.f.tipo);
-  // Solo los <select> de verdad: el de prioridad es un botón y se marca en su propia
-  // función, donde `.value` no significa nada.
-  $$('#filtros select.sel').forEach(s => s.classList.toggle('activo', !!s.value));
-  pintarFiltroPrioridad();
-}
-
 function textoBuscable(t){
   return [
     t.tarea, explATexto(t.expl), t.id,
@@ -572,14 +585,13 @@ function visible(t){
   // campo crudo para que una fila vieja o con el campo vacío caiga en la misma banda por la
   // que el tablero la apila.
   if (f.prioridades.length && !f.prioridades.includes(prioridadDe(t.prioridad).id)) return false;
-  if (f.tipo && t.tipo !== f.tipo) return false;
   if (f.pend.length && !f.pend.some(p => (t.pend || []).includes(p))) return false;
   if (f.q && !textoBuscable(t).includes(f.q)) return false;
   return true;
 }
 const filtrando = () => {
   const f = UI.f;
-  return !!f.q || f.pend.length > 0 || f.prioridades.length > 0 || !!f.tipo;
+  return !!f.q || f.pend.length > 0 || f.prioridades.length > 0;
 };
 
 /* ============================================================
@@ -587,7 +599,9 @@ const filtrando = () => {
    ============================================================ */
 function render(){
   pintarChrome();
-  sincronizarFiltros();
+  // Quedó un solo filtro que se repinta: el de prioridad, que es un botón con su menú y se
+  // marca solo. El buscador y las personas ya se dibujan por su lado.
+  pintarFiltroPrioridad();
   const v = vistaActual();
 
   /* Una tarea abierta como página se come el board entero, venga del backlog o del tablero:
@@ -599,11 +613,14 @@ function render(){
   if (paginaTarea && !tarea(paginaTarea)) cerrarPagina();
   if (paginaTarea) {
     const t = tarea(paginaTarea);
-    if (!pendientesGuardado.has('tarea:' + t.id + ':expl')) {
+    // El `!paginaArbol` es para volver con el «atrás» del navegador: si se sale de una tarea
+    // mientras su guardado está en vuelo y se vuelve a entrar enseguida, el árbol quedó en
+    // `null` y el guardado sigue pendiente, así que sin esto la página se pintaría vacía.
+    if (!paginaArbol || !pendientesGuardado.has('tarea:' + t.id + ':expl')) {
       paginaArbol = arbolDeTarea(t);
     }
     elFiltros.hidden = true;
-    board.classList.remove('cmode', 'bmode', 'rows');
+    board.classList.remove('cmode', 'bmode');
     board.classList.add('pgmode');
     board.onclick = board.oninput = board.onchange = board.onkeydown = board.onfocusout = null;
     board.onpaste = board.ondragover = board.ondrop = null;
@@ -611,275 +628,54 @@ function render(){
   }
   board.classList.remove('pgmode');
 
-  /* El tablero en modo lista NO es una vista aparte: es el mismo tablero dibujado con el
-     componente del backlog. Por eso se calcula acá, cruzando la vista con el layout, y no se
-     pregunta por `UI.layout` en diez lugares del archivo. El layout solo manda donde hay
-     tarjetas que acomodar: la caja y el backlog ya se comen el board enteros. */
-  const enLista = !anchoCompleto(v) && UI.layout === 'lista';
+  /* Las tres vistas dibujan hojas de renglones y nada más: la caja, el backlog y el tablero.
+     El tablero en lista NO es una vista aparte —es el mismo tablero, con los mismos filtros y
+     el mismo contador, dibujado con el componente del backlog pero agrupado por estado—, y por
+     eso sigue siendo `estado` en `VISTAS` y no una entrada nueva.
 
-  // La caja y el backlog ocupan el board entero en vez de repartirlo en columnas. Los
-  // filtros solo se esconden en la caja — en el backlog buscar y filtrar sirve igual que en
-  // el tablero.
+     Antes acá se cruzaba la vista con `UI.layout` para saber si tocaba lista o tarjetas. Con
+     las dos formas de tarjeta afuera (26/8/2026) no hay nada que cruzar: si no es la caja ni el
+     backlog, es la lista. */
+  // La caja y el backlog ocupan el board entero igual que el tablero. Los filtros solo se
+  // esconden en la caja — en el backlog buscar y filtrar sirve igual que en el tablero.
   elFiltros.hidden = sinTareas(v);
   board.classList.toggle('cmode', !!v.caja);
   // `bmode` es el envoltorio de la lista de renglones, no «la vista Backlog»: lo lleva
   // cualquiera que dibuje esa hoja, venga del backlog o del tablero.
-  board.classList.toggle('bmode', !!v.backlog || enLista);
-  board.classList.toggle('rows', !anchoCompleto(v) && UI.layout === 'rows');
-  // Las hojas de renglones —backlog, caja y el tablero en modo lista— enganchan sus
-  // manejadores sobre el board entero. Al salir de ellas hay que soltarlos: si no, siguen
-  // escuchando encima del tablero de tarjetas. `cerrarMenu()` va acá adentro y no suelto
-  // porque todas abren menús desde su propio repintado, y cerrarlo en el mismo paso lo
-  // apagaría en el clic que lo abre.
-  if (!v.backlog && !v.caja && !enLista) {
-    board.onclick = board.oninput = board.onchange = board.onkeydown = board.onfocusout = null;
-    board.onpaste = board.ondragover = board.ondrop = null;
-    cerrarMenu();
-  }
+  board.classList.toggle('bmode', !v.caja);
+  /* Acá se soltaban los manejadores del board al volver al tablero de tarjetas, que no los
+     usaba, y se cerraba de paso el menú `⋯`. Ya no hace falta ninguna de las dos cosas: las
+     tres vistas son hojas de renglones y las tres cuelgan los suyos del board entero, cada una
+     apagando a mano los que la otra usa y ella no (el enganche de la caja y `engancharLista()`).
+     El menú lo cierra su propio manejador global de clic, como siempre. */
 
   if (v.caja) return renderCaja();
   if (v.backlog) return renderBacklog();
-  if (enLista) return renderListaEstados();
-  renderTablero(v);
+  renderListaEstados();
 }
 
-/* Una columna por estado y, adentro, una banda por prioridad. Cada banda es su propia
-   zona de destino: soltar una tarjeta en la banda «Urgente» de otra columna le cambia
-   las dos cosas de una, el estado y la prioridad. Las bandas vacías no se dibujan salvo
-   mientras hay un arrastre en curso, para no gastar alto con cuatro títulos por columna. */
-function renderTablero(v){
-  const mostradas = datos.tareas.filter(visible);
+/* ---------- acá vivía el tablero de tarjetas ----------
+   `renderTablero()` (una columna por estado y, adentro, una banda por prioridad),
+   `tarjetaHTML()`, `conectarTablero()`, `tarjetaDespuesDe()`, `soltarTarea()` y el autoscroll
+   del arrastre —el que corría el tablero solo mientras la tarjeta se sostenía contra el borde—.
 
-  if (!mostradas.length && filtrando()) {
-    board.innerHTML = `<p class="empty-board">Ninguna tarea encaja con este filtro.<br>Probá vaciar la búsqueda o destildar los filtros.</p>`;
-    return;
-  }
+   **Se fue todo el 26/8/2026 por pedido**, junto con los dos layouts de tarjeta. El tablero se
+   dibuja ahora con `renderListaEstados()` y nada más.
 
-  board.innerHTML = ESTADOS.map(c => {
-    const lista = mostradas.filter(t => t.estado === c.id);
+   Qué hacía cada cosa y dónde quedó, para no volver a buscarlo:
 
-    // Terminadas va plegada a una solapa angosta. Se comía un cuarto del ancho para
-    // mostrar justo lo que ya no hay que mirar; ese ancho ahora es de las otras tres.
-    // No desaparece: sigue siendo zona donde soltar para dar algo por terminado, y un
-    // clic la abre entera.
-    if (c.id === HECHO && !UI.terminadasAbiertas) {
-      const n = lista.length;
-      return `<section class="col plegada" data-col="${escA(c.id)}">
-        <div class="plegada-in" data-drop="${escA(c.id)}" data-abrir-term role="button" tabindex="0"
-             title="${n} terminada${n === 1 ? '' : 's'} · clic para verlas, o soltá una tarea acá para darla por terminada">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5.5 5.5L20 6.5"/></svg>
-          <span class="plegada-n">${n}</span>
-          <span class="plegada-txt">Terminadas</span>
-        </div>
-      </section>`;
-    }
+   - **Arrastrar entre columnas y entre bandas** —soltar en la banda «Urgente» de otra columna
+     cambiaba el estado y la prioridad de una— es `engancharArrastreLista()`, que arrastra entre
+     bloques y entre bandas igual (ver `adoptarBanda` en `LISTAS.estado`).
+   - **La solapa plegada de Terminadas** es el bloque plegado de la lista, con la misma
+     preferencia `UI.terminadasAbiertas`.
+   - **La barrita `.rail`**, que medía cuánto del tablero estaba parado en cada estado, es la
+     pill de porcentaje de `filaEstadoHTML()`.
+   - **El «+ Agregar tarea» del pie de la columna** es el `＋` de la canaleta y el del final del
+     bloque, los dos por `nuevaEnEstado()`.
 
-    // La barrita ya no puede medir «cuánto de esta columna está hecho» —la columna ES un
-    // estado—, así que mide cuánto del tablero está parado acá. De un vistazo se ve si
-    // se está amontonando todo en Bloqueadas.
-    const pct = mostradas.length ? Math.round(lista.length / mostradas.length * 100) : 0;
-
-    const bandas = PRIORIDADES.map(p => {
-      const suyas = lista.filter(t => prioridadDe(t.prioridad).id === p.id);
-      return `<div class="grupo${suyas.length ? '' : ' vacio'}">
-        <div class="grupo-h"><i style="background:${p.color}"></i>${esc(p.label)}<span>${suyas.length}</span></div>
-        <div class="cards" data-drop="${escA(c.id)}" data-prio="${escA(p.id)}">${suyas.map(tarjetaHTML).join('')}</div>
-      </div>`;
-    }).join('');
-
-    return `<section class="col" data-col="${escA(c.id)}">
-      <div class="col-h">
-        <span class="dot" style="background:${c.color}"></span>
-        <h2>${esc(c.label)}</h2>
-        <span class="count">${lista.length}</span>
-        ${c.id === HECHO ? `<button class="plegar" data-plegar-term title="Plegar terminadas" aria-label="Plegar la columna de terminadas">«</button>` : ''}
-      </div>
-      <div class="rail" title="${pct}% de las tareas visibles está en esta columna"><i style="width:${pct}%;background:${c.color}"></i></div>
-      <div class="grupos">${lista.length ? '' : '<p class="empty-col">Arrastrá una tarea acá</p>'}${bandas}</div>
-      <div class="col-f"><button class="add-card" data-add="${escA(c.id)}">+ Agregar tarea</button></div>
-    </section>`;
-  }).join('');
-
-  conectarTablero(v);
-}
-
-function tarjetaHTML(t){
-  const p = prioridadDe(t.prioridad), ty = tipoDe(t.tipo);
-
-  const etiqueta = (c, txt, fuerte) =>
-    `<span class="tag${fuerte ? ' fuerte' : ''}" style="background:${tint(c,.13)};color:${c}">${esc(txt)}</span>`;
-
-  const tags = [etiqueta(p.color, p.label, p.id === CRITICA || p.id === 'urgente'), etiqueta(ty.color, ty.label)];
-
-  const bits = [];
-  const pasos = t.subtareas || [], hechos = pasos.filter(s => s.estado === HECHO).length;
-  if (pasos.length) bits.push(`<span class="meta" title="Checklist: ${hechos} de ${pasos.length} ${pasos.length === 1 ? 'paso hecho' : 'pasos hechos'}"><span class="subbar"><i style="width:${Math.round(hechos / pasos.length * 100)}%"></i></span>${hechos}/${pasos.length}</span>`);
-  if ((t.chat || []).length) bits.push(`<span class="meta" title="Intervenciones en la conversación"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M21 12a8 8 0 0 1-11.5 7.2L3.5 20.5l1.3-6A8 8 0 1 1 21 12z"/></svg>${t.chat.length}</span>`);
-  if ((t.files || []).length) bits.push(`<span class="meta" title="Adjuntos"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M20 11l-8.5 8.5a4.5 4.5 0 1 1-6.4-6.4L13 4.8a3 3 0 1 1 4.2 4.2l-8 8a1.5 1.5 0 0 1-2.1-2.1L14.5 7"/></svg>${t.files.length}</span>`);
-  // Va último de los `bits` para que quede pegado al borde de los avatares: es el dato que
-  // menos se toca de los cuatro, y adelante empujaría al checklist fuera de la vista.
-  const edad = antiguedad(t.creada);
-  if (edad) bits.push(`<span class="meta" title="Creada el ${escA(edad.exacta)}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"/><path d="M12 7.2V12l3.4 2"/></svg><i class="edad" data-edad="${escA(t.creada)}">${esc(edad.txt)}</i></span>`);
-
-  const who = PERSONAS.map(p2 => {
-    const on = (t.pend || []).includes(p2.id);
-    return `<button class="av${on ? '' : ' off'}"${on ? ` style="background:${p2.color}"` : ''} data-toggle="${escA(t.id)}|${escA(p2.id)}" title="${on ? 'Pendiente de ' : 'Marcar pendiente de '}${escA(p2.nombre)}">${esc(p2.ini)}</button>`;
-  }).join('');
-
-  // El agarre no agrega comportamiento: la tarjeta entera ya es arrastrable. Lo que hace
-  // es dar un lugar donde el arrastre SIEMPRE arranca —sobre los botones del pie el
-  // navegador no lo inicia— y, sobre todo, mostrar que la tarjeta se puede mover.
-  return `<article class="card${t.estado === HECHO ? ' done' : ''}${p.id === CRITICA ? ' critica' : ''}" draggable="true" data-id="${escA(t.id)}" style="--spine:${tint(p.color,.55)}">
-    <span class="grip" aria-hidden="true" title="Arrastrá desde acá para mover la tarea de columna"></span>
-    <p class="title">${t.tarea ? esc(t.tarea) : '<em>Sin título</em>'}${chapaNovedad(t)}</p>
-    <div class="tags">${tags.join('')}</div>
-    <div class="card-f">${bits.join('')}<span class="who">${who}</span></div>
-  </article>`;
-}
-
-/* Arrastrar entre columnas: si la columna destino quedó fuera de pantalla, el tablero se
-   corre solo mientras la tarjeta se sostiene cerca del borde. Sin esto hay que soltarla,
-   scrollear y volver a agarrarla. El puntero se lee del `dragover` (durante un arrastre
-   no hay eventos de mouse) y el desplazamiento corre por rAF, no por evento: así sigue
-   andando aunque la mano se quede quieta contra el borde. */
-const punteroArrastre = { x:0, y:0 };
-let bucleScroll = 0;
-document.addEventListener('dragover', e => { punteroArrastre.x = e.clientX; punteroArrastre.y = e.clientY; });
-
-const empuje = (dist, margen) => dist < margen ? Math.min(22, (margen - dist) / 3.2) : 0;
-
-function scrollDeArrastre(){
-  if (!arrastreId) { bucleScroll = 0; return; }
-  const { x, y } = punteroArrastre;
-  const b = board.getBoundingClientRect(), m = 110;
-
-  if (board.classList.contains('rows')) board.scrollTop  += empuje(b.bottom - y, m) - empuje(y - b.top, m);
-  else                                  board.scrollLeft += empuje(b.right - x, m) - empuje(x - b.left, m);
-
-  const zona = document.elementFromPoint(x, y)?.closest('.grupos,.cards');
-  if (zona) {
-    const r = zona.getBoundingClientRect(), mv = 56;
-    zona.scrollTop += empuje(r.bottom - y, mv) - empuje(y - r.top, mv);
-  }
-  bucleScroll = requestAnimationFrame(scrollDeArrastre);
-}
-
-function conectarTablero(v){
-  $$('.card').forEach(el => {
-    el.addEventListener('dragstart', e => {
-      arrastreId = el.dataset.id;
-      el.classList.add('dragging');
-      // Con el arrastre en curso se muestran también las bandas de prioridad vacías:
-      // son el destino de «esto pasa a ser urgente» y si no se ven no se puede soltar ahí.
-      document.body.classList.add('arrastrando');
-      if (!bucleScroll) bucleScroll = requestAnimationFrame(scrollDeArrastre);
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', arrastreId);
-    });
-    el.addEventListener('dragend', () => {
-      el.classList.remove('dragging'); arrastreId = null;
-      document.body.classList.remove('arrastrando');
-      $$('.col').forEach(c => c.classList.remove('drop'));
-      $$('.grupo').forEach(g => g.classList.remove('drop'));
-    });
-    el.addEventListener('click', e => {
-      if (e.target.closest('[data-toggle]')) return;
-      abrirTarea(el.dataset.id);
-    });
-  });
-
-  $$('[data-toggle]').forEach(b => b.onclick = e => {
-    e.stopPropagation();
-    const [id, quien] = b.dataset.toggle.split('|');
-    const t = tarea(id); if (!t) return;
-    const antes = alternarPend(t, quien);
-    if (!antes) return;
-    render();
-    persistirTarea(t, { revertir: () => { t.pend = antes; render(); } });
-  });
-
-  $$('[data-add]').forEach(b => b.onclick = e =>
-    pedirResponsable(b, e, quien => nuevaTarea(v, b.dataset.add, quien)));
-
-  // Abrir / plegar la columna de Terminadas.
-  $$('[data-abrir-term]').forEach(el => {
-    const abrir = () => { UI.terminadasAbiertas = true; guardarUI(); render(); };
-    el.onclick = abrir;
-    el.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); } };
-  });
-  $$('[data-plegar-term]').forEach(el => el.onclick = () => {
-    UI.terminadasAbiertas = false; guardarUI(); render();
-  });
-
-  $$('[data-drop]').forEach(zona => {
-    // `?.` en los dos closest: la solapa plegada de Terminadas no tiene banda de
-    // prioridad adentro, así que ahí `.grupo` no existe.
-    zona.addEventListener('dragover', e => {
-      if (!arrastreId) return;
-      e.preventDefault();
-      zona.closest('.col')?.classList.add('drop');
-      zona.closest('.grupo')?.classList.add('drop');
-      // La solapa plegada no muestra tarjetas: se ilumina como destino y nada más.
-      if (zona.hasAttribute('data-abrir-term')) return;
-      const el = document.querySelector('.card.dragging'); if (!el) return;
-      const despues = tarjetaDespuesDe(zona, e.clientY);
-      despues ? zona.insertBefore(el, despues) : zona.appendChild(el);
-      zona.closest('.col').querySelector('.empty-col')?.remove();
-    });
-    zona.addEventListener('dragleave', e => {
-      if (zona.contains(e.relatedTarget)) return;
-      zona.closest('.col')?.classList.remove('drop');
-      zona.closest('.grupo')?.classList.remove('drop');
-    });
-    zona.addEventListener('drop', e => {
-      e.preventDefault();
-      const id = arrastreId || e.dataTransfer.getData('text/plain');
-      const t = tarea(id); if (!t) return;
-      soltarTarea(t, zona);
-    });
-  });
-}
-
-function tarjetaDespuesDe(zona, y){
-  return [...zona.querySelectorAll('.card:not(.dragging)')].reduce((mejor, hijo) => {
-    const b = hijo.getBoundingClientRect();
-    const off = y - b.top - b.height / 2;
-    return (off < 0 && off > mejor.off) ? { off, el: hijo } : mejor;
-  }, { off: -Infinity, el: null }).el;
-}
-
-// Al soltar, la tarjeta ya está en su lugar dentro del DOM: se leen sus vecinas para
-// calcular el `orden` nuevo. La zona de destino dice las dos cosas que cambian: la
-// columna es el estado y la banda dentro de la columna es la prioridad.
-function soltarTarea(t, zona){
-  const antes = { orden:t.orden, estado:t.estado, prioridad:t.prioridad };
-  const ids = [...zona.querySelectorAll('.card')].map(c => c.dataset.id);
-  const pos = ids.indexOf(t.id);
-  const vecino = i => { const x = ids[i] ? tarea(ids[i]) : null; return x && x.id !== t.id ? x.orden : null; };
-
-  t.estado = zona.dataset.drop;
-  if (zona.dataset.prio) ponerPrioridad(t, zona.dataset.prio);
-
-  if (pos < 0) {
-    // Soltada en la solapa plegada de Terminadas: ahí no hay tarjetas de dónde deducir
-    // el lugar, así que va al final de las que ya están terminadas. La prioridad no se
-    // toca: una tarea terminada conserva la que tenía.
-    const yaHechas = datos.tareas.filter(x => x.estado === t.estado && x.id !== t.id);
-    t.orden = RoadmapSync.calcularOrden(yaHechas.length ? yaHechas[yaHechas.length - 1].orden : null, null);
-  } else {
-    t.orden = RoadmapSync.calcularOrden(vecino(pos - 1), vecino(pos + 1));
-  }
-
-  datos.tareas.sort((a, b) => a.orden - b.orden);
-  render();
-  persistirTarea(t, {
-    revertir: () => {
-      Object.assign(t, antes);
-      datos.tareas.sort((a, b) => a.orden - b.orden);
-      render();
-    },
-  });
-}
+   Lo único que NO tenía reemplazo era la ficha: la tarjeta era su última puerta. Volvió al menú
+   `⋯` de la fila, de donde había salido ese mismo día — ver `menuTareaHTML()`. */
 
 /* El renglón con el que nace toda tarea: el enlace del video se pega ahí adentro, en la
    explicación, como cualquier otra cosa que se escriba. Es un recordatorio, no un campo.
@@ -930,21 +726,13 @@ function pedirResponsable(anclaje, ev, crear){
   abrirMenu(anclaje, 'pend', null, quien => { if (quien) crear(quien); }, '¿Quién la hace?');
 }
 
-function nuevaTarea(v, colId, quien){
-  const id = nuevoId('T', datos.tareas.map(x => x.id));
-  const ultimo = datos.tareas.length ? datos.tareas[datos.tareas.length - 1].orden : null;
-  const t = Object.assign(tareaVacia(id), {
-    pend: [quien],
-    orden: RoadmapSync.calcularOrden(ultimo, null),
-  });
-  if (colId) t.estado = colId;
-  datos.tareas.push(t);
-  render();
-  persistirTarea(t, {
-    revertir: () => { datos.tareas = datos.tareas.filter(x => x.id !== id); render(); },
-  });
-  abrirTarea(id, true);
-}
+/* Acá vivía `nuevaTarea()`, la que creaba desde el «＋» del pie de una columna y desde
+   «+ Nueva tarea»: mandaba la fila al final de TODAS las tareas y abría la ficha. Se fue con
+   las tarjetas (26/8/2026) y las dos puertas quedaron en `nuevaEnEstado()`, que ya existía para
+   el `＋` de la lista y hace las dos cosas mejor: calcula el `orden` contra las hermanas de su
+   banda de prioridad —apilado por prioridad, el final de la lista no es el final del bloque— y
+   entra a la página en vez de abrir el modal. Dos creadores para lo mismo eran dos lugares
+   donde arreglar el día que el orden se calcule distinto. */
 
 /* ============================================================
    Detalle de la tarea (modal)
@@ -962,7 +750,6 @@ function abrirTarea(id, foco){
      esconde y no se deshabilita —un `<select>` gris invita a preguntar por qué no anda—, y
      vuelve sola cuando la tarea pasa al tablero. */
   $('#tPrioridad').hidden = !!t.backlog;
-  llenarSelect($('#tTipo'), TIPOS); $('#tTipo').value = t.tipo;
   // El sprint se guarda igual en las tareas que ya están en el tablero: sirve para mirar,
   // al cerrar un sprint, qué salió de cada uno.
   llenarSelect($('#tSprint'), opcionesSprint(), 'Sin grupo');
@@ -1915,7 +1702,7 @@ $('#tDesc').addEventListener('drop', e => {
   if (esExplBloques(t.expl)) { aviso('Esta tarea tiene página: soltá el archivo adentro de la página.'); return; }
   repartirPegado(t, e.dataTransfer);
 });
-[['tEstado','estado'], ['tPrioridad','prioridad'], ['tTipo','tipo']].forEach(([elId, campo]) => {
+[['tEstado','estado'], ['tPrioridad','prioridad']].forEach(([elId, campo]) => {
   $('#' + elId).addEventListener('change', e => {
     const t = actual(); if (!t) return;
     const antes = t[campo];
@@ -2564,27 +2351,55 @@ const enBacklog = t => !!t.backlog;
    vieja. Una columna nueva habría dejado esto esperando a una migración —hay dos pendientes
    hace semanas— y un `localStorage` habría hecho que cada uno viera nombres distintos, que es
    justo lo contrario de ponerle nombre a algo. */
-const nombresDeGrupo = () => {
-  const m = new Map();
-  (datos.grupos || []).forEach(g => { if (g.nombre) m.set(g.n, g.nombre); });
-  return m;
-};
 const nombreGrupo = n => (datos.grupos || []).find(g => g.n === n && g.nombre)?.nombre || '';
 // El fallback es «Grupo N» y no el nombre vacío: un bloque sin título no se puede nombrar en
 // el menú «Mover a otro grupo», que es donde más falta hace saber cuál es cuál.
 const nombreSprint = n => (n ? (nombreGrupo(n) || 'Grupo ' + n) : 'Sin planificar');
 
+/* ---------- dónde cae cada bloque ----------
+   Los grupos se arrastran entre las tres columnas y se quedan donde uno los deja (26/8/2026,
+   por pedido). Hasta ese día el reparto se calculaba solo: la lista de bloques cortada en
+   tramos, en orden, como las columnas de un diario, y este archivo argumentaba que cortar de
+   otra forma rompía la secuencia 1, 2, 3, 4. **Eso se cae, y lo que se pierde es real**: dónde
+   está el Grupo 4 ya no se deduce de nada. Se paga porque los bloques de este tablero dejaron
+   de ser una cadencia el día que se les puso nombre —«Onboarding», «Lo de la AFIP»— y cuál va
+   al lado de cuál lo sabe el que los escribió, no el orden en que se crearon.
+
+   **El lugar es del tablero y no del navegador**, igual que el nombre y al revés que el
+   plegado: acomodar la hoja es una decisión sobre la hoja, y que cada uno la viera acomodada
+   distinto sería justo lo contrario de acomodarla. Vive en la misma fila de `roadmap_notas`
+   que ya guarda el nombre (ver `supabase-sync.js`), así que tampoco esto necesitó migración.
+
+   **O están ubicados todos los bloques de la hoja o no lo está ninguno.** Mientras nadie haya
+   arrastrado nada, el reparto es el de siempre; el primer arrastre escribe la ubicación de
+   todos de una sola vez. Con la mitad ubicada y la mitad no, no habría forma de decir dónde
+   entra la que no lo está sin inventar una segunda regla que después se contradice con la
+   primera. */
+const filaGrupo = n => (datos.grupos || []).find(g => g.n === n);
+const ubicacionGrupo = n => { const g = filaGrupo(n); return g && g.col != null ? g : null; };
+const hayReparto = () => (datos.grupos || []).some(g => g.col != null);
+
 /* Los bloques que se dibujan aunque estén vacíos: siempre del 1 al N, sin huecos. El piso
    lo pone la config; sube si alguien agregó grupos con el botón, sube si hay una tarea
    guardada en un grupo más alto —un grupo con tareas no se puede esconder— y sube también si
-   alguien bautizó uno: un grupo con nombre es un grupo que alguien creó a propósito, y ese
-   nombre está en la base, así que lo ven todos. El `UI.sprints` de `localStorage` queda como
-   estaba, para el caso en que la tabla de nombres no se pueda escribir. */
+   alguien lo tocó: un grupo con nombre o con lugar propio en la hoja es un grupo que alguien
+   creó a propósito, y las dos cosas están en la base, así que las ven todos. El `UI.sprints` de
+   `localStorage` queda como estaba, para el caso en que la tabla no se pueda escribir. */
 function sprintsVisibles(){
   const conTareas = datos.tareas.filter(enBacklog).map(sprintDe);
-  const conNombre = [...nombresDeGrupo().keys()];
-  const piso = Math.max(1, Number(CFG.sprints) || 3, UI.sprints || 0, ...conTareas, ...conNombre);
+  const tocados = (datos.grupos || []).filter(g => g.nombre || g.col != null).map(g => g.n);
+  const piso = Math.max(1, Number(CFG.sprints) || 3, UI.sprints || 0, ...conTareas, ...tocados);
   return Array.from({ length: piso }, (_, i) => i + 1);
+}
+
+/* Los bloques que van a la hoja, en su orden natural. «Sin planificar» solo aparece si tiene
+   algo: es el cajón de lo que cayó sin clasificar, no un casillero que haya que llenar. Sale de
+   acá y no de `renderBacklog()` porque el arrastre necesita exactamente la misma lista para
+   recalcular el reparto — con dos copias, mover un bloque con un filtro puesto lo acomodaría
+   contra una hoja que no es la que está en pantalla. */
+function gruposEnPantalla(){
+  const ns = sprintsVisibles();
+  return datos.tareas.some(t => sprintDe(t) === SIN_SPRINT && visible(t)) ? [...ns, SIN_SPRINT] : ns;
 }
 const tareasDeSprint = n => datos.tareas
   .filter(t => enBacklog(t) && sprintDe(t) === n)
@@ -2605,6 +2420,30 @@ const opcionesSprint = () => sprintsVisibles().map(n => ({ id: String(n), label:
 const UMBRAL_VIEJA = 30;
 const diasAnotada = t => antiguedad(t.creada)?.dias ?? 0;
 const esVieja = t => diasAnotada(t) >= UMBRAL_VIEJA;
+
+/* ---------- desde cuándo está en el tablero ----------
+   Es otra fecha que `creada`, y la diferencia es todo el punto: una tarea anotada en marzo que
+   recién sale del backlog en agosto lleva cinco meses anotada y cero días en la cancha. El
+   número de la fila cuenta lo segundo (ver `pillDias()`).
+
+   **Vive en `tipo`, la columna muerta de la clasificación de actividades** (26/8/2026). Es la
+   misma jugada que `modulo` con el «Área», `hoy` con la chapa de novedad y `texto`/`orden` de
+   `roadmap_notas` con la columna de cada grupo, y por el mismo motivo: hay dos migraciones
+   esperando hace semanas, así que una columna nueva sería condenar esta cuenta a esperar una
+   tercera. La columna es `text`, nadie la lee desde que se sacó el `<select>` de la ficha y
+   `guardarTarea()` ya la escribe en cada guardado.
+
+   **Se lee estricto, con la forma de una fecha ISO, y nunca «lo que haya»**: ahí adentro está
+   cargado el `'nuevo'` de fábrica y las cuatro categorías viejas, y un `new Date('nuevo')` no
+   falla, devuelve `Invalid Date`. La misma regla que el prefijo `grupo-` de `roadmap_notas`:
+   una tabla o una columna reusada se corta por la forma del dato y no por confianza.
+
+   **Sin fecha guardada la cuenta cae en `creada`**, que es exactamente lo que el número decía
+   antes de que esto existiera: ninguna fila cambia de valor al subir el cambio y no hay nada
+   que migrar. Cada tarea empieza a contar de verdad la próxima vez que entre al tablero. */
+const CAMPO_ENTRADA = 'tipo';
+const entroAlTablero = t => /^\d{4}-\d{2}-\d{2}/.test(t[CAMPO_ENTRADA] || '') ? t[CAMPO_ENTRADA] : '';
+const enTableroDesde = t => entroAlTablero(t) || t.creada;
 
 /* El color del riel en el backlog, donde no hay prioridad que lo pinte. Son tres bandas y no
    un degradé: lo que se lee bajando por la columna es «esto ya lleva demasiado», no cuántos
@@ -2630,24 +2469,90 @@ let menuFila = null;
 // guarda en ningún lado, y cualquier repintado que no venga de acá lo deja como está.
 let renombrando = null;
 
-/* Guarda el nombre de un grupo, o borra la fila si quedó vacío. Optimista como todo lo
-   demás: el nombre ya está en pantalla y esto es lo que lo hace durar. */
-async function persistirGrupo(n, nombre, previo){
-  const revertir = () => {
-    datos.grupos = (datos.grupos || []).filter(g => g.n !== n);
-    if (previo) datos.grupos.push({ n, nombre: previo });
-    renderBacklog();
-  };
+/* Tarea recién creada que todavía se está bautizando en la fila, si hay alguna. Es el gemelo
+   exacto de `renombrando`: de este rato y de esta pantalla, sin guardarse en ningún lado.
+
+   El título de una fila sigue sin editarse —es la puerta a la tarea, en las dos listas— y esto
+   no lo contradice: dura lo que dura escribir el nombre de la tarea que se acaba de crear, y
+   desaparece en cuanto se sale del campo. Anotar es lo que se viene a hacer al backlog, y
+   mandar a la página por cada renglón para escribir el título era irse de la lista y volver
+   por cada cosa anotada. */
+let bautizando = null;
+
+// Una copia de las filas de grupo, para poder volver a dejarlas como estaban si la base
+// rechaza el guardado. Son cuatro campos por grupo y un puñado de grupos: sale más barato
+// clonar la lista entera que llevar la cuenta de qué tocó cada camino.
+const copiaDeGrupos = () => (datos.grupos || []).map(g => ({ ...g }));
+
+/* Guarda una fila de grupo —el nombre y dónde está el bloque en la hoja— o la borra si no le
+   queda ninguna de las dos cosas. Optimista como todo lo demás: ya está en pantalla y esto es
+   lo que lo hace durar. */
+async function persistirGrupo(n, previo){
+  const g = filaGrupo(n);
   const ok = await conEstadoDeCarga(
-    () => (nombre ? RoadmapSync.guardarGrupo(n, nombre) : RoadmapSync.borrarGrupo(n)),
-    { onEstado: onEstadoGlobal, revertir });
+    () => (g
+      ? RoadmapSync.guardarGrupos([{ n, nombre: g.nombre || '', col: g.col ?? null, pos: g.pos ?? null }])
+      : RoadmapSync.borrarGrupo(n)),
+    { onEstado: onEstadoGlobal, revertir: () => { datos.grupos = previo; renderBacklog(); } });
   if (ok) marcarEcoPropio(RoadmapSync.TABLAS.grupos, RoadmapSync.idGrupo(n));
 }
 
-// El nombre en memoria, para pintarlo antes de que la base conteste.
+/* El nombre en memoria, para pintarlo antes de que la base conteste.
+
+   **Quedarse sin nombre ya no siempre borra la fila.** Sigue valiendo el «una fila sin nombre
+   no existe» de siempre —el bloque vuelve a llamarse «Grupo N»— pero solo si esa fila no
+   guarda además dónde está el bloque en la hoja: borrarla ahí le movería la columna a un
+   grupo por haberle vaciado el rótulo, que son dos cosas que no tienen nada que ver. */
 function fijarNombreGrupo(n, nombre){
-  datos.grupos = (datos.grupos || []).filter(g => g.n !== n);
-  if (nombre) datos.grupos.push({ n, nombre });
+  const g = filaGrupo(n);
+  if (!nombre && (!g || g.col == null)) {
+    datos.grupos = (datos.grupos || []).filter(x => x.n !== n);
+    return;
+  }
+  if (g) { g.nombre = nombre; return; }
+  (datos.grupos = datos.grupos || []).push({ n, nombre, col: null, pos: null });
+}
+
+/* El lugar de un bloque en memoria, igual que el nombre y en la misma fila. */
+function fijarUbicacionGrupo(n, col, pos){
+  const g = filaGrupo(n);
+  if (g) { g.col = col; g.pos = pos; return; }
+  (datos.grupos = datos.grupos || []).push({ n, nombre: '', col, pos });
+}
+
+/* Acomoda un bloque: lo saca de donde estaba y lo mete en la columna y el lugar donde lo
+   soltaron. **Reescribe el reparto entero y no solo el bloque que se movió**, que es lo que
+   materializa las ubicaciones la primera vez (ver el cuadro de arriba) y lo que después
+   mantiene las posiciones sin huecos: con los números al día, la posición de un bloque es su
+   índice y no hay que promediar nada entre dos vecinos como con las tareas. */
+function moverGrupo(n, col, idx){
+  const cols = columnasDeGrupos(gruposEnPantalla()).map(c => [...c]);
+  const desde = cols.findIndex(c => c.includes(n));
+  if (desde < 0) return;
+  const j = cols[desde].indexOf(n);
+  cols[desde].splice(j, 1);
+  // El índice se calculó con el bloque todavía en su lugar: si salió de más arriba en la misma
+  // columna, todo lo que estaba abajo subió uno.
+  if (desde === col && j < idx) idx--;
+  if (desde === col && j === idx) return;
+  cols[col].splice(Math.min(idx, cols[col].length), 0, n);
+
+  const previo = copiaDeGrupos();
+  cols.forEach((c, i) => c.forEach((m, p) => fijarUbicacionGrupo(m, i, p)));
+  renderBacklog();
+  persistirReparto(cols.flat(), previo);
+}
+
+// Un solo viaje para toda la hoja: acomodar un bloque cambia la posición de todos los que
+// tenía debajo, y N guardados sueltos serían N formas distintas de quedar a medias.
+async function persistirReparto(ns, previo){
+  const filas = ns.map(filaGrupo).filter(Boolean)
+    .map(g => ({ n: g.n, nombre: g.nombre || '', col: g.col, pos: g.pos }));
+  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarGrupos(filas), {
+    onEstado: onEstadoGlobal,
+    revertir: () => { datos.grupos = previo; renderBacklog(); },
+  });
+  if (ok) filas.forEach(f => marcarEcoPropio(RoadmapSync.TABLAS.grupos, RoadmapSync.idGrupo(f.n)));
 }
 
 /* El campo del nombre se engancha a mano y no por delegación, al revés que todo lo demás de
@@ -2681,12 +2586,176 @@ function engancharNombreDeGrupo(){
     renombrando = null;
     if (cancelado) return;
     const nombre = el.value.trim();
-    const previo = nombreGrupo(n);
-    if (nombre === previo) return renderBacklog();
+    if (nombre === nombreGrupo(n)) return renderBacklog();
+    // La copia va antes de tocar nada: la fila guarda además dónde está el bloque en la hoja,
+    // y revertir un renombre no puede llevarse puesta la columna de nadie.
+    const previo = copiaDeGrupos();
     fijarNombreGrupo(n, nombre);
     renderBacklog();
-    persistirGrupo(n, nombre, previo);
+    persistirGrupo(n, previo);
   };
+}
+
+/* El título de la tarea recién creada. Se engancha a mano y no por delegación por lo mismo que
+   el nombre del grupo: hay uno solo, nace de cero en cada repintado y así no hace falta prender
+   el `onkeydown` ni el `onfocusout` del board, que la lista apaga a propósito.
+
+   Guarda al salir del campo y no tecla por tecla: es un título corto que se escribe de una
+   sentada, y un guardado por letra serían veinte viajes a la base para un dato de veinte. */
+function engancharTituloNuevo(){
+  const el = board.querySelector('[data-bautizo]');
+  /* Sin campo en pantalla no hay bautizo: la fila puede no haberse dibujado —un filtro o el
+     buscador prendidos dejan afuera a una tarea que todavía no dice nada—. Se limpia acá, que
+     es el único lugar que sabe si el campo existe de verdad: si no, la marca quedaría puesta y
+     le pondría un `<input>` encima del título a esa fila en cuanto el filtro la deje pasar. */
+  if (!el) { bautizando = null; return; }
+  el.focus();
+  el.select();
+
+  let cancelado = false;
+  el.onkeydown = ev => {
+    // Enter cierra el bautizo y nada más: no abre la fila siguiente. Anotar de corrido se fue
+    // con el título editable de la fila, y volver a meterlo acá sería tener dos reglas para el
+    // mismo Enter según de qué fila se trate.
+    if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); el.blur(); return; }
+    /* Escape deja la tarea como nació —sin título, con su responsable— y no la borra: ya está
+       creada y persistida, igual que si se hubiera entrado a la página y salido sin escribir.
+       El `blur` que viene atrás no tiene que guardar nada. */
+    if (ev.key === 'Escape') {
+      ev.stopPropagation();
+      cancelado = true; bautizando = null; render();
+    }
+  };
+
+  el.onblur = () => {
+    const t = tarea(el.dataset.bautizo);
+    bautizando = null;
+    if (cancelado) return;
+    // La tarea puede haber desaparecido mientras se escribía —un borrado de otro, un revert—:
+    // no hay a qué guardarle el título, pero la fila con el campo sigue en pantalla.
+    if (!t) return render();
+    const titulo = el.value.trim();
+    // `campoTarea()` corta solo si el valor no cambió, y ahí no repinta: sin este render la
+    // fila se quedaría con el `<input>` puesto.
+    if (titulo === t.tarea) return render();
+    campoTarea(t, 'tarea', titulo);
+  };
+}
+
+/* ---------- la hoja de notas del backlog ----------
+   Un cuadro del ancho de la hoja, arriba de todos los grupos, para escribir a mano lo que no es
+   una tarea: un pendiente suelto, un recordatorio, algo que hay que preguntar. Existe porque el
+   backlog es lo único que se mira antes de repartir trabajo, y hasta ahora la única forma de
+   anotar algo ahí era crear una tarea — que después hay que clasificar, asignar y sacar.
+
+   **Es texto plano y no bloques.** Tres razones y las tres apuntan al mismo lado: es una nota al
+   margen, no un documento. Con bloques habría que decidir dónde vive el árbol, qué pasa al
+   arrastrar y cómo se anida, que es media pantalla de reglas para algo que se escribe en diez
+   segundos. Lo que se pega entra como texto y por eso tampoco hace falta un sanitizador, la
+   misma regla que ya tenía la Explicación de la ficha.
+
+   **El cuadro es del tablero y el plegado es de cada uno.** Lo escrito lo ven los tres —para eso
+   está—, pero que alguien la cierre para ver más grupos a la vez no tiene por qué cerrársela a
+   los demás. Es exactamente el reparto que ya tienen los grupos: el nombre en la base, el
+   plegado en `localStorage`.
+
+   **Va solo en el backlog y no en el tablero-lista**, aunque las dos listas sean el mismo
+   componente. La nota es de la planificación; arriba del tablero sería un cuadro de texto libre
+   compitiendo con el trabajo del día. */
+let notaPlegada = false;
+try { notaPlegada = localStorage.getItem('backlog-nota') === 'plegada'; }
+catch (e) { /* si no se puede leer, abre y listo */ }
+function guardarNotaPlegada(){
+  try { localStorage.setItem('backlog-nota', notaPlegada ? 'plegada' : 'abierta'); }
+  catch (e) { /* modo privado o storage lleno: no es crítico */ }
+}
+
+/* Se guarda con retraso y no tecla por tecla: es texto corrido, y un viaje a la base por letra
+   son cien viajes para una nota de cien caracteres. El temporizador vive afuera del enganche
+   porque la hoja se repinta entera ante cualquier cambio del tablero y el guardado pendiente
+   tiene que sobrevivir a eso — por lo mismo lee `datos.nota` y no el elemento, que para cuando
+   el temporizador corre puede ser otro. */
+const ESPERA_NOTA = 700;
+let guardadoDeNota = null;
+
+/* Lo escrito que la base todavía no confirmó. Es la misma regla que la página de una tarea —el
+   árbol se rearma desde `expl` **salvo que haya un guardado en vuelo**— y acá hace falta por lo
+   mismo: un cambio de otro llegando por realtime recarga `datos` entero, y sin esto la recarga
+   pisaría en pantalla lo que estás terminando de escribir con la versión que había en la base.
+   Se limpia solo cuando la base confirmó ese mismo texto; si falló, lo tuyo se queda. */
+let notaEnVuelo = null;
+const textoDeNota = () => notaEnVuelo ?? datos.nota;
+
+function programarGuardadoDeNota(){
+  clearTimeout(guardadoDeNota);
+  guardadoDeNota = setTimeout(persistirNota, ESPERA_NOTA);
+}
+async function persistirNota(){
+  clearTimeout(guardadoDeNota);
+  guardadoDeNota = null;
+  const texto = textoDeNota();
+  /* Sin `revertir`, al revés que el nombre de un grupo: revertir es devolver el valor anterior a
+     la pantalla, y acá el valor anterior es lo que la persona tiene escrito adelante y sigue
+     escribiendo. Que falle avisa y nada más, que es la regla de los campos con autoguardado. */
+  const ok = await conEstadoDeCarga(() => RoadmapSync.guardarNota(texto),
+    { onEstado: onEstadoGlobal });
+  if (!ok) return;
+  marcarEcoPropio(RoadmapSync.TABLAS.grupos, RoadmapSync.ID_NOTA);
+  datos.nota = texto;
+  // Solo si nadie escribió más mientras el guardado viajaba: si no, lo nuevo perdería su marca
+  // de «todavía sin confirmar» y el próximo refresco se lo llevaría puesto.
+  if (notaEnVuelo === texto) notaEnVuelo = null;
+}
+
+/* Alto contenido: la nota no puede robarle la pantalla al backlog, que es a lo que se vino. El
+   cuadro crece con lo escrito hasta un tope y de ahí en más se scrollea solo — el tope está en
+   el CSS, que es donde se mide el espacio. */
+function notaHTML(){
+  return `<section class="bknota${notaPlegada ? ' plegada' : ''}">
+    <button class="bkfold bknota-h" type="button" data-nota-plegar aria-expanded="${!notaPlegada}"
+      title="${notaPlegada ? 'Abrir las notas' : 'Cerrar las notas'}">
+      <span class="bkcar${notaPlegada ? '' : ' on'}" aria-hidden="true">▸</span>
+      <span class="bkname">Notas</span>
+    </button>
+    <div class="bknota-txt" contenteditable="true" data-nota spellcheck="false"
+      role="textbox" aria-multiline="true" aria-label="Notas del backlog"
+      data-ph="Lo que quieras anotar acá">${esc(textoDeNota())}</div>
+  </section>`;
+}
+
+/* Se engancha a mano y no por delegación, igual que el nombre de un grupo y por el mismo motivo:
+   `engancharLista()` anula `oninput`, `onpaste` y `onkeydown` del board a propósito —son de la
+   caja— y hay un solo cuadro de notas, que nace de cero en cada repintado. */
+function engancharNota(){
+  const caja = board.querySelector('.bknota'); if (!caja) return;
+
+  caja.querySelector('[data-nota-plegar]').onclick = () => {
+    notaPlegada = !notaPlegada;
+    guardarNotaPlegada();
+    renderBacklog();
+  };
+
+  const el = caja.querySelector('[data-nota]');
+
+  /* Lo pegado entra siempre como texto plano: es lo que hace que no haya nada que limpiar. Sin
+     esto, copiar de una página trae su HTML entero adentro de la nota. */
+  el.onpaste = ev => {
+    ev.preventDefault();
+    const texto = (ev.clipboardData || window.clipboardData).getData('text');
+    document.execCommand('insertText', false, texto);
+  };
+
+  /* En memoria al toque y a la base con retraso: lo que se ve es lo tipeado y el viaje va atrás.
+     `innerText` y no `textContent` porque los saltos de línea de un `contenteditable` son
+     elementos, y `textContent` los pegotearía todos en un renglón. */
+  el.oninput = () => { notaEnVuelo = el.innerText; programarGuardadoDeNota(); };
+
+  // Salir del cuadro no espera al temporizador: es el momento en que se terminó de escribir.
+  el.onblur = () => { if (guardadoDeNota) persistirNota(); };
+
+  /* Acá adentro las teclas son de la nota y de nadie más. Enter hace lo suyo —un renglón nuevo—
+     y no abre una fila, y Escape no tiene por qué tocar el tablero de atrás. */
+  el.onkeydown = ev => ev.stopPropagation();
 }
 
 /* ---------- el tablero como lista ----------
@@ -2752,63 +2821,88 @@ const tareasDeEstado = id => datos.tareas
    es una fila de ninguna tabla —es el número que tiene cada tarea en `sprint`—, así que
    plegarlo, contarlo o crear uno nuevo no toca la base. */
 
+/* **Los grupos van repartidos en tres columnas** (26/8/2026, por pedido), las mismas tres del
+   tablero y con el mismo reparto de ancho: 1.18 / 1.18 / 0.64.
+
+   **Cuál va en cuál lo decide el que acomodó la hoja, no esta función** (26/8/2026, por pedido).
+   Mientras nadie haya arrastrado un bloque, el corte es el de siempre: en orden y de a tramos,
+   así que se lee 1, 2, 3, 4 bajando por la izquierda y siguiendo por la del medio, como las
+   columnas de un diario. Con la hoja acomodada esa lectura deja de estar garantizada — es la
+   contrapartida, y está asumida en el cuadro de `ubicacionGrupo`.
+
+   El reparto de ancho, en cambio, se copia y no se deduce: en el tablero la tercera columna es
+   angosta porque apila los tres finales del camino, que se consultan; acá los grupos son
+   intercambiables entre sí y ninguno merece menos ancho que otro. **Contrapartida asumida**:
+   los últimos entran más angostos sin que eso signifique nada sobre ellos. Se paga porque las
+   dos listas tienen que leerse igual — son la misma hoja mirada por otro eje.
+
+   El bloque sin lugar propio cae al pie de la última columna: es donde nace todo lo nuevo acá
+   —el «＋ Nuevo grupo» está justo ahí— y es donde ya caía «Sin planificar» por ser el último. */
+function columnasDeGrupos(ns){
+  if (!hayReparto()) {
+    /* El corte es por cantidad de bloques y no por altura: un grupo de treinta tareas frente a
+       uno de dos deja una columna mucho más larga. Balancear por altura pondría el Grupo 4
+       arriba del 3, que mientras nadie acomodó nada es lo que la secuencia no permite. */
+    const tramos = [];
+    for (let i = 0, faltan = COLUMNAS_BACKLOG; faltan > 0; faltan--) {
+      const cuantos = Math.ceil((ns.length - i) / faltan);
+      tramos.push(ns.slice(i, i + cuantos));
+      i += cuantos;
+    }
+    return tramos;
+  }
+  const cols = Array.from({ length: COLUMNAS_BACKLOG }, () => []);
+  ns.forEach(n => {
+    const u = ubicacionGrupo(n);
+    // Una columna guardada que ya no existe —si algún día la hoja se parte en menos— no puede
+    // hacer desaparecer un bloque: cae en la última, la misma regla que los estados sueltos.
+    const c = u ? Math.min(Math.max(u.col, 0), COLUMNAS_BACKLOG - 1) : COLUMNAS_BACKLOG - 1;
+    // Al final y no `Infinity`: con dos bloques sin lugar la resta daría `NaN` y el comparador
+    // dejaría de ser un comparador.
+    cols[c].push({ n, pos: u ? u.pos : Number.MAX_SAFE_INTEGER });
+  });
+  // `sort` es estable, así que los que caen sin lugar propio quedan entre sí en el orden natural.
+  return cols.map(c => c.sort((a, b) => a.pos - b.pos).map(x => x.n));
+}
+
 function renderBacklog(){
   listaActual = LISTAS.sprint;
   const mostradas = datos.tareas.filter(visible);
-  const grupos = [...sprintsVisibles(), SIN_SPRINT];
+  const grupos = gruposEnPantalla();
   const siguiente = sprintsVisibles().length + 1;
 
-  // «Sin planificar» solo aparece si tiene algo: es el cajón de lo que cayó sin clasificar,
-  // no un casillero que haya que llenar.
-  const bloques = grupos
-    .map(n => ({ n, lista: mostradas.filter(t => sprintDe(t) === n)
-      .sort((a, b) => (a.orden || 0) - (b.orden || 0)) }))
-    .filter(g => g.n !== SIN_SPRINT || g.lista.length);
-
-  /* **Los grupos van repartidos en tres columnas** (26/8/2026, por pedido), las mismas tres del
-     tablero y con el mismo reparto de ancho: 1.18 / 1.18 / 0.64. Esto contradice a propósito lo
-     que valía hasta ese día —que el backlog no se partía porque los sprints son una secuencia—.
-     La contradicción se resuelve con CÓMO se parte: el corte es en orden y de a tramos, así que
-     se sigue leyendo 1, 2, 3, 4 bajando por la izquierda y siguiendo por la del medio, como las
-     columnas de un diario. Alternando (1, 4 · 2, 5 · 3, 6) sí se rompería, y por eso no se
-     alterna.
-
-     El reparto de ancho, en cambio, se copia y no se deduce: en el tablero la tercera columna es
-     angosta porque apila los tres finales del camino, que se consultan; acá los grupos son
-     intercambiables entre sí y ninguno merece menos ancho que otro. **Contrapartida asumida**:
-     los últimos grupos entran más angostos sin que eso signifique nada sobre ellos. Se paga
-     porque las dos listas tienen que leerse igual — son la misma hoja mirada por otro eje, y
-     dos repartos distintos son dos pantallas que hay que aprenderse por separado.
-
-     **Contrapartida asumida**: el corte es por cantidad de bloques y no por altura, así que un
-     grupo de treinta tareas frente a uno de dos deja una columna mucho más larga que las otras.
-     Balancear por altura pondría el Grupo 4 arriba del 3, que es exactamente lo que la
-     secuencia no puede permitirse. */
-  const columnas = [];
-  for (let i = 0, faltan = COLUMNAS_BACKLOG; faltan > 0; faltan--) {
-    const cuantos = Math.ceil((bloques.length - i) / faltan);
-    columnas.push(bloques.slice(i, i + cuantos));
-    i += cuantos;
-  }
+  const lista = n => mostradas.filter(t => sprintDe(t) === n)
+    .sort((a, b) => (a.orden || 0) - (b.orden || 0));
+  const columnas = columnasDeGrupos(grupos);
 
   /* Un solo «＋ Nuevo grupo» y va al pie de la ÚLTIMA columna, aunque el diseño le ponga uno a
-     cada una. Acá el grupo no guarda en qué columna vive —es el número de `sprint` y nada más,
-     y la columna se calcula al pintar—, así que el que nace es siempre el N+1 y aparece
-     siempre abajo a la derecha. Dos botones que hacen lo mismo pero prometen dos lugares
-     distintos son un botón que miente. */
+     cada una. El que nace es siempre el N+1 y aparece siempre ahí —después se lo arrastra a
+     donde tenga que ir—, así que dos botones que hacen lo mismo pero prometen dos lugares
+     distintos serían un botón que miente. */
   const nuevo = `<button class="pgnew" type="button" data-sprint-nuevo data-n="${siguiente}">＋ Nuevo grupo</button>`;
 
-  // Sin encabezado: la pestaña ya dice dónde estás y cada sprint ya lleva su contador al lado
-  // del nombre. La miga, el contador general, el título y la bajada eran medio scroll de
-  // repetir lo obvio que empujaba el primer sprint hacia abajo. El aire de arriba lo pone
-  // ahora `.bkwrap`, en el CSS.
+  /* Sin encabezado: la pestaña ya dice dónde estás y cada sprint ya lleva su contador al lado
+     del nombre. La miga, el contador general, el título y la bajada eran medio scroll de
+     repetir lo obvio que empujaba el primer sprint hacia abajo. El aire de arriba lo pone
+     ahora `.bkwrap`, en el CSS.
+
+     Lo único que va arriba de los grupos es la hoja de notas, y va AFUERA de `.pgbody`: adentro
+     sería una caja más de la grilla de tres columnas y se metería en una sola. Es del ancho de
+     la hoja porque lo que se escribe ahí no es de ningún grupo.
+
+     El `data-col` es del arrastre de bloques: es lo único que le dice a dónde cayó lo que se
+     soltó. La lista por estado no lo lleva —ahí la columna la fija `COLUMNAS_LISTA` y no una
+     preferencia de nadie—, y eso es justo lo que hace que el mismo manejador no acomode nada
+     del otro lado. */
   board.innerHTML = `<div class="pgwrap bkwrap bkcols" style="${ANCHO_AVATARES}">
-    <div class="pgbody">${columnas.map((col, i) => `<div class="bkcol">${
-      col.map(g => filaSprintHTML(g.n, g.lista)).join('')
+    ${notaHTML()}
+    <div class="pgbody">${columnas.map((col, i) => `<div class="bkcol" data-col="${i}">${
+      col.map(n => filaSprintHTML(n, lista(n))).join('')
     }${i === columnas.length - 1 ? nuevo : ''}</div>`).join('')}</div>
   </div>`;
 
   engancharLista();
+  engancharNota();
 }
 
 /* Cómo se reparten los estados en las columnas de la lista. Se escribe por id y no por
@@ -2862,8 +2956,7 @@ function renderListaEstados(){
   // tienen que estar de acuerdo en dónde va cada fila, si no soltar algo encima le calcula el
   // orden contra una lista que se ve distinta.
   const bloque = c => filaEstadoHTML(c,
-    mostradas.filter(t => estadoDe(t.estado).id === c.id).sort(porPrioridad),
-    mostradas.length);
+    mostradas.filter(t => estadoDe(t.estado).id === c.id).sort(porPrioridad));
 
   board.innerHTML = (vacio
     ? `<p class="empty-board">Ninguna tarea encaja con este filtro.<br>Probá vaciar la búsqueda o destildar los filtros.</p>`
@@ -2875,20 +2968,23 @@ function renderListaEstados(){
   engancharLista();
 }
 
-/* El renglón del estado. Mismo desplegable que el del sprint, con dos cosas propias:
+/* El renglón del estado. Mismo desplegable que el del sprint, con una sola cosa propia: **el
+   punto de color**, que es el mismo de la columna. Es lo que ata las vistas entre sí — el verde
+   de Terminada tiene que ser el mismo mire por donde se mire.
 
-   - **El punto de color**, que es el mismo de la columna. Es lo que ata las tres vistas: el
-     verde de Terminada tiene que ser el mismo mire por donde se mire.
-   - **El porcentaje**, que es la barrita `.rail` de la columna convertida en pill. Mide cuánto
-     del tablero está parado acá, no cuánto de este bloque está hecho —el bloque ES un estado—,
-     así que de un vistazo se ve si se está amontonando todo en Bloqueadas. Plegado el bloque,
-     el contador y las críticas son lo único que queda a la vista, que es justo el punto. Va
-     como número pelado y el «del tablero» quedó en el `title`: en una columna de un tercio de
-     pantalla el rótulo se comía el lugar de las críticas, que es el dato que sí alarma. */
-function filaEstadoHTML(c, lista, total){
+   **A la derecha ya no va nada** (26/8/2026, por pedido). Vivían ahí dos pastillas y se fueron
+   las dos:
+
+   - **«N críticas»**, que repetía en la cabecera lo que el bloque de abajo ya dice fila por
+     fila y en color: las críticas se apilan arriba de todo (ver `porPrioridad`) y su riel es
+     rojo. Contarlas otra vez arriba era el mismo dato dos veces en la misma pantalla.
+   - **El porcentaje**, que medía cuánto del tablero estaba parado en ese estado. Un número que
+     hay que interpretar —¿32% es mucho?— pegado a un contador que dice la cuenta de verdad.
+
+   **Contrapartida asumida**: plegado el bloque, lo único que queda a la vista es el nombre y el
+   contador. Es exactamente lo que se pliega para ver, así que se paga barato. */
+function filaEstadoHTML(c, lista){
   const plegado = estadoPlegado(c.id);
-  const criticas = lista.filter(t => prioridadDe(t.prioridad).id === CRITICA).length;
-  const pct = total ? Math.round(lista.length / total * 100) : 0;
   return `<div class="pgrow pg-toggle bksprint" data-g="${escA(c.id)}">
       <div class="pgctl">
         <button class="pgadd" type="button" data-agregar="${escA(c.id)}" title="Agregar una tarea acá" aria-label="Agregar una tarea acá">＋</button>
@@ -2900,10 +2996,6 @@ function filaEstadoHTML(c, lista, total){
         <span class="bkname">${esc(c.label)}</span>
         <span class="bkn">${lista.length}</span>
       </button>
-      <span class="pgpills">
-        ${criticas ? `<span class="pgpill urge">${criticas} ${criticas === 1 ? 'crítica' : 'críticas'}</span>` : ''}
-        <span class="pgpill" title="${pct}% de las tareas visibles está en ${escA(c.label)}">${pct}%</span>
-      </span>
     </div>
     <div class="pgkids${plegado ? ' plegado' : ''}" data-filas="${escA(c.id)}">
       ${lista.map(filaTareaHTML).join('')}
@@ -2923,13 +3015,23 @@ function filaEstadoHTML(c, lista, total){
    segundos que dura escribir un nombre.
 
    El lápiz vive en las pills de la derecha, con el resto de lo que se toca. En la lista de
-   estados no va: ahí los bloques son el catálogo de estados y no se renombran. */
+   estados no va: ahí los bloques son el catálogo de estados y no se renombran.
+
+   **El `⠿` de la canaleta acomoda el bloque entre las columnas** (26/8/2026, por pedido). Es el
+   mismo asa, en el mismo lugar y con el mismo dibujo que la de una tarea, y eso es a propósito:
+   ahí adentro la fila se arrastra para cambiarla de bloque, y acá el bloque se arrastra para
+   cambiarlo de columna. Un asa distinta para lo mismo un nivel más arriba sería un control que
+   hay que aprenderse aparte. Tampoco va en la lista por estado, por lo mismo que el lápiz: la
+   columna de un estado la fija `COLUMNAS_LISTA`. */
 function filaSprintHTML(n, lista){
   const plegado = sprintsPlegados.has(String(n));
   /* Cuántas de este grupo ya llevan demasiado anotadas. Va en la cabecera y no solo en cada
      fila porque plegado el bloque es lo único que queda a la vista: de un vistazo se ve qué
-     grupo se está pudriendo sin tener que abrirlo. Es el gemelo del «N críticas» de la lista
-     por estado, y por eso se dibuja con la misma regla —solo si hay alguna—. */
+     grupo se está pudriendo sin tener que abrirlo. Fue el gemelo del «N críticas» de la lista
+     por estado, que se sacó el 26/8/2026; este se queda porque no repite nada de lo de abajo:
+     desde que la antigüedad salió de la fila, esto y el color del riel son lo único que el
+     backlog dice sobre qué se está pudriendo. Se dibuja solo si hay alguna — un «0 sin salir»
+     es un cartel para decir que no pasa nada. */
   const viejas = lista.filter(esVieja).length;
   const editando = renombrando === String(n);
   const cabecera = editando
@@ -2948,13 +3050,14 @@ function filaSprintHTML(n, lista){
   return `<div class="pgrow pg-toggle bksprint" data-g="${n}">
       <div class="pgctl">
         <button class="pgadd" type="button" data-agregar="${n}" title="Anotar una tarea acá" aria-label="Anotar una tarea acá">＋</button>
+        <button class="pgdrag" type="button" draggable="true" data-drag-grupo="${n}"
+          title="Arrastrar para acomodar el grupo en otra columna" aria-label="Mover el grupo">⠿</button>
       </div>
       ${cabecera}
       <span class="pgpills">
         <button class="pgpill lapiz" type="button" data-renombrar="${n}"
           title="Ponerle nombre al grupo" aria-label="Ponerle nombre al grupo">✎</button>
         ${viejas ? `<span class="pgpill rancio" title="Anotadas hace más de ${UMBRAL_VIEJA} días y todavía sin salir al tablero">${viejas} sin salir</span>` : ''}
-        <span class="pgpill">${lista.length} por hacer</span>
       </span>
     </div>
     <div class="pgkids${plegado ? ' plegado' : ''}" data-filas="${n}">
@@ -3013,8 +3116,14 @@ function filaSprintHTML(n, lista){
    El backlog quedó afuera media hora, con el argumento de que escribir una lista de corrido es
    el 90% de esa pantalla. Se descartó por pedido, y el motivo es más fuerte que el argumento:
    la fila tiene que ser LA MISMA de los dos lados. Dos renglones que se ven idénticos y
-   responden distinto al mismo clic es peor que perder el tipeo de corrido, que además se
-   recupera en parte —la tarea nueva abre su página con el cursor en el título—.
+   responden distinto al mismo clic es peor que perder el tipeo de corrido.
+
+   **Salvo la que se acaba de crear** (26/8/2026, por pedido). Esa nace con un `<input>` en el
+   lugar del título y el cursor adentro (`bautizando`), y vuelve a ser un botón en cuanto se
+   sale del campo. No contradice la regla de arriba: la fila ya dibujada sigue sin editarse, y
+   lo que se recupera es justo lo que se había perdido —anotar sin irse de la lista—. Mandar a
+   la página por cada renglón era un viaje de ida y vuelta a una pantalla que no se venía a
+   mirar, y encima con el «atrás» del navegador de por medio.
 
    **Contrapartida asumida**: en las dos listas Enter ya no abre una fila nueva; se agrega con
    el `＋` de la canaleta o con el del final del bloque. Con el Enter se fue también la herencia
@@ -3025,7 +3134,15 @@ function filaSprintHTML(n, lista){
    ahí ni la tarea está en el tablero ni tiene prioridad— pero sí por los avisos sin ver, que
    valen igual de los dos lados. Es el mismo elemento con las mismas reglas: las que no aplican,
    no encienden. Entrar desde el backlog sigue sin marcarla vista (ver `abrirPagina()`), así que
-   la tarea llega igual de nueva al tablero. */
+   la tarea llega igual de nueva al tablero.
+
+   **El bloque de columnas lo clava a la derecha un espaciador propio (`.pgesp`) y no la primera
+   columna** (26/8/2026). Era `.pgpills + .pgcol{margin-left:auto}`, que funcionaba mientras las
+   dos listas tuvieran una columna visible ahí —la prioridad de un lado, la antigüedad del otro—.
+   El backlog se quedó sin ninguna el día que la antigüedad salió de la fila, y un `auto` sobre
+   un elemento que el CSS esconde no empuja nada: las pastillas se pegaban al título y bailaban
+   con el largo de cada uno. Un elemento vacío que va siempre y no depende de qué dibuje cada
+   lista es lo único que no hay que volver a arreglar la próxima vez que una columna cambie. */
 function filaTareaHTML(t){
   /* Lo único que la vista decide es el «→ Al tablero»: ofrecerle a una fila del tablero mandarla
      a donde ya está no es una acción, es ruido. Todo lo demás lo decide la fila, y por eso los
@@ -3057,15 +3174,19 @@ function filaTareaHTML(t){
     <button class="pgpg" type="button" data-pagina title="${escA(puerta)}"
       aria-label="Entrar a la página de la tarea"><span class="pgriel"
       aria-hidden="true"></span><span class="pgpgico" aria-hidden="true">▤</span></button>
-    <button class="pgtxt bktit" type="button" data-pagina data-ph="Sin título"
-      title="${escA(puerta)}">${esc(t.tarea)}</button>
+    ${bautizando === t.id
+      ? `<input class="pgtxt bktit bktitedit" type="text" data-bautizo="${escA(t.id)}"
+          value="${escA(t.tarea)}" placeholder="Sin título" spellcheck="false"
+          aria-label="Título de la tarea">`
+      : `<button class="pgtxt bktit" type="button" data-pagina data-ph="Sin título"
+          title="${escA(puerta)}">${esc(t.tarea)}</button>`}
     ${chapaNovedad(t)}
     <span class="pgpills">${pillsMetaDeTarea(t)}</span>
-    ${t.backlog
-      ? `<span class="pgcol pgcol-edad">${pillEdad(t)}</span>`
-      : `<span class="pgcol pgcol-pri">${pillPrioridad(t)}</span>`}
+    <span class="pgesp" aria-hidden="true"></span>
+    ${t.backlog ? '' : `<span class="pgcol pgcol-pri">${pillPrioridad(t)}</span>`}
     <span class="pgcol pgcol-quien">${pillQuien(t)}</span>
     ${avataresQuien(t)}
+    ${t.backlog ? '' : `<span class="pgcol pgcol-dias">${pillDias(t)}</span>`}
     ${enBk ? `<span class="pgcol pgcol-ir">${pillPase()}</span>` : ''}
     ${menuFila === t.id ? menuTareaHTML(t) : ''}
   </div>`;
@@ -3157,7 +3278,7 @@ function avataresQuien(t){
    página de la tarea usa estas mismas pills y ya tiene su propio «→ Al tablero» a la derecha,
    así que preguntando por la vista se dibujaría dos veces el mismo botón. */
 const pillPase = () => `<button class="pgpill ir" type="button" data-altablero
-  title="Mandarla al tablero">→<i class="irtxt">Al tablero</i></button>`;
+  title="Mandar al tablero">→<i class="irtxt">Al tablero</i></button>`;
 
 /* El código de la tarea. Va aparte del resto de la meta porque en la cabecera de la página
    encabeza el renglón, delante de la prioridad, y en la fila arranca el bloque que acompaña
@@ -3174,36 +3295,72 @@ function pillsSueltas(t){
   return out.join('');
 }
 
-/* Desde cuándo está anotada. **Es la columna fija del backlog, en el lugar exacto en que el
-   tablero pone la prioridad** (26/8/2026, por pedido): las dos listas tienen que presentar la
-   tarjeta de la misma forma, y lo que cambia es qué dice el dato, no dónde cae. Tiene sentido
-   que sea justo esta: en el backlog no hay prioridad a propósito, así que lo único que dice
-   qué apremia es cuánto hace que algo está anotado sin salir — es la misma lectura que ya tiñe
-   el riel de la puerta, escrita en palabras. Misma razón por la que la prioridad se quedó como
-   pastilla al lado de su riel: el color solo es un dato para el que ya se lo sabe de memoria.
+/* Desde cuándo está anotada. **Ya no es columna de ninguna fila** (26/8/2026, por pedido). Fue
+   la columna fija del backlog, en el lugar exacto en que el tablero pone la prioridad, con el
+   argumento de que las dos listas tienen que presentar la misma tarjeta cambiando qué dice el
+   dato. Se sacó por el otro lado del mismo argumento: cuánto lleva una tarea es una cuenta del
+   tablero, donde el trabajo ya está en la cancha, y repetirla en la lista de lo que todavía no
+   empezó era la misma pregunta contestada en dos pantallas con dos relojes distintos.
 
-   Por eso salió de `pillsSueltas()`, donde caía en el montón que se pega al título y quedaba a
-   una altura distinta en cada fila según cuántas catalogaciones tuviera la de arriba.
+   **Lo que el backlog dice sobre qué se está pudriendo sigue estando, y sin números**: el riel
+   de la puerta se tiñe con la antigüedad (`colorRiel()`) y la cabecera del grupo cuenta las que
+   ya llevan demasiado («N sin salir»). Un color y un contador por bloque, no cuarenta números.
 
-   Se pone ámbar cuando lleva demasiado sin salir, y solo en el backlog: en el tablero la
-   antigüedad es un dato de contexto —hace cuánto se creó— y no un reproche, porque ahí la
-   tarea ya está en la cancha. Es el mismo umbral que tiñe el riel y que cuenta el «N sin
-   salir» de la cabecera: una fila ámbar dentro de un grupo que dice «0 sin salir» no se le
-   explica a nadie. */
-function pillEdad(t, conHace){
+   Queda entonces un solo lugar donde se dibuja: la cabecera de la página de la tarea, que no
+   tiene cuarenta filas que alinear. Por eso va siempre con el «hace» —el segundo argumento se
+   fue con la columna— y por eso la clase `rancio` sigue mirando `t.backlog`: adentro de la
+   página de una tarea del backlog el ámbar significa lo mismo que en su fila. */
+function pillEdad(t){
   const edad = antiguedad(t.creada);
   if (!edad) return '';
   const rancia = t.backlog && esVieja(t);
   const rotulo = 'Anotada hace ' + edad.txt + ', el ' + edad.exacta
     + (rancia ? ', y todavía sin salir al tablero' : '');
-  /* En la columna de la fila va sin el «hace»: la prioridad de la otra lista mide 58px y esta
-     tiene que medir lo mismo, si no las dos hojas dejan de caer en la misma x. «3 sem» a secas
-     no se malentiende —está en el lugar donde el tablero pone «Crítica», y la frase entera está
-     en el `title`—. En la cabecera de la página no hay columna que respetar y ahí sí va entera:
-     un «3 sem» suelto entre el área y la dependencia sí se leería como cualquier otra cosa. */
-  const pre = conHace ? 'hace ' : '';
   return `<span class="pgpill edad${rancia ? ' rancio' : ''}" title="${escA(rotulo)}"
-    data-edad="${escA(t.creada)}" data-edad-pre="${escA(pre)}">${esc(pre + edad.txt)}</span>`;
+    data-edad="${escA(t.creada)}" data-edad-pre="hace ">${esc(
+      textoEdad(edad, { edadPre: 'hace ' }))}</span>`;
+}
+
+/* Cuántos días lleva la tarea EN EL TABLERO. **Es la última columna del tablero-lista y no va
+   en el backlog** (26/8/2026, por pedido): del otro lado la cuenta ni siquiera arrancó.
+
+   **Cuenta desde que entró al tablero y no desde que se anotó** (26/8/2026, por pedido). Para
+   una tarea que estuvo dos meses en el backlog las dos fechas no son la misma, y la que importa
+   acá es la segunda: el número contesta «hace cuánto que esto está en la cancha y todavía no se
+   cerró», no «hace cuánto que a alguien se le ocurrió». Antes decía lo segundo porque la fecha
+   de entrada no existía en ninguna columna; ahora la guarda `entroAlTablero()`.
+
+   **Sin fecha de entrada guardada cae en `creada`**, que es exactamente lo que el número decía
+   hasta hoy: las filas que ya estaban en el tablero siguen contando igual y no hubo nada que
+   migrar. La cuenta de verdad arranca para cada una la próxima vez que pase por el backlog.
+
+   **Siempre en días crudos**, y esa es toda la gracia: `antiguedad()` elige la unidad sola —«3
+   d», «2 sem», «4 mes»— que es lo que hay que hacer cuando el dato se lee suelto en una frase, y
+   es exactamente lo que no sirve en una columna. Bajando por cuarenta filas, «2 sem» y «12 d» no
+   se comparan de un vistazo: hay que traducir cada renglón antes de poder ordenarlos. En días
+   crudos el número más grande es el que lleva más tiempo y no hay nada que traducir.
+
+   **Y el número va solo adentro de un círculo** (26/8/2026, por pedido). Era «14d», gris y sin
+   marco, y a esa escala una cifra suelta al final del renglón se lee como un resto de otra
+   pastilla. El círculo es una ficha: una forma cerrada del mismo tamaño en las cuarenta filas,
+   que se cuenta bajando por la columna sin leer ninguna. La `d` se fue con el marco —adentro de
+   una ficha de tamaño fijo una letra es la mitad del ancho, y qué unidad es lo dice el `title`
+   una vez—. Sigue tabular: el círculo es fijo, el número adentro tiene que caer centrado igual
+   con una cifra que con tres.
+
+   Se ayuda con `cursor:help` y un `aria-label`: un número pelado no dice de qué es, ni en
+   pantalla ni en un lector. */
+function pillDias(t){
+  const desde = enTableroDesde(t);
+  const edad = antiguedad(desde);
+  if (!edad) return '';
+  const rotulo = edad.dias === 0
+    ? 'Entró al tablero hoy, el ' + edad.exacta
+    : 'Lleva ' + edad.dias + (edad.dias === 1 ? ' día' : ' días')
+      + ' en el tablero · desde el ' + edad.exacta;
+  return `<span class="pgdias" title="${escA(rotulo)}" aria-label="${escA(rotulo)}"
+    data-edad="${escA(desde)}" data-edad-fmt="dias">${esc(
+      textoEdad(edad, { edadFmt: 'dias' }))}</span>`;
 }
 
 // Lo que en la fila queda pegado al título, fuera de las columnas.
@@ -3213,7 +3370,7 @@ const pillsMetaDeTarea = t => pillCodigo(t) + pillsSueltas(t);
    no tiene cuarenta filas que alinear: ahí las pastillas envuelven y una columna fija sería
    ancho reservado para nada. */
 const pillsDeTarea = (t, conPase) => pillCodigo(t) + pillPrioridad(t) + pillQuien(t)
-  + (conPase ? pillPase() : '') + pillsSueltas(t) + pillEdad(t, true);
+  + (conPase ? pillPase() : '') + pillsSueltas(t) + pillEdad(t);
 
 /* El `⋯` de la fila. Es el equivalente del `＋` del diseño: ahí adentro, un renglón inserta
    bloques; acá, una tarea no tiene bloques que insertar pero sí cosas que cambiar. El primero
@@ -3223,13 +3380,17 @@ const pillsDeTarea = (t, conPase) => pillCodigo(t) + pillPrioridad(t) + pillQuie
    fila en columnas. Volvió a la fila el mismo día, así que este renglón se fue: es la que más
    se cambia en el tablero, y tenerla en los dos lados son dos caminos para lo mismo.
 
-   **«Ficha completa» tampoco está**, sacada el mismo día por pedido junto con la de la
-   cabecera de la página. Desde una fila se entra a la tarea por el `▤`, que abre la página: es
-   la misma tarea con más lugar y sin un modal encima. Con las dos puertas cerradas, la ficha
-   queda colgada de la tarjeta del tablero en columnas y en filas —el clic sobre la tarjeta la
-   sigue abriendo—, así que desde el backlog y desde el tablero-lista ya no se llega. Es la
-   contrapartida asumida: la ficha deja de ser el lugar donde se trabaja una tarea y queda como
-   lo que le quedó de propio —conversación y adjuntos sueltos—, que se mira desde la tarjeta. */
+   **«Ficha completa» salió y volvió, las dos veces el 26/8/2026.** Salió por pedido, junto con
+   la de la cabecera de la página: eran dos puertas al mismo modal y la ficha ya colgaba de la
+   tarjeta del tablero, que la abría con un clic. Volvió cuando se sacaron los dos layouts de
+   tarjeta ese mismo día: sin tarjeta, esa era la última puerta, y con las tres cerradas la
+   conversación, los adjuntos sueltos y los campos que la página no dibuja quedaban guardados en
+   la base sin ninguna pantalla que los mostrara. El motivo por el que se había ido —dos puertas
+   al mismo modal— dejó de ser cierto justo cuando la otra dejó de existir.
+
+   Va acá adentro y no como pill de la fila: se abre mucho menos que entrar a la tarea, que es
+   el `▤` y sigue siendo la página. La cabecera de la página tampoco lo recupera — desde
+   adentro de la tarea, un modal encima de la misma tarea no agrega nada. */
 function menuTareaHTML(t){
   const L = listaActual;
   const it = (k, ico, txt) => `<button type="button" data-acc="${k}"><span>${ico}</span>${txt}</button>`;
@@ -3238,6 +3399,7 @@ function menuTareaHTML(t){
   return `<div class="pgpop">
     <div class="pgpop-t">La tarea</div>
     ${it('grupo', '▤', L.mover)}
+    ${it('ficha', '☰', 'Ficha completa')}
     ${it('ir', t.backlog ? '→' : '←', t.backlog ? 'Mandar al tablero' : 'Mandar al backlog')}
     ${it('borrar', '✕', 'Borrar la tarea')}
   </div>`;
@@ -3379,6 +3541,8 @@ function engancharLista(){
         return pasarAlRoadmap(t,
           board.querySelector(`.bktarea[data-id="${CSS.escape(t.id)}"] [data-menu]`) || anclaje, e);
       }
+      // La ficha es la única acción del menú que no toca la tarea: abre el modal y ya.
+      if (k === 'ficha') return abrirTarea(t.id);
       if (k === 'borrar') return borrarDeLista(t);
       return;
     }
@@ -3389,28 +3553,28 @@ function engancharLista(){
     // el menú se cuelga de la pill que lo abrió.
     const altablero = enc('[data-altablero]');
     if (altablero) return pasarAlRoadmap(t, altablero, e);
-    // El `▤` es la puerta a la página, como en el diseño. La ficha —conversación, archivos,
-    // campos— vive en el menú `⋯`: se abre mucho menos.
+    // El `▤` es la puerta a la página, como en el diseño. La ficha —conversación, adjuntos
+    // sueltos, los campos que la página no dibuja— vive en el menú `⋯`: se abre mucho menos.
     if (enc('[data-pagina]')) return abrirPagina(t.id);
     const pop = enc('[data-pop]');
     if (pop) return abrirMenu(pop, pop.dataset.pop, t);
   };
 
   engancharNombreDeGrupo();
+  engancharTituloNuevo();
 
   /* Acá vivían los tres manejadores del tipeo: el `oninput` que guardaba el título mientras se
      escribía, el `onpaste` que lo aplanaba a texto plano y el Enter que abría la fila siguiente
      heredando el responsable de la de arriba. Se fueron el 26/8/2026, cuando el título del
      backlog dejó de ser un campo y pasó a ser la puerta a la tarea, igual que el del tablero.
-     El único campo que queda en la lista es el nombre de un grupo, que se engancha aparte.
+     Los dos campos que quedan en la lista —el nombre de un grupo y el título de la tarea recién
+     creada— se enganchan aparte, cada uno con sus dos manejadores propios.
 
-     **Contrapartida asumida**: en el backlog ya no se anota una lista de corrido. Cada tarea
-     nueva —con el `＋` de la canaleta o el del final del bloque— abre su página con el cursor en
-     el título, así que son dos teclas más por renglón. Se paga porque la fila tiene que ser la
-     misma de las dos listas, y un `contenteditable` de tres líneas en el que cualquier clic
-     pone el cursor convierte entrar a la tarea en acertarle a un riel de 3px. Con eso se fue
-     también la herencia del responsable por Enter: ahora las cuatro puertas de creación
-     preguntan, que es lo que ya hacían las otras tres. */
+     **Contrapartida asumida**: Enter ya no abre la fila siguiente, así que anotar diez cosas son
+     diez `＋`. Lo que sí se recuperó el 26/8/2026 es no tener que irse de la lista para
+     escribir el título: la fila nueva nace con el cursor adentro (ver `bautizando`). Con el
+     Enter se fue también la herencia del responsable de la fila de arriba: ahora las cuatro
+     puertas de creación preguntan, que es lo que ya hacían las otras tres. */
 
   engancharArrastreLista();
 }
@@ -3621,10 +3785,14 @@ function nuevaEnBacklog(sprint, despuesDe, quien){
   // Agregar adentro de un grupo plegado dejaría la fila nueva escondida al volver de la
   // página: se abre solo.
   sprintsPlegados.delete(String(sprint)); guardarPlegados();
-  /* Entra a la página, igual que `nuevaEnEstado()` y por lo mismo: desde el 26/8/2026 el título
-     de la fila no se edita en ninguna de las dos listas, así que quedarse afuera dejaba una
-     tarea sin nombre y sin dónde escribirlo. Es lo que usa el `foco` de `abrirPagina()`. */
-  abrirPagina(id, true);
+  /* Se queda en la lista con el cursor adentro del título, igual que `nuevaEnEstado()` y por lo
+     mismo (26/8/2026, por pedido). Hasta ese día entraba a la página: el título de la fila no se
+     edita, así que quedarse afuera dejaba una tarea sin nombre y sin dónde escribirlo. La
+     contra era que anotar cinco cosas eran cinco viajes de ida y vuelta a una página que no se
+     venía a mirar. El campo lo pone `bautizando`, que dura lo que dura escribir el nombre — la
+     fila ya dibujada sigue sin editarse. */
+  bautizando = id;
+  render();
   persistirTarea(t, {
     revertir: () => { datos.tareas = datos.tareas.filter(x => x.id !== id); render(); },
   });
@@ -3660,15 +3828,19 @@ function cambiarEstado(t, id, silencio){
 }
 
 /* Una fila nueva adentro de un bloque de la lista del tablero. Es el gemelo de
-   `nuevaEnBacklog()` y no `nuevaTarea()`: esa abre la ficha entera y acá alcanza con poder
-   ponerle el nombre. La diferencia con la del backlog es de qué lado de la marca nace
+   `nuevaEnBacklog()`; la diferencia con la del backlog es de qué lado de la marca nace
    —`tareaVacia()` ya la deja en `backlog:false`— y que el bloque es el estado.
 
-   **Y desde el 26/8/2026 entra a la página en vez de dejar el cursor en la fila**: en el
-   tablero el título de la fila ya no se edita, así que quedarse afuera dejaba una tarea sin
-   nombre y sin dónde escribirlo. En el backlog no pasa —ahí el título sí se edita— y por eso
-   `nuevaEnBacklog()` sigue como estaba: entrar a una página por cada renglón mataría el tipeo
-   de corrido, que es para lo que existe esa pantalla. */
+   **Desde el 26/8/2026 es el único creador del lado del tablero.** Tenía al lado a
+   `nuevaTarea()`, que era la del «＋» del pie de la columna y la de «+ Nueva tarea»: mandaba la
+   fila al final de todas las tareas y abría la ficha. Se fue con las tarjetas y «+ Nueva tarea»
+   pasa por acá, así que las dos puertas calculan el orden igual.
+
+   **Deja el cursor en la fila y no entra a la página** (26/8/2026, por pedido). Estuvo unas
+   horas entrando, porque el título de la fila dejó de editarse y quedarse afuera dejaba una
+   tarea sin nombre y sin dónde escribirlo. Se corrigió por el otro lado: la fila recién creada
+   —y solo esa— nace con un campo en el lugar del título (`bautizando`). Vale igual para las dos
+   listas, que son el mismo componente y crear tiene que hacer lo mismo de los dos lados. */
 function nuevaEnEstado(estadoId, despuesDe, quien){
   const id = nuevoId('T', datos.tareas.map(x => x.id));
   const t = Object.assign(tareaVacia(id), { estado: estadoId, pend: [quien] });
@@ -3683,10 +3855,13 @@ function nuevaEnEstado(estadoId, despuesDe, quien){
     i >= 0 && hermanas[i] ? hermanas[i].orden : null,
     hermanas[i + 1] ? hermanas[i + 1].orden : null);
   datos.tareas.push(t);
-  // Agregar adentro de un bloque plegado dejaría la fila nueva escondida al volver de la
-  // página: se abre solo, igual que el sprint.
+  // Agregar adentro de un bloque plegado dejaría la fila nueva escondida: se abre solo, igual
+  // que el sprint.
   LISTAS.estado.abrir(estadoId);
-  abrirPagina(id, true);
+  // Se bautiza en la fila y no adentro de la página, igual que en el backlog: las dos listas
+  // son el mismo componente y crear tiene que hacer lo mismo de los dos lados.
+  bautizando = id;
+  render();
   persistirTarea(t, {
     revertir: () => { datos.tareas = datos.tareas.filter(x => x.id !== id); render(); },
   });
@@ -3720,8 +3895,14 @@ function pasarAlRoadmap(t, anclaje, ev, silencio){
 
 // El pase de verdad, ya con la prioridad elegida. Es la única puerta que apaga `backlog`.
 function alTablero(t, prioridad, silencio){
-  const antes = { backlog: t.backlog, orden: t.orden, hoy: t.hoy, prioridad: t.prioridad };
+  const antes = { backlog: t.backlog, orden: t.orden, hoy: t.hoy, prioridad: t.prioridad,
+    [CAMPO_ENTRADA]: t[CAMPO_ENTRADA] };
   ponerPrioridad(t, prioridad);
+  /* Acá arranca la cuenta de días de la fila (ver `enTableroDesde()`). Se pisa en cada pase y
+     no solo en el primero: una tarea puede ir y volver, y la vuelta es una llegada nueva —lo
+     mismo que ya decía `hoy` dos líneas más abajo—. Lo que había cargado en esa columna era el
+     tipo de actividad, que no lo lee ninguna pantalla desde que se sacó el filtro. */
+  t[CAMPO_ENTRADA] = new Date().toISOString();
   // Entra al final del tablero: el orden que traía era el de su sprint y acá no dice nada.
   const ultimo = datos.tareas.reduce((m, x) => (!x.backlog && (m == null || (x.orden || 0) > m) ? (x.orden || 0) : m), null);
   t.orden = RoadmapSync.calcularOrden(ultimo, null);
@@ -3765,6 +3946,9 @@ async function borrarDeLista(t){
   const idx = datos.tareas.findIndex(x => x.id === t.id);
   datos.tareas = datos.tareas.filter(x => x.id !== t.id);
   if (menuFila === t.id) menuFila = null;
+  // Borrarla mientras se le escribía el título deja el campo apuntando a una tarea que ya no
+  // está: el `blur` no tendría a qué guardarle nada.
+  if (bautizando === t.id) bautizando = null;
   // Si estabas parado adentro de su página, la página deja de existir con ella.
   if (paginaTarea === t.id) cerrarPagina();
   render();
@@ -3793,8 +3977,47 @@ async function borrarDeLista(t){
 
    El `antes` guarda los dos campos aunque cada lista toque uno solo: son dos números en un
    objeto de revert, y llevar la cuenta de cuál corresponde a cada lista es justo el tipo de
-   detalle que se olvida al agregar la tercera. */
+   detalle que se olvida al agregar la tercera.
+
+   **Desde el 26/8/2026 se arrastra otra cosa además de las filas: el bloque entero**, para
+   acomodarlo en otra columna del backlog. Son dos arrastres distintos sobre el mismo board y
+   por eso hay dos variables y no una: mientras una está puesta la otra es `null`, y el primer
+   renglón de cada manejador es cuál de las dos manda. Con una sola bandera habría que
+   preguntarle al DOM qué se está moviendo en cada `dragover`, que son decenas por segundo. */
 let arrastreBacklog = null;
+let arrastreGrupo = null;
+
+// Lo que hay que dejar como estaba cuando el arrastre termina, salga bien o se cancele. Va en
+// una función porque lo llaman los dos `dragend` y también el `drop` del bloque.
+function limpiarArrastreLista(){
+  arrastreBacklog = null;
+  arrastreGrupo = null;
+  board.classList.remove('mueve-grupo');
+  board.querySelectorAll('.arrastrando,.antes,.despues,.alfinal')
+    .forEach(x => x.classList.remove('arrastrando', 'antes', 'despues', 'alfinal'));
+}
+
+/* Dónde entraría el bloque si se soltara acá: la columna bajo el cursor y el índice entre los
+   bloques que ya tiene.
+
+   **El corte se hace contra el bloque entero —cabecera más lo que le cuelga— y no contra la
+   cabecera sola.** Con veinte tareas colgando, el medio de la cabecera cae en el primer
+   centímetro de un bloque de media pantalla y todo lo demás contaría como «abajo de todo». */
+function suelteDeGrupo(e){
+  const col = e.target.closest('.bkcol[data-col]');
+  if (!col) return null;
+  const cabeceras = [...col.querySelectorAll('.bksprint')];
+  let i = 0;
+  for (; i < cabeceras.length; i++) {
+    const cab = cabeceras[i];
+    const kids = cab.nextElementSibling;
+    const arriba = cab.getBoundingClientRect().top;
+    const abajo = (kids && kids.classList.contains('pgkids') ? kids : cab)
+      .getBoundingClientRect().bottom;
+    if (e.clientY < arriba + (abajo - arriba) / 2) break;
+  }
+  return { col, cabeceras, i, n: Number(col.dataset.col) };
+}
 
 function engancharArrastreLista(){
   const L = listaActual;
@@ -3807,14 +4030,42 @@ function engancharArrastreLista(){
       e.dataTransfer.setData('text/plain', arrastreBacklog);
       e.dataTransfer.setDragImage(fila, 24, 14);
     });
-    h.addEventListener('dragend', () => {
-      arrastreBacklog = null;
-      board.querySelectorAll('.arrastrando,.antes,.despues')
-        .forEach(x => x.classList.remove('arrastrando', 'antes', 'despues'));
+    h.addEventListener('dragend', limpiarArrastreLista);
+  });
+
+  /* El bloque entero. Solo lo dibuja el backlog: en la lista por estado los bloques son el
+     catálogo de estados y su columna la fija `COLUMNAS_LISTA`, así que no hay nada que
+     acomodar. La imagen que se arrastra es la cabecera y no el bloque con sus tareas — un
+     fantasma de media pantalla tapa justo el lugar donde uno quiere soltarlo. */
+  board.querySelectorAll('.bksprint [data-drag-grupo]').forEach(h => {
+    h.addEventListener('dragstart', e => {
+      const cab = h.closest('.bksprint');
+      arrastreGrupo = cab.dataset.g;
+      cab.classList.add('arrastrando');
+      /* La marca en el board le da piso a las columnas cortas mientras dura el arrastre. Sin
+         eso, una columna que termina a media pantalla no llega hasta donde uno suelta: el
+         `drop` cae en el hueco de la grilla, que no es de nadie, y el bloque vuelve a su lugar
+         sin que nada explique por qué. */
+      board.classList.add('mueve-grupo');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', arrastreGrupo);
+      e.dataTransfer.setDragImage(cab, 24, 14);
     });
+    h.addEventListener('dragend', limpiarArrastreLista);
   });
 
   board.ondragover = e => {
+    if (arrastreGrupo != null) {
+      e.preventDefault();
+      board.querySelectorAll('.antes,.alfinal').forEach(x => x.classList.remove('antes', 'alfinal'));
+      const s = suelteDeGrupo(e); if (!s) return;
+      /* La marca es una raya arriba del bloque que quedaría debajo. Al final de la columna no
+         hay bloque siguiente, así que la lleva la columna: es el único caso en que la raya no
+         es de nadie en particular. */
+      if (s.cabeceras[s.i]) s.cabeceras[s.i].classList.add('antes');
+      else s.col.classList.add('alfinal');
+      return;
+    }
     if (!arrastreBacklog) return;
     e.preventDefault();
     board.querySelectorAll('.antes,.despues').forEach(x => x.classList.remove('antes', 'despues'));
@@ -3825,6 +4076,14 @@ function engancharArrastreLista(){
   };
 
   board.ondrop = e => {
+    if (arrastreGrupo != null) {
+      e.preventDefault();
+      const n = Number(arrastreGrupo);
+      const s = suelteDeGrupo(e);
+      limpiarArrastreLista();
+      if (s) moverGrupo(n, s.n, s.i);
+      return;
+    }
     if (!arrastreBacklog) return;
     e.preventDefault();
     const t = tarea(arrastreBacklog);
@@ -3898,6 +4157,68 @@ let paginaAdjuntoAncla = null;  // id del bloque debajo del cual entra lo que se
 let arrastreBloque = null;
 
 const tareaDePagina = () => tarea(paginaTarea);
+
+/* ---------- el «atrás» del navegador ----------
+   La app es una sola URL y hasta el 26/8/2026 no tocaba el historial: entrabas a una tarea,
+   apretabas atrás y te ibas del tablero entero. Ahora cada nivel al que se entra —la tarea y
+   cada subpágina— apila una entrada que lleva adentro dónde estás parado.
+
+   **`popstate` es la única puerta que mueve dónde estás parado.** Todo lo que sale —Escape, la
+   miga de pan, el «Tablero» del principio— le pide al navegador que retroceda y no se mueve
+   por su cuenta: se mueve cuando el navegador contesta. Que las dos formas de salir escriban
+   en el mismo lugar es lo que mantiene el historial y la pantalla diciendo lo mismo. Al revés
+   —que salir con Escape apilara una entrada nueva— «atrás» te volvería a meter en la tarea de
+   la que acabás de salir, que es el defecto clásico de atar un botón de cerrar a un `pushState`.
+
+   **La ubicación va entera en el `state`, no como un número de profundidad.** Así cada entrada
+   sabe sola a qué tarea y a qué subpágina corresponde: adelante funciona igual que atrás, y
+   recargar adentro de una tarea no deja el historial diciendo una cosa y la pantalla otra. */
+const ubicacionPagina = () => ({ t: paginaTarea, r: paginaRuta.slice() });
+const profundidadPagina = () => paginaTarea ? 1 + paginaRuta.length : 0;
+
+/* Los dos únicos que escriben el historial. Van con red porque `pushState` tira si no hay
+   origen —abrir el `index.html` con doble clic, sin servidor—: que ahí no ande el «atrás» es
+   aceptable, que no se pueda entrar a una tarea no. */
+function apilarPagina(){
+  try { history.pushState({ pg: ubicacionPagina() }, ''); } catch (e) {}
+}
+function fijarPagina(){
+  try { history.replaceState({ pg: ubicacionPagina() }, ''); } catch (e) {}
+}
+
+/* Salir no mueve nada acá: pide los saltos y el `popstate` que viene atrás es el que aplica.
+   Si el destino es donde ya estás —el último tramo de la miga— no salta y no pasa nada. */
+function volverAProfundidad(prof){
+  const saltos = profundidadPagina() - prof;
+  if (saltos > 0) history.go(-saltos);
+}
+
+/* `render()` rearma el árbol solo y rutea a la página o al tablero según haya tarea o no, así
+   que acá alcanza con dejar la ubicación puesta. Una entrada que apunta a una tarea borrada la
+   resuelve él, que ya tenía ese corte. */
+function aplicarUbicacion(u){
+  cerrarMenu();
+  paginaMenu = null;
+  arrastreBloque = null;
+  paginaTarea = (u && u.t) || null;
+  paginaRuta = (u && u.r) ? u.r.slice() : [];
+  render();
+}
+addEventListener('popstate', e => aplicarUbicacion(e.state && e.state.pg));
+
+/* Al arrancar —y al volver a entrar después de cerrar sesión— la ubicación sale del historial
+   y no de cero: recargar adentro de una tarea tiene que dejarte adentro de esa tarea. Si no,
+   la entrada en la que estás parado diría «tarea P-12» y la pantalla el tablero, y el primer
+   «atrás» te metería en una tarea en vez de sacarte.
+
+   Se llama desde `arrancar()` y no acá arriba porque necesita los datos cargados: sin ellos no
+   hay cómo saber si la tarea que nombra el historial todavía existe. */
+function restaurarUbicacion(){
+  const u = history.state && history.state.pg;
+  paginaMenu = null;
+  if (u && u.t && tarea(u.t)) { paginaTarea = u.t; paginaRuta = (u.r || []).slice(); return; }
+  cerrarPagina();
+}
 
 /* ---------- el árbol ----------
    Todo lo que sigue trabaja sobre `nivelPagina()` y no sobre `paginaArbol`: al entrar a una
@@ -3993,9 +4314,11 @@ function arbolDeTarea(t){
 }
 
 /* ---------- entrar y salir ---------- */
-/* `foco` pone el cursor en el título de la página. Lo usa la creación desde el tablero: la
-   tarea nace sin nombre y la primera tecla tiene que ir ahí, no al primer bloque. */
-function abrirPagina(id, foco){
+/* Acá vivía el `foco`, que ponía el cursor en el título de la página. Lo usaba la creación,
+   cuando crear una tarea entraba a su página; desde que la fila recién creada se bautiza en la
+   lista (ver `bautizando`) no lo llama nadie, y un parámetro que nadie pasa es una promesa de
+   que la página se puede abrir enfocada — que ya no es cierta. */
+function abrirPagina(id){
   const t = tarea(id); if (!t) return;
   /* Entrar es haberla visto: la chapa de «todavía no entraste» se apaga acá y no cuando se
      sale, que es lo que uno espera del momento en que efectivamente la miró. En el backlog no
@@ -4007,20 +4330,26 @@ function abrirPagina(id, foco){
   paginaMenu = null;
   paginaArbol = arbolDeTarea(t);
   if (tareaAbierta) cerrarModales();
+  // Entrar apila y se mueve en el mismo acto: la entrada del historial todavía no existe, así
+  // que acá no hay `popstate` que esperar. Salir es al revés — ver el cuadro de arriba.
+  apilarPagina();
   render();
   board.scrollTop = 0;
-  if (foco) board.querySelector('[data-titulo]')?.focus();
 }
+/* Cerrar también deja la entrada del historial diciendo «el tablero», y por eso el `fijarPagina()`
+   va acá adentro y no en quien llama: los caminos que cierran la página sin que nadie navegue
+   —la tarea borrada, la que desapareció por realtime— dejarían una entrada que sigue jurando
+   que estás adentro de algo que ya no existe. */
 function cerrarPagina(){
   paginaTarea = null; paginaArbol = null; paginaRuta = []; paginaMenu = null;
   arrastreBloque = null;
   cerrarMenu();
+  fijarPagina();
 }
 // Escape y la miga de pan salen de a un nivel: de la subpágina a la tarea, de la tarea afuera.
+// No se mueve nada acá: se le pide al navegador que retroceda uno y el `popstate` hace el resto.
 function salirDePagina(){
-  if (paginaRuta.length) { paginaRuta.pop(); paginaMenu = null; return renderPagina(); }
-  cerrarPagina();
-  render();
+  volverAProfundidad(profundidadPagina() - 1);
 }
 
 function guardarPagina(){
@@ -4108,7 +4437,7 @@ function metaPaginaHTML(t){
     <span class="pgflex"></span>
     ${t.backlog
       ? `<button class="pgship" type="button" data-ir
-          title="Mandarla al tablero">→ Al tablero</button>`
+          title="Mandar al tablero">→ Al tablero</button>`
       : `<span class="pgship ya"><button type="button" data-ir>● En el tablero</button></span>`}
   </div>`;
 }
@@ -4121,15 +4450,20 @@ function metaPaginaHTML(t){
    que aparece solo cuando ya hay algo adentro no le sirve al primero que quiere escribir. */
 function cabeceraPaginaHTML(){
   const avisos = avisosDe(cabeceraDe(paginaArbol));
-  /* Cuenta TODOS los sin ver y no solo los dirigidos a mí, al revés que la chapa del tablero.
-     El destinatario decide a quién le suena la chapa desde afuera; adentro de la tarea el
-     cuadro se lee entero, y un «2 sin ver» que no cuadre con los renglones que están a la
-     vista se lee como un error de la pantalla. */
-  const sinVer = avisos.filter(a => !a.visto).length;
+  /* Cuenta TODOS los sin ver y no solo los dirigidos a mí, al revés que la chapa del tablero:
+     el destinatario decide a quién le suena la chapa desde afuera, pero adentro de la tarea el
+     cuadro se lee entero.
+
+     **Es un booleano a la vista y no un número** (26/8/2026, por pedido). Al lado del rótulo
+     iba la pastilla «N sin ver» y se sacó: los avisos sin ver están ahí abajo, contados en un
+     renglón cada uno y en rojo, así que la pastilla decía en números lo que la lista ya dice
+     enteros — y encima aparecía justo encima del campo, en el momento de escribir uno nuevo.
+     Que hay algo sin ver lo sigue diciendo el borde rojo del cuadro, que es lo que se ve antes
+     de leer nada, y para eso alcanza con saber si hay o no hay. */
+  const sinVer = avisos.some(a => !a.visto);
   return `<div class="pghdr${sinVer ? ' hay' : ''}">
     <div class="pgavtop">
       <span class="pglbl">Avisos</span>
-      ${sinVer ? `<span class="pgavn">${sinVer} sin ver</span>` : ''}
       <input class="pgavin" type="text" data-aviso spellcheck="false"
         placeholder="Escribí un aviso — Enter lo deja acá" aria-label="Escribir un aviso">
     </div>
@@ -4143,17 +4477,26 @@ function cabeceraPaginaHTML(){
 
    Quién lo escribió y cuándo van en el `title` y no a la vista: el cuadro tiene que poder
    leerse de un vistazo, y una firma por renglón lo llenaría de nombres. */
-/* Para quién es el aviso: avatares y no una pill con nombres escritos. Al lado de un renglón
-   que tiene que leerse de un vistazo, «Lorenzo · Antonio» pesa más que el aviso mismo — es la
-   misma razón por la que la firma vive en el `title`. Para todos es un punto hueco y no un
-   hueco de verdad: la marca vacía es justo la que hay que poder tocar, igual que el «Sin
-   asignar» del backlog. Las dos formas son el mismo botón y el mismo menú. */
+/* Para quién es el aviso, escrito y no solo en avatares (26/8/2026, por pedido). Los avatares
+   se quedan —tres iniciales de color se leen de un vistazo— pero al lado va el nombre: un
+   círculo con una «L» adentro solo es un dato para el que ya se lo sabe de memoria, y acá el
+   destinatario es justo lo que hay que poder leer sin pasar el cursor por encima. Es la misma
+   razón por la que la pastilla de prioridad se quedó en la fila de la lista al lado del riel.
+
+   Sin nadie elegido va escrito y en ámbar, no un punto tenue que se prende con el hover: de
+   los dos estados era el invisible, y es el que hay que notar. Ámbar y no rojo, la misma
+   escala que lo rancio del backlog: es algo para mirar, no una alarma — el rojo de este cuadro
+   ya significa «sin ver». Ojo con lo que quiere decir: vacío es que le suena a TODO el equipo,
+   no que el aviso no le llegue a nadie, y eso lo aclara el `title`.
+
+   Las dos formas son el mismo botón y el mismo menú. */
 const rotuloPara = ids => ids.length
   ? 'Aviso para ' + ids.map(nombrePersona).join(' · ') + ' — solo a ellos les suena'
-  : 'Aviso para todos — tocá para elegir a quién';
+  : 'Sin destinatario: le suena a todo el equipo. Tocá para elegir a quién';
 const marcasPara = ids => ids.length
   ? ids.map(id => `<span class="av mini" style="background:${colorPersona(id)}">${esc(iniPersona(id))}</span>`).join('')
-  : '<i class="pgavdot"></i>';
+    + `<span class="pgavnom">${esc(ids.map(nombrePersona).join(' · '))}</span>`
+  : '<i class="pgavdot"></i><span class="pgavnom">Sin destinatario</span>';
 
 function botonParaHTML(a){
   const ids = destinatariosDe(a);
@@ -4293,9 +4636,12 @@ function engancharPagina(){
     const t = tareaDePagina(); if (!t) return;
     const enc = s => e.target.closest(s);
 
-    if (enc('[data-salir-todo]')) { cerrarPagina(); return render(); }
+    /* La miga de pan no se mueve sola: retrocede en el historial y el `popstate` aplica. El
+       `data-nivel` es cuántos tramos de ruta quedan, así que la profundidad de destino es uno
+       más —el tramo de la tarea—; el último tramo de la miga es donde ya estás y no salta. */
+    if (enc('[data-salir-todo]')) return volverAProfundidad(0);
     const nivel = enc('[data-nivel]');
-    if (nivel) { paginaRuta = paginaRuta.slice(0, Number(nivel.dataset.nivel)); paginaMenu = null; return renderPagina(); }
+    if (nivel) return volverAProfundidad(Number(nivel.dataset.nivel) + 1);
 
     // Los de la cabecera son los mismos de la fila y hacen exactamente lo mismo.
     const ir = enc('[data-ir]');
@@ -4366,7 +4712,13 @@ function engancharPagina(){
     if (link) return;
 
     if (enc('[data-open]'))   return cambiarPagina(() => { b.open = !b.open; });
-    if (enc('[data-entrar]')) { paginaRuta.push(b.id); paginaMenu = null; return renderPagina(); }
+    // Entrar a una subpágina es un nivel más, y apila igual que entrar a la tarea: «atrás» te
+    // devuelve al nivel de arriba y no te saca del tablero de un saque.
+    if (enc('[data-entrar]')) {
+      paginaRuta.push(b.id); paginaMenu = null;
+      apilarPagina();
+      return renderPagina();
+    }
     if (enc('[data-tick]'))   return tildarBloque(t, b);
     if (enc('[data-del]'))    return borrarBloque(t, b);
   };
@@ -4818,7 +5170,6 @@ document.addEventListener('keydown', e => {
 });
 
 $('#q').addEventListener('input', e => { UI.f.q = e.target.value.trim().toLowerCase(); render(); });
-$('#fTipo').addEventListener('change', e => { UI.f.tipo = e.target.value; render(); });
 
 /* El menú de prioridades se atiende por delegación desde el contenedor, que es lo único que
    no se repinta: el contenido de adentro se rehace en cada render y un listener por opción
@@ -4838,14 +5189,10 @@ $('#fPrioridad').addEventListener('click', e => {
 document.addEventListener('click', e => {
   if (!e.target.closest('#fPrioridad')) abrirMenuPrioridad(false);
 }, true);
-/* Cambiar de layout cierra el menú `⋯` que hubiera abierto: la fila que lo tenía puede no
-   existir en el dibujo siguiente, y un menú colgado de la nada no se cierra con nada. */
-$$('[data-layout]').forEach(b => b.onclick = () => {
-  if (UI.layout === b.dataset.layout) return;
-  UI.layout = b.dataset.layout;
-  menuFila = null;
-  guardarUI(); render();
-});
+/* Acá vivía el enganche del segmentado de layout, que además cerraba el menú `⋯` de paso: la
+   fila que lo tenía abierto podía no existir en el dibujo siguiente. Con un solo layout no hay
+   de dónde a dónde cambiar, así que se fue con el segmentado. Cambiar de VISTA sigue
+   cerrándolo, arriba, por el mismo motivo. */
 $('#bNueva').onclick = e => {
   cerrarPagina();
   const v = vistaActual();
@@ -4856,17 +5203,22 @@ $('#bNueva').onclick = e => {
     // título: abrir el detalle para una línea que todavía no dice nada sería un estorbo.
     if (v.backlog) return nuevaEnBacklog(sprintsVisibles()[0], null, quien);
     // Desde la Caja no hay tablero donde mostrarla: se vuelve a una vista de tareas para
-    // que la tarea recién creada quede a la vista al cerrar el detalle.
+    // que la tarea recién creada quede a la vista al volver de su página.
     if (sinTareas(v)) { UI.vista = 'estado'; guardarUI(); render(); }
-    nuevaTarea(vistaActual(), null, quien);
+    /* Nace en el primer estado del catálogo —«Nueva»—, que es donde caía igual cuando esto
+       llamaba a `nuevaTarea()` sin columna: `tareaVacia()` arranca ahí. La diferencia es que
+       ahora pasa por el mismo creador que el `＋` de la lista, así que el `orden` se calcula
+       contra su banda y la tarea nace con el cursor en su título, en la fila, en vez de abrir
+       la ficha. */
+    nuevaEnEstado(ESTADOS[0].id, null, quien);
   });
 };
 $('#bCsv').onclick = () => {
   const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-  const cab = ['ID','Titulo','Estado','Prioridad','Tipo','Pendiente de','Grupo','Donde','Notas','Subtareas','Conversacion','Archivos'];
+  const cab = ['ID','Titulo','Estado','Prioridad','Pendiente de','Grupo','Donde','Notas','Subtareas','Conversacion','Archivos'];
   const filas = datos.tareas.map(t => [
     t.id, t.tarea,
-    estadoDe(t.estado).label, prioridadDe(t.prioridad).label, tipoDe(t.tipo).label,
+    estadoDe(t.estado).label, prioridadDe(t.prioridad).label,
     (t.pend || []).map(nombrePersona).join(' | '),
     // El nombre del grupo y no el número: en una planilla, «Onboarding» dice algo y «3» no.
     sprintDe(t) ? nombreSprint(sprintDe(t)) : '', t.backlog ? 'backlog' : 'tablero',
@@ -4904,9 +5256,12 @@ async function arrancar(){
   try { datos = await RoadmapSync.cargarEstado(); }
   catch (e) {
     aviso('No se pudo conectar con la base: ' + e.message);
-    datos = { tareas:[], caja:[], grupos:[] };
+    datos = { tareas:[], caja:[], grupos:[], nota:'' };
   }
   normalizarDatos();
+  // Dónde estás parado sale del historial y no de cero: recargar adentro de una tarea tiene
+  // que dejarte adentro de esa tarea. Va antes del `render()`, que es quien pinta lo que salga.
+  restaurarUbicacion();
   render();
   revisarEsquema();
   if (!YO.id) {
@@ -4967,7 +5322,7 @@ async function entrar(){
   RoadmapSync.onCambioSesion(async sesionOk => {
     if (sesionOk) { loginOverlay.hidden = true; await entrar(); }
     else {
-      datos = { tareas:[], caja:[], grupos:[] };
+      datos = { tareas:[], caja:[], grupos:[], nota:'' };
       YO = { id:'', nombre:'', esMiembro:false };
       cerrarModales();
       sinAccesoOverlay.hidden = true;

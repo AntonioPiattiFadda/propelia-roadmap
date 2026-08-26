@@ -28,6 +28,16 @@ const TABLAS = Object.assign(
    un grupo del backlog. */
 const PREFIJO_GRUPO = 'grupo-';
 const idGrupo = n => PREFIJO_GRUPO + n;
+/* La hoja de notas del backlog. Va en la MISMA tabla que los nombres de los grupos y con un id
+   propio, que es exactamente para lo que el prefijo de los grupos estaba puesto ahí: la tabla
+   es de texto libre y esta es la segunda cosa que la usa. Es una fila sola y fija —no hay una
+   nota por grupo ni por persona—, así que el id es una constante y no una función.
+
+   Sus tres columnas significan otra cosa que en una fila de grupo, y por eso hace falta que el
+   id las separe: `texto` es la nota escrita y no el número de columna, `titulo` queda vacío y
+   `orden` no ubica nada. Leer una fila con el significado de la otra sería pintar un grupo
+   llamado «acordate de llamar al contador». */
+const ID_NOTA = 'nota-backlog';
 const BUCKET = _CFG.bucket || 'roadmap-adjuntos';
 const CANAL = _CFG.canal || 'roadmap-sync';
 const PROYECTO = _CFG.proyecto || 'propelia';
@@ -51,12 +61,13 @@ const RoadmapSync = {
   // Lo usa el tablero para reconocer su propio eco por realtime: el id de la fila que acaba
   // de escribir. Sale de acá para que el prefijo esté escrito en un solo lugar.
   idGrupo,
+  ID_NOTA,
 
   async cargarEstado() {
     const [tarRes, cajaRes, gruposRes] = await Promise.all([
       supabaseClient.from(TABLAS.tareas).select('*').order('orden'),
       supabaseClient.from(TABLAS.caja).select('*').order('orden'),
-      supabaseClient.from(TABLAS.grupos).select('id,titulo,orden').order('orden'),
+      supabaseClient.from(TABLAS.grupos).select('id,titulo,texto,orden').order('orden'),
     ]);
     if (tarRes.error) throw tarRes.error;
     // La caja puede no existir todavía si falta correr schema-v3.sql: seguimos con una
@@ -77,6 +88,10 @@ const RoadmapSync = {
         // Campos del tablero nuevo. Si falta correr schema-v3.sql llegan `undefined`,
         // así que cada uno cae en su valor por defecto y la app igual funciona en pantalla.
         prioridad: t.prioridad || 'semanal',
+        /* `tipo` era la clasificación de la actividad y no la lee ninguna pantalla desde el
+           26/8/2026. Ese mismo día se reusó para guardar cuándo entró la tarea al tablero
+           (ver `entroAlTablero()` en app.js). Viaja crudo: quién decide si lo que hay adentro
+           es una fecha o el `'nuevo'` de fábrica es el front, y lo hace por la forma del dato. */
         tipo: t.tipo || 'nuevo',
         hoy: !!t.hoy,
         // `resp` era el responsable único de antes; si `pend` todavía no existe, se usa
@@ -103,13 +118,41 @@ const RoadmapSync = {
         // sea igual que siempre.
         carga: arr(m.carga),
       })),
-      /* Un grupo es el número que las tareas ya tienen en `sprint`; acá solo viaja su
-         nombre. Por eso no hay «lista de grupos» que mantener sincronizada con las tareas:
-         una fila sin nombre no existe, y un grupo sin fila se llama «Grupo N». */
+      /* Un grupo es el número que las tareas ya tienen en `sprint`; acá viajan las dos cosas
+         que se le cuelgan a ese número y que no son de ninguna tarea: su nombre y, desde el
+         26/8/2026, en qué columna de la hoja lo acomodaron.
+
+         **La columna va en `texto` y la posición en `orden`, las dos que la tabla ya tenía.**
+         En una fila de grupo `texto` se escribía siempre vacío (la hoja de notas lo usa, pero
+         esa es otra fila) y `orden` guardaba el número del grupo, que es un dato que ya está
+         en el `id`. Es la misma jugada que `modulo` con el «Área» y que `hoy` con la chapa de
+         novedad: reusar lo que está corrido en vez de esperar una migración, que hay dos
+         pendientes hace semanas.
+
+         Sin columna escrita, `col` es `null`: ese grupo no tiene lugar propio y la hoja se
+         reparte como se repartía siempre. Por eso no hay nada que migrar — cada fila que ya
+         existía sigue significando exactamente lo que significaba. */
       grupos: grupos
-        .filter(g => String(g.id).startsWith(PREFIJO_GRUPO))
-        .map(g => ({ n: Number(String(g.id).slice(PREFIJO_GRUPO.length)) || 0, nombre: g.titulo || '' }))
-        .filter(g => g.n > 0),
+        .map(g => {
+          const id = String(g.id);
+          const resto = id.startsWith(PREFIJO_GRUPO) ? id.slice(PREFIJO_GRUPO.length) : '';
+          /* El número se lee estricto y no con `Number(x) || 0`: con eso, una fila
+             «grupo-loquesea» de otro uso de la tabla se leería como el grupo 0, que desde que
+             los bloques se acomodan a mano sí existe («Sin planificar»). */
+          const n = /^\d+$/.test(resto) ? Number(resto) : -1;
+          const col = String(g.texto || '').trim();
+          const ubicado = /^\d+$/.test(col);
+          return {
+            n, nombre: g.titulo || '',
+            col: ubicado ? Number(col) : null,
+            pos: ubicado ? (Number(g.orden) || 0) : null,
+          };
+        })
+        .filter(g => g.n >= 0),
+      /* La hoja de notas del backlog: la misma tabla, otra fila. Sin fila es la cadena vacía,
+         que es exactamente lo mismo que una nota en blanco — el cuadro se dibuja igual y la
+         fila nace recién cuando alguien escribe algo. */
+      nota: grupos.find(g => g.id === ID_NOTA)?.texto || '',
     };
   },
 
@@ -200,19 +243,40 @@ const RoadmapSync = {
     if (error) throw error;
   },
 
-  /* El nombre de un grupo del backlog. `orden` es `not null` sin default en la tabla, así
-     que va sí o sí; se usa el número del grupo, que es justo el orden en que se dibujan. */
-  async guardarGrupo(n, nombre) {
-    const { error } = await supabaseClient.from(TABLAS.grupos).upsert({
-      id: idGrupo(n), titulo: nombre, texto: '', orden: n,
-    });
+  /* Las filas de grupo del backlog: el nombre y dónde lo acomodaron en la hoja. Va de a varias
+     y no de a una porque acomodar un bloque reescribe el reparto entero —un solo viaje en vez
+     de N— y el renombre entra por acá con una fila sola.
+
+     `orden` es `not null` sin default en la tabla, así que va sí o sí: es la posición dentro de
+     la columna cuando el grupo tiene lugar propio, y el número del grupo cuando no, que es lo
+     que guardaba antes de que los bloques se pudieran acomodar. */
+  async guardarGrupos(filas) {
+    if (!filas.length) return;
+    const { error } = await supabaseClient.from(TABLAS.grupos).upsert(filas.map(f => ({
+      id: idGrupo(f.n), titulo: f.nombre || '',
+      texto: f.col == null ? '' : String(f.col),
+      orden: f.col == null ? f.n : f.pos,
+    })));
     if (error) throw error;
   },
 
-  // Quedarse sin nombre no es tener el nombre vacío: la fila se va y el bloque vuelve a
-  // llamarse «Grupo N», que es como estaba antes de que alguien lo bautizara.
+  /* Quedarse sin nombre no es tener el nombre vacío: la fila se va y el bloque vuelve a
+     llamarse «Grupo N», que es como estaba antes de que alguien lo bautizara. Ojo: eso vale
+     solo si la fila no guarda además dónde está el bloque en la hoja — quién decide es
+     `fijarNombreGrupo()` en `app.js`, que es el que sabe las dos cosas. */
   async borrarGrupo(n) {
     const { error } = await supabaseClient.from(TABLAS.grupos).delete().eq('id', idGrupo(n));
+    if (error) throw error;
+  },
+
+  /* La hoja de notas del backlog. Al revés que el nombre de un grupo, vacía NO se borra: el
+     cuadro está siempre en pantalla, así que la fila en blanco y la fila que no existe son el
+     mismo estado y borrarla sería una rama más para no ganar nada. `orden` es `not null` sin
+     default, como en los grupos; va 0 porque la nota no compite con ellos por lugar. */
+  async guardarNota(texto) {
+    const { error } = await supabaseClient.from(TABLAS.grupos).upsert({
+      id: ID_NOTA, titulo: '', texto, orden: 0,
+    });
     if (error) throw error;
   },
 
