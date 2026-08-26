@@ -13,29 +13,58 @@ const TABLAS = Object.assign(
   {
     tareas: 'roadmap_tareas',
     caja: 'roadmap_caja',
+    // Los nombres de los grupos del backlog. Es `roadmap_notas`, la tabla que creó
+    // schema-v3.sql para la Visión vieja y que quedó vacía: ninguna pantalla la lee ni la
+    // escribe. Se reusa a propósito, y no es una comodidad: una columna o una tabla nueva
+    // significaría esperar a que se corra otra migración —hay dos pendientes hace semanas—
+    // para poder ponerle nombre a un grupo. Esta ya está corrida, ya tiene su RLS por
+    // miembro y ya está publicada en realtime.
+    grupos: 'roadmap_notas',
   },
   _CFG.tablas || {}
 );
+/* Las filas de grupo llevan prefijo en el `id`. La tabla es de texto libre y podría volver a
+   usarse para otra cosa: sin el prefijo, cualquier fila que alguien meta ahí se leería como
+   un grupo del backlog. */
+const PREFIJO_GRUPO = 'grupo-';
+const idGrupo = n => PREFIJO_GRUPO + n;
 const BUCKET = _CFG.bucket || 'roadmap-adjuntos';
 const CANAL = _CFG.canal || 'roadmap-sync';
 const PROYECTO = _CFG.proyecto || 'propelia';
 
 const arr = v => (Array.isArray(v) ? v : []);
 
+/* ¿La base rechazó el guardado porque no conoce una columna, o por cualquier otra cosa?
+   Solo el primer caso se puede reintentar recortando la fila; confundirlo con un error de
+   permisos o de red haría que un fallo real pase por «falta el esquema» y se guarde a
+   medias en silencio. PostgREST avisa con `PGRST204` cuando la columna no está en su
+   caché de esquema, y Postgres con `42703` (undefined_column). */
+const esColumnaDesconocida = e => e && (e.code === 'PGRST204' || e.code === '42703');
+
+// Se prende sola la primera vez que la base rechaza `carga` y dura lo que dure la sesión.
+let sinColumnaCarga = false;
+
 const RoadmapSync = {
   calcularOrden,
   TABLAS,
   BUCKET,
+  // Lo usa el tablero para reconocer su propio eco por realtime: el id de la fila que acaba
+  // de escribir. Sale de acá para que el prefijo esté escrito en un solo lugar.
+  idGrupo,
 
   async cargarEstado() {
-    const [tarRes, cajaRes] = await Promise.all([
+    const [tarRes, cajaRes, gruposRes] = await Promise.all([
       supabaseClient.from(TABLAS.tareas).select('*').order('orden'),
       supabaseClient.from(TABLAS.caja).select('*').order('orden'),
+      supabaseClient.from(TABLAS.grupos).select('id,titulo,orden').order('orden'),
     ]);
     if (tarRes.error) throw tarRes.error;
     // La caja puede no existir todavía si falta correr schema-v3.sql: seguimos con una
     // lista vacía en vez de dejar el tablero entero sin cargar.
     const caja = cajaRes.error ? [] : (cajaRes.data || []);
+    // Y los nombres de los grupos, igual: sin la tabla, cada bloque se llama «Grupo N» y el
+    // backlog funciona como siempre. Es un rótulo, no un dato del que dependa nada.
+    const grupos = gruposRes.error ? [] : (gruposRes.data || []);
 
     return {
       tareas: (tarRes.data || []).map(t => ({
@@ -59,7 +88,6 @@ const RoadmapSync = {
         backlog: !!t.backlog,
         sprint: Number(t.sprint) || 0,
         dep: t.dep || '',
-      loom: t.loom || '',
         loom: t.loom || '',
       })),
       caja: caja.map(m => ({
@@ -69,7 +97,19 @@ const RoadmapSync = {
         // mes a esa plantilla. Sin schema-v4.sql llegan `undefined` y la caja funciona
         // igual, solo que sin repetir nada.
         repite: m.repite || '', origen: m.origen || '',
+        // A quién se le carga el gasto (schema-v8.sql). Vacío significa «a todos», que es
+        // lo que valía para todos los movimientos antes de que la columna existiera: sin
+        // el esquema corrido llega `undefined` y toda la caja se lee como compartida, o
+        // sea igual que siempre.
+        carga: arr(m.carga),
       })),
+      /* Un grupo es el número que las tareas ya tienen en `sprint`; acá solo viaja su
+         nombre. Por eso no hay «lista de grupos» que mantener sincronizada con las tareas:
+         una fila sin nombre no existe, y un grupo sin fila se llama «Grupo N». */
+      grupos: grupos
+        .filter(g => String(g.id).startsWith(PREFIJO_GRUPO))
+        .map(g => ({ n: Number(String(g.id).slice(PREFIJO_GRUPO.length)) || 0, nombre: g.titulo || '' }))
+        .filter(g => g.n > 0),
     };
   },
 
@@ -77,14 +117,16 @@ const RoadmapSync = {
   // en pantalla en vez de fallar en silencio al guardar.
   async faltantesDeEsquema() {
     const faltan = [];
-    const [tareas, caja, backlog] = await Promise.all([
+    const [tareas, caja, backlog, carga] = await Promise.all([
       supabaseClient.from(TABLAS.tareas).select('prioridad,tipo,hoy,pend,creada').limit(1),
       supabaseClient.from(TABLAS.caja).select('repite,origen').limit(1),
       supabaseClient.from(TABLAS.tareas).select('backlog,sprint,dep,loom').limit(1),
+      supabaseClient.from(TABLAS.caja).select('carga').limit(1),
     ]);
     if (tareas.error) faltan.push('los campos nuevos de las tareas (prioridad, tipo, hoy, responsables)');
     if (caja.error) faltan.push('los gastos fijos de la caja (schema-v4.sql)');
     if (backlog.error) faltan.push('el backlog y los sprints (schema-v7.sql)');
+    if (carga.error) faltan.push('a quién se le carga cada gasto de la caja (schema-v8.sql)');
     return faltan;
   },
 
@@ -113,6 +155,10 @@ const RoadmapSync = {
       // `0` es "sin sprint" para el front, pero en la base eso es un hueco, no un cero.
       sprint: Number(t.sprint) || null,
       dep: t.dep || '',
+      // Faltaba: se leía al cargar pero no se escribía nunca, así que el enlace del Loom
+      // duraba hasta recargar la página. Y sin Loom guardado, la regla de «no sale al
+      // tablero sin video» se volvía a aplicar sola en cada visita.
+      loom: t.loom || '',
     });
     if (error) throw error;
   },
@@ -122,17 +168,51 @@ const RoadmapSync = {
     if (error) throw error;
   },
 
+  /* Guardar un movimiento tiene una vuelta que las tareas no tienen, y es por `carga`
+     (schema-v8.sql, todavía sin correr). Un `upsert` con una columna que no existe no
+     guarda «casi todo»: **falla entero**, con lo cual sin el esquema corrido dejaría de
+     guardarse hasta el importe. Así que se intenta con la columna y, si la base contesta
+     que no la conoce, se reintenta una vez sin ella: se pierde la imputación —que es lo
+     que la base no sabe todavía guardar— y no el movimiento.
+
+     La marca es de la sesión y no de cada guardado: una vez que se supo que la columna no
+     está, no tiene sentido pagar el viaje de ida y vuelta en cada tecla. Se resuelve sola
+     al recargar, que es justo cuando puede haber cambiado el esquema. */
   async guardarMovimiento(m) {
-    const { error } = await supabaseClient.from(TABLAS.caja).upsert({
+    const fila = {
       id: m.id, fecha: m.fecha || null, concepto: m.concepto || '', categoria: m.categoria || '',
       monto: Number(m.monto) || 0, cuenta: m.quien || '', notas: m.notas || '', orden: m.orden,
       repite: m.repite || '', origen: m.origen || '',
-    });
+    };
+    if (!sinColumnaCarga) {
+      const { error } = await supabaseClient.from(TABLAS.caja)
+        .upsert({ ...fila, carga: m.carga || [] });
+      if (!error) return;
+      if (!esColumnaDesconocida(error)) throw error;
+      sinColumnaCarga = true;
+    }
+    const { error } = await supabaseClient.from(TABLAS.caja).upsert(fila);
     if (error) throw error;
   },
 
   async borrarMovimiento(id) {
     const { error } = await supabaseClient.from(TABLAS.caja).delete().eq('id', id);
+    if (error) throw error;
+  },
+
+  /* El nombre de un grupo del backlog. `orden` es `not null` sin default en la tabla, así
+     que va sí o sí; se usa el número del grupo, que es justo el orden en que se dibujan. */
+  async guardarGrupo(n, nombre) {
+    const { error } = await supabaseClient.from(TABLAS.grupos).upsert({
+      id: idGrupo(n), titulo: nombre, texto: '', orden: n,
+    });
+    if (error) throw error;
+  },
+
+  // Quedarse sin nombre no es tener el nombre vacío: la fila se va y el bloque vuelve a
+  // llamarse «Grupo N», que es como estaba antes de que alguien lo bautizara.
+  async borrarGrupo(n) {
+    const { error } = await supabaseClient.from(TABLAS.grupos).delete().eq('id', idGrupo(n));
     if (error) throw error;
   },
 
@@ -212,7 +292,7 @@ RoadmapSync.onCambioSesion = function (cb) {
 
 RoadmapSync.suscribir = function (onCambio) {
   const canal = supabaseClient.channel(CANAL);
-  [TABLAS.tareas, TABLAS.caja].forEach(tabla => {
+  [TABLAS.tareas, TABLAS.caja, TABLAS.grupos].forEach(tabla => {
     canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla }, onCambio);
   });
   canal.subscribe(estadoCanal => {

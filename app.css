@@ -13,26 +13,88 @@
   /* Propias del backlog: su papel es un punto más claro que el del tablero (es una hoja de
      trabajo, no un tablero de fichas) y la cinta de prioridad de cada fila. */
   --paper-bl:#FBFBFD; --cinta:3px;
+  /* Ancho de la canaleta de la barra lateral plegada y del panel cuando se abre. Los dos
+     acá porque el aviso de esquema es `position:fixed` y necesita saber dónde termina. */
+  --rail-w:54px; --side-w:208px;
 }
 *{box-sizing:border-box}
+/* Densidad global. Todo el CSS está en px absolutos, así que la única forma de encoger el
+   sistema entero sin reescribir 300 reglas es el zoom del raíz: escala tipografías, altos,
+   paddings, bordes y radios de una. Va en `html` y NO en `body` a propósito — sobre el raíz
+   el navegador ajusta también el bloque contenedor inicial, así que `height:100%`, las
+   unidades de viewport y los modales `position:fixed` siguen midiendo la pantalla completa.
+   En `body` habría que corregir alto y ancho a mano y quedarían franjas en blanco. */
+:root{--zoom:.9}
+html{zoom:var(--zoom)}
 html,body{height:100%}
+/* La barra lateral y el resto de la app son hermanos en una fila: `.shell` es la columna de
+   siempre (encabezado + tablero) y se queda con todo el ancho que la canaleta no usa. */
 body{margin:0;font-family:var(--font);color:var(--ink);background:var(--canvas);
-  -webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden}
+  -webkit-font-smoothing:antialiased;display:flex;overflow:hidden}
+.shell{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
 button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer;border:none;background:none}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
 kbd{font:600 10.5px var(--font);background:var(--rail);border-radius:4px;padding:1px 4px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
+/* ---------- Barra lateral del sistema ----------
+   Plegada mide una canaleta de íconos y al pasar el cursor se abre a un panel angosto. Lo
+   que se abre es `.side-in`, apoyado ENCIMA del tablero y no dentro del flujo: si el ancho
+   fuera del layout, rozar la barra con el mouse reacomodaría el tablero entero, y en modo
+   columnas eso significa cuatro columnas saltando de lugar.
+
+   Adentro va todo lo que no es una tarea: a dónde ir, quién sos, exportar y salir. Sacarlo
+   del encabezado es lo que dejó arriba una sola línea de filtros. */
+/* Por debajo de los modales (60) y de los menús colgantes (70): la barra se abre sola al
+   rozarla con el mouse, y una barra que se despliegue por encima de una ficha abierta sería
+   un manotazo en la cara cada vez que el cursor pasa cerca del borde izquierdo. */
+.side{flex:0 0 var(--rail-w);position:relative;z-index:40}
+.side-in{position:absolute;top:0;bottom:0;left:0;width:var(--rail-w);overflow:hidden;
+  background:#fff;border-right:1px solid var(--line);display:flex;flex-direction:column;
+  transition:width .16s ease,box-shadow .16s ease}
+.side:hover .side-in,.side:focus-within .side-in{width:var(--side-w);box-shadow:8px 0 26px rgba(20,22,34,.11)}
+
+/* Todo lo escrito nace apagado y en cero de ancho: así, plegada, ni siquiera empuja al ícono.
+   Se enciende con la barra abierta, no con un `display` — un `display:none` no se puede
+   animar y la barra abriría de golpe con el texto apareciendo de una. */
+.side-txt{white-space:nowrap;opacity:0;transition:opacity .12s ease;font-size:13px;font-weight:600}
+.side:hover .side-txt,.side:focus-within .side-txt{opacity:1}
+
+.side-top{display:flex;align-items:center;gap:11px;padding:13px 0 13px 15px;flex:0 0 auto}
+.mark{width:26px;height:26px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent-2));position:relative;flex:0 0 auto}
+.mark::after{content:"";position:absolute;inset:8px 8px auto 8px;height:2.5px;border-radius:2px;background:rgba(255,255,255,.9);box-shadow:0 5px 0 rgba(255,255,255,.55)}
+.side-brand{min-width:0;white-space:nowrap;opacity:0;transition:opacity .12s ease}
+.side:hover .side-brand,.side:focus-within .side-brand{opacity:1}
+.side-brand b{display:block;font-family:var(--display);font-size:14px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+.side-brand span{display:block;font-size:11px;color:var(--ink-3);font-weight:500}
+
+/* Las vistas. El ícono va primero y siempre en el mismo lugar: al abrirse la barra, el
+   renglón crece hacia la derecha y el ícono no se mueve un píxel. */
+.side-nav{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;
+  gap:2px;padding:6px 8px}
+.side-nav-it{display:flex;align-items:center;gap:11px;height:36px;padding:0 8px;border-radius:9px;
+  color:var(--ink-3);white-space:nowrap;transition:background .12s,color .12s}
+.side-nav-it svg{flex:0 0 auto;margin-left:1px}
+.side-nav-it:hover{background:var(--rail);color:var(--ink-2)}
+.side-nav-it.on{background:var(--ink);color:#fff}
+.side-nav-it small{margin-left:auto;font-size:10px;font-weight:700;background:var(--rail);
+  color:var(--ink-3);padding:0 6px;border-radius:20px;opacity:0;transition:opacity .12s}
+.side-nav-it.on small{background:rgba(255,255,255,.2);color:#fff}
+.side:hover .side-nav-it small,.side:focus-within .side-nav-it small{opacity:1}
+
+/* El pie: quién sos y lo que se hace una vez por sesión. */
+.side-pie{flex:0 0 auto;padding:8px;border-top:1px solid var(--line-soft);display:flex;
+  flex-direction:column;gap:2px}
+.side-act{display:flex;align-items:center;gap:11px;height:34px;padding:0 8px;border-radius:9px;
+  color:var(--ink-3);white-space:nowrap;transition:background .12s,color .12s}
+.side-act svg{flex:0 0 auto;margin-left:2px}
+.side-act:hover{background:var(--rail);color:var(--ink)}
+
 /* ---------- Topbar ---------- */
 .top{background:#fff;border-bottom:1px solid var(--line);flex:0 0 auto}
-.top-in{padding:11px 20px 0;display:flex;flex-wrap:wrap;gap:14px;align-items:center}
-.brand{display:flex;align-items:center;gap:11px;margin-right:auto}
-.mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent-2));position:relative;flex:0 0 auto}
-.mark::after{content:"";position:absolute;inset:9px 9px auto 9px;height:3px;border-radius:2px;background:rgba(255,255,255,.9);box-shadow:0 6px 0 rgba(255,255,255,.55)}
-.brand h1{font-family:var(--display);font-size:16px;font-weight:700;letter-spacing:-.02em;margin:0;line-height:1.1}
-.brand span{display:block;font-size:11.5px;color:var(--ink-3);font-weight:500}
-.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+/* Al esconderse los filtros —la caja— las acciones no pueden quedar pegadas a la izquierda. */
+.bar-acciones{display:flex;gap:8px;align-items:center;margin-left:auto;flex:0 0 auto}
 .btn{height:34px;padding:0 13px;border-radius:9px;font-size:13px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;gap:7px;border:1px solid var(--line);background:#fff;color:var(--ink-2);transition:.15s}
 .btn:hover{border-color:#C9CCD8;color:var(--ink)}
 .btn:disabled{opacity:.55;cursor:default}
@@ -42,17 +104,18 @@ kbd{font:600 10.5px var(--font);background:var(--rail);border-radius:4px;padding
 .btn.ghost:hover{background:var(--rail)}
 .btn.danger:hover{color:var(--crit);border-color:#E3C9C7}
 .btn.block{width:100%;height:38px;margin-top:6px}
-.me{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 11px;border:1px solid var(--line);border-radius:9px;background:#fff;font-size:13px;font-weight:600;color:var(--ink-2);white-space:nowrap}
+/* Quién sos, en el pie de la barra. Sin recuadro: es un dato, no un botón, y con marco
+   propio se leería como una cosa más para tocar. El avatar queda alineado con la columna de
+   íconos de arriba, así que plegada la barra sigue siendo una sola fila de símbolos. */
+.me{display:flex;align-items:center;gap:11px;height:34px;padding:0 8px;font-size:13px;
+  font-weight:600;color:var(--ink-2);white-space:nowrap;overflow:hidden}
 .me:empty{display:none}
+.me .av.mini{margin-left:1px}
 
-/* ---------- Barra única: vistas + filtros en una sola línea ---------- */
-.bar{display:flex;align-items:center;gap:12px;padding:6px 16px;background:#FAFAFD;border-top:1px solid var(--line-soft);flex-wrap:wrap}
-.views{display:flex;gap:2px;flex:0 0 auto}
-.view-tab{padding:6px 11px;font-size:12.5px;font-weight:600;color:var(--ink-3);letter-spacing:-.01em;border-radius:8px;white-space:nowrap;transition:.12s}
-.view-tab:hover{color:var(--ink-2);background:var(--rail)}
-.view-tab.on{color:#fff;background:var(--ink)}
-.view-tab small{display:inline-block;margin-left:5px;font-size:10px;color:var(--ink-3);font-weight:700;background:var(--rail);padding:0 5px;border-radius:20px}
-.view-tab.on small{background:rgba(255,255,255,.2);color:#fff}
+/* ---------- Barra única: filtros y acciones en una sola línea ----------
+   Las pestañas de vista se mudaron a la barra lateral, así que acá queda un solo renglón:
+   con qué filtrar a la izquierda y qué hacer a la derecha. */
+.bar{display:flex;align-items:center;gap:12px;padding:8px 16px;background:#FAFAFD;flex-wrap:wrap}
 /* ---------- Filtros ---------- */
 .filters{display:flex;gap:7px;align-items:center;flex-wrap:wrap;flex:1;min-width:0}
 .filters[hidden]{display:none}
@@ -65,6 +128,22 @@ kbd{font:600 10.5px var(--font);background:var(--rail);border-radius:4px;padding
 .chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
 .sel{height:28px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:0 6px;font-size:12px;font-weight:500;color:var(--ink-3);max-width:132px}
 .sel.activo{color:var(--ink);font-weight:600;border-color:#C9CCD8}
+/* Prioridad se filtra por varias a la vez, así que el control no es un <select> sino un
+   botón del mismo alto con un menú de tildes colgado. Ocupa lo mismo que el select que
+   reemplazó: la barra tiene que seguir entrando en un renglón. */
+.selmulti{position:relative}
+.selmulti > .sel{display:inline-flex;align-items:center;gap:6px;min-width:104px;white-space:nowrap}
+.selmulti > .sel::after{content:'▾';font-size:9px;color:var(--ink-3);margin-left:auto}
+.selmenu{position:absolute;top:calc(100% + 6px);left:0;z-index:90;min-width:158px;padding:4px;
+  background:#fff;border:1px solid var(--line);border-radius:10px;
+  box-shadow:0 10px 26px rgba(20,22,34,.15);display:flex;flex-direction:column;gap:1px}
+.selmenu[hidden]{display:none}
+.selmenu button{display:flex;align-items:center;gap:8px;width:100%;height:29px;padding:0 8px;
+  border-radius:7px;font-size:12.5px;font-weight:600;color:var(--ink-2);text-align:left}
+.selmenu button:hover{background:var(--rail)}
+.selmenu button.on{color:var(--ink)}
+.selmenu .pdot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+.selmenu .tick{margin-left:auto;font-size:11px;color:var(--accent)}
 .spacer{flex:1}
 .seg-layout{display:inline-flex;background:var(--rail);border-radius:8px;padding:2px}
 .seg-layout button{height:24px;padding:0 8px;border-radius:6px;color:var(--ink-3);display:inline-flex;align-items:center}
@@ -87,19 +166,23 @@ kbd{font:600 10.5px var(--font);background:var(--rail);border-radius:4px;padding
 .estado-guardado.cargando{color:var(--accent)}
 .estado-guardado.ok{color:var(--ok)}
 
-/* Aclaración para quien configura la base (falta correr schema-v3.sql): vive en un
-   ícono del encabezado y el texto se despliega al pasar el cursor o al tabular hasta él. */
-.nota-dev{position:relative;display:inline-flex}
+/* Aclaración para quien configura la base (falta correr schema-v3.sql): vive en un renglón
+   del pie de la barra lateral y el texto se despliega al pasar el cursor o al tabular. */
+.nota-dev{display:flex}
 .nota-dev[hidden]{display:none}
-.nota-btn{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;
-  border:1px solid var(--hoy-line);background:var(--hoy-bg);color:var(--hoy);transition:.15s}
-.nota-btn:hover{background:#F6EEDD;border-color:#D3C09A}
-.nota-pop{position:absolute;top:calc(100% + 7px);right:0;z-index:90;width:min(320px,78vw);
+.nota-btn{display:flex;align-items:center;gap:11px;height:34px;padding:0 8px;width:100%;
+  border-radius:9px;color:var(--hoy);transition:.15s;text-align:left}
+.nota-btn svg{flex:0 0 auto;margin-left:2px}
+.nota-btn:hover{background:var(--hoy-bg)}
+/* `fixed` y no `absolute`: la barra lateral recorta lo que se sale de su ancho, y el cartel
+   mide bastante más que la barra. Se dibuja al costado del panel abierto, que es el único
+   momento en que este cartel puede estar a la vista. */
+.nota-pop{position:fixed;left:218px;bottom:16px;z-index:90;width:min(320px,60vw);
   background:var(--ink);color:#EDEDF2;font-size:12.5px;font-weight:500;line-height:1.55;
   padding:10px 12px;border-radius:10px;box-shadow:0 12px 30px rgba(10,11,18,.3);
   opacity:0;visibility:hidden;transform:translateY(-3px);transition:.14s;pointer-events:none}
 .nota-pop b{color:#fff;font-weight:700}
-.nota-pop::before{content:"";position:absolute;bottom:100%;right:12px;border:6px solid transparent;border-bottom-color:var(--ink)}
+.nota-pop::before{content:"";position:absolute;right:100%;bottom:14px;border:6px solid transparent;border-right-color:var(--ink)}
 .nota-dev:hover .nota-pop,.nota-dev:focus-within .nota-pop{opacity:1;visibility:visible;transform:none}
 
 /* ---------- Tablero: columnas ----------
@@ -116,7 +199,8 @@ kbd{font:600 10.5px var(--font);background:var(--rail);border-radius:4px;padding
 
    Las columnas reparten el ancho en partes iguales (`flex:1 1 0`) hasta que dejan de
    entrar: ahí cada una toma su `min-width` y el tablero pasa a moverse en horizontal.
-   Con las 4 columnas de Estado eso significa ocupar toda la pantalla. */
+   Con los 5 estados eso significa ocupar toda la pantalla. Terminadas arranca plegada a 40px,
+   así que lo habitual son 4 columnas anchas y una solapa. */
 .board{flex:1;overflow:auto;display:flex;gap:11px;padding:12px 16px 14px;align-items:stretch}
 .col{flex:1 1 0;min-width:236px;min-height:100%;background:var(--col);border-radius:12px;display:flex;flex-direction:column;border:1px solid transparent;transition:background .15s,border-color .15s}
 .col.drop{border-color:#C6C5D8;background:#E7E7EC}
@@ -209,23 +293,34 @@ body.arrastrando .grupo{background:rgba(255,255,255,.42)}
 .card.dragging{opacity:.4;cursor:grabbing;transform:rotate(1.5deg)}
 .card.done .title{color:var(--ink-3);text-decoration:line-through;text-decoration-color:#C6CAD6}
 .card.critica{box-shadow:inset 0 0 0 1px #EBC9C6,0 1px 3px rgba(164,75,69,.14)}
-.card.today{box-shadow:inset 0 0 0 1px var(--hoy-line),0 1px 3px rgba(21,22,28,.07);background:var(--hoy-bg)}
 .title{font-size:12px;font-weight:600;line-height:1.35;margin:0 0 4px;word-break:break-word}
 .title em{color:var(--ink-3);font-style:normal}
+
+/* ---------- la chapa de novedad ----------
+   La misma en la tarjeta del tablero y en la fila del backlog: hay algo acá adentro que
+   todavía no miraste. Late una vez cada dos segundos y no sin parar — un punto rojo que
+   parpadea todo el día se vuelve parte del fondo a la media hora. */
+.nuevo{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 4px;
+  border-radius:8px;background:var(--crit);color:#fff;font-family:var(--mono);font-size:9.5px;
+  font-weight:700;line-height:1;vertical-align:1px;margin-right:5px;flex:none;
+  animation:latido 2.4s ease-out 3}
+@keyframes latido{
+  0%,12%,100%{box-shadow:0 0 0 0 rgba(164,75,69,0)}
+  4%{box-shadow:0 0 0 4px rgba(164,75,69,.28)}
+}
+@media (prefers-reduced-motion:reduce){ .nuevo{animation:none} }
+/* En la fila del backlog va entre el `▤` y el título, así que necesita alinearse con el
+   renglón y no con la línea de base del texto. */
+.bktarea > .nuevo{margin-top:4px}
 .tags{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0 0 4px}
 .tags:empty{display:none}
 .tag{font-size:10px;font-weight:600;padding:1.5px 5px;border-radius:5px;display:inline-flex;align-items:center;white-space:nowrap;letter-spacing:.01em}
 .tag.fuerte{font-weight:700}
 .card-f{display:flex;align-items:center;gap:5px;min-height:23px}
-/* Botón de "para hoy": lleva la palabra escrita. Un sol suelto no dice qué hace hasta
-   que lo probás una vez; con la palabra al lado se entiende sin tocarlo. */
-.sun{height:21px;padding:0 8px 0 6px;border-radius:6px;display:inline-flex;align-items:center;gap:4px;
-  font-size:10.5px;font-weight:700;letter-spacing:.02em;color:#A4AAB8;
-  border:1px solid transparent;flex:0 0 auto;transition:.12s}
-.sun svg{flex:0 0 auto}
-.sun:hover{background:#F6F2E8;border-color:var(--hoy-line);color:var(--hoy)}
-.sun.on{background:#F2EDE1;border-color:var(--hoy-line);color:var(--hoy)}
 .meta{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:700;color:var(--ink-3);font-variant-numeric:tabular-nums}
+/* La antigüedad la reescribe un intervalo cada minuto, así que necesita su propio elemento:
+   el `<i>` es solo eso, un texto reemplazable sin tocar el reloj que tiene al lado. */
+.edad{font-style:normal}
 /* Quién tiene que operar es lo primero que se busca en una tarjeta, así que los tres
    avatares se ven SIEMPRE — también los apagados. Antes solo aparecían al pasar el
    cursor: ahorraba tres círculos por tarjeta, pero obligaba a barrer el tablero con el
@@ -258,11 +353,6 @@ body.arrastrando .empty-col{display:none}
 .m-h textarea{flex:1;border:none;background:none;resize:none;font-family:var(--display);font-size:17px;font-weight:700;letter-spacing:-.015em;line-height:1.3;padding:2px 0;overflow:hidden}
 .m-h textarea:focus{outline:none}
 .m-t{font-family:var(--display);font-size:16px;flex:1}
-.today-btn{height:30px;padding:0 11px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:12.5px;font-weight:700;color:var(--ink-3);display:inline-flex;align-items:center;gap:6px;white-space:nowrap;flex:0 0 auto}
-.today-btn:hover{border-color:var(--hoy-line);color:var(--hoy)}
-.today-btn.on{background:var(--hoy-bg);border-color:var(--hoy-line);color:var(--hoy)}
-/* `display:inline-flex` le gana al `[hidden]` del navegador si no se dice esto. */
-.today-btn[hidden]{display:none}
 .m-b{padding:12px 18px 16px;display:grid;gap:9px}
 .field label{display:block;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);margin-bottom:5px}
 .field select,.field textarea,.field input[type=text]{width:100%;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-size:13px;background:#fff}
@@ -335,24 +425,16 @@ body.arrastrando .empty-col{display:none}
   background:#fff;padding:0 6px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer}
 .barra-campos select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(110,107,160,.14)}
 .barra-campos .sep{flex:1;min-width:6px}
-/* El Loom, en la misma línea de la clasificación: sin él la tarea no puede salir al
-   tablero, así que es parte de cómo está clasificada y no un dato de más abajo. */
-.bar-loom{display:inline-flex;align-items:center;gap:6px;height:29px;padding:0 4px 0 9px;
+/* Los campos de texto de la misma línea —Área y «Depende de»—: con su etiqueta adentro, para
+   que ocupen el alto de un select y no el de un campo con label arriba. */
+.bar-campo{display:inline-flex;align-items:center;gap:6px;height:29px;padding:0 4px 0 9px;
   border:1px solid var(--line);border-radius:8px;background:#fff;flex:1 1 190px;min-width:150px}
-.bar-loom:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(110,107,160,.14)}
-.bar-loom > span{font-family:var(--mono);font-size:9px;letter-spacing:.07em;text-transform:uppercase;
+.bar-campo:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(110,107,160,.14)}
+.bar-campo > span{font-family:var(--mono);font-size:9px;letter-spacing:.07em;text-transform:uppercase;
   color:var(--ink-3);flex:0 0 auto}
-.bar-loom input{flex:1;min-width:0;border:none;background:none;padding:0;font-size:12.5px}
-.bar-loom input:focus{outline:none}
-.bar-loom input.cargado{font-weight:600;color:var(--accent)}
-.bar-loom a{flex:0 0 auto;width:22px;height:22px;display:grid;place-items:center;border-radius:6px;
-  color:var(--accent);text-decoration:none;font-size:12px}
-.bar-loom a:hover{background:var(--rail)}
-.bar-loom a[hidden]{display:none}
+.bar-campo input{flex:1;min-width:0;border:none;background:none;padding:0;font-size:12.5px}
+.bar-campo input:focus{outline:none}
 
-/* En la ficha, el botón de mandar al tablero también avisa que falta el Loom. */
-.btn.falta{opacity:.55}
-.btn.falta:hover{border-color:var(--line);color:var(--ink-2)}
 .pend{display:flex;gap:5px;flex-wrap:wrap}
 .pend button{display:inline-flex;align-items:center;gap:6px;height:29px;padding:0 10px 0 4px;border-radius:20px;
   border:1px solid var(--line);background:#fff;font-size:12.5px;font-weight:600;color:var(--ink-2);transition:.12s}
@@ -412,227 +494,331 @@ body.arrastrando .empty-col{display:none}
   background:#fff;border:2px solid var(--accent);border-radius:50%;box-shadow:0 1px 5px rgba(0,0,0,.3)}
 #grip.on{display:block}
 
-/* ---------- Caja (planilla) ---------- */
-.board.cmode{display:block;overflow:auto;padding:16px 20px 24px}
-.caja-wrap{max-width:1180px;margin:0 auto}
-.caja-intro{font-size:12.5px;color:var(--ink-3);margin:0 0 14px;line-height:1.6;max-width:70ch}
-.caja-top{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:10px;margin-bottom:16px}
-.saldo-card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:11px 13px;box-shadow:var(--shadow)}
-.saldo-card .lbl{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);display:flex;align-items:center;gap:6px;margin-bottom:6px}
-.saldo-card .val{font-family:var(--display);font-size:20px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
-.saldo-card .sub{font-size:11px;font-weight:600;color:var(--ink-3);margin-top:3px;font-variant-numeric:tabular-nums;background:none;border:none;padding:0;display:block}
-.saldo-card.total{background:var(--ink);border-color:var(--ink);grid-column:span 2}
-.saldo-card.total .val{font-size:17px;line-height:1.3}
-.saldo-card.total .lbl{color:rgba(255,255,255,.62)}
-.saldo-card.total .val{color:#fff}
-.saldo-card.total .sub{color:rgba(255,255,255,.62)}
-.pos{color:var(--ok)}
-.neg{color:var(--crit)}
+/* ---------- Caja · el libro de movimientos ----------
+   Una lista de renglones, no una planilla. Las migas, el título y las pills son las mismas
+   de la página de una tarea (`pgbc`, `pgtitle`, `pgpill`): lo propio de acá lleva el prefijo
+   `cj`. La canaleta de la izquierda mide 34px y no es decorativa —ahí vive el ↻ que vuelve
+   fijo un movimiento— y por eso las tarjetas, los títulos y la lista arrancan alineados
+   con ella. */
+.board.cmode{display:block;overflow:auto;background:var(--paper-bl)}
+.cjwrap{--pgcan:34px;max-width:820px;margin:0 auto;padding:0 24px 120px}
 
-.planilla-wrap{background:#fff;border:1px solid var(--line);border-radius:var(--r);overflow:auto;box-shadow:var(--shadow)}
-table.planilla{width:100%;border-collapse:separate;border-spacing:0;min-width:980px}
-table.planilla th{position:sticky;top:0;z-index:2;background:#FAFAFD;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
-table.planilla th.num{text-align:right}
-table.planilla td{padding:0;border-bottom:1px solid var(--line-soft);vertical-align:middle}
-table.planilla tr:last-child td{border-bottom:none}
-table.planilla tr:hover td{background:#FCFCFE}
-.cinp{width:100%;height:36px;border:1px solid transparent;border-radius:0;background:none;padding:0 10px;font-size:13px}
-.cinp:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:inset 0 0 0 2px rgba(110,107,160,.12)}
-.cinp.num{text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
-.cinp.pos{color:var(--ok)}
-.cinp.neg{color:var(--crit)}
-.cinp[type=date]{font-variant-numeric:tabular-nums}
-select.cinp{font-weight:600;appearance:none;cursor:pointer}
-.caja-del{width:34px;height:36px;color:var(--ink-3);font-size:13px;border-radius:7px}
-.caja-del:hover{color:var(--crit);background:#F7EDEC}
+/* ---------- los saldos ----------
+   Cada uno trae su saldo pegado a su número: antes había que cruzar la tarjeta de la
+   persona con una de «a favor de» para contestar si te debían o debías. */
+.cjcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:10px;
+  margin:0 0 8px var(--pgcan)}
+.cjcard{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.cjcard-h{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--ink)}
+.cjlbl{font-family:var(--mono);font-size:9px;font-weight:400;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-3)}
+.cjnum{margin-top:8px;font-family:var(--display);font-size:20px;font-weight:700;
+  letter-spacing:-.02em;color:var(--ink);font-variant-numeric:tabular-nums}
+.cjsub{margin-top:3px;font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.cjsub.ok{color:var(--ok)}
+/* Deber no es un error: es ámbar, el mismo tono de «esto pide atención» del ☀, y no el rojo
+   de lo crítico. */
+.cjsub.debe{color:var(--hoy)}
+.cjdot{width:8px;height:8px;flex:none;border-radius:50%;display:inline-block}
+.cjdot.vacio{box-shadow:inset 0 0 0 1px #CBCFDA}
 
-/* Gastos fijos: el ↻ marca la plantilla que se repite; las copias de cada mes lo
-   muestran apagado, para que se entienda que las generó el tablero solo. */
-.caja-rep{width:30px;height:30px;display:grid;place-items:center;border-radius:8px;font-size:14px;color:#C2C5D0;transition:.12s}
-button.caja-rep:hover{color:var(--accent);background:#F1F1F7}
-.caja-rep.on{color:#fff;background:var(--accent)}
-.caja-rep.hecha{color:#D2D5DE;cursor:help}
-tr.generada .cinp{color:var(--ink-2)}
-tr.generada td:first-child{box-shadow:inset 3px 0 0 -1px #DCDEE8}
-.caja-vacia{padding:26px;text-align:center;color:var(--ink-3);font-size:13px}
-.caja-add{margin-top:12px;height:36px;padding:0 14px;border-radius:9px;border:1.5px dashed var(--line);background:#fff;font-size:13px;font-weight:600;color:var(--ink-3)}
-.caja-add:hover{border-color:#C6C5D8;color:var(--ink-2)}
-.caja-tip{font-size:11.5px;color:var(--ink-3);margin:10px 2px 0;line-height:1.6}
+/* ---------- gastos fijos ----------
+   Su propio bloque arriba de todo: antes se reconocían mirando cuál de treinta filas tenía
+   el ↻ prendido. Son los mismos movimientos, así que abajo siguen apareciendo. */
+.cjsec{display:flex;align-items:baseline;gap:10px;margin:26px 0 2px var(--pgcan)}
+.cjfold,.cjsectit{font-family:var(--display);font-size:15px;font-weight:700;
+  letter-spacing:-.01em;color:var(--ink)}
+.cjfold{display:flex;align-items:center;gap:7px;padding:0}
+.cjcar{display:inline-block;font-size:9px;color:var(--ink-3);transition:transform .15s ease}
+.cjcar.on{transform:rotate(90deg)}
+.cjsecsub{font-size:11px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.cjfijos{margin:6px 0 0 var(--pgcan)}
+.cjfijo{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px}
+.cjfijo:hover{background:#F6F5FC}
+.cjfijo-t{flex:1;min-width:0;font-size:13px;color:var(--ink-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cjfijo-q{display:flex;align-items:center;gap:6px;padding:0;font-size:11px;color:var(--ink-3)}
+.cjfijo-q:hover{color:var(--accent)}
+.cjfijo-m{font-size:12.5px;font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.cjfijo-x{font-size:11px;color:#C0C3CE}
+/* Sacarlo de los fijos no es borrarlo: el movimiento se queda. Por eso el ✕ no se pone rojo
+   al pasar por encima como el 🗑 de la lista, que sí borra. */
+.cjquitar{width:22px;height:22px;flex:none;border-radius:5px;color:#C8CBD6;font-size:11px;
+  opacity:0;transition:opacity .1s}
+.cjfijo:hover .cjquitar{opacity:1}
+.cjquitar:hover{background:var(--rail);color:var(--ink)}
 
-/* ---------- Backlog: la rejilla de planificación ----------
-   Once columnas de ancho fijo y una fila por tarea, con el bloque de planificación colgando
-   de la misma fila. Es un `grid` y no una `<table>` a propósito: con tabla, el panel de cada
-   fila tendría que ir en un `<tr>` aparte con `colspan`, y la fila abierta dejaría de ser un
-   solo bloque que se pinta, se arrastra y se marca entero.
+/* ---------- la lista de movimientos ---------- */
+.cjhead{display:flex;gap:10px;margin-top:10px;padding:0 10px 6px calc(var(--pgcan) + 20px);
+  font-family:var(--mono);font-size:9px;letter-spacing:.09em;text-transform:uppercase}
+.cjhead span{color:#B0B4C2;font:inherit;letter-spacing:inherit}
+.cjrow{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:7px;
+  border-top:1px solid var(--line-soft)}
+.cjrow:hover{background:#F6F5FC}
+.cjcierre{border-top:1px solid var(--line-soft)}
+.cjctl{width:var(--pgcan);flex:none;display:flex;justify-content:flex-end;padding-right:6px}
+.cjfecha{width:46px;flex:none;font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.cjmid{flex:1;min-width:0;display:flex;align-items:baseline;gap:8px}
+.cjcon{font-size:13.5px;color:var(--ink)}
+.cjquien{width:84px;flex:none;display:flex;align-items:center;gap:6px;padding:0;
+  font-size:12px;color:var(--ink-2);text-align:left}
+.cjquien:hover{color:var(--accent)}
+/* «Cargar a» es la columna hermana de «Pagó»: quién puso la plata y a quién se le imputa
+   son dos preguntas distintas, así que son dos columnas y no una. Va más apagada que la de
+   al lado porque compartido es el caso normal y no hay nada que mirar ahí; recién cuando el
+   gasto es de alguien en particular aparecen los puntitos de color y el texto se prende. */
+.cjcarga{width:96px;flex:none;display:flex;align-items:center;gap:5px;padding:0;
+  font-size:12px;color:var(--ink-3);text-align:left;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cjcarga.propio{color:var(--ink-2)}
+.cjcarga:hover{color:var(--accent)}
+.cjcarga .cjdot{width:7px;height:7px}
+.cjcarga b{font-weight:inherit;min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* En el bloque de fijos el renglón es más angosto y ya está todo alineado con flex: acá la
+   pill se acomoda a lo que mide su texto en vez de reservar la columna. */
+.cjfijo .cjcarga{width:auto;flex:none;font-size:11px}
+.cjmonto{width:96px;flex:none;text-align:right;font-size:13px;font-weight:600;color:var(--ink);
+  font-variant-numeric:tabular-nums}
+/* Lo que entró se pinta; lo que salió no. En una caja lo normal es gastar: teñir de rojo el
+   90% de los renglones deja de avisar nada. */
+.cjmonto.pos{color:var(--ok)}
+.cjfin{width:22px;flex:none}
 
-   Renglones de 31px y letra chica: lo que se busca acá es la foto completa del sprint, y
-   cada píxel de alto es una tarea menos en pantalla. */
+/* Las celdas se escriben sobre el texto pintado, sin marco: el marco aparece recién donde
+   está el cursor. Vale para los dos renglones —el de la lista y el del bloque de fijos—,
+   que son la misma fila dibujada dos veces. */
+.cjrow [contenteditable],.cjfijo [contenteditable]{border-radius:4px;padding:1px 3px;
+  margin:-1px -3px;min-width:1.2em}
+.cjrow [contenteditable]:focus,.cjfijo [contenteditable]:focus{outline:none;background:#fff;
+  box-shadow:0 0 0 1px var(--accent)}
+.cjcon:empty::before,.cjfijo-t:empty::before,.cjnota:empty:focus::before{
+  content:attr(data-ph);color:#C6C9D4}
+
+/* La nota es lo último del renglón y por eso puede aparecer al pasar por encima sin correr
+   nada de lugar. Vacía no ocupa: escrita, es texto tenue al lado del concepto. */
+.cjnota{font-size:11.5px;color:#A9ADBA;min-width:0;max-width:38%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cjrow:hover .cjnota:empty::before{content:attr(data-ph);color:#D6D9E2}
+/* La pill de categoría se dibuja aunque esté vacía, apagada: es la misma regla que el «Sin
+   asignar» del backlog — la pill vacía es justo la que hay que poder tocar. */
+.cjcat{flex:none}
+.cjcat.vacia{color:#C6C9D4;border-style:dashed}
+
+/* ---------- la señal de gasto fijo ----------
+   Dos marcas para el mismo dato, y las dos SIEMPRE prendidas: no son controles, son parte
+   de lo que dice la fila. El ↻ de la canaleta se lee bajando por la columna —dice cuáles de
+   los treinta renglones son fijos sin leer ninguno— y la pill lo dice con letras al lado del
+   concepto, para el que mira una fila sola. Ninguna de las dos se toca: prender y apagar la
+   repetición vive arriba, en el bloque de gastos fijos, y en ningún otro lado. */
+.cjmarca{width:20px;height:20px;display:grid;place-items:center;font-size:12px;line-height:1;
+  color:var(--accent);cursor:help}
+.cjtag{flex:none;display:inline-flex;align-items:center;gap:3px;padding:1px 7px;
+  border-radius:999px;font-size:10px;font-weight:600;line-height:1.5;
+  background:#F1F0FA;color:var(--accent);cursor:help;white-space:nowrap}
+
+.cjdel{width:22px;height:22px;flex:none;border-radius:5px;color:#C8CBD6;font-size:11px;
+  opacity:0;transition:opacity .1s}
+.cjrow:hover .cjdel{opacity:1}
+.cjdel:hover{background:var(--rail);color:var(--crit)}
+
+.cjadd{display:flex;align-items:center;gap:8px;margin:4px 0 0 var(--pgcan);padding:8px 10px;
+  border-radius:7px;font-size:13.5px;color:#C0C3CE}
+.cjadd:hover{background:#F6F5FC;color:var(--ink-2)}
+.cjfijos .cjadd{margin-left:0;font-size:13px}
+.cjvacio{margin:0;padding:18px 10px 18px calc(var(--pgcan) + 20px);font-size:13px;color:var(--ink-3)}
+
+/* ---------- Backlog: la lista ----------
+   Es EL MISMO componente que la página de una tarea, y por eso reusa las clases `pg`: una
+   columna angosta, la canaleta de controles a la izquierda, el texto en el medio y las
+   catalogaciones a la derecha. Lo único propio de acá son los sprints (`bksprint`), las
+   tareas (`bktarea`) y las pills.
+
+   Los controles de la canaleta van apagados hasta el hover, como en el diseño. Lo que NO se
+   esconde nunca son las catalogaciones: son lo que se viene a mirar. */
 .board.bmode{display:block;overflow:auto;background:var(--paper-bl)}
-/* `--bpad` está acá y no escrito a mano en cada regla porque la banda de cada sprint se
-   sale del margen para ocupar todo el ancho: necesita saber cuánto margen tiene que
-   descontar, y en pantalla angosta ese margen cambia. */
-.bwrap{--bpad:24px;max-width:1460px;margin:0 auto;padding:6px var(--bpad) 120px}
+/* Tres controles en la canaleta —marcar, menú y agarre— en vez de los dos de la página. Sin
+   encabezado arriba, el aire lo pone el envoltorio: la lista no puede arrancar pegada al
+   borde de la pantalla. */
+.bkwrap{--pgcan:64px;padding-top:20px}
 
-/* marca · agarre · id · tarea · área · prioridad · quién · sprint · tablero · loom · ficha
-   · panel · borrar */
-.bgrid{
-  display:grid;
-  grid-template-columns:20px 16px 54px minmax(180px,1fr) 110px 98px 86px 110px 110px 68px 20px 20px 20px;
-  align-items:center;
+/* ---------- la lista del tablero, en columnas ----------
+   Solo la lista agrupada por estado (`bkcols`), nunca el backlog: los sprints son una
+   secuencia —uno detrás del otro— y partirlos en tres cajas rompería justo lo que dicen. Los
+   estados no son una secuencia sino un camino con dos paradas largas y tres finales, y por
+   eso el reparto es 1 / 1 / 3 y no tres columnas iguales.
+
+   La columna es del envoltorio y de nadie más: adentro sigue siendo el mismo renglón `pg`,
+   con su canaleta, su `data-g` y su `data-filas`. Lo único que cambia es que hay menos ancho,
+   así que lo que se toca acá es puro presupuesto de espacio.
+
+   Tres columnas de menos de 340px dejan de ser columnas: el título entra recortado a la
+   mitad y las pills se apilan contra el borde. Por eso TODO el tratamiento vive adentro de un
+   `min-width` y no hay nada que deshacer más abajo — apretada la pantalla, esto no existe y
+   la lista vuelve a ser una sola, en el mismo orden en que se leen las columnas. */
+@media(min-width:1121px){
+  /* `.pgwrap.bkcols` y no `.bkcols` a secas: `.pgwrap` se define bastante más abajo en este
+     archivo y también fija `max-width` y `--pgcan`. Con la misma especificidad gana el que
+     viene último, así que la clase sola quedaría escrita y muerta. */
+  .pgwrap.bkcols{--pgcan:46px;max-width:1560px}
+  .bkcols .pgbody{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 20px;
+    align-items:start}
+  /* Sin esto la columna se estira al ancho de su fila más larga y el grid deja de repartir
+     parejo: un título largo en Nueva angostaría En curso. */
+  .bkcol{min-width:0}
+  /* La sangría y la guía se achican. 22px sobre una columna de un tercio de pantalla es ancho
+     que le falta al título, que es lo que se viene a leer. */
+  .bkcols .pgkids{padding-left:14px}
+  .bkcols .pgkids::before{left:5px}
+  .bkcols .pgadd-fila{padding-left:14px}
+  /* El arranque de la explicación existía para llenar el hueco entre el título y las pills. En
+     una columna ese hueco no existe: sin soltarle el `flex` al título, además, se quedaría con
+     el ancho recortado que tenía cuando compartía el renglón. */
+  .bkcols .bkexpl{display:none}
+  .bkcols .bktarea.conexpl .pgtxt{flex:1 1 auto}
+  /* Las dos catalogaciones que menos se miran —el código y la antigüedad— son las mismas que
+     ya se caen primero cuando se angosta la pantalla. Acá la pantalla no se angostó, pero la
+     fila sí. */
+  .bkcols .pgpill.mono,.bkcols .pgpill.edad{display:none}
+  .bkcols .bktarea .pgtxt{font-size:13.5px}
 }
-.bgrid > *{padding-right:8px;min-width:0}
+/* Apiladas, en cambio, hay una cosa que SÍ hay que arreglar: `.bksprint:first-child` pega el
+   primer bloque al de arriba, y con las columnas apiladas cada una tiene un primer bloque.
+   Sin esto, Bloqueada arrancaría pegada a la última tarea de En curso. */
+@media(max-width:1120px){
+  .bkcol + .bkcol .bksprint:first-child{margin-top:26px}
+}
 
-/* El puntito de color de los menús colgantes. */
-.bdot{width:6px;height:6px;border-radius:50%;flex:none}
-.bdot.vacio{background:transparent}
+/* ---------- el renglón del sprint ----------
+   El desplegable es TODO el bloque de la izquierda —flecha, nombre y contador— y no una
+   flechita de 20px al costado del título. Antes el único lugar donde se podía tocar para
+   abrir un sprint era un carácter de 9px que además arrancaba apagado, y la acción principal
+   de esta pantalla no puede ser la más difícil de acertar. Ahora es un botón con fondo
+   propio: se ve que se toca, y el blanco de clic es el renglón entero. */
+.bksprint{margin-top:26px;align-items:center}
+.bksprint:first-child{margin-top:4px}
+.bksprint:hover{background:transparent}
+.bkfold{display:inline-flex;align-items:center;gap:9px;height:32px;padding:0 12px 0 8px;
+  border-radius:9px;border:1px solid var(--line);background:#fff;
+  transition:border-color .12s,background .12s,box-shadow .12s}
+.bkfold:hover{border-color:#C6C5D8;background:#FCFCFF;box-shadow:0 1px 2px rgba(21,22,28,.06)}
+.bkcar{width:14px;flex:none;font-size:11px;line-height:1;color:var(--ink-3);
+  transition:transform .14s ease}
+.bkcar.on{transform:rotate(90deg)}
+.bkfold:hover .bkcar{color:var(--accent)}
+.bkname{font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.01em;
+  color:var(--ink);white-space:nowrap}
+/* Cuántas actividades cuelgan del bloque. Plegado es el único dato que queda a la vista, así
+   que va acá adentro y no en las pills del costado. */
+.bkn{font-size:10.5px;font-weight:700;color:var(--ink-3);background:var(--rail);
+  border-radius:20px;padding:1px 7px;font-variant-numeric:tabular-nums}
+/* Los contadores del sprint caen en la misma columna que las catalogaciones de sus tareas:
+   el bloque se lee como una tabla sin líneas, no como dos cosas sueltas. */
+.bksprint .pgpills{margin-left:auto}
 
-/* ---------- bloque de sprint ----------
-   Es una banda maciza de lado a lado, no un título suelto: sin las filas de rótulos ni la
-   franja de totales, esto es lo único que corta la lista, y un corte tiene que verse como
-   un corte. Se pega arriba al bajar porque es lo único que dice en qué sprint estás parado.
+/* El nombre del grupo, mientras se escribe. Reemplaza al botón entero —no se mete adentro—,
+   así que tiene que quedar clavado en el mismo lugar y con la misma letra: si el renglón se
+   moviera un pixel al entrar a editar, cambiarle el nombre a un grupo se sentiría como abrir
+   otra pantalla. El marco se pone del color de acento porque es lo único que dice que eso
+   ahora es un campo y no un título. */
+.bkfold.editando{border-color:var(--accent);background:#fff;
+  box-shadow:0 0 0 3px rgba(110,107,160,.12)}
+.bkedit{font-family:var(--display);font-size:15px;font-weight:700;letter-spacing:-.01em;
+  color:var(--ink);border:0;outline:0;background:transparent;padding:0;min-width:0;width:15ch}
+.bkedit::placeholder{color:#C6C9D4;font-weight:600}
+/* El lápiz aparece con el renglón, como el resto de la canaleta: es una acción, y tenerla
+   siempre encendida al lado de un nombre que casi nunca se cambia es ruido en cada bloque. */
+.pgpill.lapiz{color:var(--ink-3);border-color:transparent;background:transparent;
+  padding:2px 5px;font-size:11px;opacity:0;transition:opacity .12s,color .12s}
+.bksprint:hover .pgpill.lapiz,.pgpill.lapiz:focus-visible{opacity:1}
+.pgpill.lapiz:hover{color:var(--accent);border-color:var(--line);background:#fff}
 
-   Se sale del margen del `.bwrap` con un margen negativo para llegar a los dos bordes; el
-   relleno de la izquierda lo devuelve, así el texto queda alineado con las filas. */
-.bghead{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:10px;
-  margin:26px calc(var(--bpad) * -1) 0;
-  padding:9px var(--bpad) 9px calc(var(--bpad) + var(--cinta) + 7px);
-  background:#ECECF2;border-top:1px solid #DBDCE4;border-bottom:1px solid #DBDCE4}
-.bbloque:first-child .bghead{margin-top:0}
-.bgtog{font-family:var(--display);font-size:13.5px;font-weight:700;letter-spacing:-.01em;
-  color:var(--ink);display:flex;align-items:center;gap:7px}
-.bgtog:hover{color:var(--accent)}
-.bcaret{color:var(--ink-3);font-size:9px;transition:transform .12s ease;display:inline-block}
-.bbloque.plegado .bgtog .bcaret{transform:rotate(-90deg)}
-.bgmeta{font-family:var(--mono);font-size:10px;color:var(--ink-3);white-space:nowrap}
-/* Reparto por persona: una barra y no tres números, porque lo que importa es si está
-   torcido, no cuánto exactamente. */
-.bcarga{display:flex;height:5px;flex:1;max-width:300px;min-width:80px;border-radius:3px;
-  overflow:hidden;background:var(--line-soft)}
-.bcarga span{height:100%;transition:width .25s ease}
-.bgadd{margin-left:auto;font-size:11.5px;color:var(--ink-3);white-space:nowrap}
-.bgadd:hover{color:var(--accent)}
-.bfilas{border-top:1px solid var(--line-soft)}
-.bbloque.plegado .bfilas{display:none}
+/* El punto de color del bloque, solo en la lista del tablero: es el MISMO de la columna y el
+   mismo del `.dot` del encabezado. Es lo único que ata las tres vistas — el verde de Terminada
+   tiene que ser el mismo se mire por donde se mire, si no son tres pantallas distintas en vez
+   de tres formas de mirar la misma. */
+.bkdot{width:7px;height:7px;flex:none;border-radius:50%}
+/* Cuántas críticas hay paradas en este estado. Plegado el bloque es, junto al contador, lo
+   único que queda a la vista: de un vistazo se ve si lo urgente se está amontonando en
+   Bloqueada. Va en rojo apagado y no en el rojo pleno de la campana — es un dato del bloque,
+   no una alarma. */
+.pgpill.urge{color:#A44B45;border-color:#E7CFCD;background:#FBF3F2;font-weight:600}
 
-/* ---------- fila ---------- */
-.brow{position:relative;background:#fff;border-bottom:1px solid var(--line-soft)}
-/* La cinta de color es la prioridad. Va pegada al borde y no adentro: así la columna de
-   colores se lee de arriba abajo de un vistazo, sin buscarla renglón por renglón. */
-.brow::before{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--cinta);background:var(--rc,var(--line))}
-.brmain{min-height:31px;padding-left:calc(var(--cinta) + 7px)}
-.brow:hover{background:#F8F7FE}
-.brow.marcada{background:#F3F1FD}
-.brow.marcada::after{content:"";position:absolute;inset:0;pointer-events:none;
-  border-top:1px solid #DAD6F7;border-bottom:1px solid #DAD6F7}
-.brow.arrastrando{opacity:.35}
-.brow.antes{box-shadow:inset 0 2px 0 -.5px var(--accent)}
-.brow.despues{box-shadow:inset 0 -2px 0 -.5px var(--accent)}
-.brow.abierta{background:#FCFCFE}
+.pgkids{position:relative;padding-left:22px}
+.pgkids.plegado{display:none}
+/* La guía vertical del bloque: dice hasta dónde llega el sprint sin gastar un renglón en
+   decirlo. Empieza debajo del título y no a la altura de la sangría entera. */
+.pgkids{padding-top:6px}
+.pgkids::before{content:"";position:absolute;left:9px;top:6px;bottom:26px;width:1px;background:var(--line-soft)}
 
-/* Ya mandada al tablero: no se va de la lista, se apaga. Al cerrar un sprint uno quiere ver
-   el sprint entero, no lo que le queda. */
-.brow.salida{background:#F8FBFA}
-.brow.salida::before{background:repeating-linear-gradient(180deg,var(--ok) 0 3px,transparent 3px 6px)}
-.brow.salida .btitle{color:var(--ink-3)}
-.brow.salida .bcode{color:var(--ok)}
+.pgadd-fila{display:block;width:100%;text-align:left;padding:4px 0 4px 22px;font-size:13px;
+  color:#C0C3CE}
+.pgadd-fila:hover{color:var(--accent)}
 
-.bcheck{width:13px;height:13px;border:1.5px solid #CBCFDA;border-radius:3px;
-  display:grid;place-items:center;font-size:8px;color:#fff;line-height:1}
-.bcheck:hover{border-color:var(--accent)}
-.brow.marcada .bcheck{background:var(--accent);border-color:var(--accent)}
-
-.bhandle{color:#CFD2DC;cursor:grab;font-size:11px;line-height:1;opacity:0;transition:opacity .1s;user-select:none}
-.brow:hover .bhandle{opacity:1}
-.bhandle:active{cursor:grabbing}
-
-/* El código es la puerta de entrada a la ficha, como el número de un ticket. */
-.bcode{font-family:var(--mono);font-size:10px;color:#A5A9B8;text-align:left}
-.bcode:hover{color:var(--accent);text-decoration:underline}
-
-.btitle{font-size:13px;font-weight:450;color:var(--ink);padding:7px 8px 7px 0;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-/* Al escribir se suelta el recorte: si no, editar una tarea larga sería escribir a ciegas
+/* ---------- el renglón de una tarea ----------
+   Al abrir un sprint lo que tiene que saltar a la vista es el título de cada actividad: es
+   el dato por el que se abrió el bloque. Por eso pesa más que el texto de una página común y
+   la fila respira un poco más — las catalogaciones acompañan, no compiten. */
+.bktarea{align-items:center;padding:3px 0}
+.bktarea .pgtxt{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  font-size:14.5px;font-weight:600;color:var(--ink)}
+/* Al escribir se suelta el recorte: si no, editar un título largo sería escribir a ciegas
    contra el borde derecho. */
-.btitle:focus{white-space:normal;overflow:visible;outline:none;box-shadow:inset 0 -1px 0 var(--accent)}
-.barea{font-size:11.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.barea:focus{outline:none;box-shadow:inset 0 -1px 0 var(--accent)}
-.btitle:empty::before,.barea:empty::before{content:attr(data-ph);color:#C6C9D4}
+.bktarea .pgtxt:focus{white-space:normal;overflow:visible;box-shadow:inset 0 -1px 0 var(--accent)}
 
-.bchip{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9.5px;
-  letter-spacing:.05em;text-transform:uppercase;padding:2px 6px;border-radius:3px;
-  background:var(--chb);color:var(--chc);white-space:nowrap;max-width:100%}
-.bchip:hover{filter:brightness(.95)}
+.bktarea.marcada{background:#F3F1FD;box-shadow:inset 0 0 0 1px #DAD6F7}
+/* Acá vivía `.bktarea.salida`, la fila apagada de la que ya se había mandado al tablero. Desde
+   el 26/8/2026 esa fila no existe: la que sale se va de la lista. */
 
-/* Quién hace la actividad: los mismos tres botones del detalle, siempre a la vista. Un
-   menú colgante escondía justo lo que más se toca, y con `pend` admitiendo varias personas
-   había que abrirlo tres veces para asignar a tres. Van con las iniciales y el nombre en el
-   tooltip: los tres completos no entran en un renglón sin comerse la columna del título. */
-.bpend{display:flex;gap:4px}
-/* `.bpend .av.mini` y no `.bpend button`: `.av.mini` fija 19px con dos clases y le ganaría
-   a una clase más un elemento. Redondos como en el detalle, no cuadrados. */
-.bpend .av.mini{width:22px;height:22px;font-size:9.5px}
-.bpend .av.off:hover{box-shadow:inset 0 0 0 1.5px var(--accent);color:var(--accent)}
+/* El `▤` es la puerta a la página. Va siempre prendido, no al hover: es lo que más se toca
+   de la fila y esconderlo sería esconder la función principal de la pantalla. */
+.bktarea .pgpg{color:var(--ink-3);font-size:13px}
+.bktarea .pgpg:hover{color:var(--accent);background:var(--rail);border-radius:4px}
 
-.bsprintsel{display:inline-flex;align-items:center;gap:5px;max-width:100%;font-size:11.5px;
-  color:var(--ink-2);border:1px solid transparent;border-radius:4px;padding:2px 5px;
-  white-space:nowrap;overflow:hidden}
-.brow:hover .bsprintsel{border-color:var(--line)}
-.bsprintsel:hover{background:#fff;border-color:#CFD2DC}
-.bsprintsel .bcaret{font-size:7px;color:#B0B4C2;margin-left:auto}
+.pgsel{width:14px;height:14px;flex:none;border:1.5px solid #CBCFDA;border-radius:3px;
+  display:grid;place-items:center;font-size:8px;color:#fff;line-height:1}
+.pgsel:hover{border-color:var(--accent)}
+.pgsel.on{background:var(--accent);border-color:var(--accent)}
+/* La marca queda a la vista aunque el mouse se vaya: si se apagara con el resto de la
+   canaleta, no habría forma de ver qué tenés marcado mientras marcás. */
+.bktarea.marcada .pgctl{opacity:1}
 
-/* El botón que manda al tablero. Aparece al pasar por encima salvo cuando ya salió: ahí es
-   el cartel que dice dónde está. */
-.bship{display:inline-flex;align-items:center;font-family:var(--mono);font-size:9px;
-  letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line);border-radius:4px;
-  padding:3px 7px;color:var(--ink-3);background:#fff;white-space:nowrap;opacity:0;transition:opacity .1s}
-.brow:hover .bship,.brow.salida .bship{opacity:1}
-.bship:hover{border-color:var(--ok);color:var(--ok)}
-.brow.salida .bship{background:#E8F1EA;border-color:#C6DDCC;color:#3F6B4B}
+/* ---------- las catalogaciones ---------- */
+.pgpills{display:flex;align-items:center;gap:5px;flex:none;margin-left:10px}
+.pgpill{display:inline-flex;align-items:center;font-size:10px;line-height:1.5;padding:2px 8px;
+  border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--ink-2);
+  white-space:nowrap}
+.pgpill.mono{font-family:var(--mono);font-size:9.5px;color:#A5A9B8}
+.pgpill.tono{border-color:transparent;background:var(--pb);color:var(--pc);font-weight:600}
+button.pgpill:hover{filter:brightness(.96)}
+.pgpill.ok{color:var(--ok);border-color:#C6DDCC;background:#F1F7F2}
+.pgpill.edad{color:#B0B4C2;border-color:transparent;background:transparent;padding-left:2px;
+  font-variant-numeric:tabular-nums}
+/* «→ Al tablero». Es la única pill de la fila que hace algo en vez de decir algo, así que se
+   distingue por color y no por forma: entre cuarenta pastillas blancas, una acción tiene que
+   poder buscarse con el ojo. En el tono de acento y apagada, no en pleno: se toca una vez por
+   tarea, y cuarenta botones a pleno color serían la fila entera gritando. */
+.pgpill.ir{color:var(--accent);font-weight:600;
+  border-color:#D4D3E3;background:#F5F5F8}
+.pgpill.ir:hover{background:#EBEAF2;
+  border-color:var(--accent);filter:none}
+/* Quién la hace: una sola pill con todos los nombres, cada uno de su color. */
+.pgpill.quien i{font-style:normal;font-weight:600}
+.pgpill.quien .pgsep2{margin:0 4px;color:#CFD2DC;font-weight:400}
+.pgpill.quien .nadie{color:#C6C9D4;font-weight:400}
+.pgpill.quien:hover{border-color:var(--accent)}
 
-/* El cartel de Loom. Lleva la palabra escrita y no solo un tilde: sin la fila de rótulos de
-   columna, un cuadradito suelto no dice de qué es. Prendido cuando el campo tiene enlace;
-   apagado, es el hueco que se ve vacío al recorrer la columna, que es para lo que está. */
-.bloom{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:9px;
-  letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;border-radius:4px;
-  border:1px solid var(--line);background:#fff;color:#B6B9C4;white-space:nowrap;transition:.12s}
-.bloom:hover{border-color:var(--accent);color:var(--accent)}
-.bloom.on{background:#EDECFA;border-color:#D5D2F3;color:var(--accent);font-weight:700}
-
-/* Sin Loom no sale al tablero: el botón lo dice antes de que lo toques. */
-.bship.falta{opacity:.45}
-.bship.falta:hover{border-color:var(--line);color:var(--ink-3);cursor:not-allowed}
-
-.bfull,.bexp,.bdel{color:#C8CBD6;font-size:11px;line-height:1;text-align:center;width:100%}
-.bfull:hover,.bexp:hover,.bdel:hover{color:var(--ink)}
-.bfull,.bdel{opacity:0;transition:opacity .1s}
-.brow:hover .bfull,.brow:hover .bdel{opacity:1}
-.bfull:hover{color:var(--accent)}
-.brow.abierta .bexp{color:var(--accent);transform:rotate(90deg);display:inline-block}
-
-.bnueva{width:100%;text-align:left;padding:7px 0 7px calc(var(--cinta) + 65px);
-  font-size:12px;color:#B0B4C2}
-.bnueva:hover{color:var(--accent)}
-.bsprint{margin-top:18px;padding:7px 12px;border-radius:8px;border:1.5px dashed var(--line);
-  font-size:12.5px;font-weight:600;color:var(--ink-3);background:#fff}
-.bsprint:hover{border-color:#C6C5D8;color:var(--ink-2)}
-
-/* ---------- panel de planificación ---------- */
-.bplan{padding:2px 16px 14px calc(var(--cinta) + 101px);background:inherit}
-.bplan-grid{display:grid;grid-template-columns:1fr 230px;gap:16px}
-.bplan label{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.09em;
-  text-transform:uppercase;color:#A5A9B8;margin-bottom:4px}
-/* Hereda de `.rico`, que es el mismo editor del detalle: mismo campo, mismo formato, mismas
-   imágenes pegadas. Solo se le baja el alto — acá no puede ocupar media pantalla. */
-.bplan-txt{min-height:76px;font-size:12px;border-radius:4px;padding:7px 9px}
-.bcampo{margin-bottom:9px}
-.bplan input,.bplan select{width:100%;font-size:12px;color:var(--ink);background:#fff;
-  border:1px solid var(--line);border-radius:4px;padding:6px 8px}
-.bplan input:focus,.bplan select:focus{outline:none;border-color:var(--accent)}
-.bplan input::placeholder{color:#BFC3CE}
-.bficha{margin-top:3px;width:100%;padding:6px 8px;border:1px solid var(--line);border-radius:4px;
-  background:#fff;font-size:11.5px;font-weight:600;color:var(--ink-2)}
-.bficha:hover{border-color:var(--accent);color:var(--accent)}
-
+/* ---------- el pase al tablero ----------
+   Aparece al pasar por encima, como en el diseño. Cuando ya salió es al revés: el cartel
+   queda fijo, porque ahí deja de ser un botón y pasa a ser el estado de la tarea. */
+.pgship{flex:none;align-self:center;margin-left:8px;padding:2px 9px;border-radius:999px;
+  border:1px solid #D5D2F3;background:#F2F1FB;color:var(--accent);font-size:10px;
+  font-weight:600;white-space:nowrap;opacity:0;transition:opacity .1s,background .15s,color .15s}
+.pgrow:hover .pgship{opacity:1}
+.pgship:hover{background:var(--accent);border-color:var(--accent);color:#fff}
+.pgship.ya{opacity:1;padding:0;border:none;background:transparent}
+.pgship.ya button{padding:2px 9px;border-radius:999px;border:1px solid #C6DDCC;background:#F1F7F2;
+  color:var(--ok);font-size:10px;font-weight:600;white-space:nowrap}
+.pgship.ya button:hover{background:var(--ok);border-color:var(--ok);color:#fff}
 /* ---------- menú colgante ----------
    Va pegado al `<body>` y no a la fila: una fila recorta lo que se sale, y desde el body el
    mismo clic de afuera lo cierra siempre. */
@@ -642,6 +828,10 @@ tr.generada td:first-child{box-shadow:inset 3px 0 0 -1px #DCDEE8}
   font-size:12.5px;text-align:left;color:var(--ink-2)}
 .bpop button:hover{background:#F6F5FE;color:var(--ink)}
 .bpop button.on{color:var(--ink);font-weight:600}
+/* Solo lo lleva el menú que se abre suelto, sin una tarea detrás: ahí tres nombres a secas
+   no dicen qué se está eligiendo. Los de una fila no lo necesitan. */
+.bpoptit{padding:5px 8px 6px;font-size:11px;font-weight:700;letter-spacing:.02em;
+  color:var(--ink-2);border-bottom:1px solid var(--line);margin-bottom:4px}
 .btick{margin-left:auto;color:var(--accent);font-size:11px}
 
 /* ---------- barra de las marcadas ---------- */
@@ -657,18 +847,211 @@ tr.generada td:first-child{box-shadow:inset 3px 0 0 -1px #DCDEE8}
 .bbulk .bprimary{background:var(--ok);color:#fff;padding:5px 11px;border-radius:6px;font-size:12px;font-weight:600}
 .bbulk .bprimary:hover{background:#6E9878;color:#fff}
 
-/* En pantallas angostas se cae la columna de Área antes que ninguna: es la única que se
-   puede leer del título, y encogerlas todas deja nueve celdas ilegibles en vez de ocho
-   legibles. `display:none` la saca de la rejilla, así que la plantilla pasa a diez. */
+/* En pantalla angosta las catalogaciones son lo primero que sobra: el título completo vale
+   más que seis pills apretadas contra el borde. Se caen de a poco, de la menos a la más
+   importante, y las que quedan bajan a un renglón propio antes que recortar el título. */
 @media(max-width:1180px){
-  .bgrid{grid-template-columns:20px 16px 52px minmax(150px,1fr) 92px 86px 100px 100px 68px 20px 20px 20px}
-  .b-area{display:none}
-  .bplan-grid{grid-template-columns:1fr}
-  .bplan{padding-left:calc(var(--cinta) + 28px)}
-  /* La banda del sprint lee `--bpad` para saber cuánto margen descontar: se cambia acá y
-     se acomoda sola. */
-  .bwrap{--bpad:12px}
+  .pgpill.edad{display:none}
 }
+@media(max-width:980px){
+  .bkwrap{--pgcan:52px}
+  .pgpills{gap:4px}
+  .pgpill{padding:2px 6px}
+  .pgpill.mono{display:none}
+}
+@media(max-width:760px){
+  .bktarea{flex-wrap:wrap}
+  .bktarea .pgtxt{flex:1 1 100%}
+  /* Sin hover en un teléfono, esconder es esconder para siempre. */
+  .bktarea .pgctl,.pgship{opacity:1}
+  .pgpills{margin-left:0;padding-left:calc(var(--pgcan) - 42px);flex-wrap:wrap}
+}
+
+/* ---------- La tarea como página ----------
+   Un documento, no un formulario: una sola columna angosta, mucho aire y los controles
+   apagados hasta que pasás por encima. Acá esconderlos SÍ corresponde —al revés que en la
+   lista, que existe para tener la foto del sprint entera a la vista—: lo que se mira en una
+   página es lo escrito, y un `＋` y un `⠿` prendidos en cada renglón lo tapan.
+
+   La canaleta de la izquierda mide 44px y no es decorativa: es donde viven esos dos
+   controles, y por eso el título y el texto arrancan alineados con ella. */
+.board.pgmode{display:block;overflow:auto;background:var(--paper-bl)}
+.pgwrap{--pgcan:44px;max-width:820px;margin:0 auto;padding:0 24px 160px}
+
+.pgbc{display:flex;align-items:center;gap:8px;height:52px;font-size:12px;color:var(--ink-3)}
+.pgbc button{font-size:12px;color:var(--ink-3);padding:2px 4px;border-radius:5px}
+.pgbc button:hover{color:var(--accent);background:#F2F1FB}
+.pgbc button:last-of-type{color:var(--ink)}
+.pgsep{color:#C6C9D4}
+.pgflex{flex:1}
+.pgres{font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+
+/* El margen de abajo lo daba el subtítulo descriptivo, que se sacó: llenaba pantalla sin
+   decir nada que no dijera la página misma. Ahora lo pone el título. */
+.pgtitle{margin:0 0 18px var(--pgcan);font-family:var(--display);font-size:29px;font-weight:600;
+  line-height:1.2;letter-spacing:-.02em;color:var(--ink)}
+.pgtitle:focus{outline:none}
+.pgtitle:empty::before{content:attr(data-ph);color:#C6C9D4}
+
+/* Cabecera de la tarea: los mismos controles de la fila, con las mismas clases. El `.bship`
+   nace apagado porque en la lista aparece al pasar por encima; acá es un botón fijo. */
+.pgmeta{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 22px var(--pgcan);
+  padding-bottom:14px;border-bottom:1px solid var(--line-soft)}
+/* Acá el pase al tablero no se esconde: en la lista aparece al pasar por encima porque hay
+   cuarenta filas, pero en la página de una tarea es de las tres cosas que se hacen. */
+.pgmeta .pgship{opacity:1}
+.pgmeta .pgpills{margin-left:0;flex-wrap:wrap}
+.pgficha{font-size:11.5px;color:var(--ink-3);border:1px solid var(--line);border-radius:5px;
+  padding:3px 9px;background:#fff;white-space:nowrap}
+.pgficha:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ---------- el cuadro de avisos ----------
+   Va como una tarjeta y no como más renglones de la página: es lo primero que se mira al
+   entrar y tiene que separarse de lo que uno viene a escribir. Con algo sin ver adentro el
+   borde se pone rojo, así que se sabe que hay un aviso antes de leerlo. */
+.pghdr{--pglbl:52px;margin:0 0 22px var(--pgcan);padding:10px 14px 11px;border:1px solid var(--line);
+  border-radius:9px;background:#FBFBFE;display:flex;flex-direction:column;gap:7px}
+.pghdr.hay{border-color:#E7C9C6;background:#FFFBFB}
+
+.pgavtop{display:flex;align-items:center;gap:8px}
+.pglbl{flex:none;width:var(--pglbl);font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;
+  text-transform:uppercase;color:var(--ink-3)}
+.pgavn{flex:none;font-family:var(--mono);font-size:9px;letter-spacing:.05em;color:var(--crit);
+  background:#FBEFEF;border-radius:999px;padding:2px 7px;white-space:nowrap}
+/* Sin recuadro: adentro de la tarjeta, un input con borde propio parece un formulario. Lo
+   que marca que se puede escribir es el cartel de adentro. */
+.pgavin{flex:1;min-width:0;border:none;background:transparent;font-family:inherit;
+  font-size:13px;color:var(--ink-2);padding:2px 0}
+.pgavin:focus{outline:none}
+.pgavin::placeholder{color:#C6C9D4}
+
+/* Los avisos cuelgan alineados con la caja donde se escriben, no con el rótulo. */
+.pgavmsgs{list-style:none;margin:0;padding:2px 0 0 calc(var(--pglbl) + 8px);
+  display:flex;flex-direction:column;gap:3px}
+.pgavmsg{display:flex;align-items:flex-start;gap:8px}
+/* Resaltado y no solo coloreado: un renglón rojo entre renglones grises se pierde apenas hay
+   tres, y el punto de esto es que no se pueda pasar de largo. */
+.pgavtxt{flex:1;min-width:0;font-size:13px;line-height:1.55;color:var(--crit);font-weight:500;
+  word-break:break-word;background:#FBE9E7;border-radius:4px;padding:1px 6px;margin-left:-6px}
+.pgavmsg.visto .pgavtxt{color:var(--ink-3);font-weight:400;background:transparent}
+.pgavok{flex:none;font-size:10px;font-weight:600;color:var(--crit);border:1px solid #EBCFCD;
+  background:#fff;border-radius:999px;padding:2px 9px;white-space:nowrap;margin-top:1px}
+.pgavok:hover{background:var(--crit);border-color:var(--crit);color:#fff}
+/* Visto no es un botón apagado: ya pasó, no hay nada que apretar. */
+.pgavya{flex:none;font-size:10px;color:#C0C3CE;white-space:nowrap;padding:2px 0}
+/* El ✕ aparece al pasar por encima, como el de los bloques: está siempre disponible pero no
+   compite con el texto del aviso. */
+.pgavx{flex:none;width:18px;height:18px;display:grid;place-items:center;border-radius:4px;
+  color:#C8CBD6;font-size:10px;opacity:0;transition:opacity .1s}
+.pgavmsg:hover .pgavx{opacity:1}
+.pgavx:hover{background:var(--rail);color:var(--crit)}
+
+/* ---------- un bloque ---------- */
+.pgrow{position:relative;display:flex;align-items:flex-start;gap:2px;padding:2px 0;border-radius:5px}
+.pgrow:hover{background:#F6F5FC}
+.pgrow.arrastrando{opacity:.35}
+.pgrow.antes{box-shadow:inset 0 2px 0 -.5px var(--accent)}
+.pgrow.despues{box-shadow:inset 0 -2px 0 -.5px var(--accent)}
+/* La sangría es un relleno y no un margen: así el fondo del hover llega igual hasta el
+   borde izquierdo y la fila se lee entera aunque esté anidada tres niveles. */
+.pgrow > .pgctl + *{margin-left:var(--ind,0)}
+
+.pgctl{width:var(--pgcan);flex:none;display:flex;align-items:center;justify-content:flex-end;
+  gap:2px;padding-top:2px;opacity:0;transition:opacity .1s}
+.pgrow:hover .pgctl{opacity:1}
+.pgadd,.pgdrag{width:18px;height:18px;display:grid;place-items:center;border-radius:4px;
+  color:var(--ink-3);font-size:13px;line-height:1}
+.pgdrag{color:#C8CBD6;font-size:11px;cursor:grab;margin-right:4px}
+.pgdrag:active{cursor:grabbing}
+.pgadd:hover,.pgdrag:hover{background:var(--rail);color:var(--ink)}
+
+.pgtxt{flex:1;min-width:0;font-size:14px;line-height:1.65;color:var(--ink-2);padding:1px 0;
+  word-break:break-word}
+.pgtxt:focus{outline:none}
+/* El `min-height` es lo que reemplaza al cartel donde el cartel se sacó: un renglón vacío
+   sin nada adentro mide cero y no se puede ni clickear. */
+.pgtxt{min-height:1.65em}
+.pgtxt:empty::before{content:attr(data-ph);color:#C6C9D4}
+/* En el texto y en los encabezados el cartel sale SOLO donde está el cursor: son los dos
+   que se crean de a montones, y una página a medio escribir era una columna de «Escribí
+   algo…». En el desplegable, la subpágina y el paso se queda siempre, porque ahí no es una
+   sugerencia sino la etiqueta de algo que existe: sin ella son un ícono suelto. */
+.pg-text .pgtxt:empty::before,.pg-h .pgtxt:empty::before{content:none}
+.pg-text .pgtxt:empty:focus::before,.pg-h .pgtxt:empty:focus::before{content:attr(data-ph)}
+.pgtxt.hecho{color:var(--ink-3);text-decoration:line-through}
+
+.pg-h .pgtxt{font-family:var(--display);font-size:16px;font-weight:600;color:var(--ink);
+  letter-spacing:-.01em;margin-top:12px}
+.pg-toggle .pgtxt{font-weight:600;color:var(--ink)}
+.pg-page .pgtxt{font-weight:500;color:var(--ink)}
+
+.pgcar{width:20px;height:23px;flex:none;color:var(--ink-3);font-size:9px;
+  transform:rotate(-90deg);transition:transform .12s ease}
+.pgcar.on{transform:none}
+.pgcar:hover{color:var(--ink)}
+.pgpg{width:20px;height:23px;flex:none;color:var(--ink-3);font-size:12px}
+.pgpg:hover{color:var(--accent)}
+/* «abrir ⤢» aparece con el hover: el título ya es clicable, esto solo lo dice en voz alta. */
+.pgabrir{flex:none;align-self:center;font-size:10.5px;color:#B6B9C4;opacity:0;transition:opacity .1s}
+.pgrow:hover .pgabrir{opacity:1}
+.pgabrir:hover{color:var(--accent)}
+
+.pgbox{width:15px;height:15px;flex:none;margin:5px 6px 0 1px;border:1.5px solid #CBCFDA;
+  border-radius:3px;display:grid;place-items:center;font-size:9px;color:#fff;line-height:1}
+.pgbox:hover{border-color:var(--accent)}
+.pgbox.on{background:var(--accent);border-color:var(--accent)}
+
+.pgdel{flex:none;align-self:center;width:20px;height:20px;color:#C8CBD6;font-size:11px;
+  border-radius:4px;opacity:0;transition:opacity .1s}
+.pgrow:hover .pgdel{opacity:1}
+.pgdel:hover{background:var(--rail);color:var(--crit)}
+
+.pgimg{padding:4px 0}
+.pgimg img{max-width:100%;border-radius:7px;display:block;border:1px solid var(--line-soft)}
+.pgimg img.cargando{opacity:.5;filter:grayscale(.4)}
+
+/* El renglón que es un archivo. La ficha (`.pgfile`) queda siempre, plegado y desplegado:
+   una imagen suelta en el medio de la hoja no dice de qué archivo salió ni deja dónde
+   apretar para bajarla. Lo de adentro cuelga abajo, en columna. */
+.pgfilewrap{display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.pgfile{display:inline-flex;align-items:center;gap:7px;max-width:100%;
+  padding:3px 9px 3px 8px;border:1px solid var(--line);border-radius:6px;background:#FBFBFE}
+.pgfile:hover{border-color:var(--accent)}
+.pgfico{flex:none;color:var(--ink-3)}
+.pgfn{min-width:0;font-size:13px;color:var(--ink-2);text-decoration:none;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pgfn:hover{color:var(--accent);text-decoration:underline}
+.pgfsz{flex:none;font-family:var(--mono);font-size:9px;letter-spacing:.05em;color:#B0B4C2}
+/* El marco del PDF o del HTML. Alto fijo: el contenido está en otro origen y no hay forma
+   de medirlo desde acá, y un marco que se estira solo tampoco existe. */
+.pgframe{width:100%;height:420px;border:1px solid var(--line-soft);border-radius:7px;background:#fff}
+/* Lo que no se puede mirar acá adentro no lleva flecha, pero sí su lugar: sin el hueco, la
+   ficha de ese renglón arrancaría 20px corrida respecto de las de arriba y abajo. */
+.pgcar.hueco{display:block;transform:none}
+
+.pgnew{width:100%;text-align:left;margin-top:6px;padding:7px 0 7px var(--pgcan);
+  font-size:14px;color:#C0C3CE}
+.pgnew:hover{color:var(--ink-2)}
+
+/* El menú del `＋`. Va adentro de la fila y no colgado del `<body>` como el de la lista:
+   acá nada tiene `overflow` que lo recorte, y pegado al bloque se ve de qué bloque es. */
+.pgpop{position:absolute;z-index:20;top:26px;left:var(--pgcan);width:224px;background:#fff;
+  border:1px solid var(--line);border-radius:8px;padding:5px;
+  box-shadow:0 10px 28px rgba(20,21,28,.13),0 1px 2px rgba(20,21,28,.06)}
+.pgpop-t{font-family:var(--mono);font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;
+  color:#A5A9B8;padding:6px 8px 4px}
+.pgpop button{display:flex;align-items:center;gap:9px;width:100%;padding:6px 8px;border-radius:5px;
+  font-size:13px;text-align:left;color:var(--ink-2)}
+.pgpop button:hover{background:#F6F5FE;color:var(--ink)}
+.pgpop button span{width:16px;color:var(--ink-3);text-align:center}
+
+/* Entrada a la página desde la ficha y desde el panel de la fila. */
+.field-h{display:flex;align-items:center;gap:10px}
+.field-h label{margin-bottom:0}
+.pglink{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--accent);padding:2px 6px;border-radius:5px}
+.pglink:hover{background:#F2F1FB}
+/* La explicación de una tarea que ya tiene página se lee, no se escribe. */
+.rico.leyendo{background:#FAFAFC;color:var(--ink-2);cursor:default}
 
 /* ---------- Login / sin acceso ---------- */
 .login-overlay{position:fixed;inset:0;background:rgba(18,19,26,.55);backdrop-filter:blur(3px);display:grid;place-items:center;z-index:100;padding:20px}
@@ -694,11 +1077,37 @@ tr.generada td:first-child{box-shadow:inset 3px 0 0 -1px #DCDEE8}
   .board:not(.rows) .col{flex:0 0 82vw;min-width:0}
   .search input{width:100%}
   .search{flex:1 1 100%}
-  .brand span{display:none}
   .board.rows .card{flex-wrap:wrap}
-  .top-in{padding:12px 14px 0}
   .bar{padding-left:14px;padding-right:14px;gap:8px}
-  .views{width:100%}
   .estado-guardado{min-width:0}
-  .board.cmode{padding:12px}
+  /* Sin cursor no hay hover: la barra se abre al tocar cualquiera de sus renglones, que es
+     lo que hace `:focus-within`. La canaleta se achica porque en 360px de ancho 54px son
+     casi un sexto de la pantalla. */
+  :root{--rail-w:44px}
+  .side:hover .side-in,.side:focus-within .side-in{width:min(var(--side-w),72vw)}
+  .side-top{padding-left:9px}
+  .side-nav,.side-pie{padding-left:4px;padding-right:4px}
+  .nota-pop{left:auto;right:10px;bottom:10px;width:min(320px,calc(100vw - 64px))}
+  .nota-pop::before{display:none}
+  /* En un teléfono la canaleta de 44px es casi un quinto del ancho. Se achica y los
+     controles se quedan prendidos: sin hover, esconderlos sería esconderlos para siempre. */
+  .pgwrap{--pgcan:28px;padding:0 12px 160px}
+  .cjwrap{--pgcan:22px;padding:0 12px 120px}
+  .pgctl,.pgdel,.pgabrir,.cjdel,.cjquitar,.pgpill.lapiz{opacity:1}
+  /* La nota y la categoría se van: en 360px de ancho, fecha, concepto, quién y monto ya no
+     entran cómodos. Se siguen editando desde el escritorio. */
+  .cjnota,.cjcat{display:none}
+  .cjquien{width:74px}
+  /* «Cargar a» no se esconde entera como la nota y la categoría: es plata, y un gasto que
+     se le carga a uno solo leído como compartido es un saldo mal. Se queda el punto —color
+     es de alguien, hueco es de todos— y se va el rótulo, que no entra. El punto también es
+     lo que deja dónde tocar para cambiarlo desde el teléfono.
+
+     Ancho fijo y no `auto`: el encabezado es la misma rejilla de flex que las filas, y una
+     columna que mide distinto arriba que abajo corre de lugar todos los rótulos que siguen. */
+  .cjcarga{width:16px}
+  .cjcarga b{display:none}
+  .cjmonto{width:82px}
+  .pgtitle{font-size:24px}
+  .pgpop{left:0;width:min(224px,calc(100vw - 40px))}
 }

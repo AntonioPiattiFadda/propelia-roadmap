@@ -1,0 +1,39 @@
+-- supabase/schema-v8.sql
+-- Ejecutar en el SQL Editor del proyecto Supabase "propelia" (gvkdyxhxsnpumxlhvhsm).
+-- No depende de v5 ni de v7: toca solo `roadmap_caja`. Idempotente.
+--
+-- QUE HACE, EN CRIOLLO:
+--   Separa dos preguntas que hasta ahora contestaba una sola columna. `cuenta` decia
+--   "quien lo pago de su bolsillo" y ademas se daba por hecho que el gasto era de todos
+--   por partes iguales. Con `carga` se puede decir a quien se le imputa cada gasto: a una
+--   persona sola, a las dos, o a quien corresponda.
+--
+--   Un ejemplo de por que hace falta: Lorenzo paga la suscripcion de una herramienta que
+--   usa solo Antonio. Antes eso quedaba como un gasto compartido y el saldo salia mal por
+--   la mitad del importe; ahora se paga con la tarjeta de Lorenzo y se le carga a Antonio.
+--
+-- SIN ESTE ARCHIVO CORRIDO la caja funciona igual que siempre: todo gasto se reparte
+-- entre todos. La columna nueva no existe, el front lo detecta al primer guardado y sigue
+-- guardando el resto del movimiento sin ella, pero la imputacion no queda persistida.
+-- El aviso del triangulito de la barra lateral lo dice.
+
+-- ============================================================
+-- 1) A quien se le carga el gasto
+-- ------------------------------------------------------------
+-- Es una lista de ids de persona (`["Loro","Toni"]`), no una columna de texto ni una
+-- tabla de imputaciones: son dos o tres personas y no hay nada que colgarle a cada una
+-- mas alla del nombre. Es el mismo criterio que `roadmap_tareas.pend`.
+--
+-- El default es la lista vacia, y **la lista vacia significa "a todos"**: es exactamente
+-- lo que valia para cada movimiento antes de que esta columna existiera, asi que las
+-- filas viejas se leen bien sin migrar ni una. El front escribe la lista completa cuando
+-- el gasto es de todos, pero acepta las dos formas al leer.
+-- ============================================================
+alter table public.roadmap_caja add column if not exists carga jsonb not null default '[]'::jsonb;
+
+-- ============================================================
+-- 2) Permisos y realtime: nada que hacer
+-- ------------------------------------------------------------
+-- Es una columna de `roadmap_caja`, que ya tiene su RLS y ya esta publicada en realtime
+-- desde schema-v3.sql. Agregar columnas no toca ninguna de las dos cosas.
+-- ============================================================

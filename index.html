@@ -11,44 +11,65 @@
 </head>
 <body>
 
-<header class="top">
-  <div class="top-in">
-    <div class="brand">
+<!-- ===== Barra lateral del sistema =====
+     Vive plegada a una canaleta de íconos mientras se trabaja y se abre sola al pasar el
+     cursor. Adentro va TODO lo que no es una tarea: a dónde ir (tablero, backlog, caja),
+     quién sos, exportar y cerrar sesión. Eso es lo que dejó al encabezado en una sola
+     línea de filtros, que es puro tablero ganado.
+
+     El panel que se abre es `.side-in`, que está posicionado sobre la canaleta y no la
+     empuja: si el ancho de la barra fuera parte del flujo, cada vez que el mouse la roza se
+     reacomodaría el tablero entero. -->
+<aside class="side" id="side">
+  <div class="side-in">
+    <div class="side-top">
       <div class="mark"></div>
-      <div><h1 id="tituloApp">Tablero de tareas</h1><span id="subtituloApp"></span></div>
+      <div class="side-brand"><b id="tituloApp">Tablero de tareas</b><span id="subtituloApp"></span></div>
     </div>
-    <div class="top-actions">
-      <button class="campana" id="campana" type="button" hidden>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8.5a6 6 0 1 0-12 0c0 6-2.2 7.5-2.2 7.5h16.4S18 14.5 18 8.5z"/><path d="M13.7 19.5a2 2 0 0 1-3.4 0"/></svg>
-        <b>0</b>
-      </button>
-      <!-- Aclaraciones para quien configura la base: un solo ícono que despliega el
+
+    <nav class="side-nav" id="views" aria-label="Vistas del tablero"></nav>
+
+    <div class="side-pie">
+      <!-- Aclaraciones para quien configura la base: un solo renglón que despliega el
            detalle al pasar el cursor, para no comerse una franja entera del tablero. -->
       <div class="nota-dev" id="avisoEsquema" hidden>
         <button class="nota-btn" type="button" aria-label="Falta un paso en la base de datos" aria-describedby="avisoEsquemaTexto">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6 2.9 19.4h18.2L12 3.6z"/><path d="M12 9.8v4.1M12 17.1v.1"/></svg>
+          <span class="side-txt">Falta un paso en la base</span>
         </button>
         <div class="nota-pop" id="avisoEsquemaTexto" role="tooltip"></div>
       </div>
       <span class="me" id="yoNombre"></span>
-      <button class="btn ghost" id="bCsv">Exportar</button>
-      <button class="btn ghost" id="bCerrarSesion">Cerrar sesión</button>
-      <button class="btn primary" id="bNueva">+ Nueva tarea</button>
+      <button class="side-act" id="bCsv" type="button" title="Exportar todo a CSV">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 19.5h15"/></svg>
+        <span class="side-txt">Exportar</span>
+      </button>
+      <button class="side-act" id="bCerrarSesion" type="button" title="Cerrar sesión">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4.5h4a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-4M9.5 15.5 5 12l4.5-3.5M5 12h10"/></svg>
+        <span class="side-txt">Cerrar sesión</span>
+      </button>
     </div>
   </div>
+</aside>
 
-  <!-- Vistas y filtros comparten una sola línea: cada píxel que no se gasta acá arriba
-       es un píxel más de tablero, que es lo que se mira todo el día. -->
+<div class="shell">
+<header class="top">
+  <!-- Una sola línea: filtros a la izquierda, lo que se hace a la derecha. Las vistas se
+       mudaron a la barra lateral, así que acá no queda nada que compita por el renglón. -->
   <div class="bar">
-    <nav class="views" id="views" aria-label="Vistas del tablero"></nav>
-
     <div class="filters" id="filtros">
       <div class="search">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
         <input type="search" id="q" placeholder="Buscar…  ( / )">
       </div>
       <div class="chips" id="chipsPend"></div>
-      <select class="sel" id="fPrioridad" aria-label="Filtrar por prioridad"></select>
+      <!-- Prioridad admite varias a la vez, así que no puede ser un <select>: es un botón
+           con un menú de tildes. Ocupa lo mismo que el select que reemplazó para no
+           ganarle un renglón a la barra. -->
+      <div class="selmulti" id="fPrioridad">
+        <button type="button" class="sel" aria-haspopup="true" aria-expanded="false">Prioridad</button>
+        <div class="selmenu" hidden role="group" aria-label="Filtrar por prioridad"></div>
+      </div>
       <select class="sel" id="fTipo" aria-label="Filtrar por tipo"></select>
       <span class="spacer"></span>
       <div class="seg-layout" id="layout">
@@ -56,8 +77,23 @@
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="9.5" y="4" width="5" height="16" rx="1.5"/><rect x="16" y="4" width="5" height="16" rx="1.5"/></svg></button>
         <button data-layout="rows" title="Ver en filas" aria-label="Ver en filas">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="18" height="4.2" rx="1.5"/><rect x="3" y="10" width="18" height="4.2" rx="1.5"/><rect x="3" y="16" width="18" height="4.2" rx="1.5"/></svg></button>
+        <!-- La tercera es la misma lista de renglones del Backlog, pero agrupada por estado
+             en vez de por sprint. El ícono lleva la viñeta a la izquierda de cada renglón
+             justamente para que no se confunda con «filas», que son tarjetas apiladas. -->
+        <button data-layout="lista" title="Ver como lista" aria-label="Ver como lista">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4.6" width="3.2" height="3.2" rx=".9"/><rect x="8.4" y="5" width="12.6" height="2.4" rx="1.2"/><rect x="3" y="10.4" width="3.2" height="3.2" rx=".9"/><rect x="8.4" y="10.8" width="12.6" height="2.4" rx="1.2"/><rect x="3" y="16.2" width="3.2" height="3.2" rx=".9"/><rect x="8.4" y="16.6" width="12.6" height="2.4" rx="1.2"/></svg></button>
       </div>
       <span class="estado-guardado" id="estadoGuardado" aria-live="polite"></span>
+    </div>
+
+    <!-- Fuera de `#filtros` a propósito: la caja esconde los filtros enteros, y la campana
+         y «Nueva tarea» tienen que seguir estando igual. -->
+    <div class="bar-acciones">
+      <button class="campana" id="campana" type="button" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8.5a6 6 0 1 0-12 0c0 6-2.2 7.5-2.2 7.5h16.4S18 14.5 18 8.5z"/><path d="M13.7 19.5a2 2 0 0 1-3.4 0"/></svg>
+        <b>0</b>
+      </button>
+      <button class="btn primary" id="bNueva">+ Nueva tarea</button>
     </div>
   </div>
 </header>
@@ -69,13 +105,13 @@
     <div class="esq-col"><div class="esq-cab shimmer"></div><div class="esq-card shimmer"></div><div class="esq-card shimmer"></div></div>
   </div>
 </main>
+</div><!-- /.shell -->
 
 <!-- ===== Modal: tarea ===== -->
 <div class="scrim" id="scrimTarea">
   <div class="modal" role="dialog" aria-modal="true" aria-label="Detalle de la tarea">
     <div class="m-h">
       <textarea id="tTitulo" rows="1" placeholder="Título de la tarea"></textarea>
-      <button class="today-btn" id="tHoy">☀ Realizar hoy</button>
       <button class="btn ghost" data-close aria-label="Cerrar">✕</button>
     </div>
     <div class="m-b">
@@ -85,13 +121,19 @@
         <select id="tEstado" aria-label="Estado"></select>
         <select id="tPrioridad" aria-label="Prioridad"></select>
         <select id="tTipo" aria-label="Tipo de actividad"></select>
-        <select id="tSprint" aria-label="Sprint"></select>
-        <!-- El Loom va acá arriba y no en una ficha aparte: sin él la tarea no puede salir
-             al tablero, así que es parte de la clasificación, no un dato de más. -->
-        <label class="bar-loom">
-          <span>Loom</span>
-          <input type="url" id="tLoom" placeholder="Pegá el enlace del video" aria-label="Enlace del Loom">
-          <a id="tLoomVer" href="#" target="_blank" rel="noopener" title="Ver el Loom" hidden>↗</a>
+        <select id="tSprint" aria-label="Grupo del backlog"></select>
+        <!-- Área y «Depende de» vivían en el panel de la fila del backlog. Al pasar la lista
+             al formato del diseño, la fila quedó con el título y las catalogaciones y nada
+             más, así que los dos campos se mudaron acá, que es donde ya está el resto de la
+             clasificación. Son texto libre a propósito: la mitad de las dependencias reales
+             no son otra tarea del tablero, y obligarlas a serlo hace que nadie las anote. -->
+        <label class="bar-campo">
+          <span>Área</span>
+          <input type="text" id="tArea" placeholder="De qué parte es" aria-label="Área">
+        </label>
+        <label class="bar-campo">
+          <span>Depende</span>
+          <input type="text" id="tDep" placeholder="T04, diseño cerrado…" aria-label="Depende de">
         </label>
         <span class="sep"></span>
         <div class="pend" id="tPend" role="group" aria-label="Pendiente de acción"></div>
@@ -101,7 +143,13 @@
            texto, en el lugar donde estaba el cursor. Lo demás de la ficha se pliega para
            dejarle el alto a este campo, que es donde se trabaja de verdad. -->
       <div class="field">
-        <label id="tDescLbl">Explicación</label>
+        <div class="field-h">
+          <label id="tDescLbl">Explicación</label>
+          <!-- La misma explicación, con estructura: renglones, encabezados, desplegables,
+               checklist y subpáginas. Una vez que la tarea tiene página, acá se lee y allá
+               se escribe: dos editores sobre el mismo campo se pisarían el formato. -->
+          <button class="pglink" type="button" id="tPagina">Abrir como página ↗</button>
+        </div>
         <div class="rico" id="tDesc" contenteditable="true" role="textbox" aria-multiline="true"
              aria-labelledby="tDescLbl"
              data-ph="Qué hay que hacer y por qué. El detalle completo: qué pasa hoy, cómo tendría que quedar, y con qué se da por terminada. Pegá capturas con Ctrl+V y entran acá mismo."></div>
@@ -142,6 +190,10 @@
     </div>
   </div>
 </div>
+
+<!-- El selector de archivos de la página de una tarea. Va suelto acá y no adentro del modal
+     porque la página no es el modal: son dos pantallas distintas sobre la misma tarea. -->
+<input type="file" id="pgFileIn" multiple hidden>
 
 <div class="scrim lightbox" id="lightbox"><img id="lbImg" alt=""></div>
 <div id="grip" aria-hidden="true"></div>
@@ -198,17 +250,13 @@ window.APP_CONFIG = {
   // dibujan igual, así que esto es solo el piso: los casilleros que están listos para
   // recibir algo el día que se abre la pestaña por primera vez.
   sprints: 3,
-  // `caja: true` marca a quien pone plata. La planilla de la caja solo muestra a esa
+  // `caja: true` marca a quien pone plata. La caja solo muestra a esa
   // gente y el saldo se reparte entre ellos; el resto usa el tablero igual que siempre.
   personas: [
     { id: 'Loro', nombre: 'Lorenzo', ini: 'LO', color: '#6E6BA0', email: 'lorenzopiattifadda@gmail.com', caja: true },
     { id: 'Toni', nombre: 'Antonio', ini: 'AN', color: '#4F7F79', email: 'antonio.piattifadda@gmail.com', caja: true },
     { id: 'Luis', nombre: 'Luis',    ini: 'LU', color: '#A87A3F', email: 'rubioluis13@gmail.com' },
   ],
-  caja: {
-    intro: 'Quién puso cada peso: en negativo lo que sale (lo pagó esa persona), en positivo lo que entra. '
-         + 'Arriba se ve cuánto puso cada uno y para qué lado quedó el saldo. Nada se prorratea todavía: es la cuenta para saldar más adelante.',
-  },
 };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>

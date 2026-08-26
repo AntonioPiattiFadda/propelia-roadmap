@@ -1,7 +1,10 @@
 # Pendientes de back-end — tablero unificado
 
-**Al 17/8/2026 queda un solo punto abierto:**
+**Al 26/8/2026 quedan dos puntos abiertos:**
 
+- **El 9 (`schema-v8.sql`, a quién se le carga cada gasto de la caja) es el único que hace
+  falta.** Sin correrlo la caja anda, pero la imputación no se guarda: todo se lee como
+  compartido.
 - **El 5 (sacar las temáticas de la base) es limpieza.** El tablero anda igual sin correrlo.
 - **El 7 (`schema-v7.sql`, el Backlog) — ✅ HECHO (17/8/2026).** Aplicado como migración
   `roadmap_schema_v7_backlog`; columnas e índice verificados contra la base.
@@ -30,7 +33,7 @@ Lo que hizo, en orden:
 | Paso | Qué toca |
 |---|---|
 | 1 | Agrega a las tareas: `prioridad`, `tipo`, `hoy`, `pend` (varios responsables), `creada`. Hace `sec_id` opcional para permitir «Sin temática». Agrega `color` a las secciones. |
-| 2 | Crea `roadmap_notas` (las dos hojas de la vista Visión) con su RLS y realtime. |
+| 2 | Crea `roadmap_notas` (eran las dos hojas de la vista Visión) con su RLS y realtime. La Visión murió y la tabla quedó vacía; desde el 26/8/2026 guarda los **nombres de los grupos del backlog**, una fila por grupo. No hay nada que correr: ya está. |
 | 3 | Copia secciones y tareas de Captalia a las tablas `roadmap_*` con el prefijo `c-` en el id. **Nada se borra**: `captalia_*` queda intacta como respaldo. |
 | 4 | Borra las membresías de `captalia` de `app_miembros` — eso también saca a Diego, que era miembro solo de ahí. Deja el bucket viejo de Captalia en solo lectura, para que los adjuntos copiados se sigan viendo. |
 
@@ -212,6 +215,30 @@ tenía cacheados; se vence solo.
 (URLs públicas) dejaba de mostrar imágenes y adjuntos hasta que llegara el deploy.
 
 Vuelta atrás, si hiciera falta: el mismo `update` con `true`.
+
+---
+
+## 9. Correr `supabase/schema-v8.sql` — ⏳ PENDIENTE (26/8/2026)
+
+Agrega una sola columna a `roadmap_caja`:
+
+| Columna | Qué es |
+|---|---|
+| `carga` (jsonb, default `[]`) | A quién se le imputa el gasto para el saldo. Lista de ids de persona (`["Loro","Toni"]`). **La lista vacía significa «a todos»**, que es lo que valía para cada movimiento antes de que la columna existiera: por eso no hay nada que migrar. |
+
+Hasta ahora `cuenta` contestaba dos preguntas a la vez —quién lo pagó de su bolsillo— y se
+daba por hecho que el gasto era de todos por partes iguales. La herramienta que paga Lorenzo
+pero usa solo Antonio quedaba como gasto compartido y el saldo salía mal por la mitad del
+importe. Ahora son dos columnas en pantalla: **Pagó** y **Cargar a**.
+
+No depende de la v5 ni de ninguna otra: toca solo `roadmap_caja`. No hace falta tocar RLS ni
+realtime —la tabla ya tiene las dos cosas desde `schema-v3.sql`— y es idempotente.
+
+**Mientras no esté corrido, el tablero funciona.** La caja se usa igual y todo se lee como
+compartido, exactamente como antes. Lo único que no pasa es que la elección quede guardada:
+`RoadmapSync.guardarMovimiento()` intenta el `upsert` con la columna, la base contesta que no
+la conoce (`PGRST204`), y reintenta una vez sin ella para que el importe, el concepto y quién
+pagó se sigan guardando igual. El aviso del triangulito de la barra lateral lo dice.
 
 ---
 
