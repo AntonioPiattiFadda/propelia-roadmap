@@ -636,10 +636,11 @@ body.arrastrando .empty-col{display:none}
    Los controles de la canaleta van apagados hasta el hover, como en el diseño. Lo que NO se
    esconde nunca son las catalogaciones: son lo que se viene a mirar. */
 .board.bmode{display:block;overflow:auto;background:var(--paper-bl)}
-/* Tres controles en la canaleta —marcar, menú y agarre— en vez de los dos de la página. Sin
-   encabezado arriba, el aire lo pone el envoltorio: la lista no puede arrancar pegada al
-   borde de la pantalla. */
-.bkwrap{--pgcan:64px;padding-top:20px}
+/* Los mismos dos controles de la página —menú y agarre—. Eran tres hasta el 26/8/2026: el
+   casillero de marcar se sacó por pedido, y con él los 14px de canaleta que le faltaban al
+   título. Sin encabezado arriba, el aire lo pone el envoltorio: la lista no puede arrancar
+   pegada al borde de la pantalla. */
+.bkwrap{--pgcan:48px;padding-top:20px}
 
 /* ---------- la lista del tablero, en columnas ----------
    Solo la lista agrupada por estado (`bkcols`), nunca el backlog: los sprints son una
@@ -659,7 +660,7 @@ body.arrastrando .empty-col{display:none}
   /* `.pgwrap.bkcols` y no `.bkcols` a secas: `.pgwrap` se define bastante más abajo en este
      archivo y también fija `max-width` y `--pgcan`. Con la misma especificidad gana el que
      viene último, así que la clase sola quedaría escrita y muerta. */
-  .pgwrap.bkcols{--pgcan:46px;max-width:1560px}
+  .pgwrap.bkcols{--pgcan:32px;max-width:1560px}
   .bkcols .pgbody{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 20px;
     align-items:start}
   /* Sin esto la columna se estira al ancho de su fila más larga y el grid deja de repartir
@@ -670,16 +671,19 @@ body.arrastrando .empty-col{display:none}
   .bkcols .pgkids{padding-left:14px}
   .bkcols .pgkids::before{left:5px}
   .bkcols .pgadd-fila{padding-left:14px}
-  /* El arranque de la explicación existía para llenar el hueco entre el título y las pills. En
-     una columna ese hueco no existe: sin soltarle el `flex` al título, además, se quedaría con
-     el ancho recortado que tenía cuando compartía el renglón. */
-  .bkcols .bkexpl{display:none}
-  .bkcols .bktarea.conexpl .pgtxt{flex:1 1 auto}
   /* Las dos catalogaciones que menos se miran —el código y la antigüedad— son las mismas que
      ya se caen primero cuando se angosta la pantalla. Acá la pantalla no se angostó, pero la
      fila sí. */
   .bkcols .pgpill.mono,.bkcols .pgpill.edad{display:none}
   .bkcols .bktarea .pgtxt{font-size:13.5px}
+  /* Las columnas siguen siendo columnas, pero con el presupuesto de un tercio de pantalla:
+     lo que se recorta es el ancho reservado, no la alineación. */
+  .bkcols .pgcol{margin-left:6px}
+  .bkcols .pgcol-pri{width:58px}
+  .bkcols .pgcol-quien{width:86px}
+  /* En una columna de un tercio de pantalla, la dependencia y el área también sobran: el
+     título es lo que se viene a leer y era lo único que se estaba recortando. */
+  .bkcols .bktarea .pgpills{display:none}
 }
 /* Apiladas, en cambio, hay una cosa que SÍ hay que arreglar: `.bksprint:first-child` pega el
    primer bloque al de arriba, y con las columnas apiladas cada una tiene un primer bloque.
@@ -759,28 +763,49 @@ body.arrastrando .empty-col{display:none}
    el dato por el que se abrió el bloque. Por eso pesa más que el texto de una página común y
    la fila respira un poco más — las catalogaciones acompañan, no compiten. */
 .bktarea{align-items:center;padding:3px 0}
-.bktarea .pgtxt{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+/* `flex:0 1 auto` y no `1 1 auto`: el título ocupa lo que mide y deja que lo que sigue se le
+   pegue al lado. Lo que empuja las columnas contra el borde derecho es el `margin-left:auto`
+   de la primera, no el título estirado — así la meta de la fila se lee como parte del título
+   y no como un bloque suelto flotando a media distancia. Recortar sigue recortando primero al
+   título, que es lo único elástico del renglón. */
+.bktarea .pgtxt{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   font-size:14.5px;font-weight:600;color:var(--ink)}
 /* Al escribir se suelta el recorte: si no, editar un título largo sería escribir a ciegas
    contra el borde derecho. */
 .bktarea .pgtxt:focus{white-space:normal;overflow:visible;box-shadow:inset 0 -1px 0 var(--accent)}
 
-.bktarea.marcada{background:#F3F1FD;box-shadow:inset 0 0 0 1px #DAD6F7}
-/* Acá vivía `.bktarea.salida`, la fila apagada de la que ya se había mandado al tablero. Desde
-   el 26/8/2026 esa fila no existe: la que sale se va de la lista. */
+/* Acá vivían `.bktarea.salida` —la fila apagada de la que ya se había mandado al tablero— y
+   `.bktarea.marcada`, con el `.pgsel` de la canaleta. La primera se fue porque la que sale se
+   va de la lista; la segunda, con la selección múltiple, el 26/8/2026. */
 
 /* El `▤` es la puerta a la página. Va siempre prendido, no al hover: es lo que más se toca
    de la fila y esconderlo sería esconder la función principal de la pantalla. */
 .bktarea .pgpg{color:var(--ink-3);font-size:13px}
 .bktarea .pgpg:hover{color:var(--accent);background:var(--rail);border-radius:4px}
 
-.pgsel{width:14px;height:14px;flex:none;border:1.5px solid #CBCFDA;border-radius:3px;
-  display:grid;place-items:center;font-size:8px;color:#fff;line-height:1}
-.pgsel:hover{border-color:var(--accent)}
-.pgsel.on{background:var(--accent);border-color:var(--accent)}
-/* La marca queda a la vista aunque el mouse se vaya: si se apagara con el resto de la
-   canaleta, no habría forma de ver qué tenés marcado mientras marcás. */
-.bktarea.marcada .pgctl{opacity:1}
+/* ---------- las columnas del renglón ----------
+   Título, prioridad y quién la hace, cada uno con su ancho (26/8/2026, por pedido). Hasta ese
+   día eran todas pastillas apiladas contra el borde derecho, así que dónde caía cada una
+   dependía de cuántas tuviera la fila: la prioridad de un renglón quedaba a la altura del área
+   del de arriba. Con cuarenta filas eso no se lee bajando por una columna, se lee fila por
+   fila.
+
+   El ancho es fijo y no `1fr`: son cuatro valores posibles de prioridad y tres nombres, así
+   que reservar lo que miden cuesta menos que hacer que el renglón entero se recalcule según lo
+   que tenga adentro. Lo que sobra o falta se lo lleva el título, que es el elástico.
+
+   Solo lo llevan estos tres. El código, la dependencia, el área y la antigüedad se dibujan
+   nada más cuando hay algo que decir, y una columna reservada para un campo que la mitad de
+   las filas no tiene es puro hueco. */
+.pgcol{flex:none;display:flex;align-items:center;min-width:0;margin-left:10px}
+/* La primera columna es la que despega el bloque del título y lo clava a la derecha. Se
+   escribe contra `.pgpills` —que va siempre— y no contra `:first-of-type`, porque cuál es la
+   primera cambia: en el backlog no hay prioridad. */
+.pgpills + .pgcol{margin-left:auto}
+.pgcol-pri{width:74px}
+.pgcol-quien{width:148px}
+.pgcol-ir{width:88px}
+.pgcol > .pgpill{max-width:100%;min-width:0}
 
 /* ---------- las catalogaciones ---------- */
 .pgpills{display:flex;align-items:center;gap:5px;flex:none;margin-left:10px}
@@ -801,7 +826,11 @@ button.pgpill:hover{filter:brightness(.96)}
   border-color:#D4D3E3;background:#F5F5F8}
 .pgpill.ir:hover{background:#EBEAF2;
   border-color:var(--accent);filter:none}
-/* Quién la hace: una sola pill con todos los nombres, cada uno de su color. */
+/* Quién la hace: una sola pill con todos los nombres, cada uno de su color. Los nombres van
+   adentro de `.qn` porque la columna tiene ancho fijo: sin un único elemento al que recortar,
+   tres responsables desbordarían la pastilla en vez de terminar en puntos suspensivos. Los
+   nombres completos quedan en el `title`. */
+.pgpill.quien .qn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pgpill.quien i{font-style:normal;font-weight:600}
 .pgpill.quien .pgsep2{margin:0 4px;color:#CFD2DC;font-weight:400}
 .pgpill.quien .nadie{color:#C6C9D4;font-weight:400}
@@ -834,37 +863,36 @@ button.pgpill:hover{filter:brightness(.96)}
   color:var(--ink-2);border-bottom:1px solid var(--line);margin-bottom:4px}
 .btick{margin-left:auto;color:var(--accent);font-size:11px}
 
-/* ---------- barra de las marcadas ---------- */
-.bbulk{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(140%);
-  display:flex;align-items:center;gap:13px;background:#16171F;color:#fff;border-radius:9px;
-  padding:9px 14px;box-shadow:0 12px 32px rgba(20,21,28,.26);z-index:50;
-  transition:transform .18s cubic-bezier(.2,.8,.3,1)}
-.bbulk.on{transform:translateX(-50%) translateY(0)}
-.bcount{font-family:var(--mono);font-size:11px}
-.bsep{width:1px;height:18px;background:#33353F}
-.bbulk button{font-size:12.5px;color:#D3D4DC}
-.bbulk button:hover{color:#fff}
-.bbulk .bprimary{background:var(--ok);color:#fff;padding:5px 11px;border-radius:6px;font-size:12px;font-weight:600}
-.bbulk .bprimary:hover{background:#6E9878;color:#fff}
+/* Acá vivía `.bbulk`, la barra oscura de acciones sobre varias filas marcadas. Se fue el
+   26/8/2026 con el casillero que la alimentaba. */
 
 /* En pantalla angosta las catalogaciones son lo primero que sobra: el título completo vale
    más que seis pills apretadas contra el borde. Se caen de a poco, de la menos a la más
-   importante, y las que quedan bajan a un renglón propio antes que recortar el título. */
+   importante, y las que quedan bajan a un renglón propio antes que recortar el título. Las
+   columnas fijas son las últimas en achicarse: se sacan las pastillas sueltas primero, porque
+   perder la alineación es perder justo lo que estas filas vinieron a dar. */
 @media(max-width:1180px){
   .pgpill.edad{display:none}
 }
 @media(max-width:980px){
-  .bkwrap{--pgcan:52px}
+  .bkwrap{--pgcan:40px}
   .pgpills{gap:4px}
   .pgpill{padding:2px 6px}
   .pgpill.mono{display:none}
+  .pgcol{margin-left:8px}
+  .pgcol-quien{width:118px}
 }
 @media(max-width:760px){
   .bktarea{flex-wrap:wrap}
   .bktarea .pgtxt{flex:1 1 100%}
   /* Sin hover en un teléfono, esconder es esconder para siempre. */
   .bktarea .pgctl,.pgship{opacity:1}
-  .pgpills{margin-left:0;padding-left:calc(var(--pgcan) - 42px);flex-wrap:wrap}
+  /* Envuelto el renglón, las columnas dejan de ser columnas: sobre un segundo renglón propio,
+     el ancho reservado solo deja huecos. Vuelven a ser pastillas una al lado de la otra, y la
+     primera pierde el `auto` que la clavaba a la derecha. */
+  .pgpills{margin-left:0;padding-left:calc(var(--pgcan) - 34px);flex-wrap:wrap}
+  .pgcol,.pgpills + .pgcol{width:auto;margin-left:5px}
+  .pgpill.quien .qn{overflow:visible}
 }
 
 /* ---------- La tarea como página ----------

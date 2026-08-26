@@ -167,16 +167,45 @@ filtros, su buscador y su contador; lo único que cambia es el componente que lo
   título recortado a la mitad, así que la lista vuelve a ser una sola. La única regla del lado
   angosto es devolverle el margen al primer bloque de cada columna: `.bksprint:first-child` lo
   pega al de arriba, y apiladas cada columna tiene un primer bloque.
-- **Cambiar de layout o de vista limpia las marcadas.** La barra oscura ofreciendo mover diez
-  filas que ya no están en pantalla es un botón apuntando a ninguna parte.
+- **Cambiar de layout cierra el menú `⋯`.** La fila que lo tenía abierto puede no existir en el
+  dibujo siguiente, y un menú colgado de la nada no se cierra con nada.
 
 **Las dos listas son un solo componente y un solo juego de manejadores** (`LISTAS`,
 `listaActual`, `engancharLista()`, `engancharArrastreLista()`). Lo único que cambia entre el
 backlog y el tablero-lista está en el descriptor: por qué se agrupa (`grupoDe`, `hermanas`,
-`fijar`), qué significa plegar y crear adentro de un bloque, y los rótulos del menú `⋯` y de la
-barra de marcadas. Son ~120 líneas de delegación con nueve casos: con dos copias, el arreglo
-que se hace en una no llega nunca a la otra. Por eso el menú `⋯` dice `data-acc="grupo"` y no
-`"sprint"`, y la barra `data-lote="grupo"` — qué bloque es lo decide la lista pintada.
+`fijar`), qué significa plegar y crear adentro de un bloque, y el rótulo del menú `⋯`. Son
+~110 líneas de delegación con ocho casos: con dos copias, el arreglo que se hace en una no
+llega nunca a la otra. Por eso el menú `⋯` dice `data-acc="grupo"` y no `"sprint"` — qué
+bloque es lo decide la lista pintada.
+
+**La fila se dibuja en columnas de ancho fijo** (26/8/2026, por pedido): título, prioridad y
+quién la hace. Antes eran todas pastillas apiladas contra el borde derecho, así que dónde caía
+cada una dependía de cuántas tuviera la fila —la prioridad de un renglón quedaba a la altura
+del área del de arriba— y con cuarenta filas eso se lee fila por fila y no bajando por una
+columna.
+
+- **Solo esos tres.** El código, la dependencia, el área y la antigüedad se dibujan nada más
+  cuando hay algo que decir, y una columna reservada para un campo que la mitad de las filas no
+  tiene es puro hueco. Van juntas en `.pgpills`, pegadas al título.
+- **El título es el único elástico** (`flex:0 1 auto`) y lo que clava las columnas a la derecha
+  es el `margin-left:auto` de la primera, escrito como `.pgpills + .pgcol` y no como
+  `:first-of-type`: cuál es la primera cambia, porque en el backlog no hay prioridad.
+- **El ancho es fijo y no `1fr`.** Son cuatro prioridades posibles y tres nombres: reservar lo
+  que miden cuesta menos que hacer que el renglón se recalcule según lo que tenga adentro.
+- **Los nombres van adentro de un `.qn`** y no sueltos en la pastilla: con ancho fijo hace falta
+  un único elemento al que recortar, si no tres responsables desbordan en vez de terminar en
+  puntos suspensivos. Los nombres completos quedan en el `title`.
+- **Envuelto el renglón (≤760px) las columnas dejan de ser columnas**: sobre un segundo renglón
+  propio, el ancho reservado solo deja huecos.
+
+**Ya no hay selección múltiple** (26/8/2026, por pedido). Se fueron el casillero de la canaleta
+(`.pgsel`), el conjunto `marcadas`, la barra oscura de acciones en lote (`.bbulk`) y
+`accionEnLote()` / `aplicarEnLote()`. No se usaba, y esos 14px de canaleta eran los que le
+faltaban al título. Sin dónde marcar una fila, dejar la barra habría sido dejar código que no
+puede correr; las mismas acciones siguen estando de a una, en el menú `⋯`, en la pill de cada
+campo y en la ficha. El `silencio` que todavía aceptan `campoTarea()`, `cambiarSprint()`,
+`cambiarEstado()`, `pasarAlRoadmap()` y `mandarAlBacklog()` era de ahí y se conservó.
+**Contrapartida asumida**: vaciar un grupo entero al tablero vuelve a ser una tarea por vez.
 
 Cuidado con `filaTareaHTML()`: es compartida y tiene dos cortes que no son iguales.
 
@@ -383,8 +412,8 @@ campana de críticas.
   `abrirPagina()`. Ese símbolo significa lo mismo acá que adentro de una página: entrás a un
   documento. La **ficha** —el modal de siempre, con conversación, archivos y campos— quedó
   en el menú `⋯`: se abre mucho menos que la página.
-- **Plegado y filas marcadas son del navegador de cada uno**, no del tablero. Que alguien
-  pliegue el Sprint 3 para leer cómodo no tiene por qué plegárselo a los demás.
+- **El plegado es del navegador de cada uno**, no del tablero. Que alguien pliegue el Sprint 3
+  para leer cómodo no tiene por qué plegárselo a los demás.
 
 **El formato es el del diseño de Claude Design (26/8/2026): una lista de renglones, no una
 rejilla.** Hasta ese día fue un `grid` de once columnas. Se reemplazó por pedido explícito, y
@@ -416,21 +445,22 @@ componente. La vista sigue marcándose con `bmode` en el board; lo propio de ac�
   (`resumenDeExpl()`, clase `bkexpl`, en el hueco entre el título y las pills) y se sacó el
   mismo día por pedido: media línea de texto tenue recortada al medio se lee peor que el hueco
   vacío, y de qué se trata la tarea se ve entrando a la página, que está a un clic del `▤`.
-  Con eso volvieron también `.bktarea .pgtxt{flex:1 1 auto}` sin excepción y la fila sin la
-  clase `conexpl`.
-- **Las catalogaciones van todas a la derecha, en pills, en el orden en que se miran**:
-  código, quién, dependencia, área y desde cuándo está anotada. Las que no tienen
-  valor no dibujan nada: una columna de guiones no dice más que el hueco. La única excepción
-  es quién la hace.
+  Con eso volvió también la fila sin la clase `conexpl`.
+- **Las catalogaciones van todas a la derecha, en pills**, y desde el 26/8/2026 en dos zonas:
+  las que se comparan entre filas —prioridad, quién la hace, «→ Al tablero»— en columnas de
+  ancho fijo, y las que solo acompañan —código, dependencia, área y desde cuándo está anotada—
+  juntas contra el título. Las que no tienen valor no dibujan nada: una columna de guiones no
+  dice más que el hueco. La única excepción es quién la hace. La regla completa está en el
+  cuadro de los tres layouts.
 - **En el backlog no hay prioridad, y no es que esté escondida: no se puede poner**
   (26/8/2026, por pedido). Lo que está anotado todavía no se está haciendo, y ponerle
   «crítica» a algo que nadie empezó es una urgencia inventada que después llega al tablero
-  envejecida. Se decide cuando la tarea entra a la cancha. Son tres puertas y hay que cerrar
-  las tres, porque con una abierta la regla no vale: la pill de la fila (`pillsDeTarea()`, que
-  mira `t.backlog` y no la vista, así vale también adentro de la página de la tarea), el
-  «Prioridad ▾» de la barra de marcadas y el `<select>` de la ficha, que se esconde —no se
-  deshabilita: un campo gris invita a preguntar por qué no anda—. El campo igual se guarda con
-  el `semanal` de fábrica: no se migró nada y no hace falta.
+  envejecida. Se decide cuando la tarea entra a la cancha. Son dos puertas y hay que cerrar las
+  dos, porque con una abierta la regla no vale: la pill de la fila (`pillPrioridad()`, que mira
+  `t.backlog` y no la vista, así vale también adentro de la página de la tarea) y el `<select>`
+  de la ficha, que se esconde —no se deshabilita: un campo gris invita a preguntar por qué no
+  anda—. Fueron tres hasta que se sacó la barra de acciones en lote, con su «Prioridad ▾». El
+  campo igual se guarda con el `semanal` de fábrica: no se migró nada y no hace falta.
 - **Quién la hace es UNA pill con todos los nombres adentro, no una por persona.** Abre el
   menú donde se prenden y se apagan; con una pill por cabeza no habría dónde tocar para
   agregar a la segunda. Cuando no hay nadie igual se dibuja («Sin asignar») porque es justo
@@ -451,12 +481,11 @@ componente. La vista sigue marcándose con `bmode` en el board; lo propio de ac�
   - **Va enganchado a esas dos y no al final de las pills** porque son las únicas que se
     dibujan siempre: así queda en el mismo lugar en las cuarenta filas, en vez de bailar
     según la fila tenga o no área, dependencia o antigüedad.
-  - **Solo lo dibuja el backlog.** `conPase` lo decide quien llama y no `pillsDeTarea()`
+  - **Solo lo dibuja el backlog.** Quién lo dibuja lo decide quien llama y no `pillPase()`
     mirando la vista: la cabecera de la página de la tarea usa estas mismas pills y ya tiene
     su propio «→ Al tablero», así que preguntando por la vista se dibujaría dos veces el mismo
     botón. Que la fila esté ahí ya alcanza para saber que todavía no salió — la que sale se va
-    de la lista. Los otros caminos siguen intactos: el menú `⋯`, la barra de las marcadas (el
-    que se usa para vaciar un grupo entero) y la ficha.
+    de la lista. Los otros caminos siguen intactos: el menú `⋯` y la ficha.
 - **El panel de planificación de la fila se eliminó.** Era donde vivían Área, «Depende de»,
   Estado y Tipo; los cuatro se mudaron a la ficha. La explicación ya no se edita en la lista
   bajo ningún concepto: dos editores sobre el mismo `expl`, uno de bloques y otro de HTML
@@ -466,12 +495,9 @@ componente. La vista sigue marcándose con `bmode` en el board; lo propio de ac�
   cuelga los suyos igual, así que cada una apaga a mano los que la otra usa y ella no.
   Ojo con usar `addEventListener` ahí: la lista se repinta entera ante cualquier cambio y se
   acumularía un listener por repintado (por eso son `board.onclick`, `board.oninput`…).
-- **Marcar varias y moverlas juntas es la razón de ser de esta pantalla**: de a una,
-  repartir un sprint entre tres personas son treinta clics. El diseño no traía selección
-  múltiple; se conservó, con el casillero en la canaleta junto al `⋯` y al `⠿`. La marca
-  queda a la vista aunque el mouse se vaya —si se apagara con el resto de la canaleta, no
-  habría forma de ver qué tenés marcado mientras marcás—. Las acciones en lote corren en
-  silencio y repintan una sola vez al final.
+- **La canaleta tiene dos controles y no tres**: el `⋯` y el `⠿`. El casillero de marcar se
+  sacó el 26/8/2026 con toda la selección múltiple — ver el cuadro de los tres layouts, donde
+  vive esa regla.
 
 **Historial de la pestaña**, para no volver a caminarlo: fue un enlace a Notion, después una
 hoja de texto libre con renglones anidados (`roadmap_vision`, borrada el 15/8/2026 sin haber

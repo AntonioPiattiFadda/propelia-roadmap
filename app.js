@@ -493,7 +493,7 @@ function pintarChrome(){
   // Cambiar de pestaña sale de la página: si no, se elegiría una vista que no se ve.
   $$('[data-vista]').forEach(b => b.onclick = () => {
     cerrarPagina();
-    if (UI.vista !== b.dataset.vista) { marcadas.clear(); menuFila = null; renombrando = null; }
+    if (UI.vista !== b.dataset.vista) { menuFila = null; renombrando = null; }
     UI.vista = b.dataset.vista; guardarUI(); render();
   });
 
@@ -2512,9 +2512,9 @@ const tareasDeSprint = n => datos.tareas
 // Para el selector de la ficha, que sí es un `<select>` común.
 const opcionesSprint = () => sprintsVisibles().map(n => ({ id: String(n), label: nombreSprint(n) }));
 
-/* Tres cosas que son del navegador de cada uno y no del tablero: qué bloques dejó cerrados,
-   qué paneles dejó abiertos y qué filas tiene marcadas. Que alguien pliegue el Sprint 3 para
-   leer cómodo no tiene por qué plegárselo a los demás. */
+/* Qué bloques dejó cerrados y qué paneles dejó abiertos son del navegador de cada uno y no
+   del tablero: que alguien pliegue el Sprint 3 para leer cómodo no tiene por qué
+   plegárselo a los demás. */
 let sprintsPlegados = new Set();
 try { sprintsPlegados = new Set(JSON.parse(localStorage.getItem('backlog-plegados') || '[]')); }
 catch (e) { /* si no se puede leer, abre todo y listo */ }
@@ -2522,7 +2522,6 @@ function guardarPlegados(){
   try { localStorage.setItem('backlog-plegados', JSON.stringify([...sprintsPlegados])); }
   catch (e) { /* modo privado o storage lleno: no es crítico */ }
 }
-const marcadas = new Set();
 // Fila con el menú `⋯` desplegado. Uno solo a la vez.
 let menuFila = null;
 // Grupo que está siendo bautizado, si hay alguno. Es de este rato y de esta pantalla: no se
@@ -2658,8 +2657,7 @@ function renderBacklog(){
   board.innerHTML = `<div class="pgwrap bkwrap">
     <div class="pgbody">${bloques.map(g => filaSprintHTML(g.n, g.lista)).join('')}</div>
     <button class="pgnew" type="button" data-sprint-nuevo data-n="${siguiente}">＋ Nuevo grupo</button>
-  </div>
-  ${barraMarcadasHTML()}`;
+  </div>`;
 
   engancharLista();
 }
@@ -2713,8 +2711,7 @@ function renderListaEstados(){
     : `<div class="pgwrap bkwrap bkcols">
     <div class="pgbody">${columnasDeEstados()
       .map(col => `<div class="bkcol">${col.map(bloque).join('')}</div>`).join('')}</div>
-  </div>`)
-  + barraMarcadasHTML();
+  </div>`);
 
   engancharLista();
 }
@@ -2816,19 +2813,30 @@ function filaSprintHTML(n, lista){
    cuando arranca el grupo, y tenerlo escondido en el menú `⋯` son dos clics por tarea. Ahora
    vive entre las catalogaciones, al lado de la prioridad y de quién la hace (ver
    `pillsDeTarea`), y no suelto al final del renglón como la primera vez. El menú `⋯` conserva
-   la suya, igual que la barra de las marcadas y la ficha: son los caminos para varias juntas
-   y para la que ya salió. */
+   la suya, igual que la ficha: son los caminos para la que ya salió.
+
+   **Los tres campos que se miran van en columnas fijas** (26/8/2026, por pedido): título,
+   prioridad y quién la hace. Antes eran pastillas apretadas contra el borde derecho, así que
+   el lugar de cada una dependía de cuántas tuviera la fila: la prioridad de un renglón caía
+   donde el de arriba tenía el área. Con cuarenta filas eso no es una lista, son cuarenta
+   renglones distintos. Ahora cada campo tiene su ancho (`.pgcol`) y se lee bajando por la
+   columna sin leer ningún renglón entero.
+
+   Lo que no es columna —el código, la dependencia, el área y la antigüedad— sigue junto,
+   pegado al título: son las catalogaciones que se miran una vez y no las que se comparan
+   entre filas.
+
+   **La canaleta ya no tiene casillero de marcar** (26/8/2026, por pedido): no se usaba, y sus
+   14px eran los que le faltaban al título. Con él se fueron la selección múltiple y la barra
+   oscura de acciones en lote. */
 function filaTareaHTML(t){
-  const marcada = marcadas.has(t.id);
   /* La chapa de novedad es del tablero y de nadie más: en el backlog se planifica, se lee la
      lista entera y varias veces, y una chapa roja por renglón ahí no avisa nada — avisa en el
      tablero, que es donde una tarea aparece de golpe. La marca la da la vista, no la fila,
      porque la fila es la misma en las dos listas. */
   const enBk = !!vistaActual().backlog;
-  return `<div class="pgrow pg-page bktarea${marcada ? ' marcada' : ''}" data-id="${escA(t.id)}">
+  return `<div class="pgrow pg-page bktarea" data-id="${escA(t.id)}">
     <div class="pgctl">
-      <button class="pgsel${marcada ? ' on' : ''}" type="button" data-marcar
-        aria-pressed="${marcada}" aria-label="Marcar la tarea">${marcada ? '✓' : ''}</button>
       <button class="pgadd" type="button" data-menu title="Prioridad, responsable, grupo…"
         aria-label="Acciones de la tarea">⋯</button>
       <button class="pgdrag" type="button" draggable="true" data-drag
@@ -2839,18 +2847,21 @@ function filaTareaHTML(t){
     ${enBk ? '' : chapaNovedad(t)}
     <div class="pgtxt" contenteditable="true" spellcheck="false" data-f="tarea"
       data-ph="Sin título">${esc(t.tarea)}</div>
-    <span class="pgpills">${pillsDeTarea(t, enBk)}</span>
+    <span class="pgpills">${pillsMetaDeTarea(t)}</span>
+    ${t.backlog ? '' : `<span class="pgcol pgcol-pri">${pillPrioridad(t)}</span>`}
+    <span class="pgcol pgcol-quien">${pillQuien(t)}</span>
+    ${enBk ? `<span class="pgcol pgcol-ir">${pillPase()}</span>` : ''}
     ${menuFila === t.id ? menuTareaHTML(t) : ''}
   </div>`;
 }
 
-/* Las catalogaciones. Van todas a la derecha del título, en el orden en que se miran: qué
-   tarea es, cuánto urge, quién la hace, de qué depende, de qué área es y desde cuándo está
-   anotada. Las que no tienen valor no dibujan nada — una columna de
-   guiones no dice más que el hueco.
+/* ---------- las catalogaciones ----------
+   Cada una en su función porque la fila las reparte en columnas y la cabecera de la página
+   las pone todas juntas en un renglón que envuelve. Con el HTML escrito dos veces, el arreglo
+   que se hace en un lado no llega nunca al otro. */
 
-   La de prioridad es un botón: es la que más se cambia, y hacerla pasar por el menú `⋯`
-   sería dos clics para lo que se hace veinte veces por grupo.
+/* La prioridad es un botón: es la que más se cambia, y hacerla pasar por el menú `⋯` sería
+   dos clics para lo que se hace veinte veces por grupo.
 
    **Pero en el backlog no se dibuja** (26/8/2026, por pedido). Lo que está anotado todavía no
    se está haciendo, y ponerle «crítica» a algo que nadie empezó es una urgencia inventada que
@@ -2858,48 +2869,55 @@ function filaTareaHTML(t){
    cancha, no cuando se anota. El corte lo da la fila (`t.backlog`) y no la vista, que es lo
    que hace que valga también adentro de la página de una tarea del backlog: mientras esté de
    ese lado, no hay dónde tocar para clasificarla. La tarea igual guarda su campo con el
-   `semanal` de fábrica — no se migró nada y no hace falta.
-
-   `conPase` lo decide quien llama y no esta función mirando la vista: la cabecera de la página
-   de la tarea usa estas mismas pills y ya tiene su propio «→ Al tablero» a la derecha, así que
-   preguntando por la vista se dibujaría dos veces el mismo botón. */
-function pillsDeTarea(t, conPase){
+   `semanal` de fábrica — no se migró nada y no hace falta. */
+function pillPrioridad(t){
+  if (t.backlog) return '';
   const p = prioridadDe(t.prioridad);
-  const edad = antiguedad(t.creada);
-  const out = [`<span class="pgpill mono">${esc(t.id)}</span>`];
-  if (!t.backlog) {
-    out.push(`<button class="pgpill tono" type="button" data-pop="prioridad"
-      style="--pb:${tint(p.color, .14)};--pc:${p.color}">${esc(p.label)}</button>`);
-  }
+  return `<button class="pgpill tono" type="button" data-pop="prioridad"
+    style="--pb:${tint(p.color, .14)};--pc:${p.color}">${esc(p.label)}</button>`;
+}
 
-  /* Quién la hace es UNA sola pill con todos los nombres adentro, y no una por persona:
-     abre el menú donde se prenden y se apagan, y con una pill por cabeza no habría dónde
-     tocar para agregar a la segunda. Cuando no hay nadie igual se dibuja —«Sin asignar»—
-     porque es justo el caso en el que hay que poder tocarla. */
+/* Quién la hace es UNA sola pill con todos los nombres adentro, y no una por persona: abre el
+   menú donde se prenden y se apagan, y con una pill por cabeza no habría dónde tocar para
+   agregar a la segunda. Cuando no hay nadie igual se dibuja —«Sin asignar»— porque es justo el
+   caso en el que hay que poder tocarla.
+
+   Los nombres van adentro de un `.qn` y no sueltos en el botón: la columna tiene ancho fijo, y
+   sin un solo elemento que recortar, tres responsables desbordarían la pastilla en vez de
+   terminar en puntos suspensivos. Los nombres completos quedan en el `title`. */
+function pillQuien(t){
   const gente = t.pend || [];
-  out.push(`<button class="pgpill quien" type="button" data-pop="pend" title="Quién la hace">${
+  const nombres = gente.map(nombrePersona).join(' · ');
+  return `<button class="pgpill quien" type="button" data-pop="pend"
+    title="${escA(nombres ? 'Quién la hace: ' + nombres : 'Quién la hace')}"><span class="qn">${
     gente.length
       ? gente.map(id => `<i style="color:${colorPersona(id)}">${esc(nombrePersona(id))}</i>`).join('<i class="pgsep2">·</i>')
-      : '<i class="nadie">Sin asignar</i>'}</button>`);
+      : '<i class="nadie">Sin asignar</i>'}</span></button>`;
+}
 
-  /* «→ Al tablero», al lado de la prioridad y de quién la hace (26/8/2026, por pedido). Es la
-     vuelta del botón que se había sacado esa misma mañana por ser cuarenta botones en pantalla
-     para algo que se hace una vez por tarea. Vuelve con dos cortes que antes no tenía, y son
-     los que lo hacen soportable:
+/* «→ Al tablero» (26/8/2026, por pedido). Es la vuelta del botón que se había sacado esa misma
+   mañana por ser cuarenta botones en pantalla para algo que se hace una vez por tarea. Vuelve
+   como una columna más y solo en el backlog: adentro del tablero, ofrecerle a cada fila
+   mandarla a donde ya está no es una acción, es ruido. Que la fila esté en el backlog ya
+   alcanza para saber que todavía no salió — la que se manda al tablero se va de la lista.
 
-     **Solo en el backlog.** Adentro del tablero, ofrecerle a cada fila mandarla a donde ya
-     está no es una acción, es ruido. La marca la da la vista, no la fila. Que la fila esté ahí
-     ya alcanza para saber que todavía no salió: desde el 26/8/2026 la que se manda al tablero
-     se va de la lista.
+   Quién lo dibuja lo decide quien llama y no esta función mirando la vista: la cabecera de la
+   página de la tarea usa estas mismas pills y ya tiene su propio «→ Al tablero» a la derecha,
+   así que preguntando por la vista se dibujaría dos veces el mismo botón. */
+const pillPase = () => `<button class="pgpill ir" type="button" data-altablero
+  title="Mandarla al tablero">→ Al tablero</button>`;
 
-     Va acá y no al final de las pills porque prioridad y responsable son las dos únicas que se
-     dibujan siempre: enganchado a ellas, el botón queda en el mismo lugar en las cuarenta
-     filas, y no bailando según la fila tenga o no área, dependencia o antigüedad. */
-  if (conPase) {
-    out.push(`<button class="pgpill ir" type="button" data-altablero
-      title="Mandarla al tablero">→ Al tablero</button>`);
-  }
+/* El código de la tarea. Va aparte del resto de la meta porque en la cabecera de la página
+   encabeza el renglón, delante de la prioridad, y en la fila arranca el bloque que acompaña
+   al título. */
+const pillCodigo = t => `<span class="pgpill mono">${esc(t.id)}</span>`;
 
+/* Lo que acompaña y no se compara entre filas: de qué depende, de qué área es y desde cuándo
+   está anotada. Las que no tienen valor no dibujan nada — una columna de guiones no dice más
+   que el hueco, y por eso ninguna de estas puede ser columna fija. */
+function pillsSueltas(t){
+  const edad = antiguedad(t.creada);
+  const out = [];
   if (t.dep) out.push(`<span class="pgpill">Dep. ${esc(t.dep)}</span>`);
   if (t.modulo) out.push(`<span class="pgpill">${esc(t.modulo)}</span>`);
   if (edad) {
@@ -2908,6 +2926,15 @@ function pillsDeTarea(t, conPase){
   }
   return out.join('');
 }
+
+// Lo que en la fila queda pegado al título, fuera de las columnas.
+const pillsMetaDeTarea = t => pillCodigo(t) + pillsSueltas(t);
+
+/* Todas juntas, en el orden en que se miran. Lo usa la cabecera de la página de la tarea, que
+   no tiene cuarenta filas que alinear: ahí las pastillas envuelven y una columna fija sería
+   ancho reservado para nada. */
+const pillsDeTarea = (t, conPase) => pillCodigo(t) + pillPrioridad(t) + pillQuien(t)
+  + (conPase ? pillPase() : '') + pillsSueltas(t);
 
 /* El `⋯` de la fila. Es el equivalente del `＋` del diseño: ahí adentro, un renglón inserta
    bloques; acá, una tarea no tiene bloques que insertar pero sí cosas que cambiar. Los tres
@@ -2926,28 +2953,12 @@ function menuTareaHTML(t){
   </div>`;
 }
 
-/* La barra de las marcadas. El botón oscuro es el mismo en las dos listas y hace el viaje que
-   corresponda: desde el backlog manda al tablero, desde el tablero devuelve al backlog. Eso ya
-   lo decidía `accionEnLote('ir')` mirando de qué lado están las marcadas — acá solo se le pone
-   el rótulo que corresponde, para no ofrecer «mandar al tablero» algo que ya está ahí.
-
-   «Prioridad ▾» no está en el backlog, por lo mismo que ahí no está la pill: de ese lado la
-   prioridad no se toca. Ofrecerla en lote sería la puerta de atrás de una regla que la fila
-   ya cierra. */
-function barraMarcadasHTML(){
-  const L = listaActual;
-  const enBk = L === LISTAS.sprint;
-  return `<div class="bbulk${marcadas.size ? ' on' : ''}">
-    <span class="bcount">${marcadas.size} ${marcadas.size === 1 ? 'marcada' : 'marcadas'}</span>
-    <span class="bsep"></span>
-    <button type="button" data-lote="grupo">${esc(L.lote)} ▾</button>
-    ${enBk ? '' : '<button type="button" data-lote="prioridad">Prioridad ▾</button>'}
-    <button type="button" data-lote="pend">Asignar a ▾</button>
-    <span class="bsep"></span>
-    <button class="bprimary" type="button" data-lote="ir">${enBk ? 'Mandar al tablero' : 'Mandar al backlog'}</button>
-    <button type="button" data-lote="limpiar">Quitar marcas</button>
-  </div>`;
-}
+/* Acá vivían `barraMarcadasHTML()` y el casillero de marcar de la canaleta: la selección
+   múltiple y su barra oscura de acciones en lote —mover de grupo, asignar, mandar al tablero
+   de a diez—. Se sacaron enteras el 26/8/2026 por pedido: no se usaban, y el casillero
+   ocupaba los 14px de canaleta que le faltaban al título. Sin él no hay forma de marcar una
+   fila, así que dejar la barra habría sido dejar código que no puede correr. Las mismas
+   acciones siguen estando de a una: el menú `⋯` de la fila, la pill de cada campo y la ficha. */
 
 /* ---------- las dos listas ----------
    El backlog y el tablero en modo lista son EL MISMO componente: los mismos renglones, los
@@ -2961,7 +2972,6 @@ const LISTAS = {
   sprint: {
     tipo: 'sprint',                       // qué menú abre `abrirMenu()`
     mover: 'Mover a otro grupo',          // el primer renglón del menú `⋯`
-    lote: 'Mover a grupo',                // el botón de la barra de marcadas
     // Solo asigna el campo del bloque; el orden lo calcula quien llama, que es el único que
     // sabe entre qué dos filas cayó la que se soltó.
     fijar: (t, g) => { t.sprint = Number(g) || SIN_SPRINT; },
@@ -2975,7 +2985,6 @@ const LISTAS = {
   estado: {
     tipo: 'estado',
     mover: 'Cambiar el estado',
-    lote: 'Estado',
     fijar: (t, g) => { t.estado = g; },
     hermanas: g => tareasDeEstado(g),
     plegar: g => alternarEstadoPlegado(g),
@@ -2986,7 +2995,7 @@ const LISTAS = {
   },
 };
 // Cuál de las dos está pintada ahora. La fijan los dos `render*` de arriba, y todo lo que
-// corre después —manejadores, menús, la barra de marcadas— la lee de acá en vez de volver a
+// corre después —manejadores y menús— la lee de acá en vez de volver a
 // preguntar por la vista y el layout.
 let listaActual = LISTAS.sprint;
 
@@ -3028,9 +3037,6 @@ function engancharLista(){
       renombrando = String(n);
       return render();
     }
-    const lote = enc('[data-lote]');
-    if (lote) return accionEnLote(lote.dataset.lote, lote);
-
     const fila = enc('.bktarea');
     if (!fila) return;
     const t = tarea(fila.dataset.id); if (!t) return;
@@ -3061,10 +3067,6 @@ function engancharLista(){
     }
     if (enc('.pgpop')) { e.stopPropagation(); return; }
 
-    if (enc('[data-marcar]')) {
-      marcadas.has(t.id) ? marcadas.delete(t.id) : marcadas.add(t.id);
-      return L.repintar();
-    }
     // El pase al tablero desde la fila. Solo lo dibuja el backlog y solo en la que todavía no
     // salió, así que acá no hace falta volver a preguntarlo.
     if (enc('[data-altablero]')) return pasarAlRoadmap(t);
@@ -3117,7 +3119,6 @@ function engancharLista(){
       else pedirResponsable(e.target, e, quien => L.nueva(g, t, quien));
       return;
     }
-    if (e.key === 'Escape' && marcadas.size) { marcadas.clear(); L.repintar(); }
   };
 
   engancharArrastreLista();
@@ -3128,7 +3129,7 @@ function engancharLista(){
    tiene `overflow` y lo recortaría, y porque así se cierra siempre con el mismo clic. */
 function cerrarMenu(){ $$('.bpop').forEach(p => p.remove()); }
 document.addEventListener('click', e => {
-  if (!e.target.closest('.bpop,[data-pop],[data-lote]')) cerrarMenu();
+  if (!e.target.closest('.bpop,[data-pop]')) cerrarMenu();
   // Los menús pegados a un renglón —el `＋` de la página y el `⋯` de la lista— se cierran
   // con cualquier clic afuera. Los clics que los abren, o que eligen algo adentro, frenan la
   // propagación y no llegan hasta acá.
@@ -3141,7 +3142,7 @@ document.addEventListener('click', e => {
    preguntar el responsable antes de que la fila exista. El `titulo` va con él: una lista de
    tres nombres sin nada arriba no dice qué se está eligiendo. */
 function abrirMenu(anclaje, tipo, t, alElegir, titulo){
-  const de = (t ? t.id : alElegir ? 'suelto' : 'lote') + tipo;
+  const de = (t ? t.id : 'suelto') + tipo;
   const abierto = $('.bpop');
   cerrarMenu();
   if (abierto && abierto.dataset.de === de) return;
@@ -3193,9 +3194,9 @@ function abrirMenu(anclaje, tipo, t, alElegir, titulo){
     // Selector suelto: se cierra primero y se avisa después, para que lo que abra el
     // llamador —una fila nueva con el cursor adentro— no quede tapado por el menú.
     if (alElegir) { cerrarMenu(); alElegir(v); return; }
-    // Con `t` en nulo el menú es el de la barra de marcadas, no el de una fila. Los
-    // responsables solo llegan por ahí: en la fila son tres botones, no un menú.
-    if (!t) { aplicarEnLote(tipo, v); cerrarMenu(); return; }
+    // Sin tarea y sin `alElegir` no hay a qué aplicarle lo elegido. Pasaba con la barra de
+    // acciones en lote, que ya no existe; el guardo queda porque abajo todo da por hecho `t`.
+    if (!t) { cerrarMenu(); return; }
     if (tipo === 'prioridad') campoTarea(t, 'prioridad', v);
     if (tipo === 'sprint') cambiarSprint(t, Number(v) || SIN_SPRINT);
     if (tipo === 'estado') cambiarEstado(t, v);
@@ -3403,7 +3404,6 @@ async function borrarDeLista(t){
 
   const idx = datos.tareas.findIndex(x => x.id === t.id);
   datos.tareas = datos.tareas.filter(x => x.id !== t.id);
-  marcadas.delete(t.id);
   if (menuFila === t.id) menuFila = null;
   // Si estabas parado adentro de su página, la página deja de existir con ella.
   if (paginaTarea === t.id) cerrarPagina();
@@ -3418,57 +3418,12 @@ async function borrarDeLista(t){
   if (ok) marcarEcoPropio(RoadmapSync.TABLAS.tareas, t.id);
 }
 
-/* ---------- varias a la vez ----------
-   Marcar diez y moverlas juntas es la razón de ser de una pantalla de planificación: de a
-   una, repartir un sprint entre tres personas son treinta clics. */
-const marcadasComoTareas = () => [...marcadas].map(tarea).filter(Boolean);
-
-function accionEnLote(accion, boton){
-  if (accion === 'limpiar') { marcadas.clear(); return listaActual.repintar(); }
-  // «Mover a sprint» y «Estado» llegan con el mismo nombre desde las dos listas: cuál de los
-  // dos menús se abre lo decide la lista pintada, no el botón.
-  if (accion === 'grupo') return abrirMenu(boton, listaActual.tipo, null);
-  if (accion === 'ir') {
-    const lista = marcadasComoTareas();
-    if (!lista.length) return;
-    // Si están todas afuera, el botón hace el camino de vuelta: un solo control para los
-    // dos sentidos, igual que en la fila.
-    const todasAfuera = lista.every(t => !t.backlog);
-    if (todasAfuera) {
-      lista.forEach(t => mandarAlBacklog(t, true));
-      marcadas.clear(); render();
-      aviso(`${lista.length} ${lista.length === 1 ? 'tarea volvió' : 'tareas volvieron'} al backlog`);
-      return;
-    }
-    const fueron = lista.filter(t => t.backlog);
-    fueron.forEach(t => pasarAlRoadmap(t, true));
-    marcadas.clear();
-    render();
-    aviso(`${fueron.length} ${fueron.length === 1 ? 'tarea pasó' : 'tareas pasaron'} al tablero`);
-    return;
-  }
-  abrirMenu(boton, accion, null);
-}
-
-function aplicarEnLote(tipo, v){
-  const lista = marcadasComoTareas();
-  if (!lista.length) return;
-  // Todas en silencio y un solo repintado al final: treinta marcadas serían treinta
-  // repintados completos de la pantalla.
-  lista.forEach(t => {
-    if (tipo === 'prioridad') campoTarea(t, 'prioridad', v, true);
-    if (tipo === 'sprint') cambiarSprint(t, Number(v) || SIN_SPRINT, true);
-    if (tipo === 'estado') cambiarEstado(t, v, true);
-    // En lote, asignar reemplaza en vez de alternar: marcar diez y que a unas se les prenda
-    // y a otras se les apague la misma persona sería impredecible.
-    if (tipo === 'pend') {
-      const antes = [...(t.pend || [])];
-      t.pend = [v];
-      persistirTarea(t, { revertir: () => { t.pend = antes; render(); } });
-    }
-  });
-  render();
-}
+/* Acá vivían `accionEnLote()` y `aplicarEnLote()`, las acciones sobre varias tareas marcadas.
+   Se fueron el 26/8/2026 con el casillero que las alimentaba: sin dónde marcar una fila, no
+   había forma de que llegara nada a estas dos. El `silencio` que todavía aceptan
+   `campoTarea()`, `cambiarSprint()`, `cambiarEstado()`, `pasarAlRoadmap()` y
+   `mandarAlBacklog()` era de acá, y se conserva porque no cuesta nada y es justo lo que haría
+   falta el día que vuelva algo parecido. */
 
 /* ---------- arrastrar y soltar ----------
    Mueve la fila entre sus hermanas y, si se suelta en otro bloque, la cambia de bloque: de
@@ -4461,12 +4416,12 @@ $('#fPrioridad').addEventListener('click', e => {
 document.addEventListener('click', e => {
   if (!e.target.closest('#fPrioridad')) abrirMenuPrioridad(false);
 }, true);
-/* Cambiar de layout limpia las marcadas: son de la lista, y la barra oscura ofreciendo mover
-   diez tarjetas que ya no se ven es un botón apuntando a ninguna parte. */
+/* Cambiar de layout cierra el menú `⋯` que hubiera abierto: la fila que lo tenía puede no
+   existir en el dibujo siguiente, y un menú colgado de la nada no se cierra con nada. */
 $$('[data-layout]').forEach(b => b.onclick = () => {
   if (UI.layout === b.dataset.layout) return;
   UI.layout = b.dataset.layout;
-  marcadas.clear(); menuFila = null;
+  menuFila = null;
   guardarUI(); render();
 });
 $('#bNueva').onclick = e => {
