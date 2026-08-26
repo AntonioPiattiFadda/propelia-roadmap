@@ -302,16 +302,19 @@ body.arrastrando .grupo{background:rgba(255,255,255,.42)}
    parpadea todo el día se vuelve parte del fondo a la media hora. */
 .nuevo{display:inline-grid;place-items:center;min-width:16px;height:16px;padding:0 4px;
   border-radius:8px;background:var(--crit);color:#fff;font-family:var(--mono);font-size:9.5px;
-  font-weight:700;line-height:1;vertical-align:1px;margin-right:5px;flex:none;
+  font-weight:700;line-height:1;vertical-align:1px;margin-left:5px;flex:none;
   animation:latido 2.4s ease-out 3}
 @keyframes latido{
   0%,12%,100%{box-shadow:0 0 0 0 rgba(164,75,69,0)}
   4%{box-shadow:0 0 0 4px rgba(164,75,69,.28)}
 }
 @media (prefers-reduced-motion:reduce){ .nuevo{animation:none} }
-/* En la fila del backlog va entre el `▤` y el título, así que necesita alinearse con el
-   renglón y no con la línea de base del texto. */
-.bktarea > .nuevo{margin-top:4px}
+/* Va SIEMPRE a la derecha del título, tanto en la tarjeta como en la fila: el ojo baja por
+   el borde izquierdo leyendo títulos, y una chapa metida antes corría el arranque de cada
+   título unos píxeles según si la tarea tenía novedad o no. En la fila, además, el título se
+   recorta, así que la chapa tiene que sobrevivir al recorte: no se encoge (`flex:none`) y va
+   como hermana del `.pgtxt`, no adentro. */
+.bktarea > .nuevo{margin-right:2px}
 .tags{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:0 0 4px}
 .tags:empty{display:none}
 .tag{font-size:10px;font-weight:600;padding:1.5px 5px;border-radius:5px;display:inline-flex;align-items:center;white-space:nowrap;letter-spacing:.01em}
@@ -642,27 +645,44 @@ body.arrastrando .empty-col{display:none}
    pegada al borde de la pantalla. */
 .bkwrap{--pgcan:48px;padding-top:20px}
 
-/* ---------- la lista del tablero, en columnas ----------
-   Solo la lista agrupada por estado (`bkcols`), nunca el backlog: los sprints son una
-   secuencia —uno detrás del otro— y partirlos en tres cajas rompería justo lo que dicen. Los
-   estados no son una secuencia sino un camino con dos paradas largas y tres finales, y por
-   eso el reparto es 1 / 1 / 3 y no tres columnas iguales.
+/* ---------- las dos listas, en columnas ----------
+   `bkcols` es «esta hoja está partida en columnas» y **no hay variante por lista**: el tablero
+   y el backlog se parten en tres, con el mismo reparto, el mismo separador y los mismos anchos
+   reservados. Hubo un `bkcols2` de un día —el backlog en dos columnas parejas— y se fue el
+   26/8/2026 por pedido: dos listas que se leen distinto son dos pantallas que hay que
+   aprenderse por separado, y estas dos son la misma hoja mirada por otro eje.
+
+   **Que el backlog se parta contradice a propósito lo que valía hasta el 26/8/2026**, cuando
+   este cuadro decía que los sprints son una secuencia y partirlos rompería lo que dicen. Lo que
+   cambió no es la premisa sino el corte: en orden y de a tramos, se sigue leyendo 1, 2, 3, 4
+   bajando por la izquierda y siguiendo por la del medio, como las columnas de un diario.
+   Alternando (1, 4 · 2, 5 · 3, 6) sí se rompería, y por eso no se alterna.
 
    La columna es del envoltorio y de nadie más: adentro sigue siendo el mismo renglón `pg`,
    con su canaleta, su `data-g` y su `data-filas`. Lo único que cambia es que hay menos ancho,
    así que lo que se toca acá es puro presupuesto de espacio.
 
-   Tres columnas de menos de 340px dejan de ser columnas: el título entra recortado a la
-   mitad y las pills se apilan contra el borde. Por eso TODO el tratamiento vive adentro de un
-   `min-width` y no hay nada que deshacer más abajo — apretada la pantalla, esto no existe y
-   la lista vuelve a ser una sola, en el mismo orden en que se leen las columnas. */
+   Columnas de menos de 340px dejan de ser columnas: el título entra recortado a la mitad y las
+   pills se apilan contra el borde. Por eso TODO el tratamiento vive adentro de un `min-width` y
+   no hay nada que deshacer más abajo — apretada la pantalla, esto no existe y la lista vuelve a
+   ser una sola, en el mismo orden en que se leen las columnas. */
 @media(min-width:1121px){
   /* `.pgwrap.bkcols` y no `.bkcols` a secas: `.pgwrap` se define bastante más abajo en este
      archivo y también fija `max-width` y `--pgcan`. Con la misma especificidad gana el que
      viene último, así que la clase sola quedaría escrita y muerta. */
   .pgwrap.bkcols{--pgcan:32px;max-width:1560px}
-  .bkcols .pgbody{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 20px;
-    align-items:start}
+  /* El reparto no es parejo y es el MISMO para las dos listas: las dos primeras columnas son
+     las que se miran todo el día y sus títulos son los que hay que poder leer enteros; la
+     tercera es la de consulta. 1.18 / 1.18 / 0.64 le da a cada una de las dos primeras casi el
+     doble de ancho que a la última.
+
+     En el tablero eso sale del contenido —Nueva y En curso contra los tres finales del camino—.
+     En el backlog los grupos son intercambiables entre sí, así que el reparto no sale de lo que
+     hay adentro: se copia, porque la pantalla tiene que leerse igual de los dos lados.
+     **Contrapartida asumida**: los últimos grupos entran en una columna más angosta sin que eso
+     signifique nada sobre ellos. */
+  .bkcols .pgbody{display:grid;gap:0 20px;align-items:start;
+    grid-template-columns:minmax(0,1.18fr) minmax(0,1.18fr) minmax(0,.64fr)}
   /* Sin esto la columna se estira al ancho de su fila más larga y el grid deja de repartir
      parejo: un título largo en Nueva angostaría En curso. */
   .bkcol{min-width:0}
@@ -671,31 +691,113 @@ body.arrastrando .empty-col{display:none}
   .bkcols .pgkids{padding-left:14px}
   .bkcols .pgkids::before{left:5px}
   .bkcols .pgadd-fila{padding-left:14px}
-  /* Las dos catalogaciones que menos se miran —el código y la antigüedad— son las mismas que
-     ya se caen primero cuando se angosta la pantalla. Acá la pantalla no se angostó, pero la
-     fila sí. */
-  .bkcols .pgpill.mono,.bkcols .pgpill.edad{display:none}
   .bkcols .bktarea .pgtxt{font-size:13.5px}
+  /* ---------- la puerta como riel ----------
+     El `▤` deja de ser un glifo y pasa a ser un riel del alto del renglón (26/8/2026, por
+     diseño). Dice la prioridad sin gastar ancho, que es lo único que falta en una columna de un
+     tercio de pantalla: el color es el mismo `tint(color,.55)` del lomo de la tarjeta. Sigue
+     siendo la puerta a la página: es el mismo botón, con el mismo `data-pagina` y el mismo lugar
+     en la fila.
+
+     El riel es una línea CONTINUA (26/8/2026, por pedido). Estuvo unas horas cortado en muescas
+     —una por línea de título, para que el ícono también dijera cuánto medía la tarea— y se sacó
+     el mismo día: con títulos de una y dos líneas el corte se leía como una línea y un punto
+     sueltos, no como una escala. Un dato que hay que explicar para que se entienda no es un
+     dato. Con eso se fue también la atadura entre el período del gradiente y el
+     `line-height:1.4` del título de acá, que se conserva porque es el interlineado que hace
+     entrar tres renglones en la altura de la fila. */
+  .bkcols .bktarea .pgpg{width:19px;height:auto;min-height:19px;align-self:stretch;
+    padding-right:8px;display:flex;justify-content:center}
+  .bkcols .bktarea .pgpg:hover{background:none}
+  .bkcols .bktarea .pgpgico{display:none}
+  .bkcols .bktarea .pgriel{display:block;width:3px;border-radius:2px;
+    background-color:var(--pri,var(--line));
+    transition:background-color .12s}
+  /* Al pasar por encima el riel se pone del color de acento: es lo que dice que eso se toca.
+     Sin esto, un riel de color pálido se lee como una decoración. */
+  .bkcols .bktarea .pgpg:hover .pgriel{background-color:var(--accent)}
   /* Las columnas siguen siendo columnas, pero con el presupuesto de un tercio de pantalla:
      lo que se recorta es el ancho reservado, no la alineación. */
   .bkcols .pgcol{margin-left:6px}
-  .bkcols .pgcol-pri{width:52px}
-  .bkcols .pgcol-quien{width:72px}
+  /* Quién la hace deja de ser columna y pasa a avatares: a 72px «Lorenzo · Antonio» terminaba
+     en puntos suspensivos igual, y tres iniciales de color se leen bajando por la columna. Esos
+     ~50px se los lleva el título, que es lo que se viene a leer.
+
+     **La prioridad se queda, con nombre y todo** (26/8/2026, por pedido). El riel ya la dice en
+     color, pero el color solo es un dato para el que ya se lo sabe de memoria: 58px de pastilla
+     es lo que cuesta que no haya que aprendérselo. Y es la que más se cambia — es un botón, no
+     un cartel. La pastilla de quién la hace no se borra, se esconde: apretada la pantalla esto
+     no existe, la lista vuelve a ser una sola y vuelve ella. */
+  .bkcols .pgcol-pri{width:58px}
+  /* La del backlog: mismo lugar, mismo ancho, mismo trato. Que midan los dos 58px no es una
+     coincidencia que quedó bien — es el punto: la fila tiene que caer igual en las dos listas y
+     lo único que cambia es qué dice el dato. Para que entre en 58px la pastilla pierde el
+     «hace» y queda «3 sem» (ver `pillEdad()`); la frase completa vive en el `title`. */
+  .bkcols .pgcol-edad{width:58px}
+  .bkcols .pgcol-quien{display:none}
+  /* `margin-left:6px` y no `auto`: la que clava el bloque a la derecha es la prioridad, que va
+     primera. Con las dos en `auto` el espacio libre se reparte entre ambas y los avatares se
+     despegan de la pastilla en cada fila por una cantidad distinta.
+
+     **Y el ancho es reservado, no el que midan los avatares** (26/8/2026, por pedido). Es la
+     misma regla de `.pgcol` y estaba escrita para las pastillas pero no para esta forma: con el
+     ancho al contenido, una fila con un responsable medía 31px y una con tres 81px, y como el
+     bloque va clavado a la derecha eso corría la pastilla de prioridad 50px de una fila a la
+     otra. Dos columnas que se leen bajando dejaban de leerse bajando justo en la vista donde
+     más filas hay a la vez. Se reserva lo que mide la lista entera de gente —`--avn` sale de
+     `APP_CONFIG.personas`, que es el techo real: nadie puede asignar a alguien que no está— y
+     los avatares arrancan pegados a la izquierda de ese hueco, así que la primera inicial cae
+     siempre en la misma x. Cuentas: cada avatar mide 23px, el hueco entre dos 2px y el
+     `padding-left` 8px. */
+  .bkcols .bktarea .bkav{display:flex;justify-content:flex-start;margin-left:6px;
+    width:calc(var(--avn,3) * 25px + 6px)}
+  /* Acá vivía un `margin-left:auto` propio de los avatares del backlog: sin prioridad, la
+     primera columna era `.pgcol-quien` y en columnas está escondida, así que el `auto` de
+     `.pgpills + .pgcol` caía sobre algo que no se dibuja y el bloque entero se amontonaba
+     contra el título. Se fue el 26/8/2026 cuando la antigüedad pasó a ser columna fija: ahora
+     la primera que se ve es esa, se lleva el `auto` como se lo lleva la prioridad del otro
+     lado, y las dos listas quedan clavadas a la derecha por la misma regla. */
+
   /* Achicar los anchos reservados tiene un piso: un título largo no entra en un tercio de
      pantalla por más que se le saque todo lo de al lado. Así que acá el título deja de ser
      un renglón y pasa a ser un párrafo de hasta tres líneas — recortar sigue recortando, pero
-     recién a las tres. Con `align-items:flex-start` en la fila, las pastillas quedan a la
-     altura de la primera línea, que es donde uno las busca. */
+     recién a las tres. Con `align-items:flex-start` en la fila, los avatares quedan a la
+     altura de la primera línea, que es donde uno los busca. */
   .bkcols .bktarea{align-items:flex-start}
   .bkcols .bktarea .pgtxt{white-space:normal;overflow:hidden;text-overflow:clip;
-    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-height:1.35}
-  .bkcols .pgcol,.bkcols .bktarea .pgpg{margin-top:1px}
-  /* Al escribir se suelta el tope, igual que se soltaba el recorte de una línea: si no,
-     editar un título de cuatro renglones sería escribir a ciegas contra el corte. */
-  .bkcols .bktarea .pgtxt:focus{display:block;overflow:visible}
-  /* En una columna de un tercio de pantalla, la dependencia y el área también sobran: el
-     título es lo que se viene a leer y era lo único que se estaba recortando. */
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-height:1.4}
+  .bkcols .pgcol,.bkcols .bktarea .pgpg,.bkcols .bktarea .bkav{margin-top:1px}
+  /* Acá se soltaba el tope de tres líneas mientras se escribía el título. Se fue con el campo
+     editable el 26/8/2026: tabular hasta el botón es «llegué acá con el teclado», no «estoy
+     escribiendo», y desarmarle el recorte a la fila por eso sería decir lo que no es. */
+  /* Partida en columnas, el montón que se pega al título sobra en las dos listas: el título es
+     lo que se viene a leer y era lo único que se estaba recortando. **Y desde el 26/8/2026
+     también en el backlog** (por pedido): la fila tiene que presentarse igual de los dos lados,
+     y un racimo de pastillas que cambia de largo en cada renglón es justo lo que rompe que se
+     lea bajando por la columna. El código, de qué depende y de qué área es se ven entrando a la
+     tarea; lo que apremia —la antigüedad— dejó el montón y se mudó a su columna fija.
+     Apretada la pantalla las columnas dejan de ser columnas y el montón vuelve, en las dos. */
   .bkcols .bktarea .pgpills{display:none}
+
+  /* ---------- lo único propio del backlog ----------
+     «→ Al tablero» se achica hasta ser la flecha sola. Es lo único que la fila del backlog tiene
+     de más y la columna es la misma que la del tablero, así que o paga poco o le saca ancho al
+     título. No se esconde en el menú `⋯` como se escondió el resto: mandar tareas al tablero es
+     lo que se viene a hacer acá. Paga 30px en vez de 88, la flecha ya dice para dónde va y el
+     `title` dice a dónde. Va contra `.bkcols` y no contra la vista porque `.pgcol-ir` solo lo
+     dibuja el backlog: una regla por lista sería un segundo lugar donde acordarse de eso. */
+  .bkcols .pgcol-ir{width:30px}
+  .bkcols .pgpill.ir{justify-content:center;padding:2px 0;width:100%}
+  .bkcols .pgpill.ir .irtxt{display:none}
+  /* El «＋ Nuevo grupo» cuelga del pie de la última columna y no del final de la hoja, así que
+     la sangría de la canaleta lo dejaría flotando en el medio de la columna. */
+  .bkcols .pgnew{padding-left:calc(var(--pgcan) - 16px)}
+}
+/* Entre los 1121 y los 1239 las columnas ya existen pero están justas: la canaleta cede 6px,
+   que es lo único que se puede achicar sin tocar lo que se lee. Arriba de eso vuelve a los
+   32px de siempre. */
+@media(min-width:1121px) and (max-width:1239px){
+  .pgwrap.bkcols{--pgcan:26px}
 }
 /* Apiladas, en cambio, hay una cosa que SÍ hay que arreglar: `.bksprint:first-child` pega el
    primer bloque al de arriba, y con las columnas apiladas cada una tiene un primer bloque.
@@ -782,18 +884,61 @@ body.arrastrando .empty-col{display:none}
    título, que es lo único elástico del renglón. */
 .bktarea .pgtxt{flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
   font-size:14.5px;font-weight:600;color:var(--ink)}
-/* Al escribir se suelta el recorte: si no, editar un título largo sería escribir a ciegas
-   contra el borde derecho. */
-.bktarea .pgtxt:focus{white-space:normal;overflow:visible;box-shadow:inset 0 -1px 0 var(--accent)}
+/* Acá vivía el `:focus` del título editable, que soltaba el recorte para no escribir a ciegas
+   contra el borde derecho. Se fue el 26/8/2026: en las dos listas el título es un botón. */
+
+/* ---------- el título de la fila, que no se edita ----------
+   La fila es para mirar y el título es la puerta: mismo `data-pagina` que el riel, así que el
+   renglón entero se toca (26/8/2026, por pedido, en las DOS listas). Es un `<button>` y no un
+   div con `onclick` para que llegue el teclado y el Enter solo. Reusa `.pgtxt` y solo deshace lo
+   que un botón trae puesto: centrado y ancho propio.
+
+   El centrado hay que deshacerlo dos veces y no una. `text-align:left` alcanza mientras el
+   botón sea un bloque, pero en la lista en columnas el recorte a tres líneas lo vuelve un
+   `-webkit-box` y ahí el que ubica el texto es el empaquetado de la caja, no el alineado del
+   texto: el navegador le pone el suyo a todo `<button>` y el título de dos líneas quedaba con
+   la segunda al medio. Van los cuatro porque cuál manda depende del eje —con `box-orient`
+   vertical el que corre a lo ancho es `box-align`— y de si el motor entiende la caja vieja o
+   la nueva. */
+.bktit{display:block;text-align:left;width:auto;padding:1px 0;
+  -webkit-box-pack:start;-webkit-box-align:start;
+  justify-content:flex-start;align-items:flex-start}
+.bktit:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+/* Pasar por el título prende el riel: es lo que dice que ese renglón entero es la puerta, sin
+   subrayar tres líneas de texto en cada hover. `:has()` es el único que puede mirar para atrás,
+   y donde no esté soportado simplemente no pasa nada — el `cursor:pointer` del botón ya avisa. */
+.bkcols .bktarea:has(.bktit:hover) .pgriel{background-color:var(--accent)}
 
 /* Acá vivían `.bktarea.salida` —la fila apagada de la que ya se había mandado al tablero— y
    `.bktarea.marcada`, con el `.pgsel` de la canaleta. La primera se fue porque la que sale se
    va de la lista; la segunda, con la selección múltiple, el 26/8/2026. */
 
 /* El `▤` es la puerta a la página. Va siempre prendido, no al hover: es lo que más se toca
-   de la fila y esconderlo sería esconder la función principal de la pantalla. */
+   de la fila y esconderlo sería esconder la función principal de la pantalla.
+
+   El botón lleva SIEMPRE sus dos caras —el glifo y el riel— y el CSS elige cuál se
+   ve: la del riel es la de la lista en columnas y la decide el ancho de pantalla, que desde el
+   JS no se sabe. Acá, apilada, manda el glifo. */
 .bktarea .pgpg{color:var(--ink-3);font-size:13px}
 .bktarea .pgpg:hover{color:var(--accent);background:var(--rail);border-radius:4px}
+.pgriel{display:none}
+
+/* ---------- quién la hace, como avatares ----------
+   La otra cara de `.pgcol-quien`, para la lista en columnas: tres iniciales de color se leen
+   bajando por la columna, y a 72px «Lorenzo · Antonio» terminaba en puntos suspensivos igual.
+   Va siempre al HTML de la fila del tablero y acá arranca escondida, por lo mismo que el riel:
+   cuál de las dos formas se dibuja es una pregunta de ancho de pantalla.
+
+   Sin nadie, un hueco punteado: es justo el caso en el que hay que poder tocarlo, misma regla
+   que el «Sin asignar» de la pastilla. Reusa `.av.off` y solo le cambia el marco a punteado —
+   un lugar vacío se dibuja distinto de una persona apagada. */
+.bkav{display:none;align-items:center;gap:2px;flex:none;padding-left:8px}
+/* Un par de píxeles más que el `.av.mini` de todos lados (26/8/2026, por pedido): en la fila el
+   avatar no acompaña a un nombre escrito al lado, ES el nombre, y además es el blanco al que
+   hay que apuntarle para cambiar el responsable. Se sube acá y no en `.av.mini`, que también lo
+   usa la identidad de la barra lateral —ahí sí acompaña a un nombre y 19px están bien—. */
+.bkav .av.mini{width:23px;height:23px;font-size:10px}
+.bkav .av.off{border:1.5px dashed #D9DDE7;box-shadow:none;font-size:12px;font-weight:400}
 
 /* ---------- las columnas del renglón ----------
    Título, prioridad y quién la hace, cada uno con su ancho (26/8/2026, por pedido). Hasta ese
@@ -815,6 +960,11 @@ body.arrastrando .empty-col{display:none}
    primera cambia: en el backlog no hay prioridad. */
 .pgpills + .pgcol{margin-left:auto}
 .pgcol-pri{width:74px}
+/* La antigüedad es la columna del backlog y ocupa el lugar que del otro lado ocupa la
+   prioridad: son las dos listas presentando la misma tarjeta, cambiando qué dice el dato. Más
+   ancha que la prioridad porque «hace 3 sem» con el marco ámbar de lo rancio mide más que
+   «Crítica». */
+.pgcol-edad{width:88px}
 .pgcol-quien{width:148px}
 .pgcol-ir{width:88px}
 .pgcol > .pgpill{max-width:100%;min-width:0}
@@ -838,6 +988,19 @@ button.pgpill:hover{filter:brightness(.96)}
   border-color:#D4D3E3;background:#F5F5F8}
 .pgpill.ir:hover{background:#EBEAF2;
   border-color:var(--accent);filter:none}
+/* El rótulo, aparte de la flecha para poder esconderlo en el backlog en dos columnas. */
+.pgpill.ir .irtxt{font-style:normal;margin-left:4px}
+
+/* ---------- lo que se está añejando ----------
+   Ámbar y no rojo: una tarea que lleva dos meses anotada no es una alarma —nadie se rompió—,
+   es algo que hay que mirar. El rojo ya está tomado por las críticas del tablero y por la chapa
+   de novedad, y si todo grita, nada grita.
+
+   La misma clase la llevan la pastilla de la fila y el contador de la cabecera, que son el
+   mismo dato en dos escalas. La de la fila pisa a `.pgpill.edad`, que es transparente y gris:
+   por eso va después en el archivo y no antes. */
+.pgpill.rancio{color:#854F0B;border-color:#FAC775;background:#FAEEDA;font-weight:600;
+  padding:2px 8px;font-variant-numeric:tabular-nums}
 /* Quién la hace: una sola pill con todos los nombres, cada uno de su color. Los nombres van
    adentro de `.qn` porque la columna tiene ancho fijo: sin un único elemento al que recortar,
    tres responsables desbordarían la pastilla en vez de terminar en puntos suspensivos. Los
@@ -884,7 +1047,10 @@ button.pgpill:hover{filter:brightness(.96)}
    columnas fijas son las últimas en achicarse: se sacan las pastillas sueltas primero, porque
    perder la alineación es perder justo lo que estas filas vinieron a dar. */
 @media(max-width:1180px){
-  .pgpill.edad{display:none}
+  /* Solo la del montón que se pega al título —la de la cabecera de la página—, nunca la de la
+     columna fija de la fila del backlog: ahí la antigüedad no acompaña, es el dato que dice qué
+     apremia, y esconderla dejaría un hueco reservado de 88px diciendo nada. */
+  .pgpills .pgpill.edad{display:none}
 }
 @media(max-width:980px){
   .bkwrap{--pgcan:40px}
@@ -918,32 +1084,57 @@ button.pgpill:hover{filter:brightness(.96)}
 .board.pgmode{display:block;overflow:auto;background:var(--paper-bl)}
 .pgwrap{--pgcan:44px;max-width:820px;margin:0 auto;padding:0 24px 160px}
 
-.pgbc{display:flex;align-items:center;gap:8px;height:52px;font-size:12px;color:var(--ink-3)}
-.pgbc button{font-size:12px;color:var(--ink-3);padding:2px 4px;border-radius:5px}
+/* La miga es la única salida de la página, así que se lee: 13px y el último tramo —dónde
+   estás parado— en negrita. Estuvo en 12px gris hasta el 26/8/2026, del mismo tono que el
+   separador, y a esa escala un botón no se distingue de una etiqueta. */
+.pgbc{display:flex;align-items:center;gap:8px;height:52px;font-size:13px;color:var(--ink-3)}
+.pgbc button{font-size:13px;color:var(--ink-2);padding:3px 6px;border-radius:5px}
 .pgbc button:hover{color:var(--accent);background:#F2F1FB}
-.pgbc button:last-of-type{color:var(--ink)}
+.pgbc button:last-of-type{color:var(--ink);font-weight:600}
 .pgsep{color:#C6C9D4}
 .pgflex{flex:1}
-.pgres{font-family:var(--mono);font-size:9.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+.pgres{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
 
 /* El margen de abajo lo daba el subtítulo descriptivo, que se sacó: llenaba pantalla sin
-   decir nada que no dijera la página misma. Ahora lo pone el título. */
-.pgtitle{margin:0 0 18px var(--pgcan);font-family:var(--display);font-size:29px;font-weight:600;
-  line-height:1.2;letter-spacing:-.02em;color:var(--ink)}
-.pgtitle:focus{outline:none}
+   decir nada que no dijera la página misma. Ahora lo pone el título.
+
+   **El título es un cuadro, no un titular** (26/8/2026, por pedido). Fue 29px de `--display`
+   con el interletrado apretado, que es una tipografía de display: anda con «Onboarding» y se
+   cae con los títulos de verdad de este tablero, que son frases largas. Tres renglones de 29px
+   son media pantalla antes de que empiece la página. Ahora es texto —la fuente del cuerpo,
+   16.5px, `line-height` de párrafo— y lo que dice que es el título ya no es el tamaño sino el
+   marco: caja blanca, borde y un riel de acento a la izquierda, el mismo lenguaje del riel de
+   la fila. Que sea el marco y no la letra es lo que hace que una frase de tres renglones se
+   siga leyendo como una frase.
+
+   El `padding` de arriba es un pelo más chico que el de abajo: el `line-height` de 1.5 ya deja
+   aire arriba de la primera línea, y partido en dos iguales el texto queda mirando hacia abajo. */
+.pgtitle{margin:0 0 18px var(--pgcan);padding:10px 14px 11px;
+  border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:9px;
+  background:#fff;font-size:16.5px;font-weight:600;line-height:1.5;color:var(--ink)}
+.pgtitle:focus{outline:none;border-color:var(--accent);background:#FDFDFF}
 .pgtitle:empty::before{content:attr(data-ph);color:#C6C9D4}
 
 /* Cabecera de la tarea: los mismos controles de la fila, con las mismas clases. El `.bship`
-   nace apagado porque en la lista aparece al pasar por encima; acá es un botón fijo. */
-.pgmeta{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 22px var(--pgcan);
-  padding-bottom:14px;border-bottom:1px solid var(--line-soft)}
+   nace apagado porque en la lista aparece al pasar por encima; acá es un botón fijo.
+
+   **Pero acá pesan más que en la fila** (26/8/2026, por pedido). En la lista hay cuarenta
+   renglones y las pastillas tienen que ser discretas para que se lea el título; en la página
+   hay una sola tarea, son los únicos controles del encabezado y quedaban como una nota al pie.
+   Con el grupo y «Ficha completa» afuera sobra ancho de sobra para dárselos. Se sube acá
+   adentro y no en `.pgpill`, que es de las dos listas. */
+.pgmeta{display:flex;align-items:center;flex-wrap:wrap;gap:9px;margin:0 0 22px var(--pgcan);
+  padding-bottom:15px;border-bottom:1px solid var(--line-soft)}
 /* Acá el pase al tablero no se esconde: en la lista aparece al pasar por encima porque hay
    cuarenta filas, pero en la página de una tarea es de las tres cosas que se hacen. */
-.pgmeta .pgship{opacity:1}
-.pgmeta .pgpills{margin-left:0;flex-wrap:wrap}
-.pgficha{font-size:11.5px;color:var(--ink-3);border:1px solid var(--line);border-radius:5px;
-  padding:3px 9px;background:#fff;white-space:nowrap}
-.pgficha:hover{border-color:var(--accent);color:var(--accent)}
+.pgmeta .pgship{opacity:1;margin-left:0;font-size:12.5px;padding:5px 13px}
+.pgmeta .pgship.ya{padding:0}
+.pgmeta .pgship.ya button{font-size:12.5px;padding:5px 13px}
+.pgmeta .pgpills{margin-left:0;gap:7px;flex-wrap:wrap}
+.pgmeta .pgpill{font-size:12px;padding:4px 11px;border-radius:999px}
+.pgmeta .pgpill.mono{font-size:11px}
+/* La antigüedad es la única que se queda chica y tenue: es contexto, no algo que se toca. */
+.pgmeta .pgpill.edad{font-size:11px;padding:4px 4px}
 
 /* ---------- el cuadro de avisos ----------
    Va como una tarjeta y no como más renglones de la página: es lo primero que se mira al
@@ -974,6 +1165,20 @@ button.pgpill:hover{filter:brightness(.96)}
 .pgavtxt{flex:1;min-width:0;font-size:13px;line-height:1.55;color:var(--crit);font-weight:500;
   word-break:break-word;background:#FBE9E7;border-radius:4px;padding:1px 6px;margin-left:-6px}
 .pgavmsg.visto .pgavtxt{color:var(--ink-3);font-weight:400;background:transparent}
+/* Para quién es el aviso. Avatares y no nombres escritos: el renglón tiene que leerse de un
+   vistazo y tres nombres al lado pesan más que el aviso — misma razón por la que la firma vive
+   en el `title`. Para todos queda un punto hueco: la marca vacía es justo la que hay que poder
+   tocar, igual que el «Sin asignar» del backlog. Con `todos` no llama la atención, pero está. */
+.pgavpara{flex:none;display:flex;align-items:center;gap:2px;margin-top:1px;padding:2px 4px;
+  border-radius:999px;transition:background .1s}
+.pgavpara:hover{background:var(--rail)}
+.pgavpara .av.mini{width:16px;height:16px;font-size:8px}
+.pgavdot{width:11px;height:11px;border-radius:50%;border:1.5px dashed #CDD0DA;display:block}
+.pgavpara:hover .pgavdot{border-color:var(--crit)}
+/* Para todos se queda tenue y se prende con el hover del renglón, como el ✕: está disponible
+   pero no compite con el aviso. Dirigido no se apaga nunca — ahí es un dato de la fila. */
+.pgavpara.todos{opacity:.45;transition:opacity .1s,background .1s}
+.pgavmsg:hover .pgavpara.todos,.pgavpara.todos:hover{opacity:1}
 .pgavok{flex:none;font-size:10px;font-weight:600;color:var(--crit);border:1px solid #EBCFCD;
   background:#fff;border-radius:999px;padding:2px 9px;white-space:nowrap;margin-top:1px}
 .pgavok:hover{background:var(--crit);border-color:var(--crit);color:#fff}
@@ -1148,6 +1353,6 @@ button.pgpill:hover{filter:brightness(.96)}
   .cjcarga{width:16px}
   .cjcarga b{display:none}
   .cjmonto{width:82px}
-  .pgtitle{font-size:24px}
+  .pgtitle{font-size:15.5px;padding:9px 12px 10px}
   .pgpop{left:0;width:min(224px,calc(100vw - 40px))}
 }
