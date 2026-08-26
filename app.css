@@ -679,8 +679,20 @@ body.arrastrando .empty-col{display:none}
   /* Las columnas siguen siendo columnas, pero con el presupuesto de un tercio de pantalla:
      lo que se recorta es el ancho reservado, no la alineación. */
   .bkcols .pgcol{margin-left:6px}
-  .bkcols .pgcol-pri{width:58px}
-  .bkcols .pgcol-quien{width:86px}
+  .bkcols .pgcol-pri{width:52px}
+  .bkcols .pgcol-quien{width:72px}
+  /* Achicar los anchos reservados tiene un piso: un título largo no entra en un tercio de
+     pantalla por más que se le saque todo lo de al lado. Así que acá el título deja de ser
+     un renglón y pasa a ser un párrafo de hasta tres líneas — recortar sigue recortando, pero
+     recién a las tres. Con `align-items:flex-start` en la fila, las pastillas quedan a la
+     altura de la primera línea, que es donde uno las busca. */
+  .bkcols .bktarea{align-items:flex-start}
+  .bkcols .bktarea .pgtxt{white-space:normal;overflow:hidden;text-overflow:clip;
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-height:1.35}
+  .bkcols .pgcol,.bkcols .bktarea .pgpg{margin-top:1px}
+  /* Al escribir se suelta el tope, igual que se soltaba el recorte de una línea: si no,
+     editar un título de cuatro renglones sería escribir a ciegas contra el corte. */
+  .bkcols .bktarea .pgtxt:focus{display:block;overflow:visible}
   /* En una columna de un tercio de pantalla, la dependencia y el área también sobran: el
      título es lo que se viene a leer y era lo único que se estaba recortando. */
   .bkcols .bktarea .pgpills{display:none}
