@@ -524,10 +524,34 @@ arrancan en `display:none` en una línea sola, arriba del `@media`, y no hay nad
   darse por vencido.
 
 **La fila deja de ser una fila y pasa a ser una tarjeta.** Es el MISMO renglón con las mismas
-clases y el mismo HTML; lo que cambia es que sin ancho para columnas el título se lleva la
-primera línea entera (hasta cuatro, no tres) y todo lo demás baja a la segunda, ordenado con
-`order`: prioridad, catalogaciones, espaciador, avatares, días, pase y el `⋯`.
+clases y el mismo HTML; lo que cambia es el reparto: **el título a la izquierda —hasta cuatro
+líneas, no tres— y todo lo demás clavado a la derecha**, en el mismo renglón. El orden de la
+derecha lo pone `order`: avatares, prioridad, días, pase y el `⋯`.
 
+- **Estuvo unas horas con el título llevándose la primera línea entera y las catalogaciones
+  abajo**, y se cambió el mismo día por pedido. El problema era el de siempre: arrancando en el
+  borde izquierdo y con una cantidad distinta de cosas por fila, la prioridad de un renglón
+  caía a la altura del área del de al lado. Es exactamente lo que las columnas de ancho fijo
+  vinieron a resolver en el escritorio.
+- **El título es lo único elástico y va con `flex:1 1 0`, no `1 1 auto`.** Con la base en el
+  contenido un título largo reclama su ancho entero y se lleva el renglón solo; con la base en
+  cero se estira hasta donde llegue lo que tiene al lado, que es lo que clava el resto a la
+  derecha. El `min-width:140px` es el piso: sin él, un bloque de la derecha que no entre lo
+  achica hasta desaparecer. Y `justify-content:flex-end` en la fila es para ese caso — lo que
+  envuelva baja alineado a la derecha y no al borde donde vive el título.
+- **Los avatares van PRIMEROS y no en el medio como en el escritorio.** Son lo único de ancho
+  variable —de uno a tres responsables hay 50px— y el bloque va clavado a la derecha, así que
+  todo lo que esté detrás de ellos se corre de lugar fila por fila. Pegados al título, lo único
+  que se mueve es el borde del título, que es elástico. En el escritorio esto se arregla al
+  revés, reservando el hueco de la lista entera de gente (`--avn`); acá esos 80px son un cuarto
+  de lo que le queda al título.
+- **Los tres que quedan detrás sí tienen ancho fijo** —prioridad 58px, días 24px, pase 32px— y
+  por lo mismo de siempre: son cuatro prioridades posibles y un número de dos cifras, así que
+  reservar lo que miden cuesta menos que recalcular el renglón por lo que tenga adentro.
+- **El montón que se pega al título se esconde** (código, de qué depende, de qué área es), con
+  la misma regla y el mismo argumento que en la lista en columnas: es lo único que se estaba
+  recortando el título, y un racimo que cambia de largo en cada renglón rompe que la lista se
+  lea bajando. Se ven entrando a la tarea.
 - **El riel de la puerta se convierte en el borde izquierdo de la tarjeta.** Mismo color y
   mismo dato que en la lista en columnas —prioridad en el tablero, antigüedad en el backlog—.
   Va `position:absolute` y no como ítem del flex: la fila envuelve, y en una fila envuelta

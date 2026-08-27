@@ -1477,10 +1477,20 @@ button.pgpill:hover{filter:brightness(.96)}
   .bkname{min-width:0;overflow:hidden;text-overflow:ellipsis}
 
   /* La fila. Es el MISMO renglón con las mismas clases —nada de esto lo sabe el JS— y lo que
-     cambia es que el título se lleva la primera línea entera y las catalogaciones bajan a la
-     segunda. Con cuarenta tarjetas eso se recorre con el pulgar sin leer ninguna entera. */
-  .bktarea{position:relative;flex-wrap:wrap;align-items:center;gap:7px;
-    margin:0 0 7px;padding:11px 12px 11px 13px;
+     cambia es el reparto: **el título a la izquierda y todo lo demás clavado a la derecha**
+     (27/8/2026, por pedido), en el mismo renglón y no en dos.
+
+     Estuvo unas horas con el título llevándose la primera línea entera y las catalogaciones
+     abajo, y se cambió el mismo día: con cuarenta tarjetas, lo de abajo arrancaba en el borde
+     izquierdo y cada renglón tenía una cantidad distinta de cosas, así que la prioridad de uno
+     caía a la altura del área del otro. Es exactamente el problema que las columnas de ancho
+     fijo vinieron a resolver en el escritorio. Pegado a la derecha se lee bajando.
+
+     `justify-content:flex-end` es para el caso en que no entre todo: lo que envuelve baja
+     alineado a la derecha y no al borde izquierdo, que es donde vive el título. En el renglón
+     de arriba no hace nada —el título se come el espacio libre— y ahí está la gracia. */
+  .bktarea{position:relative;flex-wrap:wrap;justify-content:flex-end;align-items:flex-start;
+    gap:6px;margin:0 0 7px;padding:11px 12px 11px 13px;
     background:#fff;border:1px solid var(--line);border-radius:12px}
   .bktarea:hover{background:#fff}
   /* El riel de la puerta pasa a ser el borde izquierdo de la tarjeta: el mismo color y el mismo
@@ -1492,32 +1502,60 @@ button.pgpill:hover{filter:brightness(.96)}
   .bktarea .pgpg:hover{background:none}
   .bktarea .pgpgico{display:none}
   .bktarea .pgriel{display:block;width:100%;height:100%;background-color:var(--pri,var(--line))}
-  /* El título, hasta cuatro líneas. Acá no compite con dos columnas de ancho fijo, así que
-     puede respirar más que las tres de la lista en columnas. */
-  .bktarea .pgtxt{order:1;flex:1 1 100%;min-width:0;padding:0;
+  /* El título, hasta cuatro líneas, y es lo único elástico del renglón.
+
+     `flex:1 1 0` y no `1 1 auto`: con la base en el contenido, un título largo reclama su ancho
+     entero y se lleva el renglón solo, y todo lo demás envuelve. Con la base en cero se estira
+     hasta donde llegue lo que tiene al lado, que es lo que lo clava a la derecha.
+
+     El `min-width` es el piso: si lo de la derecha no entra, el título NO se achica hasta
+     desaparecer —con la base en cero y sin piso eso es exactamente lo que pasa— sino que hace
+     envolver a las catalogaciones, que bajan alineadas a la derecha. */
+  .bktarea .pgtxt{order:1;flex:1 1 0;min-width:140px;padding:0;
     white-space:normal;overflow:hidden;text-overflow:clip;
     display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;
     font-size:13.5px;font-weight:500;line-height:1.4;color:var(--ink)}
-  .bktarea .pgtxt.bktitedit{display:block;flex:1 1 100%;-webkit-line-clamp:none;
+  .bktarea .pgtxt.bktitedit{display:block;flex:1 1 auto;-webkit-line-clamp:none;
     white-space:nowrap;font-size:14px}
-  /* El segundo renglón, en el orden en que se mira: qué tan urgente es, de qué se trata,
-     quién la hace, cuánto lleva y qué se puede hacer con ella. */
+  /* Lo de la derecha. **Los avatares van primeros y no en el medio como en el escritorio**, y
+     es por una sola razón: son lo único de ancho variable —de uno a tres responsables hay 50px
+     de diferencia— y el bloque va clavado a la derecha, así que lo que esté DESPUÉS de ellos se
+     corre de lugar en cada fila. Puestos contra el título, lo único que se mueve es el borde
+     del título, que es elástico y no se lee por su ancho.
+
+     En el escritorio esto se resuelve al revés, reservando el hueco de la lista entera de gente
+     (`--avn`); acá esos 80px son un cuarto de lo que le queda al título. Con los tres de ancho
+     fijo detrás —prioridad, días y el `⋯`— las columnas se leen bajando igual. */
   .bktarea > .nuevo{order:2;margin:0}
-  .bktarea .pgcol-pri{order:3}
-  .bktarea .pgpills{order:4;margin-left:0;padding-left:0;flex-wrap:wrap;gap:5px}
-  .bktarea .pgesp{order:5;display:block;flex:1 1 0}
-  .bktarea .bkav{order:6;display:flex;padding-left:0}
-  .bktarea .pgcol-dias{order:7}
-  .bktarea .pgcol-ir{order:8}
-  .bktarea .pgctl{order:9;width:auto;padding:0}
+  .bktarea .bkav{order:3;display:flex;padding-left:0}
+  .bktarea .pgcol-pri{order:4}
+  .bktarea .pgcol-dias{order:5}
+  .bktarea .pgcol-ir{order:6}
+  .bktarea .pgctl{order:7;width:auto;padding:0}
+  /* El montón que se pega al título —código, de qué depende, de qué área es— se esconde, por
+     lo mismo y con la misma regla que en la lista en columnas: el título es lo que se viene a
+     leer y era lo único que se estaba recortando. Un racimo que cambia de largo en cada
+     renglón es justo lo que rompe que la lista se lea bajando. Se ven entrando a la tarea. */
+  .bktarea .pgpills{display:none}
+  /* El espaciador no hace falta: el que empuja es el título. Con los dos creciendo, el espacio
+     libre se reparte entre ambos y las catalogaciones quedan flotando a media distancia. */
+  .bktarea .pgesp{display:none}
   /* Los responsables son los avatares y no la pastilla: tres nombres escritos se comen el
      renglón entero, y acá el avatar además es el blanco al que hay que apuntarle. */
   .bktarea .pgcol-quien{display:none}
-  .bktarea .pgcol{width:auto;margin-left:0}
+  /* Los anchos siguen siendo fijos y por lo mismo de siempre: son cuatro prioridades posibles y
+     un número de dos cifras, así que reservar lo que miden cuesta menos que hacer que el
+     renglón se recalcule según lo que tenga adentro. Lo que sobra o falta se lo lleva el
+     título. Los del escritorio no sirven acá —son de una fila que tiene el doble de ancho— así
+     que se recortan a lo justo. */
+  .bktarea .pgcol{margin-left:0}
+  .bktarea .pgcol-pri{width:58px}
+  .bktarea .pgcol-dias{width:24px}
+  .bktarea .pgcol-ir{width:32px}
   /* El rótulo del pase se va y queda la flecha, como en la lista en columnas y por lo mismo:
      el ancho que gasta se lo lleva el título. */
-  .bktarea .pgpill.ir{padding:3px 10px;font-size:13px;line-height:1;
-    border-color:var(--accent);background:#EFEEF7}
+  .bktarea .pgpill.ir{justify-content:center;width:100%;padding:3px 0;font-size:13px;
+    line-height:1.4;border-color:var(--accent);background:#EFEEF7}
   .bktarea .pgpill.ir .irtxt{display:none}
   /* El `⠿` se va: el arrastre del navegador no funciona con el dedo, así que sería un control
      que no hace nada. **Contrapartida asumida**: en el teléfono una tarea se cambia de bloque
