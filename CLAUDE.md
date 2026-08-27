@@ -465,10 +465,110 @@ las dos acciones que sí son del tablero —la campana de críticas y «+ Nueva 
   encima de una ficha abierta es un manotazo cada vez que el cursor pasa cerca del borde.
 - **El aviso de esquema (`.nota-pop`) es `position:fixed`.** La barra recorta lo que se sale
   de su ancho y ese cartel mide bastante más que la barra.
-- **En pantalla chica la abre `:focus-within`**, no el hover: sin cursor, tocar cualquiera de
-  sus renglones tiene que alcanzar.
+- **En el teléfono no existe como canaleta: es un cajón.** Ver la sección de abajo — lo que
+  cambia es la barra entera, no un par de anchos.
 - La franja de arriba (`.bar`) quedó con `#filtros` y `.bar-acciones` como hermanos: la caja
   esconde los filtros enteros, y la campana y «Nueva tarea» tienen que seguir estando.
+
+### El teléfono
+
+Abajo de 760px el tablero no es el mismo apretado: es otra forma de la misma pantalla
+(27/8/2026, a partir de un diseño de Claude Design). Hasta ese día era el escritorio con los
+anchos achicados y las columnas apiladas, que en 390px significaba una canaleta de 44px, una
+barra lateral que hay que adivinar y filas de columnas fijas que no entran.
+
+**Nada de esto lo sabe el JS.** Todo lo propio del teléfono va SIEMPRE al HTML y lo esconde el
+CSS arriba de 760px — es la misma regla que ya tenían el riel de la fila, los avatares y el
+rótulo del pase al tablero: cuál de las dos formas corresponde es una pregunta de ancho de
+pantalla, y el ancho desde el JS no se sabe. Las piezas propias son seis: `.mhead` (el
+encabezado), `.tabbar` (las vistas), `.fab` (el `＋`), `.side-scrim` (el fondo del cajón),
+`.cjmes` (el mes de la caja) y `#fPend` (el filtro de personas con forma de menú). Las seis
+arrancan en `display:none` en una línea sola, arriba del `@media`, y no hay nada que deshacer.
+
+- **A dónde ir se va abajo** (`.tabbar`). La barra lateral se abría al pasar el cursor y sin
+  cursor eso no existe. **Es un segundo dibujo del mismo `VISTAS`, no una segunda navegación**:
+  se pinta adentro de `pintarChrome()`, arriba del `$$('[data-vista]')`, con el mismo atributo,
+  así que el enganche cubre las dos de un saque y no hay un segundo lugar donde acordarse de
+  agregar una vista.
+- **Lo que no son vistas queda en un cajón**, que es la misma barra lateral abierta a lo ancho
+  y sin canaleta. Lo abre el avatar del encabezado y lo cierra el fondo o Escape. `.side-nav`
+  se esconde ahí adentro: las vistas ya están abajo, y dos lugares para lo mismo son dos
+  lugares que hay que aprenderse. El `:hover` de la barra se anula a mano —en un teléfono un
+  hover se queda pegado después de tocar— y el cajón va en `z-index:58`: por debajo de los
+  modales y del visor, como en el escritorio, y por encima de la barra de abajo.
+- **«+ Nueva tarea» se muda al `＋` flotante** y es el mismo camino, no una copia:
+  `nuevaDesdeBarra(ancla, ev)` la usan los dos y lo único que cambia es el anclaje del menú de
+  responsables —el botón del encabezado no está en pantalla—. **En la caja el `＋` carga un
+  movimiento**, que es lo único en lo que las dos puertas se separan: el «＋ Nuevo movimiento»
+  de esa pantalla está al final de la lista, y el del encabezado manda al tablero a crear una
+  tarea, que no es lo que se vino a hacer ahí.
+- **El buscador se despliega desde el 🔍** y se lleva su propio renglón: en línea con los dos
+  filtros no le quedaría ancho para escribir. **Cerrarlo vacía lo buscado** —un filtro puesto
+  detrás de un campo escondido es la forma más rápida de que el tablero parezca vacío sin que
+  se vea por qué—. **Se vacía al irse a la caja y no al entrar a una tarea**: adentro de una
+  página la búsqueda queda escondida con el resto de los filtros y al volver el tablero tiene
+  que estar como se lo dejó, que buscar algo, entrar a lo que apareció y volver es exactamente
+  para lo que se busca. `cerrarBuscador()` NO repinta: lo llama también `pintarChrome()`, en
+  medio de un `render()` que todavía no dibujó nada, y desde ahí repintar sería una vuelta
+  infinita. Devuelve si había algo puesto y quien lo llama de afuera decide.
+- **El campo de búsqueda va en 16px y no en 12.5.** Abajo de 16 el navegador del teléfono hace
+  zoom solo al tocarlo, y de ese zoom no se vuelve hasta recargar.
+- **Las personas se filtran del mismo menú de tildes que las prioridades** (`#fPend`,
+  `pintarFiltroPend()`). Tres chips con avatar y nombre son más anchos que la pantalla. Las dos
+  formas escriben en el mismo `UI.f.pend`, así que no hay dos filtros que mantener de acuerdo;
+  el menú usa `data-fpend` y no `data-persona` porque ese lo engancha el bucle de los chips con
+  un `onclick` directo y cada tilde se contaría dos veces.
+- **El 🔍 y el `＋` se esconden donde no significan nada**: en la caja no hay qué buscar, y
+  adentro de la página de una tarea `＋` inserta bloques, que es otro botón y está en la fila.
+  Se esconden en vez de no hacer nada — un control que no responde se toca dos veces antes de
+  darse por vencido.
+
+**La fila deja de ser una fila y pasa a ser una tarjeta.** Es el MISMO renglón con las mismas
+clases y el mismo HTML; lo que cambia es que sin ancho para columnas el título se lleva la
+primera línea entera (hasta cuatro, no tres) y todo lo demás baja a la segunda, ordenado con
+`order`: prioridad, catalogaciones, espaciador, avatares, días, pase y el `⋯`.
+
+- **El riel de la puerta se convierte en el borde izquierdo de la tarjeta.** Mismo color y
+  mismo dato que en la lista en columnas —prioridad en el tablero, antigüedad en el backlog—.
+  Va `position:absolute` y no como ítem del flex: la fila envuelve, y en una fila envuelta
+  `align-self:stretch` mide una línea y no la tarjeta.
+- **La canaleta desaparece** (`--pgcan:0`) y sus dos controles se van al final del renglón, el
+  del bloque incluido. 48px reservados son un octavo de la pantalla, y el `＋` delante del
+  nombre de un bloque es lo primero que se toca sin querer al ir a plegar. Con la canaleta se
+  va la guía vertical del bloque, que colgaba de ella.
+- **El `⠿` se va.** El arrastre del navegador no funciona con el dedo, así que sería un control
+  que no hace nada. **Contrapartida asumida**: cambiar una tarea de bloque se hace desde el
+  menú `⋯`, que es el mismo camino y sigue estando.
+- **Los responsables son los avatares y no la pastilla**, la misma regla que en la lista en
+  columnas y por lo mismo: tres nombres escritos se comen el renglón, y el avatar además es el
+  blanco al que hay que apuntarle.
+- **El menú `⋯` cae debajo de la tarjeta y en `z-index:46`.** Con los 20 de siempre, abierto en
+  la última tarjeta a la vista quedaría tapado por la barra de abajo.
+- **Los blancos crecen**: el `⋯` a 28px y las pastillas a 4px de alto de más. Lo que cuesta es
+  el ancho que dejó de gastar la canaleta.
+
+**La caja se lee por mes.** Los separadores (`.cjmes`, `cuerpoDeMovimientos()`) van siempre al
+HTML y los esconde el CSS arriba de 760px: en el escritorio la caja es una planilla y la fecha
+vive en su columna, pero con el pulgar «24/08» sola no dice de qué mes es hasta que uno se fija
+en el renglón de arriba. No cambia nada de lo que ya andaba — el `↑` `↓` de la planilla salta
+entre `.cjrow` y esto no es una, y las filas siguen saliendo de `filaMovimiento()`.
+
+- **El movimiento también es una tarjeta**, y el que envuelve es `.cjmid`: el concepto se lleva
+  su primera línea y la categoría baja a la segunda, así que el monto, quién pagó y a quién se
+  le carga quedan centrados a la derecha sin partirse en dos renglones. **La categoría vuelve**
+  —hasta el 27/8/2026 se escondía en el teléfono— porque en su propio renglón sí entra; la nota
+  sigue afuera.
+- **«Pagó» y «Cargar a» quedan en el punto de color**, ninguno se esconde entero: es plata, y
+  un gasto imputado a uno leído como compartido es un saldo mal. El de «Pagó» recorta el nombre
+  contra el borde derecho y no se centra —centrado, lo que se sale por los dos lados es justo
+  el punto—; el de «Cargar a» sí se centra, que ahí adentro solo hay puntos. Por eso el `title`
+  de «Pagó» ahora dice el nombre: es lo único que queda del dato cuando el rótulo no entra.
+- **La miga y el título («Caja», dos veces) se van**: el encabezado del teléfono ya dice dónde
+  estás y cuántos movimientos hay.
+
+**Lo que NO cambió y conviene saber**: la ficha, la página de una tarea y los modales se siguen
+dibujando igual, con los anchos apretados de siempre. La página de una tarea conserva su miga
+—es la salida— y su canaleta de 28px.
 
 ### La Caja
 

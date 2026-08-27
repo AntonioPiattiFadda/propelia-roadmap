@@ -57,12 +57,36 @@
   <!-- Una sola línea: filtros a la izquierda, lo que se hace a la derecha. Las vistas se
        mudaron a la barra lateral, así que acá no queda nada que compita por el renglón. -->
   <div class="bar">
+    <!-- Encabezado del teléfono. Va SIEMPRE en el HTML y lo esconde el CSS arriba de 760px:
+         cuál de las dos cabeceras corresponde es una pregunta de ancho de pantalla, y el ancho
+         no se sabe desde el JS — la misma regla que ya tenían el riel y los avatares de la fila.
+         En el escritorio esto no existe: la vista la dice la barra lateral y el contador, su
+         renglón. -->
+    <div class="mhead">
+      <div class="mtit"><b id="mVista"></b><small id="mCont"></small></div>
+      <button class="micon" id="bBuscar" type="button" aria-label="Buscar" aria-expanded="false">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      </button>
+      <!-- El avatar abre el cajón con lo que en el escritorio vive en la barra lateral: quién
+           sos, el aviso de esquema, exportar y cerrar sesión. Las vistas NO están ahí adentro:
+           esas son la barra de abajo. -->
+      <button class="myo" id="bYo" type="button" aria-label="Abrir el menú del tablero" aria-expanded="false"></button>
+    </div>
+
     <div class="filters" id="filtros">
       <div class="search">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
         <input type="search" id="q" placeholder="Buscar…  ( / )">
       </div>
       <div class="chips" id="chipsPend"></div>
+      <!-- El mismo filtro de personas que los chips de al lado, con la forma del de prioridad.
+           En 390px de ancho tres chips con avatar no entran en el renglón, así que en el
+           teléfono se elige de un menú. Las dos formas van siempre en el HTML y escriben en el
+           mismo `UI.f.pend`; cuál se ve la decide el CSS. -->
+      <div class="selmulti" id="fPend">
+        <button type="button" class="sel" aria-haspopup="true" aria-expanded="false">Responsable</button>
+        <div class="selmenu" hidden role="group" aria-label="Filtrar por responsable"></div>
+      </div>
       <!-- Prioridad admite varias a la vez, así que no puede ser un <select>: es un botón
            con un menú de tildes. Ocupa lo mismo que el select que reemplazó para no
            ganarle un renglón a la barra. -->
@@ -101,6 +125,21 @@
   </div>
 </main>
 </div><!-- /.shell -->
+
+<!-- ===== Lo propio del teléfono =====
+     Las tres piezas van siempre en el HTML y el CSS las esconde arriba de 760px. Están fuera
+     de `.shell` porque las tres son `position:fixed`: apoyadas encima del tablero y no dentro
+     del flujo, igual que el panel de la barra lateral.
+
+     La barra de abajo la llena `pintarChrome()` con las mismas `VISTAS` y el mismo
+     `data-vista` que la barra lateral, así que el enganche de las vistas la cubre sola: no hay
+     un segundo lugar donde acordarse de agregar una pestaña. -->
+<nav class="tabbar" id="tabbar" aria-label="Vistas del tablero"></nav>
+<!-- El `＋` flotante reemplaza a «+ Nueva tarea» del encabezado, que en el teléfono no entra.
+     Hace exactamente lo mismo: es el mismo manejador, no una copia. -->
+<button class="fab" id="bFab" type="button">＋</button>
+<!-- El fondo del cajón. Sin él, la única forma de cerrarlo sería volver a tocar el avatar. -->
+<div class="side-scrim" id="sideScrim" hidden></div>
 
 <!-- ===== Modal: tarea ===== -->
 <div class="scrim" id="scrimTarea">
