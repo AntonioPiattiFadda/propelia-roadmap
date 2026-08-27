@@ -539,15 +539,23 @@ derecha lo pone `order`: avatares, prioridad, días, pase y el `⋯`.
   derecha. El `min-width:140px` es el piso: sin él, un bloque de la derecha que no entre lo
   achica hasta desaparecer. Y `justify-content:flex-end` en la fila es para ese caso — lo que
   envuelva baja alineado a la derecha y no al borde donde vive el título.
-- **Los avatares van PRIMEROS y no en el medio como en el escritorio.** Son lo único de ancho
-  variable —de uno a tres responsables hay 50px— y el bloque va clavado a la derecha, así que
-  todo lo que esté detrás de ellos se corre de lugar fila por fila. Pegados al título, lo único
-  que se mueve es el borde del título, que es elástico. En el escritorio esto se arregla al
-  revés, reservando el hueco de la lista entera de gente (`--avn`); acá esos 80px son un cuarto
-  de lo que le queda al título.
-- **Los tres que quedan detrás sí tienen ancho fijo** —prioridad 58px, días 24px, pase 32px— y
-  por lo mismo de siempre: son cuatro prioridades posibles y un número de dos cifras, así que
-  reservar lo que miden cuesta menos que recalcular el renglón por lo que tenga adentro.
+- **Todas las columnas tienen ancho reservado, los avatares incluidos** —quién la hace
+  (`--avn`), prioridad 34px, días 24px, pase 32px— y por lo mismo de siempre: reservar lo que
+  miden cuesta menos que recalcular el renglón según lo que tenga adentro, y es lo único que
+  hace que cada cosa caiga en la misma x en las cuarenta filas.
+  - **Los avatares estuvieron unas horas midiendo lo que midieran**, puestos primeros del bloque
+    para que su ancho variable moviera nada más que el borde del título. Se cambió el mismo día
+    por pedido: eso no es una columna. Con uno o con tres responsables la prioridad caía en un
+    lugar distinto, que es justo lo que rompe leer bajando.
+  - **Lo que hace pagable el hueco reservado es la prioridad abreviada**: de 58px a 34. Sin eso,
+    las dos columnas juntas no entran al lado de un título legible.
+- **En el teléfono la prioridad es la inicial con su punto de color** (27/8/2026, por pedido):
+  «C», «U», «S», «M», que son cuatro y no se pisan. **La pastilla lleva las tres piezas siempre
+  en el HTML** —el punto, la palabra entera y la inicial— y el CSS elige cuál se ve, la misma
+  regla del riel y los avatares. El punto no es decorativo: solas, «S» y «M» no dicen nada, y el
+  color es lo único que se lee bajando por una columna de 34px sin leer ninguna fila. En el
+  escritorio no va, que ahí está la palabra y el fondo de la pastilla ya es de ese color. La
+  inicial va con `aria-hidden` y la frase entera en el `title` y el `aria-label`.
 - **El montón que se pega al título se esconde** (código, de qué depende, de qué área es), con
   la misma regla y el mismo argumento que en la lista en columnas: es lo único que se estaba
   recortando el título, y un racimo que cambia de largo en cada renglón rompe que la lista se

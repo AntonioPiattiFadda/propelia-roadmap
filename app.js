@@ -3324,11 +3324,27 @@ function filaTareaHTML(t){
    que hace que valga también adentro de la página de una tarea del backlog: mientras esté de
    ese lado, no hay dónde tocar para clasificarla. La tarea igual guarda su campo con el
    `semanal` de fábrica — no se migró nada y no hace falta. */
+/* **La pastilla lleva las dos formas del dato y el punto de color, siempre** (27/8/2026, por
+   pedido). Escrita entera es la del escritorio; en el teléfono se abrevia a la inicial —«C», «U»,
+   «S», «M», que son cuatro y no se pisan— con el punto del color al lado, que es lo que la sigue
+   haciendo legible sin la palabra. Cuál de las dos se ve lo decide el CSS: es una pregunta de
+   ancho de pantalla, y el ancho no se sabe desde acá. La misma regla que el riel y los avatares.
+
+   El punto no es decorativo: solo, «S» y «M» no dicen nada, y el color es lo único que se lee
+   bajando por una columna de 34px sin leer ninguna fila. En el escritorio no va —ahí está la
+   palabra, y el fondo de la pastilla ya es de ese color—.
+
+   La abreviatura va con `aria-hidden` y la frase entera en el `title` y el `aria-label`: una
+   «C» suelta no dice nada ni en pantalla ni en un lector. */
 function pillPrioridad(t){
   if (t.backlog) return '';
   const p = prioridadDe(t.prioridad);
+  const rotulo = 'Prioridad: ' + p.label.toLowerCase();
   return `<button class="pgpill tono" type="button" data-pop="prioridad"
-    style="--pb:${tint(p.color, .14)};--pc:${p.color}">${esc(p.label)}</button>`;
+    title="${escA(rotulo)}" aria-label="${escA(rotulo)}"
+    style="--pb:${tint(p.color, .14)};--pc:${p.color}"><i class="pridot"
+    style="background:${p.color}"></i><i class="prilab">${esc(p.label)}</i><i
+    class="priini" aria-hidden="true">${esc(p.label.slice(0, 1))}</i></button>`;
 }
 
 /* Quién la hace es UNA sola pill con todos los nombres adentro, y no una por persona: abre el

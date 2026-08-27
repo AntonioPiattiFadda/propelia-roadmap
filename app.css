@@ -956,6 +956,12 @@ kbd{font:600 10.5px var(--font);background:var(--rail);border-radius:4px;padding
   font-weight:500;white-space:nowrap}
 .pgpill.mono{font-family:var(--mono);font-size:10px;color:#73788A}
 .pgpill.tono{border-color:transparent;background:var(--pb);color:var(--pc);font-weight:600}
+/* La prioridad lleva las tres piezas en el HTML y acá se ve una sola: la palabra entera. El
+   punto de color y la inicial son la forma del teléfono, donde no hay ancho para la palabra —
+   cuál corresponde es una pregunta de ancho de pantalla y el ancho no se sabe desde el JS. Acá
+   el punto sobraría: el fondo de la pastilla ya es de ese color y al lado está el nombre. */
+.pgpill.tono i{font-style:normal}
+.pridot,.priini{display:none}
 button.pgpill:hover{filter:brightness(.96)}
 .pgpill.ok{color:var(--ok);border-color:#C6DDCC;background:#F1F7F2}
 .pgpill.edad{color:#787D8E;border-color:transparent;background:transparent;padding-left:2px;
@@ -1517,17 +1523,21 @@ button.pgpill:hover{filter:brightness(.96)}
     font-size:13.5px;font-weight:500;line-height:1.4;color:var(--ink)}
   .bktarea .pgtxt.bktitedit{display:block;flex:1 1 auto;-webkit-line-clamp:none;
     white-space:nowrap;font-size:14px}
-  /* Lo de la derecha. **Los avatares van primeros y no en el medio como en el escritorio**, y
-     es por una sola razón: son lo único de ancho variable —de uno a tres responsables hay 50px
-     de diferencia— y el bloque va clavado a la derecha, así que lo que esté DESPUÉS de ellos se
-     corre de lugar en cada fila. Puestos contra el título, lo único que se mueve es el borde
-     del título, que es elástico y no se lee por su ancho.
+  /* Lo de la derecha, cada cosa en su columna y en el orden en que se mira: quién la hace, qué
+     tan urgente es, cuánto lleva y qué se puede hacer con ella (27/8/2026, por pedido).
 
-     En el escritorio esto se resuelve al revés, reservando el hueco de la lista entera de gente
-     (`--avn`); acá esos 80px son un cuarto de lo que le queda al título. Con los tres de ancho
-     fijo detrás —prioridad, días y el `⋯`— las columnas se leen bajando igual. */
+     **Todas las columnas tienen ancho reservado, los avatares incluidos.** Estuvieron unas
+     horas midiendo lo que midieran, puestos primeros para que su ancho variable moviera solo el
+     borde del título; se cambió el mismo día porque eso no es una columna: con uno o con tres
+     responsables la prioridad caía en una x distinta, que es justo lo que rompe leer bajando.
+     Ahora el hueco es el de la lista entera de gente —`--avn` sale de `APP_CONFIG.personas`,
+     que es el techo real porque el menú no ofrece a nadie más— y las iniciales arrancan pegadas
+     a su izquierda, así que la primera cae siempre en el mismo lugar. Es la misma regla y la
+     misma cuenta del escritorio; lo que la hace pagable acá es la prioridad abreviada, que pasó
+     de 58px a 34. */
   .bktarea > .nuevo{order:2;margin:0}
-  .bktarea .bkav{order:3;display:flex;padding-left:0}
+  .bktarea .bkav{order:3;display:flex;justify-content:flex-start;padding-left:0;
+    width:calc(var(--avn,3) * 25px - 2px)}
   .bktarea .pgcol-pri{order:4}
   .bktarea .pgcol-dias{order:5}
   .bktarea .pgcol-ir{order:6}
@@ -1549,7 +1559,15 @@ button.pgpill:hover{filter:brightness(.96)}
      título. Los del escritorio no sirven acá —son de una fila que tiene el doble de ancho— así
      que se recortan a lo justo. */
   .bktarea .pgcol{margin-left:0}
-  .bktarea .pgcol-pri{width:58px}
+  /* La prioridad, abreviada a la inicial con su punto de color (27/8/2026, por pedido). 34px en
+     vez de 58, y esos 24px son los que pagan el hueco reservado de los avatares — sin la
+     abreviatura, las dos columnas juntas no entran al lado de un título legible. La palabra
+     entera sigue estando en el `title`. */
+  .bktarea .pgcol-pri{width:34px}
+  .bktarea .pgcol-pri .pgpill{justify-content:center;width:100%;gap:4px;padding:4px 0}
+  .bktarea .prilab{display:none}
+  .bktarea .priini{display:inline}
+  .bktarea .pridot{display:block;width:6px;height:6px;flex:none;border-radius:50%}
   .bktarea .pgcol-dias{width:24px}
   .bktarea .pgcol-ir{width:32px}
   /* El rótulo del pase se va y queda la flecha, como en la lista en columnas y por lo mismo:
