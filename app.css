@@ -703,7 +703,7 @@ kbd{font:600 10.5px var(--font);background:var(--rail);border-radius:4px;padding
      bloque va clavado a la derecha eso corría la pastilla de prioridad 50px de una fila a la
      otra. Dos columnas que se leen bajando dejaban de leerse bajando justo en la vista donde
      más filas hay a la vez. Se reserva lo que mide la lista entera de gente —`--avn` sale de
-     `APP_CONFIG.personas`, que es el techo real: nadie puede asignar a alguien que no está— y
+     `users`, que es el techo real: nadie puede asignar a alguien que no está— y
      los avatares arrancan pegados a la izquierda de ese hueco, así que la primera inicial cae
      siempre en la misma x. Cuentas: cada avatar mide 23px, el hueco entre dos 2px y el
      `padding-left` 8px. */
