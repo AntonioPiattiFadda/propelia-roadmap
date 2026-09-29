@@ -165,6 +165,9 @@ const $$ = s => [...document.querySelectorAll(s)];
 const board       = $('#board');
 const elFiltros   = $('#filtros');
 const elVistas    = $('#views');
+// La misma lista de vistas, abajo y en el teléfono. Es un segundo dibujo del mismo `VISTAS`,
+// no una segunda navegación: los dos usan `data-vista` y los engancha el mismo bucle.
+const elTabs      = $('#tabbar');
 const elGuardado  = $('#estadoGuardado');
 const elToast     = $('#toast');
 const elAviso     = $('#avisoEsquema');
@@ -517,6 +520,63 @@ function pintarChrome(){
       <span class="side-txt">${esc(v.label)}</span>${badge}
     </button>`;
   }).join('');
+
+  /* La barra de abajo del teléfono: las MISMAS vistas, con el mismo `data-vista`, dibujadas
+     con la forma de una barra de pestañas de aplicación. No es una navegación aparte —si lo
+     fuera habría dos lugares donde acordarse de agregar una vista— y por eso se pinta acá
+     adentro, arriba del enganche, que las cubre a las dos de un saque.
+
+     El ícono va arriba y el rótulo abajo: con el pulgar tapando la pantalla el ícono es lo
+     último que queda a la vista, igual que con la barra lateral plegada. */
+  elTabs.innerHTML = VISTAS.map(v => {
+    const on = UI.vista === v.id;
+    return `<button class="tab-it${on ? ' on' : ''}" data-vista="${v.id}"
+      aria-current="${on ? 'page' : 'false'}">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+        stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${v.ico}</svg>
+      <span>${esc(v.label)}</span>${v.backlog && nBacklog ? `<i class="tab-n">${nBacklog}</i>` : ''}
+    </button>`;
+  }).join('');
+
+  /* El encabezado del teléfono. Dice dónde estás y cuántas cosas hay, que es lo que en el
+     escritorio dicen la barra lateral y el contador de cada bloque. El número es el de la
+     vista y no uno solo para las tres: en el tablero lo que se cuenta es lo que falta cerrar
+     —lo terminado no es carga—, en el backlog lo anotado y en la caja los movimientos. */
+  const vAhora = vistaActual();
+
+  /* Las dos cosas del encabezado que solo tienen sentido sobre una lista de tareas. En la caja
+     no hay qué buscar, y adentro de la página de una tarea el `＋` no significa lo que dice —ahí
+     `＋` inserta bloques, que es otro botón y está en la fila—. Se esconden en vez de no hacer
+     nada: un control que no responde se toca dos veces antes de darse por vencido.
+
+     Va ANTES del contador porque cerrar el buscador vacía lo buscado, y el número tiene que
+     salir del filtro que efectivamente quedó puesto. */
+  $('#bBuscar').hidden = sinTareas(vAhora) || !!paginaTarea;
+  $('#bFab').hidden = !!paginaTarea;
+  /* Y lo buscado se vacía SOLO al irse a la caja, no al entrar a una tarea. Con el botón
+     escondido no quedaría con qué cerrar el buscador, y un filtro puesto detrás de un campo que
+     no está en pantalla es la forma más rápida de que el tablero parezca vacío sin que se vea
+     por qué. Adentro de una página el caso es otro: la búsqueda sigue ahí, escondida con el
+     resto de los filtros, y al volver el tablero tiene que estar como se lo dejó — buscar algo,
+     entrar a lo que apareció y volver es exactamente para lo que se busca. */
+  if (sinTareas(vAhora)) cerrarBuscador();
+
+  $('#mVista').textContent = vAhora.label;
+  $('#mCont').textContent = vAhora.caja
+    ? `${datos.caja.length} ${datos.caja.length === 1 ? 'movimiento' : 'movimientos'}`
+    : vAhora.backlog
+      ? `${nBacklog} ${nBacklog === 1 ? 'anotada' : 'anotadas'}`
+      : `${datos.tareas.filter(t => visible(t) && t.estado !== HECHO).length} sin cerrar`;
+  // El avatar del encabezado es la puerta al cajón. Sin identidad cargada queda el hueco: el
+  // cajón tiene que poder abrirse igual, que ahí adentro está «cerrar sesión».
+  $('#bYo').innerHTML = YO.id
+    ? `<span class="av mini" style="background:${colorPersona(YO.id)}">${esc(iniPersona(YO.id))}</span>`
+    : '<span class="av mini off">?</span>';
+
+  // El filtro de personas con forma de menú, para el teléfono. Va acá y no en `render()` para
+  // que el enganche de abajo lo alcance: es el mismo dato que los chips de al lado.
+  pintarFiltroPend();
+
   // Cambiar de pestaña sale de la página: si no, se elegiría una vista que no se ve.
   $$('[data-vista]').forEach(b => b.onclick = () => {
     cerrarPagina();
@@ -559,13 +619,43 @@ function pintarFiltroPrioridad(){
   }).join('');
 }
 
-function abrirMenuPrioridad(ver){
-  const cont = $('#fPrioridad');
+/* El gemelo del de prioridad, para el teléfono: las mismas personas de `#chipsPend` con la
+   forma del menú de tildes. En 390px de ancho tres chips con avatar y nombre no entran en el
+   renglón, y apilarlos se come media pantalla antes de que empiece la lista.
+
+   **Las dos formas van siempre al HTML y el CSS elige cuál se ve**, la misma regla del riel y
+   los avatares de la fila: cuál corresponde es una pregunta de ancho de pantalla. Las dos
+   escriben en el mismo `UI.f.pend`, así que no hay dos filtros que mantener de acuerdo. */
+function pintarFiltroPend(){
+  const cont = $('#fPend');
+  const boton = cont.querySelector('.sel'), menu = cont.querySelector('.selmenu');
+  const puestas = UI.f.pend;
+  boton.textContent = !puestas.length ? 'Responsable'
+    : puestas.length === 1 ? (puestas[0] === YO.id ? 'Lo mío' : nombrePersona(puestas[0]))
+    : `${puestas.length} personas`;
+  boton.classList.toggle('activo', puestas.length > 0);
+  // `data-fpend` y no `data-persona`: ese lo engancha el bucle de los chips con un `onclick`
+  // directo, y con el mismo atributo cada tilde de acá se contaría dos veces.
+  menu.innerHTML = PERSONAS.map(p => {
+    const on = puestas.includes(p.id);
+    return `<button type="button" data-fpend="${escA(p.id)}"${on ? ' class="on"' : ''} aria-pressed="${on}">
+      <span class="av mini" style="background:${p.color}">${esc(p.ini)}</span>${esc(p.id === YO.id ? 'Lo mío' : p.nombre)}
+      <span class="tick">${on ? '✓' : ''}</span>
+    </button>`;
+  }).join('');
+}
+
+/* Abrir y cerrar cualquiera de los dos menús de filtro. Fue `abrirMenuPrioridad()` hasta que
+   el teléfono sumó el de personas: con una función por menú, el segundo llega con su propia
+   copia del abierto/cerrado y del `aria-expanded`. */
+function abrirSelmulti(id, ver){
+  const cont = $(id);
   const menu = cont.querySelector('.selmenu'), boton = cont.querySelector('.sel');
   const mostrar = ver == null ? menu.hidden : ver;
   menu.hidden = !mostrar;
   boton.setAttribute('aria-expanded', String(mostrar));
 }
+const selmultiAbierto = id => !$(id + ' .selmenu').hidden;
 
 function textoBuscable(t){
   return [
@@ -600,8 +690,8 @@ const filtrando = () => {
    ============================================================ */
 function render(){
   pintarChrome();
-  // Quedó un solo filtro que se repinta: el de prioridad, que es un botón con su menú y se
-  // marca solo. El buscador y las personas ya se dibujan por su lado.
+  // El de prioridad: un botón con su menú, que se marca solo. El de personas es su gemelo y se
+  // pinta adentro de `pintarChrome()`, junto a los chips, que son la otra cara del mismo dato.
   pintarFiltroPrioridad();
   const v = vistaActual();
 
@@ -1976,13 +2066,40 @@ function renderCaja(){
       <span class="cjquien">Pagó</span><span class="cjcarga">Cargar a</span>
       <span class="cjmonto">Monto</span><span class="cjfin"></span>
     </div>
-    ${movs.length ? movs.map(filaMovimiento).join('')
+    ${movs.length ? cuerpoDeMovimientos(movs)
                   : '<p class="cjvacio">Sin movimientos todavía. Agregá el primero acá abajo.</p>'}
     <div class="cjcierre"></div>
     <button class="cjadd" type="button" data-nuevo="mov"><span>＋</span>Nuevo movimiento</button>
   </div>`;
 
   colgarManejadoresCaja();
+}
+
+/* Los movimientos, con el mes escrito cada vez que cambia. **Los separadores van SIEMPRE al
+   HTML y los esconde el CSS arriba de 760px**, la misma regla del riel y los avatares de la
+   fila: cuál de las dos formas corresponde es una pregunta de ancho de pantalla.
+
+   En el escritorio la caja es una planilla y la fecha de cada renglón está a la vista en su
+   columna, así que el mes escrito sería un renglón de más cada treinta días. En el teléfono la
+   lista se recorre con el pulgar y «24/08» sola no dice de qué mes es hasta que uno se fija en
+   el renglón de arriba.
+
+   No cambia nada de lo que ya andaba: el `↑` `↓` de la planilla salta entre `.cjrow` y esto no
+   es una, y las filas siguen viniendo de `filaMovimiento()` sin enterarse. */
+function rotuloMes(f){
+  const d = f ? new Date(f + 'T00:00:00') : null;
+  if (!d || isNaN(d)) return 'Sin fecha';
+  const s = d.toLocaleDateString('es-ES', { month:'long', year:'numeric' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+function cuerpoDeMovimientos(movs){
+  let mes = null;
+  return movs.map(m => {
+    const k = mesDe(m.fecha);
+    const cab = k === mes ? '' : `<div class="cjmes">${esc(rotuloMes(m.fecha))}</div>`;
+    mes = k;
+    return cab + filaMovimiento(m);
+  }).join('');
 }
 
 /* El número grande es lo que puso; abajo, lo que le toca bancar y el saldo que sale de
@@ -2057,7 +2174,7 @@ function filaMovimiento(m){
       ${esFijo ? `<span class="cjtag" title="${escA(porQue)}">↻ fijo</span>` : ''}
       <div class="cjnota" contenteditable="true" data-c="notas" data-ph="nota">${esc(m.notas)}</div>
     </div>
-    <button class="cjquien" type="button" data-pop="quien" title="De qué bolsillo salió la plata"><i class="cjdot${per ? '' : ' vacio'}" style="background:${per ? per.color : 'transparent'}"></i>${esc(per ? per.nombre : 'Sin asignar')}</button>
+    <button class="cjquien" type="button" data-pop="quien" title="${escA('De qué bolsillo salió la plata' + (per ? ': ' + per.nombre : ''))}"><i class="cjdot${per ? '' : ' vacio'}" style="background:${per ? per.color : 'transparent'}"></i>${esc(per ? per.nombre : 'Sin asignar')}</button>
     ${botonCarga(m)}
     <div class="cjmonto${m.monto > 0 ? ' pos' : ''}" contenteditable="true" data-c="monto">${fmtEur(m.monto)}</div>
     <button class="cjdel" type="button" data-del title="Borrar movimiento" aria-label="Borrar movimiento">🗑</button>
@@ -3207,11 +3324,27 @@ function filaTareaHTML(t){
    que hace que valga también adentro de la página de una tarea del backlog: mientras esté de
    ese lado, no hay dónde tocar para clasificarla. La tarea igual guarda su campo con el
    `semanal` de fábrica — no se migró nada y no hace falta. */
+/* **La pastilla lleva las dos formas del dato y el punto de color, siempre** (27/8/2026, por
+   pedido). Escrita entera es la del escritorio; en el teléfono se abrevia a la inicial —«C», «U»,
+   «S», «M», que son cuatro y no se pisan— con el punto del color al lado, que es lo que la sigue
+   haciendo legible sin la palabra. Cuál de las dos se ve lo decide el CSS: es una pregunta de
+   ancho de pantalla, y el ancho no se sabe desde acá. La misma regla que el riel y los avatares.
+
+   El punto no es decorativo: solo, «S» y «M» no dicen nada, y el color es lo único que se lee
+   bajando por una columna de 34px sin leer ninguna fila. En el escritorio no va —ahí está la
+   palabra, y el fondo de la pastilla ya es de ese color—.
+
+   La abreviatura va con `aria-hidden` y la frase entera en el `title` y el `aria-label`: una
+   «C» suelta no dice nada ni en pantalla ni en un lector. */
 function pillPrioridad(t){
   if (t.backlog) return '';
   const p = prioridadDe(t.prioridad);
+  const rotulo = 'Prioridad: ' + p.label.toLowerCase();
   return `<button class="pgpill tono" type="button" data-pop="prioridad"
-    style="--pb:${tint(p.color, .14)};--pc:${p.color}">${esc(p.label)}</button>`;
+    title="${escA(rotulo)}" aria-label="${escA(rotulo)}"
+    style="--pb:${tint(p.color, .14)};--pc:${p.color}"><i class="pridot"
+    style="background:${p.color}"></i><i class="prilab">${esc(p.label)}</i><i
+    class="priini" aria-hidden="true">${esc(p.label.slice(0, 1))}</i></button>`;
 }
 
 /* Quién la hace es UNA sola pill con todos los nombres adentro, y no una por persona: abre el
@@ -5159,9 +5292,12 @@ document.addEventListener('keydown', e => {
   const tag = document.activeElement?.tagName;
   if (e.key === 'Escape') {
     if ($('#lightbox').classList.contains('on')) { $('#lightbox').classList.remove('on'); return; }
-    // El menú de prioridades es lo de más arriba de todo: se cierra primero y no se lleva
-    // por delante la ficha que pueda haber abierta debajo.
-    if (!$('#fPrioridad .selmenu').hidden) { abrirMenuPrioridad(false); return; }
+    // El cajón del teléfono es lo de más arriba de todo: se cierra primero y no se lleva por
+    // delante la ficha ni la página que puedan estar abiertas debajo.
+    if (document.body.classList.contains('menu-abierto')) { cerrarCajon(); return; }
+    // Después, los menús de filtro, por lo mismo.
+    if (selmultiAbierto('#fPrioridad')) { abrirSelmulti('#fPrioridad', false); return; }
+    if (selmultiAbierto('#fPend')) { abrirSelmulti('#fPend', false); return; }
     // Con la ficha abierta encima de la página, Escape cierra la ficha y te deja en la
     // página. Recién el siguiente sale de un nivel.
     if (!tareaAbierta && paginaTarea) { salirDePagina(); return; }
@@ -5179,29 +5315,44 @@ $('#q').addEventListener('input', e => { UI.f.q = e.target.value.trim().toLowerC
    se colgaría de un botón que ya no existe. Elegir NO cierra el menú —marcar tres es un
    solo gesto—; lo cierra un clic afuera. */
 $('#fPrioridad').addEventListener('click', e => {
-  if (e.target.closest('.sel')) { abrirMenuPrioridad(); return; }
+  if (e.target.closest('.sel')) { abrirSelmulti('#fPrioridad'); return; }
   const op = e.target.closest('[data-prio]');
   if (!op) return;
   const k = op.dataset.prio, i = UI.f.prioridades.indexOf(k);
   i > -1 ? UI.f.prioridades.splice(i, 1) : UI.f.prioridades.push(k);
   render();
 });
+// El de personas del teléfono, con exactamente la misma mecánica: delegado desde el
+// contenedor, que es lo único que no se repinta, y sin cerrarse al elegir.
+$('#fPend').addEventListener('click', e => {
+  if (e.target.closest('.sel')) { abrirSelmulti('#fPend'); return; }
+  const op = e.target.closest('[data-fpend]');
+  if (!op) return;
+  const k = op.dataset.fpend, i = UI.f.pend.indexOf(k);
+  i > -1 ? UI.f.pend.splice(i, 1) : UI.f.pend.push(k);
+  render();
+});
 // En captura y no al burbujear: elegir una opción repinta el menú, así que si esto corriera
 // después el botón que se tocó ya estaría fuera del documento, `closest` no encontraría el
 // contenedor y el menú se cerraría solo en cada tilde.
 document.addEventListener('click', e => {
-  if (!e.target.closest('#fPrioridad')) abrirMenuPrioridad(false);
+  if (!e.target.closest('#fPrioridad')) abrirSelmulti('#fPrioridad', false);
+  if (!e.target.closest('#fPend')) abrirSelmulti('#fPend', false);
 }, true);
 /* Acá vivía el enganche del segmentado de layout, que además cerraba el menú `⋯` de paso: la
    fila que lo tenía abierto podía no existir en el dibujo siguiente. Con un solo layout no hay
    de dónde a dónde cambiar, así que se fue con el segmentado. Cambiar de VISTA sigue
    cerrándolo, arriba, por el mismo motivo. */
-$('#bNueva').onclick = e => {
+/* «+ Nueva tarea» del encabezado y el `＋` flotante del teléfono son el mismo camino, así que
+   es una sola función y no dos copias. Lo único que cambia entre las dos puertas es el
+   anclaje: el menú de responsables se cuelga del botón que se tocó, y en el teléfono el del
+   encabezado ni siquiera está en pantalla. */
+function nuevaDesdeBarra(ancla, e){
   cerrarPagina();
   const v = vistaActual();
   // Primero quién la hace y recién después la fila: el cambio de vista también espera, para
   // que cerrar el menú sin elegir no deje al usuario en otra pantalla y sin tarea.
-  pedirResponsable($('#bNueva'), e, quien => {
+  pedirResponsable(ancla, e, quien => {
     // En el backlog la tarea nace ahí mismo, en el primer sprint y lista para escribirle el
     // título: abrir el detalle para una línea que todavía no dice nada sería un estorbo.
     if (v.backlog) return nuevaEnBacklog(sprintsVisibles()[0], null, quien);
@@ -5215,7 +5366,77 @@ $('#bNueva').onclick = e => {
        la ficha. */
     nuevaEnEstado(ESTADOS[0].id, null, quien);
   });
+}
+$('#bNueva').onclick = e => nuevaDesdeBarra($('#bNueva'), e);
+
+/* ---------- lo propio del teléfono ----------
+   Tres controles que en el escritorio no existen porque ahí hay lugar: el `＋` flotante, el
+   buscador que se despliega y el cajón con lo que vive en la barra lateral. Los tres están
+   siempre en el HTML y los esconde el CSS, así que acá no se pregunta por el ancho de
+   pantalla en ningún lado — un manejador colgado de un botón escondido no molesta a nadie. */
+
+/* El `＋` flotante. En el tablero y en el backlog hace exactamente lo mismo que «+ Nueva
+   tarea», con la misma función: es la misma puerta, movida a donde llega el pulgar.
+
+   **En la caja carga un movimiento y no una tarea**, que es lo único en lo que se separa del
+   botón del encabezado. El «＋ Nuevo movimiento» de esa pantalla está al final de la lista, y
+   en un teléfono eso es scrollear treinta renglones para anotar un gasto; el del encabezado,
+   en cambio, manda al tablero a crear una tarea, que no es lo que se vino a hacer acá. */
+$('#bFab').onclick = e => {
+  if (vistaActual().caja) return nuevoMovimiento();
+  nuevaDesdeBarra($('#bFab'), e);
 };
+
+/* El buscador se despliega. En 390px de ancho un campo de texto y dos filtros no entran en el
+   mismo renglón, y de las tres cosas la búsqueda es la que se usa de a ratos: las otras dos
+   quedan a la vista y esta aparece cuando se la pide.
+
+   **Cerrarlo vacía lo buscado.** Un filtro puesto detrás de un campo escondido es la forma más
+   rápida de que el tablero parezca vacío sin que se vea por qué — y acá el campo se esconde de
+   verdad, no se achica como en el escritorio.
+
+   `cerrarBuscador()` no repinta: lo llama también `pintarChrome()`, en medio de un `render()`
+   que todavía no dibujó el tablero, y desde ahí un repintado sería una vuelta infinita.
+   Devuelve si había algo puesto, para que quien lo llame de afuera decida. */
+function cerrarBuscador(){
+  document.body.classList.remove('buscando');
+  $('#bBuscar').setAttribute('aria-expanded', 'false');
+  const habia = !!UI.f.q;
+  $('#q').value = '';
+  UI.f.q = '';
+  return habia;
+}
+$('#bBuscar').onclick = () => {
+  if (document.body.classList.contains('buscando')) {
+    if (cerrarBuscador()) render();
+    return;
+  }
+  document.body.classList.add('buscando');
+  $('#bBuscar').setAttribute('aria-expanded', 'true');
+  $('#q').focus();
+};
+
+/* El cajón: la barra lateral de siempre, que en el teléfono no puede vivir plegada en una
+   canaleta —no hay hover, y 44px de ancho son un octavo de la pantalla—. Se abre desde el
+   avatar del encabezado y adentro queda lo que no son vistas: quién sos, el aviso de esquema,
+   exportar y cerrar sesión. Las vistas están en la barra de abajo, así que ahí adentro no se
+   dibujan: dos lugares para lo mismo son dos lugares que hay que aprenderse. */
+function cerrarCajon(){
+  document.body.classList.remove('menu-abierto');
+  $('#sideScrim').hidden = true;
+  $('#bYo').setAttribute('aria-expanded', 'false');
+}
+$('#bYo').onclick = () => {
+  const abrir = !document.body.classList.contains('menu-abierto');
+  document.body.classList.toggle('menu-abierto', abrir);
+  $('#sideScrim').hidden = !abrir;
+  $('#bYo').setAttribute('aria-expanded', String(abrir));
+};
+$('#sideScrim').onclick = cerrarCajon;
+// Lo que se hace desde el cajón se hace una vez y cierra: dejarlo abierto encima del tablero
+// después de exportar obliga a un toque más para volver a lo que se estaba mirando.
+$('#side').addEventListener('click', e => { if (e.target.closest('.side-act')) cerrarCajon(); });
+
 $('#bCsv').onclick = () => {
   const q = v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
   const cab = ['ID','Titulo','Estado','Prioridad','Pendiente de','Grupo','Donde','Notas','Subtareas','Conversacion','Archivos'];

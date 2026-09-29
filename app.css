@@ -956,6 +956,12 @@ kbd{font:600 10.5px var(--font);background:var(--rail);border-radius:4px;padding
   font-weight:500;white-space:nowrap}
 .pgpill.mono{font-family:var(--mono);font-size:10px;color:#73788A}
 .pgpill.tono{border-color:transparent;background:var(--pb);color:var(--pc);font-weight:600}
+/* La prioridad lleva las tres piezas en el HTML y acá se ve una sola: la palabra entera. El
+   punto de color y la inicial son la forma del teléfono, donde no hay ancho para la palabra —
+   cuál corresponde es una pregunta de ancho de pantalla y el ancho no se sabe desde el JS. Acá
+   el punto sobraría: el fondo de la pastilla ya es de ese color y al lado está el nombre. */
+.pgpill.tono i{font-style:normal}
+.pridot,.priini{display:none}
 button.pgpill:hover{filter:brightness(.96)}
 .pgpill.ok{color:var(--ok);border-color:#C6DDCC;background:#F1F7F2}
 .pgpill.edad{color:#787D8E;border-color:transparent;background:transparent;padding-left:2px;
@@ -1324,45 +1330,323 @@ button.pgpill:hover{filter:brightness(.96)}
 .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(60px);background:var(--ink);color:#fff;font-size:13px;font-weight:600;padding:10px 16px;border-radius:10px;z-index:120;opacity:0;transition:.22s;pointer-events:none;max-width:80vw;text-align:center;line-height:1.5}
 .toast.on{opacity:1;transform:translateX(-50%)}
 
-/* ---------- Responsive ---------- */
+/* ---------- lo propio del teléfono ----------
+   Cuatro piezas que en el escritorio no existen porque ahí hay lugar de sobra: el encabezado
+   compacto (`.mhead`), la barra de vistas de abajo (`.tabbar`), el `＋` flotante (`.fab`) y el
+   fondo del cajón (`.side-scrim`). Más el separador de mes de la caja (`.cjmes`) y el filtro de
+   personas con forma de menú (`#fPend`), que son la otra cara de algo que ya existe.
+
+   **Las seis van SIEMPRE al HTML y acá arrancan escondidas**: cuál de las dos formas
+   corresponde es una pregunta de ancho de pantalla, y el ancho no se sabe desde el JS. Es la
+   misma regla que ya tenían el riel de la fila, los avatares y el rótulo del pase al tablero.
+   Todo lo que las prende vive en el `@media(max-width:760px)` de más abajo, y no hay nada que
+   deshacer acá arriba. */
+.mhead,.tabbar,.fab,.side-scrim,.cjmes,#fPend{display:none}
+
+/* ---------- Responsive ----------
+   El teléfono no es el escritorio apretado: es otra forma de la misma pantalla. Lo que cambia
+   de fondo son tres cosas, y las tres salen del mismo hecho de que no hay hover ni ancho:
+
+   - **A dónde ir se va abajo.** La barra lateral vivía plegada en una canaleta que se abría al
+     pasar el cursor, y sin cursor eso no existe. Las vistas pasan a la barra de abajo, donde
+     llega el pulgar; lo demás de la barra —quién sos, exportar, salir— queda en un cajón que
+     abre el avatar del encabezado.
+   - **La fila deja de ser una fila y pasa a ser una tarjeta.** Sin ancho para columnas, el
+     título se lleva el renglón entero y todo lo demás baja a un segundo renglón. El riel de la
+     puerta se convierte en el borde izquierdo de la tarjeta: el mismo dato, el mismo color.
+   - **Lo que se esconde al pasar por encima se queda prendido.** Sin hover, esconder es
+     esconder para siempre. */
 @media(max-width:760px){
-  .board{padding:12px}
-  /* Acá se achicaban las columnas del kanban a 82vw —en un teléfono no entran cuatro por más
-     que se repartan el ancho— y se envolvía la tarjeta del modo filas. Las dos se fueron con
-     las tarjetas: la lista ya baja a una sola columna en cuanto no entran las tres, y de eso
-     se ocupa el `@media(min-width:1121px)` que envuelve todo el tratamiento de `.bkcols`. */
-  .search input{width:100%}
-  .search{flex:1 1 100%}
-  .bar{padding-left:14px;padding-right:14px;gap:8px}
+  /* ---------- el encabezado ----------
+     Dos renglones: dónde estás y con qué filtrar. El primero lo ocupa entero `.mhead` y en el
+     segundo conviven los filtros y la campana, que es la única acción del tablero que sobrevive
+     acá arriba —«+ Nueva tarea» se fue al `＋` flotante—. `flex-wrap` y no `column`: la campana
+     tiene que compartir renglón con los filtros y no llevarse uno propio. */
+  .bar{flex-wrap:wrap;gap:8px 10px;padding:9px 12px}
+  .mhead{display:flex;align-items:center;gap:10px;flex:1 1 100%}
+  .mtit{display:flex;align-items:baseline;gap:8px;flex:1;min-width:0}
+  /* El nombre de la vista es lo único que dice dónde estás: en el escritorio eso lo dice el
+     renglón encendido de la barra lateral, que acá no está a la vista. */
+  .mtit b{font-family:var(--display);font-size:21px;font-weight:700;letter-spacing:-.02em;
+    color:var(--ink);white-space:nowrap}
+  .mtit small{min-width:0;font-size:11.5px;font-weight:600;color:var(--ink-3);
+    font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .micon,.myo{flex:none;width:34px;height:34px;border-radius:10px;display:grid;place-items:center}
+  /* El `display:grid` de arriba pisa al `display:none` que trae el atributo `hidden`, así que
+     esconder el 🔍 en la caja hay que decirlo otra vez. Lo mismo el `＋` flotante. */
+  .micon[hidden],.fab[hidden]{display:none}
+  .micon{border:1px solid var(--line);background:#fff;color:var(--ink-2)}
+  .micon:hover{border-color:#C9CCD8;color:var(--ink)}
+  /* Prendido cuando el buscador está desplegado: es lo único que dice que ese campo lo abriste
+     vos y que se cierra con el mismo botón. */
+  body.buscando .micon{border-color:var(--accent);background:#F2F1FB;color:var(--accent)}
+  .myo .av.mini{width:29px;height:29px;font-size:11px}
+
+  /* ---------- los filtros ----------
+     Dos menús y nada más. Los chips con avatar y nombre no entran en el renglón —tres de esos
+     son más anchos que la pantalla— así que las personas se eligen del mismo menú de tildes que
+     las prioridades. El buscador se despliega desde el 🔍 y se lleva su propio renglón: en
+     línea con los dos menús no le quedaría ancho para escribir. */
+  .filters{flex:1 1 auto;gap:6px}
   .estado-guardado{min-width:0}
-  /* Sin cursor no hay hover: la barra se abre al tocar cualquiera de sus renglones, que es
-     lo que hace `:focus-within`. La canaleta se achica porque en 360px de ancho 54px son
-     casi un sexto de la pantalla. */
-  :root{--rail-w:44px}
-  .side:hover .side-in,.side:focus-within .side-in{width:min(var(--side-w),72vw)}
-  .side-top{padding-left:9px}
-  .side-nav,.side-pie{padding-left:4px;padding-right:4px}
+  #chipsPend{display:none}
+  #fPend{display:block}
+  .selmulti > .sel{min-width:0;height:32px;padding:0 9px;font-size:12.5px}
+  .selmenu{min-width:min(230px,calc(100vw - 48px));padding:5px}
+  .selmenu button{height:38px;font-size:13.5px}
+  .search{display:none}
+  body.buscando .search{display:block;flex:1 1 100%}
+  /* 16px y no 12.5: abajo de 16 el navegador del teléfono hace zoom solo al tocar el campo, y
+     de ese zoom no se vuelve — la pantalla queda corrida hasta que se recarga. */
+  .search input{width:100%;height:34px;font-size:16px;padding-left:30px}
+  .search svg{top:11px}
+  /* «+ Nueva tarea» se fue al `＋` flotante: dos puertas a lo mismo, y arriba compite con el
+     título de la vista. La campana se queda — es un aviso, no una acción, y tiene que verse
+     sin abrir nada. */
+  #bNueva{display:none}
+
+  /* ---------- la barra de vistas ----------
+     Fija abajo y apoyada encima del tablero, no dentro del flujo. Va por debajo de los modales
+     (60) y de los menús colgantes (70), por lo mismo que la barra lateral: una barra que se
+     dibuje encima de una ficha abierta es un manotazo. */
+  .tabbar{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:45;
+    gap:4px;padding:7px 8px calc(7px + env(safe-area-inset-bottom));
+    background:rgba(255,255,255,.97);border-top:1px solid var(--line);
+    -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  /* El ícono arriba y el rótulo abajo: con el pulgar encima de la pantalla el ícono es lo
+     último que queda a la vista, igual que con la barra lateral plegada. */
+  .tab-it{flex:1 1 0;min-width:0;position:relative;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:3px;height:46px;border-radius:11px;
+    color:var(--ink-3);font-size:10.5px;font-weight:600;transition:color .12s,background .12s}
+  .tab-it.on{color:var(--accent);background:#F2F1FB}
+  .tab-it:active{opacity:.6}
+  /* El contador del backlog, colgado del ícono. Es el mismo número que el `<small>` de la barra
+     lateral, con la forma que entra en 46px de alto. */
+  .tab-n{position:absolute;top:1px;left:calc(50% + 5px);min-width:15px;height:15px;padding:0 4px;
+    border-radius:8px;background:var(--rail);color:var(--ink-3);font-family:var(--mono);
+    font-size:9px;font-weight:700;font-style:normal;line-height:15px;text-align:center}
+  .tab-it.on .tab-n{background:var(--accent);color:#fff}
+
+  /* ---------- el `＋` flotante ----------
+     Por debajo de la barra de vistas y no encima: si se pisaran, el que tiene que ganar es a
+     dónde ir. Se apoya en la esquina donde cae el pulgar, que es la razón de que exista. */
+  .fab{display:grid;place-items:center;position:fixed;right:16px;z-index:44;
+    bottom:calc(76px + env(safe-area-inset-bottom));
+    width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;
+    font-size:24px;line-height:1;box-shadow:0 6px 20px rgba(110,107,160,.4)}
+  .fab:active{filter:brightness(.94)}
+
+  /* ---------- el cajón ----------
+     La barra lateral de siempre, sin canaleta: sin hover no hay con qué abrirla al pasar, y
+     44px de ancho fijo son un octavo de la pantalla gastados en tres íconos. Se abre desde el
+     avatar del encabezado y se cierra tocando el fondo o con Escape.
+
+     Las vistas NO se dibujan ahí adentro: están en la barra de abajo, y dos lugares para lo
+     mismo son dos lugares que hay que aprenderse. */
+  /* Sigue por debajo de los modales (60) y del visor de imágenes (80), como en el escritorio, y
+     por encima de la barra de abajo (45): el cajón es navegación, no una pantalla. Acá se abre
+     a propósito y no al rozarlo, así que no hace falta bajarlo hasta los 40 de allá. */
+  .side{position:fixed;left:0;top:0;bottom:0;flex:0 0 0;width:0;z-index:58}
+  .side-in{width:0;border-right-color:transparent}
+  /* El hover se anula a mano: en un teléfono un `:hover` se queda pegado después de tocar, y
+     el cajón quedaría medio abierto sin que nadie lo haya pedido. */
+  .side:hover .side-in,.side:focus-within .side-in{width:0;box-shadow:none}
+  body.menu-abierto .side-in{width:min(268px,80vw);border-right-color:var(--line);
+    box-shadow:8px 0 30px rgba(20,22,34,.22)}
+  body.menu-abierto .side-txt,body.menu-abierto .side-brand{opacity:1}
+  .side-nav{display:none}
+  .side-scrim{display:block;position:fixed;inset:0;z-index:57;background:rgba(18,19,26,.42)}
+  .side-scrim[hidden]{display:none}
   .nota-pop{left:auto;right:10px;bottom:10px;width:min(320px,calc(100vw - 64px))}
   .nota-pop::before{display:none}
-  /* En un teléfono la canaleta de 44px es casi un quinto del ancho. Se achica y los
-     controles se quedan prendidos: sin hover, esconderlos sería esconderlos para siempre. */
-  .pgwrap{--pgcan:28px;padding:0 12px 160px}
-  .cjwrap{--pgcan:22px;padding:0 12px 120px}
-  .pgctl,.pgdel,.pgabrir,.cjdel,.cjquitar,.pgpill.lapiz{opacity:1}
-  /* La nota y la categoría se van: en 360px de ancho, fecha, concepto, quién y monto ya no
-     entran cómodos. Se siguen editando desde el escritorio. */
-  .cjnota,.cjcat{display:none}
-  .cjquien{width:74px}
-  /* «Cargar a» no se esconde entera como la nota y la categoría: es plata, y un gasto que
-     se le carga a uno solo leído como compartido es un saldo mal. Se queda el punto —color
-     es de alguien, hueco es de todos— y se va el rótulo, que no entra. El punto también es
-     lo que deja dónde tocar para cambiarlo desde el teléfono.
 
-     Ancho fijo y no `auto`: el encabezado es la misma rejilla de flex que las filas, y una
-     columna que mide distinto arriba que abajo corre de lugar todos los rótulos que siguen. */
-  .cjcarga{width:16px}
-  .cjcarga b{display:none}
-  .cjmonto{width:82px}
+  /* ---------- sin hover, nada se esconde ---------- */
+  .board{padding:10px 10px 0}
+  .pgctl,.pgdel,.pgabrir,.cjdel,.cjquitar,.pgpill.lapiz{opacity:1}
+
+  /* ---------- la lista, en tarjetas ----------
+     La canaleta desaparece: en 390px de ancho 48px reservados para dos controles son un octavo
+     de la pantalla, y los dos controles se acomodan al final del renglón. Con la canaleta se va
+     también la guía vertical del bloque, que colgaba de ella. */
+  .pgwrap.bkwrap{--pgcan:0;padding:0 10px 150px}
+  .bkwrap .pgkids{padding-left:0;padding-top:8px}
+  .bkwrap .pgkids::before{display:none}
+  .bkwrap .pgadd-fila{padding-left:2px;padding-top:6px;padding-bottom:6px}
+  .bknota-txt{font-size:14px}
+
+  /* La cabecera del bloque: el `＋` se va al final del renglón. Sin canaleta no hay dónde
+     ponerlo delante, y delante del nombre es lo primero que se toca sin querer al ir a plegar. */
+  .bksprint{margin-top:20px}
+  .bksprint:first-child{margin-top:2px}
+  .bksprint .pgctl{order:9;width:auto;padding:0}
+  .bkfold{flex:0 1 auto;min-width:0;height:36px}
+  .bkname{min-width:0;overflow:hidden;text-overflow:ellipsis}
+
+  /* La fila. Es el MISMO renglón con las mismas clases —nada de esto lo sabe el JS— y lo que
+     cambia es el reparto: **el título a la izquierda y todo lo demás clavado a la derecha**
+     (27/8/2026, por pedido), en el mismo renglón y no en dos.
+
+     Estuvo unas horas con el título llevándose la primera línea entera y las catalogaciones
+     abajo, y se cambió el mismo día: con cuarenta tarjetas, lo de abajo arrancaba en el borde
+     izquierdo y cada renglón tenía una cantidad distinta de cosas, así que la prioridad de uno
+     caía a la altura del área del otro. Es exactamente el problema que las columnas de ancho
+     fijo vinieron a resolver en el escritorio. Pegado a la derecha se lee bajando.
+
+     `justify-content:flex-end` es para el caso en que no entre todo: lo que envuelve baja
+     alineado a la derecha y no al borde izquierdo, que es donde vive el título. En el renglón
+     de arriba no hace nada —el título se come el espacio libre— y ahí está la gracia. */
+  .bktarea{position:relative;flex-wrap:wrap;justify-content:flex-end;align-items:flex-start;
+    gap:6px;margin:0 0 7px;padding:11px 12px 11px 13px;
+    background:#fff;border:1px solid var(--line);border-radius:12px}
+  .bktarea:hover{background:#fff}
+  /* El riel de la puerta pasa a ser el borde izquierdo de la tarjeta: el mismo color y el mismo
+     dato que en la lista en columnas —prioridad en el tablero, antigüedad en el backlog—. Va
+     `absolute` y no como ítem del flex porque la fila envuelve, y en una fila envuelta
+     `align-self:stretch` mide una línea y no la tarjeta. */
+  .bktarea .pgpg{position:absolute;left:0;top:0;bottom:0;width:3px;height:auto;padding:0;
+    border-radius:12px 0 0 12px;overflow:hidden}
+  .bktarea .pgpg:hover{background:none}
+  .bktarea .pgpgico{display:none}
+  .bktarea .pgriel{display:block;width:100%;height:100%;background-color:var(--pri,var(--line))}
+  /* El título, hasta cuatro líneas, y es lo único elástico del renglón.
+
+     `flex:1 1 0` y no `1 1 auto`: con la base en el contenido, un título largo reclama su ancho
+     entero y se lleva el renglón solo, y todo lo demás envuelve. Con la base en cero se estira
+     hasta donde llegue lo que tiene al lado, que es lo que lo clava a la derecha.
+
+     El `min-width` es el piso: si lo de la derecha no entra, el título NO se achica hasta
+     desaparecer —con la base en cero y sin piso eso es exactamente lo que pasa— sino que hace
+     envolver a las catalogaciones, que bajan alineadas a la derecha. */
+  .bktarea .pgtxt{order:1;flex:1 1 0;min-width:140px;padding:0;
+    white-space:normal;overflow:hidden;text-overflow:clip;
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;
+    font-size:13.5px;font-weight:500;line-height:1.4;color:var(--ink)}
+  .bktarea .pgtxt.bktitedit{display:block;flex:1 1 auto;-webkit-line-clamp:none;
+    white-space:nowrap;font-size:14px}
+  /* Lo de la derecha, cada cosa en su columna y en el orden en que se mira: quién la hace, qué
+     tan urgente es, cuánto lleva y qué se puede hacer con ella (27/8/2026, por pedido).
+
+     **Todas las columnas tienen ancho reservado, los avatares incluidos.** Estuvieron unas
+     horas midiendo lo que midieran, puestos primeros para que su ancho variable moviera solo el
+     borde del título; se cambió el mismo día porque eso no es una columna: con uno o con tres
+     responsables la prioridad caía en una x distinta, que es justo lo que rompe leer bajando.
+     Ahora el hueco es el de la lista entera de gente —`--avn` sale de `APP_CONFIG.personas`,
+     que es el techo real porque el menú no ofrece a nadie más— y las iniciales arrancan pegadas
+     a su izquierda, así que la primera cae siempre en el mismo lugar. Es la misma regla y la
+     misma cuenta del escritorio; lo que la hace pagable acá es la prioridad abreviada, que pasó
+     de 58px a 34. */
+  .bktarea > .nuevo{order:2;margin:0}
+  .bktarea .bkav{order:3;display:flex;justify-content:flex-start;padding-left:0;
+    width:calc(var(--avn,3) * 25px - 2px)}
+  .bktarea .pgcol-pri{order:4}
+  .bktarea .pgcol-dias{order:5}
+  .bktarea .pgcol-ir{order:6}
+  .bktarea .pgctl{order:7;width:auto;padding:0}
+  /* El montón que se pega al título —código, de qué depende, de qué área es— se esconde, por
+     lo mismo y con la misma regla que en la lista en columnas: el título es lo que se viene a
+     leer y era lo único que se estaba recortando. Un racimo que cambia de largo en cada
+     renglón es justo lo que rompe que la lista se lea bajando. Se ven entrando a la tarea. */
+  .bktarea .pgpills{display:none}
+  /* El espaciador no hace falta: el que empuja es el título. Con los dos creciendo, el espacio
+     libre se reparte entre ambos y las catalogaciones quedan flotando a media distancia. */
+  .bktarea .pgesp{display:none}
+  /* Los responsables son los avatares y no la pastilla: tres nombres escritos se comen el
+     renglón entero, y acá el avatar además es el blanco al que hay que apuntarle. */
+  .bktarea .pgcol-quien{display:none}
+  /* Los anchos siguen siendo fijos y por lo mismo de siempre: son cuatro prioridades posibles y
+     un número de dos cifras, así que reservar lo que miden cuesta menos que hacer que el
+     renglón se recalcule según lo que tenga adentro. Lo que sobra o falta se lo lleva el
+     título. Los del escritorio no sirven acá —son de una fila que tiene el doble de ancho— así
+     que se recortan a lo justo. */
+  .bktarea .pgcol{margin-left:0}
+  /* La prioridad, abreviada a la inicial con su punto de color (27/8/2026, por pedido). 34px en
+     vez de 58, y esos 24px son los que pagan el hueco reservado de los avatares — sin la
+     abreviatura, las dos columnas juntas no entran al lado de un título legible. La palabra
+     entera sigue estando en el `title`. */
+  .bktarea .pgcol-pri{width:34px}
+  .bktarea .pgcol-pri .pgpill{justify-content:center;width:100%;gap:4px;padding:4px 0}
+  .bktarea .prilab{display:none}
+  .bktarea .priini{display:inline}
+  .bktarea .pridot{display:block;width:6px;height:6px;flex:none;border-radius:50%}
+  .bktarea .pgcol-dias{width:24px}
+  .bktarea .pgcol-ir{width:32px}
+  /* El rótulo del pase se va y queda la flecha, como en la lista en columnas y por lo mismo:
+     el ancho que gasta se lo lleva el título. */
+  .bktarea .pgpill.ir{justify-content:center;width:100%;padding:3px 0;font-size:13px;
+    line-height:1.4;border-color:var(--accent);background:#EFEEF7}
+  .bktarea .pgpill.ir .irtxt{display:none}
+  /* El `⠿` se va: el arrastre del navegador no funciona con el dedo, así que sería un control
+     que no hace nada. **Contrapartida asumida**: en el teléfono una tarea se cambia de bloque
+     desde el menú `⋯`, que es el mismo camino y sigue estando. */
+  .bktarea .pgdrag{display:none}
+  /* El menú `⋯` cae debajo de la tarjeta y del ancho de la tarjeta: colgado a 26px del borde
+     de arriba quedaría encima del título que se vino a leer. Y sube por encima de la barra de
+     abajo: en la última tarjeta a la vista, con los 20 de siempre, el menú se abriría tapado. */
+  .bktarea .pgpop{top:calc(100% - 4px);left:6px;right:6px;width:auto;z-index:46}
+  .pgpop button{height:38px;font-size:13.5px}
+  /* Los blancos crecen. Un `⋯` de 18px y una pastilla de 20px de alto se aciertan con el mouse
+     y no con el dedo, que necesita bastante más. El ancho que cuesta es el que dejó de gastar
+     la canaleta. */
+  .bktarea .pgadd,.bksprint .pgadd{width:28px;height:28px;font-size:15px}
+  .bktarea .pgpill{padding:4px 9px;font-size:11px}
+  .bkwrap .pgnew{padding-left:2px}
+
+  /* ---------- la página de una tarea ---------- */
+  .pgwrap{--pgcan:28px;padding:0 12px 170px}
   .pgtitle{font-size:15.5px;padding:9px 12px 10px}
   .pgpop{left:0;width:min(224px,calc(100vw - 40px))}
+
+  /* ---------- la caja ----------
+     La miga y el título se van: el encabezado del teléfono ya dice «Caja» y cuántos
+     movimientos hay, y repetirlo son dos renglones antes de que empiece la plata. */
+  .cjwrap{--pgcan:0;padding:0 10px 150px}
+  .cjwrap > .pgbc,.cjwrap > .pgtitle{display:none}
+  .cjcards,.cjsec,.cjfijos,.cjadd{margin-left:0}
+  .cjcards{gap:8px}
+  .cjcard{border-radius:14px;padding:13px 15px}
+  .cjnum{font-size:24px}
+  .cjhead{display:none}
+  .cjcierre{display:none}
+  .cjvacio{padding-left:12px}
+  /* El mes escrito cada vez que cambia. En el escritorio la caja es una planilla y la fecha
+     está en su columna; acá la lista se recorre con el pulgar y «24/08» sola no dice de qué mes
+     es hasta que uno se fija en el renglón de arriba. */
+  .cjmes{display:block;margin:20px 0 7px 2px;font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.09em;text-transform:uppercase;color:var(--ink-3)}
+  .cjmes:first-of-type{margin-top:10px}
+  /* El movimiento, como tarjeta. El concepto se lleva la primera línea de su bloque y la
+     categoría baja a la segunda: el que envuelve es `.cjmid`, así que el monto, quién pagó y a
+     quién se le carga quedan centrados a la derecha sin partirse en dos renglones. */
+  .cjrow{flex-wrap:wrap;align-items:center;gap:5px 9px;margin-bottom:7px;padding:10px 12px;
+    border:1px solid var(--line);border-radius:12px;background:#fff}
+  .cjrow:hover{background:#fff}
+  .cjctl{width:auto;padding:0}
+  .cjctl:empty{display:none}
+  .cjfecha{width:32px;font-size:11px;line-height:1.3}
+  .cjmid{flex:1 1 0;min-width:0;flex-wrap:wrap;align-items:center;gap:2px 7px}
+  .cjcon{flex:1 1 100%;font-size:14px;font-weight:500;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* La categoría vuelve: en su propio renglón, adentro del bloque del concepto, sí entra. La
+     nota sigue afuera — es lo último del renglón y en un teléfono no hay último. */
+  .cjcat{display:inline-flex;max-width:100%;font-size:9.5px;padding:1px 7px;
+    overflow:hidden;text-overflow:ellipsis}
+  .cjnota{display:none}
+  .cjmonto{width:auto;min-width:68px;font-size:14px}
+  /* «Pagó» y «Cargar a» se quedan en el punto de color. Es plata: un gasto imputado a uno
+     leído como compartido es un saldo mal, así que ninguno de los dos se esconde entero —color
+     es de alguien, hueco es de todos—. El rótulo no entra y el punto sube a 11px, que es lo
+     que hace que se pueda tocar con el dedo. Los nombres están en el `title`. */
+  /* El nombre se recorta contra el borde derecho y no se centra: centrado, con el contenido más
+     ancho que la caja, lo que se sale por los dos lados es justo el punto de color, que es lo
+     único que hay que ver. */
+  .cjquien{width:22px;gap:0;justify-content:flex-start;padding-left:5px;overflow:hidden}
+  .cjquien .cjdot{width:11px;height:11px}
+  /* «Cargar a» dibuja un punto por persona cuando el gasto es de alguien en particular, así que
+     tiene que entrar la lista entera: son 9px cada uno y como mucho hay tres. Acá sí se centra
+     —adentro solo hay puntos, el rótulo está escondido— y por eso no se recorta nada. */
+  .cjcarga{width:30px;gap:1px;justify-content:center;overflow:hidden}
+  .cjcarga .cjdot{width:9px;height:9px}
+  .cjcarga b{display:none}
+  .cjfijo{padding:9px 10px}
+  .cjfijo .cjcarga{width:auto}
 }
