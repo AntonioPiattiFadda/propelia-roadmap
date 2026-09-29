@@ -18,6 +18,9 @@ const TABLAS = Object.assign(
     // migraciones pendientes hacía semanas: esta ya estaba corrida, con su RLS por miembro
     // y publicada en realtime. Ver el CLAUDE.md.
     grupos: 'roadmap_notas',
+    // Quién es quién (29/9/2026). Reemplaza a `app_miembros` + `APP_CONFIG.personas`: tener
+    // fila acá ES tener acceso, y la fila dice nombre, color y si pone plata en la caja.
+    usuarios: 'users',
   },
   _CFG.tablas || {}
 );
@@ -38,7 +41,6 @@ const idGrupo = n => PREFIJO_GRUPO + n;
 const ID_NOTA = 'nota-backlog';
 const BUCKET = _CFG.bucket || 'roadmap-adjuntos';
 const CANAL = _CFG.canal || 'roadmap-sync';
-const PROYECTO = _CFG.proyecto || 'propelia';
 
 const arr = v => (Array.isArray(v) ? v : []);
 
@@ -158,16 +160,18 @@ const RoadmapSync = {
   // avisar en pantalla en vez de fallar en silencio al guardar.
   async faltantesDeEsquema() {
     const faltan = [];
-    const [tareas, caja, backlog, carga] = await Promise.all([
+    const [tareas, caja, backlog, carga, usuarios] = await Promise.all([
       supabaseClient.from(TABLAS.tareas).select('prioridad,tipo,hoy,pend,creada').limit(1),
       supabaseClient.from(TABLAS.caja).select('repite,origen').limit(1),
       supabaseClient.from(TABLAS.tareas).select('backlog,sprint,dep,loom').limit(1),
       supabaseClient.from(TABLAS.caja).select('carga').limit(1),
+      supabaseClient.from(TABLAS.usuarios).select('activo,caja').limit(1),
     ]);
     if (tareas.error) faltan.push('los campos nuevos de las tareas (prioridad, tipo, hoy, responsables)');
     if (caja.error) faltan.push('los gastos fijos de la caja');
     if (backlog.error) faltan.push('el backlog y los grupos');
     if (carga.error) faltan.push('a quién se le carga cada gasto de la caja');
+    if (usuarios.error) faltan.push('la tabla de usuarios');
     return faltan;
   },
 
@@ -326,17 +330,20 @@ RoadmapSync.sesionActiva = async function () {
   return !!data.session;
 };
 
-RoadmapSync.emailActual = async function () {
+RoadmapSync.idActual = async function () {
   const { data } = await supabaseClient.auth.getUser();
-  return data.user?.email || null;
+  return data.user?.id || null;
 };
 
-// ¿La cuenta logueada es miembro del tablero? Sale de `app_miembros` en Supabase
-// (protegida por RLS), no de un mapa escrito en el HTML.
-RoadmapSync.esMiembro = async function () {
-  const { data, error } = await supabaseClient.from('app_miembros').select('proyecto');
+// El equipo entero. La RLS de `users` deja leer la tabla solo a quien tiene fila activa en
+// ella, así que una cuenta sin acceso recibe una lista vacía: no hay una consulta aparte para
+// preguntar «¿puedo entrar?». Esa pregunta ya no existe como tal.
+RoadmapSync.cargarUsuarios = async function () {
+  const { data, error } = await supabaseClient
+    .from(TABLAS.usuarios)
+    .select('id,email,nombre,iniciales,color,caja,activo');
   if (error) throw error;
-  return (data || []).some(r => r.proyecto === PROYECTO);
+  return data || [];
 };
 
 RoadmapSync.iniciarSesion = async function (email, password) {
