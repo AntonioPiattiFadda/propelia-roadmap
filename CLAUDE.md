@@ -1,5 +1,28 @@
 # Convenciones del proyecto
 
+## El frontend nuevo (React) — leer primero
+
+**Desde el 29/9/2026 la raíz del repo es un proyecto Vite + React** (rama `frontend-react`
+hasta que se mergee). Tres páginas en la barra lateral: Roadmap, CRM y Caja. Diseño en
+`docs/superpowers/specs/2026-09-29-frontend-react-cascara-design.md`.
+
+- **Stack y design system copiados de `propelia-frontend`**: React 19, Vite, TS, Tailwind v4,
+  shadcn/Radix, TanStack Query, sonner, lucide. `src/components/ui` y `src/index.css` son
+  copias del producto: si hay que cambiarlos, primero preguntarse si el cambio va en el producto.
+- **`npm install`, `vitest` y `npm run dev` se corren desde Windows**, nunca desde WSL. El
+  typecheck sí anda desde WSL: `node node_modules/typescript/bin/tsc -b`.
+- **Acceso**: `accesoDe()` en `src/lib/acceso.ts` es la misma regla que `es_usuario()` en la
+  base — fila activa en `users` o no pasás. Un error de red NO es «sin acceso».
+- **Variables**: `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (ver `.env.example`).
+- **Deploy**: Vercel. **Netlify publica `legacy/`** (Publish directory) mientras el Roadmap
+  nuevo no esté portado.
+
+**El tablero vanilla vive en `legacy/`** y todo lo que sigue en este archivo lo describe. Es
+la **especificación del port** del Roadmap (sub-proyecto 3): las rutas de archivo que nombra
+(`app.js`, `index.html`, `scripts/…`) ahora están adentro de `legacy/`. Se borra cuando el
+port termine. Para verlo en local: `cd legacy && node ../.claude/static-server.mjs` desde el
+checkout principal (el servidor sirve la carpeta en la que se lo corre).
+
 ## Arquitectura
 
 SPA que se sirve estática. **Una sola página**: `index.html`. Fue tablero doble (Propelia
