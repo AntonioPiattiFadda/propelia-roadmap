@@ -12,9 +12,8 @@ Diseño completo: `docs/superpowers/specs/2026-09-29-base-nueva-users-crm-design
 
 Todo lo de la mudanza vive en el repo. Una sesión que arranca en frío hace esto:
 
-1. `git switch mudanza-base` — **todo el trabajo está en esta rama y NO en `main`**. El
-   front de la rama espera la tabla `users`; mergearla antes de la inyección deja a los
-   tres en «Sin acceso» contra la base vieja.
+1. **Desde el 29/9/2026 todo está en `main`** y `main` apunta al proyecto nuevo. La rama
+   `mudanza-base` se mergeó y se borró.
 2. Leer, en orden: este archivo → `docs/superpowers/specs/2026-09-29-base-nueva-users-crm-design.md`
    (el diseño) → `docs/superpowers/plans/2026-09-29-base-nueva-users-crm.md` (lo implementado).
 3. La revisión final de la rama y sus correcciones: ver «Revisión final», abajo.
@@ -86,7 +85,9 @@ no hace falta re-extraer.
 | 5. prueba del CRM | ✅ `PRUEBA CRM OK`, sin residuos en `crm_*` |
 | 6. `04-reasignar-usuarios.sql` | ✅ 0 claves viejas · chapas 10 = 10 · `pend`: Antonio 94, Lorenzo 62 |
 | 7. adjuntos | ✅ 78/78, huella `nombre:tamaño` igual al origen (`32bc1825…`); las 53 rutas que guardan las tareas existen. Las otras 25 ya eran huérfanas en el origen |
-| 8–10 | ⏳ sin empezar |
+| 8. deploy | ✅ `main` en `37904a7` apunta a `itqwxnmuxuiiydsueazb`; antes se trajo la versión de teléfono que `main` tenía y la rama no |
+| 9. prueba de humo | ⏳ la hacen Antonio y Lorenzo contra la versión online |
+| 10. proyecto viejo | intacto, es la vuelta atrás. Se limpia más adelante, a mano |
 
 **Paso 7 sin service role** (29/9/2026): no se usó `03-copiar-storage.mjs`. Se copió con la
 sesión de cada uno: un botón «Exportar archivos» de un solo uso en `main` (nunca commiteado,
