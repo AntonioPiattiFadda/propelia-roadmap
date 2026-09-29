@@ -58,10 +58,61 @@ El resultado no entra en la respuesta y el MCP lo guarda en un `.txt`; esa ruta 
    | `antonio.piattifadda@gmail.com` | Antonio | AN | `#4F7F79` | sí | `Toni` |
    | `rubioluis13@gmail.com` | Luis | LU | `#A87A3F` | no | `Luis` |
 
-5. `04-reasignar-usuarios.sql` y su verificación: cero `Loro`/`Toni`/`Luis` en los datos.
-6. `03-copiar-storage.mjs` desde PowerShell (ver su cabecera) → `78/78 copiados`.
-7. Deploy del front: URL + key nuevas en `supabase-sync.js` **y** el cambio a `users`, en el
-   mismo commit (cada mitad sola no anda).
-8. Prueba de humo: login de los tres, responsables bien, una captura, un chat, un gasto, un
-   `crm_leads` creado por el MCP.
-9. El proyecto viejo, intacto. Se limpia más adelante, a mano.
+   ```sql
+   insert into public.users (id, email, nombre, iniciales, color, caja)
+   select a.id, a.email, v.nombre, v.iniciales, v.color, v.caja
+   from (values ('lorenzopiattifadda@gmail.com', 'Lorenzo', 'LO', '#6E6BA0', true),
+                ('antonio.piattifadda@gmail.com', 'Antonio', 'AN', '#4F7F79', true),
+                ('rubioluis13@gmail.com',         'Luis',    'LU', '#A87A3F', false))
+        v(email, nombre, iniciales, color, caja)
+   join auth.users a on lower(a.email) = v.email
+   on conflict (id) do nothing;
+   select count(*) from public.users;   -- esperado 3
+   ```
+
+5. **Probar el CRM**. Un solo bloque que termina con una excepción A PROPÓSITO: eso deshace
+   todo lo que insertó. Resultado bueno = el error dice `PRUEBA CRM OK`; cualquier otro error
+   (un `assert` que falla) dice qué no anduvo. Corre por el MCP, sin sesión: `assigned_to` va
+   explícito y `changed_by` queda en null.
+   ```sql
+   do $$
+   declare
+     v_user uuid := (select id from users order by email limit 1);
+     v_otro uuid := (select id from users order by email desc limit 1);
+     v_cli  uuid;
+     v_lead uuid;
+     r      record;
+   begin
+     insert into crm_clients (first_name, company_name) values ('Prueba', 'Inmo X') returning id into v_cli;
+     insert into crm_leads (client_id, assigned_to, funnel_stage_id)
+       values (v_cli, v_user, (select id from crm_funnel_stages where value = 'NEW')) returning id into v_lead;
+     assert (select gestion_reference_at = created_at and not gestion_has_events from crm_leads where id = v_lead),
+       'al nacer, la gestión cuenta desde created_at';
+
+     update crm_leads set funnel_stage_id = (select id from crm_funnel_stages where value = 'DISCARDED') where id = v_lead;
+     assert (select count(*) from crm_stage_history where lead_id = v_lead) = 2, 'dos filas de historial de etapa';
+
+     update crm_leads set assigned_to = v_otro where id = v_lead;
+     assert (select count(*) from crm_assignment_history where lead_id = v_lead) = (case when v_otro <> v_user then 1 else 0 end),
+       'una fila de historial de asignación';
+
+     insert into crm_management_events (lead_id, action, effective_at) values (v_lead, 'POSTPONED', now() + interval '3 days');
+     select * into r from crm_leads where id = v_lead;
+     assert r.gestion_postponed and r.gestion_has_events and r.gestion_reference_at > now() + interval '2 days',
+       'la postergación manda la referencia a futuro';
+
+     update crm_management_events set deleted_at = now() where lead_id = v_lead;
+     select * into r from crm_leads where id = v_lead;
+     assert not r.gestion_postponed and not r.gestion_has_events and r.gestion_reference_at = r.created_at,
+       'borrado el evento, vuelve a created_at';
+
+     raise exception 'PRUEBA CRM OK (se deshace todo)';
+   end $$;
+   ```
+6. `04-reasignar-usuarios.sql`. Aborta solo si algo no cierra; al final avisa cuántas chapas
+   de avisos sin ver quedaron (tiene que ser igual a antes).
+7. `03-copiar-storage.mjs` desde PowerShell (ver su cabecera) → `78/78 copiados`.
+8. Deploy del front: mergear la rama `mudanza-base` y poner URL + key nuevas en
+   `supabase-sync.js`, en el mismo deploy (cada mitad sola no anda).
+9. Prueba de humo: login de los tres, responsables bien, una captura, un chat, un gasto.
+10. El proyecto viejo, intacto. Se limpia más adelante, a mano.
