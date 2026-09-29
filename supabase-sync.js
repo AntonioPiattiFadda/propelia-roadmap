@@ -2,8 +2,8 @@
 // Capa de sincronización con Supabase. Un solo tablero, un solo conjunto de tablas.
 // Requiere order-math.js cargado antes (para `calcularOrden`).
 
-const SUPABASE_URL = 'https://gvkdyxhxsnpumxlhvhsm.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd2a2R5eGh4c25wdW14bGh2aHNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExMDUwMzAsImV4cCI6MjA5NjY4MTAzMH0.rBFXKVaMyyWfTwz8uAfL2LNFyEiGrpWpWlcTa60xeak';
+const SUPABASE_URL = 'https://itqwxnmuxuiiydsueazb.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0cXd4bm11eHVpaXlkc3VlYXpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2NzA0NDgsImV4cCI6MjEwNjI0NjQ0OH0.DrjXR-_SrMnRTYX8TDa3L6K6sN93HWsI_jD1_0ENw9o';
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 

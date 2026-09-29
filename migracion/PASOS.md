@@ -85,7 +85,13 @@ no hace falta re-extraer.
 | 4. filas en `users` | ✅ 2 filas, `SUPERADMIN`, las dos con `caja` |
 | 5. prueba del CRM | ✅ `PRUEBA CRM OK`, sin residuos en `crm_*` |
 | 6. `04-reasignar-usuarios.sql` | ✅ 0 claves viejas · chapas 10 = 10 · `pend`: Antonio 94, Lorenzo 62 |
-| 7–10 | ⏳ sin empezar |
+| 7. adjuntos | ✅ 78/78, huella `nombre:tamaño` igual al origen (`32bc1825…`); las 53 rutas que guardan las tareas existen. Las otras 25 ya eran huérfanas en el origen |
+| 8–10 | ⏳ sin empezar |
+
+**Paso 7 sin service role** (29/9/2026): no se usó `03-copiar-storage.mjs`. Se copió con la
+sesión de cada uno: un botón «Exportar archivos» de un solo uso en `main` (nunca commiteado,
+ya borrado) bajó el bucket a una carpeta con un `manifest.json`, y «Importar archivos» en esta
+rama lo subió a las mismas rutas. Los dos botones ya no existen: ninguno llegó a un commit.
 
 **Paso 2 cerrado** (29/9/2026). Huellas globales de la base, iguales a las del disco
 (`python3 migracion/verificar-huellas.py <tabla>`):
