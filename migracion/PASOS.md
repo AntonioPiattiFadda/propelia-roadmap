@@ -71,6 +71,49 @@ producto (la regla es de B, que es quien dibuja la pantalla).
 | ✅ | `04-reasignar-usuarios.sql` | 29/9/2026, rama `mudanza-base` |
 | ✅ | Front del tablero leyendo `users` | 29/9/2026, rama `mudanza-base` |
 
+## Inyección en curso (29/9/2026, cortada a mitad por límite de uso)
+
+Proyecto nuevo: **`Propelia`, `itqwxnmuxuiiydsueazb`** (us-east-2). El tablero quedó
+**congelado desde las 17:28 UTC** (confirmado): se usan los `02-datos-*` que ya están en disco,
+no hace falta re-extraer.
+
+| paso | estado |
+|---|---|
+| 1. `schema.sql` | ✅ migración `schema_inicial`; comprobación `false` · `r` · 4 · 2 |
+| 2. datos | ✅ tareas 159 · caja 3 · notas 8, verificadas por huella contra el disco |
+| 3. cuentas en Auth | ✅ Antonio y Lorenzo, desde el panel (Luis no se muda) |
+| 4. filas en `users` | ✅ 2 filas, `SUPERADMIN`, las dos con `caja` |
+| 5. prueba del CRM | ✅ `PRUEBA CRM OK`, sin residuos en `crm_*` |
+| 6. `04-reasignar-usuarios.sql` | ✅ 0 claves viejas · chapas 10 = 10 · `pend`: Antonio 94, Lorenzo 62 |
+| 7–10 | ⏳ sin empezar |
+
+**Paso 2 cerrado** (29/9/2026). Huellas globales de la base, iguales a las del disco
+(`python3 migracion/verificar-huellas.py <tabla>`):
+
+| tabla | filas | huella |
+|---|---|---|
+| `roadmap_tareas` | 159 | `66af7d6b71c533e15492778858be8866` |
+| `roadmap_caja` | 3 | `3ab45468ce609b1e7debd208fb1a9ecb` |
+| `roadmap_notas` | 8 | `8f6f09510f5257781491252eecf9f5f9` |
+
+**Luis no se muda** (29/9/2026, decisión): ni cuenta, ni fila en `users`, ni baja con
+`activo = false`. Estaba en `pend` de 5 tareas terminadas (T109, T29, T33, T36, T87), las
+cinco compartidas con Toni: se lo sacó en la base nueva y `resp` quedó en Toni. Por eso las
+huellas de arriba ya no coinciden con el disco en esas 5 filas. La mención de T124 es texto
+libre de la explicación y quedó.
+
+La huella `ac238b8a…` que figuraba antes como «esperada» no la reproduce el script actual y
+está mal: la referencia es la que da el disco. Las 125 tareas cargadas antes se compararon
+fila por fila y dieron idénticas (incluidos los lotes 3–5).
+
+**Gotcha de los espacios duros**: el texto de las tareas tiene 111 `U+00A0`. Transcriptos por
+el MCP se vuelven espacios comunes **sin ningún error**: 7 tareas del lote 2 quedaron casi
+iguales (mismo largo en caracteres, un byte menos) y solo lo detectó la huella. Se borraron y
+se recargaron en ASCII (` `). Desde entonces `generar-datos.py` escribe ASCII de fábrica.
+
+**Aparte**: la tarea T47 tiene una contraseña en texto plano (la de `info@propelia.es`). Se
+migra tal cual; conviene cambiarla y sacarla del tablero.
+
 **El origen sigue vivo, así que los datos envejecen.** Lo que se toque en el tablero después
 de las 17:28 UTC del 29/9 no está en `02-datos-*`. Antes de inyectar, re-extraer (abajo).
 
@@ -78,7 +121,10 @@ de las 17:28 UTC del 29/9 no está en `02-datos-*`. Antes de inyectar, re-extrae
 
 - `02-datos-01.sql` … `02-datos-07.sql` — datos del roadmap en lotes de ~30 KB (uno por
   llamada `execute_sql`). **En `.gitignore`**: tienen la caja.
-- `generar-datos.py` — arma los `02-datos-*` desde el volcado del MCP.
+- `generar-datos.py` — arma los `02-datos-*` desde el volcado del MCP, en ASCII puro.
+  `--ascii` convierte los que ya están en disco.
+- `verificar-huellas.py` — compara fila por fila la base contra los `02-datos-*` (md5 de
+  `to_jsonb(fila)::text`).
 - `fuente-crm-producto.sql` — REFERENCIA, no se corre. Tablas, triggers y funciones del CRM
   del producto, para escribir las `crm_*`.
 - `03-copiar-storage.mjs` — copia los 78 adjuntos (el MCP no mueve binarios).
@@ -108,25 +154,23 @@ El resultado no entra en la respuesta y el MCP lo guarda en un `.txt`; esa ruta 
           (select count(*) from crm_priorities), (select count(*) from crm_funnel_stages);
    ```
 2. `execute_sql` con cada `02-datos-NN.sql`, en orden. Verificar 159 / 3 / 8.
-3. **Panel → Authentication → Users**: crear las tres cuentas (email + contraseña, confirmadas).
+3. **Panel → Authentication → Users**: crear las dos cuentas (email + contraseña, confirmadas).
 4. Insertar sus filas en `users` (el `id` sale de `auth.users` por email, no se copia a mano):
 
    | email | nombre | iniciales | color | caja | hoy en los datos |
    |---|---|---|---|---|---|
    | `lorenzopiattifadda@gmail.com` | Lorenzo | LO | `#6E6BA0` | sí | `Loro` |
    | `antonio.piattifadda@gmail.com` | Antonio | AN | `#4F7F79` | sí | `Toni` |
-   | `rubioluis13@gmail.com` | Luis | LU | `#A87A3F` | no | `Luis` |
 
    ```sql
    insert into public.users (id, email, nombre, iniciales, color, caja)
    select a.id, a.email, v.nombre, v.iniciales, v.color, v.caja
    from (values ('lorenzopiattifadda@gmail.com', 'Lorenzo', 'LO', '#6E6BA0', true),
-                ('antonio.piattifadda@gmail.com', 'Antonio', 'AN', '#4F7F79', true),
-                ('rubioluis13@gmail.com',         'Luis',    'LU', '#A87A3F', false))
+                ('antonio.piattifadda@gmail.com', 'Antonio', 'AN', '#4F7F79', true))
         v(email, nombre, iniciales, color, caja)
    join auth.users a on lower(a.email) = v.email
    on conflict (id) do nothing;
-   select count(*) from public.users;   -- esperado 3
+   select count(*) from public.users;   -- esperado 2
    ```
 
 5. **Probar el CRM**. Un solo bloque que termina con una excepción A PROPÓSITO: eso deshace
@@ -173,5 +217,5 @@ El resultado no entra en la respuesta y el MCP lo guarda en un `.txt`; esa ruta 
 7. `03-copiar-storage.mjs` desde PowerShell (ver su cabecera) → `78/78 copiados`.
 8. Deploy del front: mergear la rama `mudanza-base` y poner URL + key nuevas en
    `supabase-sync.js`, en el mismo deploy (cada mitad sola no anda).
-9. Prueba de humo: login de los tres, responsables bien, una captura, un chat, un gasto.
+9. Prueba de humo: login de los dos, responsables bien, una captura, un chat, un gasto.
 10. El proyecto viejo, intacto. Se limpia más adelante, a mano.

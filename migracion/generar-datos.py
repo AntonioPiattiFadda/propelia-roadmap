@@ -33,7 +33,10 @@ def leer_volcado(ruta):
 
 
 def insert(tabla, filas):
-    cuerpo = json.dumps(filas, ensure_ascii=False)
+    # ASCII puro: lo no-ASCII viaja como  , ñ... y jsonb lo decodifica igual. Con el
+    # carácter crudo, los 111 espacios duros del texto se vuelven espacios comunes al pasar
+    # por el MCP, sin ningún error (29/9/2026). Ver verificar-huellas.py.
+    cuerpo = json.dumps(filas, ensure_ascii=True)
     if TAG in cuerpo:
         sys.exit(f'El texto {TAG} aparece en los datos de {tabla}: cambiá TAG.')
     return (f'insert into public.{tabla}\n'
@@ -41,7 +44,24 @@ def insert(tabla, filas):
             f'on conflict (id) do nothing;\n')
 
 
+def a_ascii():
+    """Reescribe en ASCII los 02-datos-* que ya están en disco, sin re-extraer. Mismos lotes,
+    mismos datos: solo cambia cómo viaja lo no-ASCII."""
+    pat = re.compile(r'\$migra\$(.*?)\$migra\$', re.S)
+    for f in sorted(AQUI.glob('02-datos-*.sql')):
+        nuevo = pat.sub(lambda m: TAG + json.dumps(json.loads(m.group(1)), ensure_ascii=True) + TAG,
+                        f.read_text())
+        # La cabecera (comentarios) puede tener tildes; lo que va al MCP es lo de abajo.
+        cuerpo = '\n'.join(l for l in nuevo.split('\n') if not l.startswith('--'))
+        if not cuerpo.isascii():
+            sys.exit(f'{f.name}: quedó algo no-ASCII fuera de los datos.')
+        f.write_text(nuevo)
+        print(f.name, 'en ASCII')
+
+
 def main():
+    if sys.argv[1:] == ['--ascii']:
+        return a_ascii()
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     d = leer_volcado(sys.argv[1])
@@ -51,7 +71,7 @@ def main():
               + insert('roadmap_notas', d['roadmap_notas'] or [])]
     lote, tam = [], 0
     for t in d['roadmap_tareas']:
-        s = len(json.dumps(t, ensure_ascii=False))
+        s = len(json.dumps(t, ensure_ascii=True))
         if lote and tam + s > LOTE:
             partes.append(insert('roadmap_tareas', lote))
             lote, tam = [], 0

@@ -1,5 +1,7 @@
 -- ============================================================
--- Reasigna 'Loro' / 'Toni' / 'Luis' a los uuids de `users` en los datos del roadmap.
+-- Reasigna 'Loro' / 'Toni' a los uuids de `users` en los datos del roadmap.
+-- Luis no se muda (29/9/2026): se lo sacó de las 5 tareas que lo nombraban antes de correr
+-- esto. La verificación igual busca 'Luis' entre las claves viejas: si reapareciera, aborta.
 -- Corre DESPUÉS de cargar los datos (02-datos-*) y las filas de `users`.
 --
 -- Una sola transacción: o se reasigna todo o nada. Idempotente: solo toca valores que
@@ -20,8 +22,7 @@ begin;
 create temp table _mapa on commit drop as
 select v.clave, u.id::text as uid
 from (values ('Loro', 'lorenzopiattifadda@gmail.com'),
-             ('Toni', 'antonio.piattifadda@gmail.com'),
-             ('Luis', 'rubioluis13@gmail.com')) v(clave, email)
+             ('Toni', 'antonio.piattifadda@gmail.com')) v(clave, email)
 left join public.users u on lower(u.email) = v.email;
 
 do $$ begin
@@ -176,7 +177,7 @@ commit;
 --        create temp table roadmap_caja   as select * from public.roadmap_caja;
 --   2. en lugar del `create temp table _mapa … left join public.users …`:
 --        create temp table _mapa on commit drop as
---        select * from (values ('Loro','u-lo'),('Toni','u-to'),('Luis','u-lu')) v(clave, uid);
+--        select * from (values ('Loro','u-lo'),('Toni','u-to')) v(clave, uid);
 --   3. `commit;` → `rollback;`
 -- Los updates caen sobre las copias temporales (pg_temp se busca antes que public).
 -- ============================================================

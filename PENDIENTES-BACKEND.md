@@ -42,7 +42,6 @@ guardan su uuid.
 |---|---|---|
 | Lorenzo | `lorenzopiattifadda@gmail.com` | sí |
 | Antonio | `antonio.piattifadda@gmail.com` | sí |
-| Luis | `rubioluis13@gmail.com` | no |
 
 ---
 
