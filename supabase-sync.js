@@ -13,12 +13,10 @@ const TABLAS = Object.assign(
   {
     tareas: 'roadmap_tareas',
     caja: 'roadmap_caja',
-    // Los nombres de los grupos del backlog. Es `roadmap_notas`, la tabla que creó
-    // schema-v3.sql para la Visión vieja y que quedó vacía: ninguna pantalla la lee ni la
-    // escribe. Se reusa a propósito, y no es una comodidad: una columna o una tabla nueva
-    // significaría esperar a que se corra otra migración —hay dos pendientes hace semanas—
-    // para poder ponerle nombre a un grupo. Esta ya está corrida, ya tiene su RLS por
-    // miembro y ya está publicada en realtime.
+    // Los nombres de los grupos del backlog. Es `roadmap_notas`, la tabla que se creó
+    // para la Visión vieja y que quedó vacía. Se reusó a propósito cuando había
+    // migraciones pendientes hacía semanas: esta ya estaba corrida, con su RLS por miembro
+    // y publicada en realtime. Ver el CLAUDE.md.
     grupos: 'roadmap_notas',
   },
   _CFG.tablas || {}
@@ -70,7 +68,7 @@ const RoadmapSync = {
       supabaseClient.from(TABLAS.grupos).select('id,titulo,texto,orden').order('orden'),
     ]);
     if (tarRes.error) throw tarRes.error;
-    // La caja puede no existir todavía si falta correr schema-v3.sql: seguimos con una
+    // La caja puede no existir si falta correr supabase/schema.sql: seguimos con una
     // lista vacía en vez de dejar el tablero entero sin cargar.
     const caja = cajaRes.error ? [] : (cajaRes.data || []);
     // Y los nombres de los grupos, igual: sin la tabla, cada bloque se llama «Grupo N» y el
@@ -85,7 +83,7 @@ const RoadmapSync = {
         files: arr(t.files),
         chat: arr(t.chat),
         subtareas: arr(t.subtareas),
-        // Campos del tablero nuevo. Si falta correr schema-v3.sql llegan `undefined`,
+        // Campos del tablero nuevo. Si falta alguna columna llegan `undefined`,
         // así que cada uno cae en su valor por defecto y la app igual funciona en pantalla.
         prioridad: t.prioridad || 'semanal',
         /* `tipo` era la clasificación de la actividad y no la lee ninguna pantalla desde el
@@ -98,7 +96,7 @@ const RoadmapSync = {
         // como semilla para no perder las asignaciones ya hechas.
         pend: arr(t.pend).length ? arr(t.pend) : (t.resp ? [t.resp] : []),
         creada: t.creada || null,
-        // Backlog (schema-v7.sql). Sin el esquema corrido llegan `undefined`: toda tarea
+        // Backlog. Sin las columnas llegan `undefined`: toda tarea
         // se lee como del tablero y sin sprint, que es exactamente como estaba antes.
         backlog: !!t.backlog,
         sprint: Number(t.sprint) || 0,
@@ -109,12 +107,12 @@ const RoadmapSync = {
         id: m.id, fecha: m.fecha || '', concepto: m.concepto || '', categoria: m.categoria || '',
         monto: Number(m.monto) || 0, quien: m.cuenta || '', notas: m.notas || '', orden: m.orden,
         // Gastos fijos: `repite` marca la plantilla y `origen` apunta de la copia de cada
-        // mes a esa plantilla. Sin schema-v4.sql llegan `undefined` y la caja funciona
+        // mes a esa plantilla. Sin las columnas llegan `undefined` y la caja funciona
         // igual, solo que sin repetir nada.
         repite: m.repite || '', origen: m.origen || '',
-        // A quién se le carga el gasto (schema-v8.sql). Vacío significa «a todos», que es
+        // A quién se le carga el gasto. Vacío significa «a todos», que es
         // lo que valía para todos los movimientos antes de que la columna existiera: sin
-        // el esquema corrido llega `undefined` y toda la caja se lee como compartida, o
+        // la columna llega `undefined` y toda la caja se lee como compartida, o
         // sea igual que siempre.
         carga: arr(m.carga),
       })),
@@ -156,8 +154,8 @@ const RoadmapSync = {
     };
   },
 
-  // Comprueba qué partes de schema-v3.sql están corridas. El tablero lo usa para avisar
-  // en pantalla en vez de fallar en silencio al guardar.
+  // Comprueba que la base tenga las columnas de supabase/schema.sql. El tablero lo usa para
+  // avisar en pantalla en vez de fallar en silencio al guardar.
   async faltantesDeEsquema() {
     const faltan = [];
     const [tareas, caja, backlog, carga] = await Promise.all([
@@ -167,9 +165,9 @@ const RoadmapSync = {
       supabaseClient.from(TABLAS.caja).select('carga').limit(1),
     ]);
     if (tareas.error) faltan.push('los campos nuevos de las tareas (prioridad, tipo, hoy, responsables)');
-    if (caja.error) faltan.push('los gastos fijos de la caja (schema-v4.sql)');
-    if (backlog.error) faltan.push('el backlog y los sprints (schema-v7.sql)');
-    if (carga.error) faltan.push('a quién se le carga cada gasto de la caja (schema-v8.sql)');
+    if (caja.error) faltan.push('los gastos fijos de la caja');
+    if (backlog.error) faltan.push('el backlog y los grupos');
+    if (carga.error) faltan.push('a quién se le carga cada gasto de la caja');
     return faltan;
   },
 
@@ -211,8 +209,8 @@ const RoadmapSync = {
     if (error) throw error;
   },
 
-  /* Guardar un movimiento tiene una vuelta que las tareas no tienen, y es por `carga`
-     (schema-v8.sql, todavía sin correr). Un `upsert` con una columna que no existe no
+  /* Guardar un movimiento tiene una vuelta que las tareas no tienen, y es por `carga`, la
+     última columna que se sumó a la caja. Un `upsert` con una columna que no existe no
      guarda «casi todo»: **falla entero**, con lo cual sin el esquema corrido dejaría de
      guardarse hasta el importe. Así que se intenta con la columna y, si la base contesta
      que no la conoce, se reintenta una vez sin ella: se pierde la imputación —que es lo

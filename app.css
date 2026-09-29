@@ -173,7 +173,7 @@ kbd{font:600 10.5px var(--font);background:var(--rail);border-radius:4px;padding
 .estado-guardado.cargando{color:var(--accent)}
 .estado-guardado.ok{color:var(--ok)}
 
-/* Aclaración para quien configura la base (falta correr schema-v3.sql): vive en un renglón
+/* Aclaración para quien configura la base (falta correr supabase/schema.sql): vive en un renglón
    del pie de la barra lateral y el texto se despliega al pasar el cursor o al tabular. */
 .nota-dev{display:flex}
 .nota-dev[hidden]{display:none}

@@ -1828,8 +1828,8 @@ const genteDeCaja = quien => (!quien || PERSONAS_CAJA.some(p => p.id === quien))
 
    **`carga` vacío significa «a todos».** No es un caso raro que haya que tolerar: es
    exactamente lo que valía para cada movimiento antes de que la columna existiera, así que
-   toda la caja vieja se lee bien sin migrar una sola fila —y sigue leyéndose bien mientras
-   schema-v8.sql no esté corrido, que es donde estamos hoy—. Los movimientos nuevos sí
+   toda la caja vieja se lee bien sin migrar una sola fila —y se leería bien aunque la
+   columna no existiera—. Los movimientos nuevos sí
    escriben la lista completa: eligieron a todos, no se quedaron sin elegir. */
 const cargaDe = m => {
   const ids = (m.carga || []).filter(id => PERSONAS_CAJA.some(p => p.id === id));
@@ -5269,8 +5269,8 @@ async function arrancar(){
   }
 }
 
-// Si falta correr alguno de los archivos de `supabase/`, el tablero se ve pero no puede
-// guardar lo que ese archivo trae. Mejor decirlo en pantalla que dejar que falle en
+// Si la base no tiene todo lo de `supabase/schema.sql`, el tablero se ve pero no puede
+// guardar lo que falta. Mejor decirlo en pantalla que dejar que falle en
 // silencio al guardar. Va en el ícono del encabezado: el detalle se lee al pasar el
 // cursor por encima.
 async function revisarEsquema(){
@@ -5279,7 +5279,7 @@ async function revisarEsquema(){
   if (!faltan.length) { elAviso.hidden = true; return; }
   elAviso.hidden = false;
   elAvisoTexto.innerHTML = `<b>Falta un paso en la base de datos.</b> Todavía no se puede guardar: ${esc(faltan.join(', '))}. `
-    + `Hay que correr los archivos de <b>supabase/</b> que falten, en orden, en el SQL Editor de Supabase (lo hace Antonio).`;
+    + `Hay que correr <b>supabase/schema.sql</b> en el SQL Editor de Supabase (lo hace Antonio).`;
 }
 
 $('#loginForm').addEventListener('submit', async e => {

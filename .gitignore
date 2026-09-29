@@ -3,3 +3,5 @@
 .env
 .superpowers/
 .atl/
+migracion/02-datos-*.sql
+migracion/.env

@@ -114,11 +114,9 @@ Bucket de adjuntos: `roadmap-adjuntos`.
   sección del Backlog para el porqué. La columna «Área» de esa vista es `modulo`, un campo
   del tablero viejo que estaba muerto y se reusó.
 
-`roadmap_secciones` ya no se usa. Eran las **temáticas**: se sacaron del tablero el
-11/8/2026 porque no aportaban nada. El front no la lee ni la escribe, y tampoco toca
-`roadmap_tareas.sec_id`. La tabla y la columna siguen en Supabase hasta que se corra
-`schema-v5.sql` — mientras tanto, ojo con el `on delete cascade` de `sec_id`: borrar una
-fila de secciones a mano desde el panel se lleva puestas sus tareas.
+`roadmap_secciones` ya no existe. Eran las **temáticas**: se sacaron del tablero el
+11/8/2026 porque no aportaban nada, y el esquema único (`supabase/schema.sql`) no las crea,
+ni a la tabla ni a `roadmap_tareas.sec_id`.
 
 `roadmap_notas` **guarda los grupos del backlog y la hoja de notas de esa pantalla**, desde el
 26/8/2026. La creó `schema-v3.sql` para la Visión vieja (dos hojas de texto libre) y quedó vacía;
@@ -1245,34 +1243,28 @@ alto que no gastan es el de la Explicación—, y el estado abierto/cerrado se d
 abrir la tarea**. Si se decidiera en cada repintado, plegar una ficha a mano duraría hasta el
 próximo tilde.
 
-### Supabase / migraciones
+### Supabase / esquema
 
-`schema.sql` → `schema-v2.sql` → `schema-v3.sql` → `schema-v4.sql` → `schema-v5.sql` →
-`schema-v7.sql` → `schema-v8.sql`, en ese orden, todos idempotentes. `schema-v3.sql` unifica
-los dos tableros y agrega los campos del diseño actual; `schema-v4.sql` agrega `repite` y
-`origen` a la caja (gastos fijos); `schema-v5.sql` borra las temáticas; `schema-v7.sql`
-agrega `backlog`, `sprint`, `dep` y `loom` a las tareas; `schema-v8.sql` agrega `carga` a la
-caja (a quién se le imputa cada gasto). Las primeras cuatro están corridas en `propelia`
-(`gvkdyxhxsnpumxlhvhsm`) desde el 8/8/2026 y la v7 desde el 17/8/2026; **v5 y v8 están
-pendientes**. Después de correr la v5 no se pueden volver a correr las anteriores: dan por
-hecho que `roadmap_secciones` y `sec_id` existen. La v8 no depende de ninguna: toca solo
-`roadmap_caja`.
+**Un solo archivo: `supabase/schema.sql`** (29/9/2026). Se corre una vez, entero, sobre un
+proyecto vacío, y es idempotente. Reemplazó a la cadena `schema.sql` → v2 → v3 → v4 → v5 →
+v7 → v8, que contaba cómo se llegó al esquema sobre el proyecto `propelia`
+(`gvkdyxhxsnpumxlhvhsm`, compartido con el CRM). Esa cadena está en git; no hay que
+reconstruirla. El archivo nuevo se armó **leyendo el catálogo en vivo** y no sumando los
+viejos: la v8 figuraba como pendiente y en la base estaba corrida.
 
-**No hay `schema-v6.sql`, y el hueco es a propósito.** Existió un día: creaba
-`roadmap_vision` para la hoja de texto libre. Esa pestaña pasó a ser el Backlog antes de que
-el archivo se corriera en ningún lado, así que se borró en vez de dejarlo invitando a crear
-una tabla que ya no usa nadie. La v7 trae el `drop` comentado por si alguien alcanzó a
-correrlo.
-
-La diferencia entre las dos pendientes: sin la v5 el tablero funciona igual (es limpieza);
-sin la v8 la caja se usa igual y todo se lee como compartido, pero elegir a quién cargarle un
-gasto no queda guardado. Las dos las avisa en pantalla `RoadmapSync.faltantesDeEsquema()`, en
-el triangulito de la barra lateral. Lo que queda pendiente de base y cuentas está en
-`PENDIENTES-BACKEND.md` (raíz).
+- **Las «migraciones pendientes» que se nombran en este archivo** (la v5 y la v8, «hay dos
+  pendientes hace semanas») son historia: explican por qué se reusaron `modulo`, `hoy`,
+  `tipo` y las columnas de `roadmap_notas`, y esos porqués siguen valiendo. En el esquema
+  único la v5 ya está aplicada (no existen `roadmap_secciones` ni `sec_id`) y la v8 también.
+- **El tablero se muda a un proyecto Supabase propio**: `migracion/PASOS.md`. Los datos
+  extraídos (`migracion/02-datos-*.sql`) están en `.gitignore` — tienen la caja y emails.
+- `RoadmapSync.faltantesDeEsquema()` sigue vivo: con una base a medio armar avisa en el
+  triangulito de la barra lateral en vez de fallar en silencio. Cuentas, acceso y bucket en
+  `PENDIENTES-BACKEND.md` (raíz).
 
 **Ojo con `guardarMovimiento()`, que es el único guardado tolerante del proyecto.** Un
-`upsert` con una columna que la base no conoce no guarda «casi todo»: falla entero. Sin la v8
-corrida, mandar `carga` dejaría de guardar hasta el importe. Por eso intenta con la columna
+`upsert` con una columna que la base no conoce no guarda «casi todo»: falla entero. Sin la columna
+`carga` en la base, mandarla dejaría de guardar hasta el importe. Por eso intenta con la columna
 y, solo si la base contesta que no la conoce (`PGRST204` o `42703`, ver
 `esColumnaDesconocida()`), reintenta una vez sin ella y se lo anota para el resto de la
 sesión. Se pierde la imputación —que es lo que la base todavía no sabe guardar— y no el
