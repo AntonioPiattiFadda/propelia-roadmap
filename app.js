@@ -102,19 +102,23 @@ const anchoCompleto = v => !!(v.caja || v.backlog);
    `soltarTarea()`, `tarjetaDespuesDe()` y el autoscroll del arrastre de tarjetas. El arrastre
    de la lista es otro y vive en `engancharArrastreLista()`. */
 
-// Personas del tablero. El `id` es lo que se guarda en la base (responsables, autor
-// del chat, quién puso la plata); `email` es lo que ata cada persona a su cuenta.
-const PERSONAS = (CFG.personas || []).map((p, i) => ({
-  id: p.id,
-  nombre: p.nombre || p.id,
-  ini: p.ini || String(p.nombre || p.id).slice(0, 2).toUpperCase(),
-  color: p.color || ['#6E6BA0','#4F7F79','#A87A3F','#5A7E8C'][i % 4],
-  email: (p.email || '').toLowerCase(),
-  caja: !!p.caja,
-}));
-// En la caja no participan todos: solo quienes tienen `caja:true` en la config. Si no
-// hay ninguno marcado se usan todos, para que la caja nunca quede sin gente.
-const PERSONAS_CAJA = PERSONAS.filter(p => p.caja).length ? PERSONAS.filter(p => p.caja) : PERSONAS;
+// Personas del tablero. Salen de la tabla `users` (29/9/2026) y se cargan al entrar, en
+// `cargarEquipo()`: antes de eso las dos listas están vacías. Son `const` y se llenan en el
+// lugar, no se reasignan, porque todo el archivo las lee por nombre. El `id` es el uuid de la
+// cuenta, y es lo que se guarda en la base (responsables, autor del chat, quién puso la plata).
+const PERSONAS = [];
+// En la caja no participan todos: solo quien tiene `caja` en `users`, activo o no — lo que
+// pagó alguien que se fue sigue contando en el saldo. Si nadie está marcado, son todos.
+const PERSONAS_CAJA = [];
+function cargarEquipo(filas){
+  const { personas, caja } = personasDesdeUsuarios(filas);
+  PERSONAS.splice(0, PERSONAS.length, ...personas);
+  PERSONAS_CAJA.splice(0, PERSONAS_CAJA.length, ...caja);
+}
+/* A quién se le puede ofrecer algo en un menú de elegir. Los inactivos se pintan —una tarea
+   vieja sigue diciendo quién la hizo— pero no se ofrecen, salvo que ya estén puestos en lo
+   que se está editando: ahí tienen que aparecer, si no no habría cómo sacarlos. */
+const elegibles = (lista, marcados = []) => lista.filter(p => p.activo || marcados.includes(p.id));
 const persona = id => PERSONAS.find(p => p.id === id) || null;
 const colorPersona = id => persona(id)?.color || '#858A99';
 const iniPersona = id => persona(id)?.ini || '?';
@@ -523,7 +527,7 @@ function pintarChrome(){
     UI.vista = b.dataset.vista; guardarUI(); render();
   });
 
-  $('#chipsPend').innerHTML = PERSONAS.map(p =>
+  $('#chipsPend').innerHTML = elegibles(PERSONAS, UI.f.pend).map(p =>
     `<button class="chip${UI.f.pend.includes(p.id) ? ' on' : ''}" data-persona="${escA(p.id)}">
        <span class="av mini" style="background:${p.color}">${esc(p.ini)}</span>${esc(p.id === YO.id ? 'Lo mío' : p.nombre)}
      </button>`).join('');
@@ -719,10 +723,10 @@ function tareaVacia(id){
    guardada sin nadie, que es justo lo que se quiere evitar. */
 function pedirResponsable(anclaje, ev, crear){
   ev?.stopPropagation();
-  // Sin nadie cargado en `APP_CONFIG.personas` no hay a quién elegir, y un menú vacío dejaría
-  // el tablero sin poder crear una sola tarea. Se avisa y no se crea nada: el arreglo es de
-  // configuración, no algo que se pueda resolver desde acá.
-  if (!PERSONAS.length) { aviso('No hay personas cargadas: sin responsable no se puede crear una tarea'); return; }
+  // Sin nadie activo en `users` no hay a quién elegir, y un menú vacío dejaría el tablero sin
+  // poder crear una sola tarea. Se avisa y no se crea nada: el arreglo es de la base, no algo
+  // que se pueda resolver desde acá.
+  if (!elegibles(PERSONAS).length) { aviso('No hay personas activas: sin responsable no se puede crear una tarea'); return; }
   abrirMenu(anclaje, 'pend', null, quien => { if (quien) crear(quien); }, '¿Quién la hace?');
 }
 
@@ -931,7 +935,7 @@ const nuevoAviso = texto => ({
 
    `para` vacío significa «para todos», que es exactamente lo que valía para cada aviso antes
    de que el campo existiera: por eso no hay nada que migrar. Todo lo que lee el campo pasa por
-   `destinatariosDe()`, que además filtra a quien ya no está en `APP_CONFIG.personas` — un
+   `destinatariosDe()`, que además filtra a quien ya no está en `users` — un
    aviso dirigido a alguien que se fue volvería invisible para todos.
 
    Ojo: el destinatario decide a quién le SUENA la chapa, no quién puede leerlo. El aviso se
@@ -978,7 +982,7 @@ const avisoParaMi = a => { const p = destinatariosDe(a); return !p.length || p.i
    tablero es algo que el equipo tiene que notar. En la práctica eso son cuarenta chapas rojas
    para todos y ninguna dirigida a nadie, que es el ruido que hace que se dejen de mirar. Ahora
    sale de `pend`, que es el único lugar donde vive quién la hace. Contrapartidas asumidas: sin
-   identidad cargada en `APP_CONFIG.personas` no le suena a nadie —el tablero no sabe quién
+   fila en `users` no le suena a nadie —el tablero no sabe quién
    sos, mal puede decirte que algo es tuyo—, y una tarea sin responsable tampoco, que es un
    caso que la invariante de `pend` ya no deja crear.
 
@@ -1446,7 +1450,7 @@ function pintarBotonBacklog(t){
 }
 
 function pintarPend(t){
-  $('#tPend').innerHTML = PERSONAS.map(p => {
+  $('#tPend').innerHTML = elegibles(PERSONAS, t.pend || []).map(p => {
     const on = (t.pend || []).includes(p.id);
     return `<button class="${on ? 'on' : ''}"${on ? ` style="background:${p.color}"` : ''} data-p="${escA(p.id)}">
       <span class="av mini" style="background:${on ? 'rgba(255,255,255,.28)' : p.color}">${esc(p.ini)}</span>${esc(p.nombre)}
@@ -1816,9 +1820,8 @@ let cajaFijosAbiertos = true;
 
 /* La lista de gente es la de la caja, pero si el movimiento quedó a nombre de alguien que ya
    no participa se le agrega igual su opción: nadie cambia de dueño solo. */
-const genteDeCaja = quien => (!quien || PERSONAS_CAJA.some(p => p.id === quien))
-  ? PERSONAS_CAJA
-  : PERSONAS_CAJA.concat(PERSONAS.filter(p => p.id === quien));
+const genteDeCaja = quien => elegibles(PERSONAS_CAJA, quien ? [quien] : [])
+  .concat(PERSONAS.filter(p => p.id === quien && !PERSONAS_CAJA.some(c => c.id === quien)));
 
 /* Quién lo pagó y a quién se le carga son dos preguntas distintas, y hasta acá las
    contestaba una sola columna: `quien` decía de qué bolsillo salió la plata y se daba por
@@ -2894,7 +2897,7 @@ function renderBacklog(){
      soltó. La lista por estado no lo lleva —ahí la columna la fija `COLUMNAS_LISTA` y no una
      preferencia de nadie—, y eso es justo lo que hace que el mismo manejador no acomode nada
      del otro lado. */
-  board.innerHTML = `<div class="pgwrap bkwrap bkcols" style="${ANCHO_AVATARES}">
+  board.innerHTML = `<div class="pgwrap bkwrap bkcols" style="${anchoAvatares()}">
     ${notaHTML()}
     <div class="pgbody">${columnas.map((col, i) => `<div class="bkcol" data-col="${i}">${
       col.map(n => filaSprintHTML(n, lista(n))).join('')
@@ -2960,7 +2963,7 @@ function renderListaEstados(){
 
   board.innerHTML = (vacio
     ? `<p class="empty-board">Ninguna tarea encaja con este filtro.<br>Probá vaciar la búsqueda o destildar los filtros.</p>`
-    : `<div class="pgwrap bkwrap bkcols" style="${ANCHO_AVATARES}">
+    : `<div class="pgwrap bkwrap bkcols" style="${anchoAvatares()}">
     <div class="pgbody">${columnasDeEstados()
       .map(col => `<div class="bkcol">${col.map(bloque).join('')}</div>`).join('')}</div>
   </div>`);
@@ -3247,11 +3250,12 @@ function pillQuien(t){
    y apagan los mismos nombres. Sin nadie igual se dibuja un hueco punteado, porque es justo el
    caso en el que hay que poder tocarlo — misma regla que el «Sin asignar». */
 /* Cuánta gente tiene que entrar en el hueco reservado de los avatares. El ancho lo dibuja el
-   CSS —es puro presupuesto de espacio— pero el número no lo sabe: sale de `APP_CONFIG.personas`,
+   CSS —es puro presupuesto de espacio— pero el número no lo sabe: sale de `users`,
    que es el techo real de responsables que puede tener una tarea, porque el menú no ofrece a
    nadie más. Va como variable en el envoltorio de la lista y no en cada fila: es el mismo
    número para las cuarenta. */
-const ANCHO_AVATARES = `--avn:${Math.max(PERSONAS.length, 1)}`;
+// Función y no constante: al cargar el script el equipo todavía no llegó de la base.
+const anchoAvatares = () => `--avn:${Math.max(PERSONAS.length, 1)}`;
 
 function avataresQuien(t){
   const gente = t.pend || [];
@@ -3622,10 +3626,12 @@ function abrirMenu(anclaje, tipo, t, alElegir, titulo){
   const items =
     tipo === 'prioridad' ? PRIORIDADES.map(p => ({ v:p.id, label:p.label, color:p.color }))
     : tipo === 'pend' || tipo === 'avpara'
-                         ? PERSONAS.map(p => ({ v:p.id, label:p.nombre, color:p.color }))
+                         ? elegibles(PERSONAS, PERSONAS.filter(p => marcado(p.id)).map(p => p.id))
+                             .map(p => ({ v:p.id, label:p.nombre, color:p.color }))
     : tipo === 'quien'   ? [{ v:'', label:'Sin asignar' },
                             ...genteDeCaja(t && t.quien).map(p => ({ v:p.id, label:p.nombre, color:p.color }))]
-    : tipo === 'carga'   ? PERSONAS_CAJA.map(p => ({ v:p.id, label:p.nombre, color:p.color }))
+    : tipo === 'carga'   ? elegibles(PERSONAS_CAJA, PERSONAS_CAJA.filter(p => marcado(p.id)).map(p => p.id))
+                             .map(p => ({ v:p.id, label:p.nombre, color:p.color }))
     : tipo === 'categoria' ? [{ v:'', label:'Sin categoría' }, ...CATEGORIAS.map(c => ({ v:c, label:c }))]
     : tipo === 'estado'  ? ESTADOS.map(c => ({ v:c.id, label:c.label, color:c.color }))
     : [...sprintsVisibles().map(n => ({ v:String(n), label:nombreSprint(n) })),
@@ -5241,15 +5247,17 @@ $('#bCsv').onclick = () => {
 const loginOverlay = $('#loginOverlay');
 const sinAccesoOverlay = $('#sinAccesoOverlay');
 
+/* Quién sos sale de `users` por el id de la cuenta, no por el email (29/9/2026). Membresía e
+   identidad dejaron de ser dos cosas: tener fila activa en `users` ES tener acceso, y esa
+   misma fila dice quién sos. Ya no existe «entraste pero el tablero no sabe quién sos». */
 async function resolverIdentidad(){
-  let email = null;
-  try { email = await RoadmapSync.emailActual(); } catch (e) {}
-  let esMiembro = false;
-  try { esMiembro = email ? await RoadmapSync.esMiembro() : false; } catch (e) {}
-  const p = email ? PERSONAS.find(x => x.email && x.email === email.toLowerCase()) : null;
-  YO = p
-    ? { id:p.id, nombre:p.nombre, esMiembro }
-    : { id:'', nombre:email ? email.split('@')[0] : '', esMiembro };
+  let id = null, filas = [];
+  try { id = await RoadmapSync.idActual(); } catch (e) {}
+  try { filas = id ? await RoadmapSync.cargarUsuarios() : []; }
+  catch (e) { aviso('No se pudo cargar el equipo: ' + e.message); }
+  cargarEquipo(filas);
+  const p = PERSONAS.find(x => x.id === id && x.activo);
+  YO = p ? { id:p.id, nombre:p.nombre, esMiembro:true } : { id:'', nombre:'', esMiembro:false };
 }
 
 async function arrancar(){
@@ -5264,9 +5272,6 @@ async function arrancar(){
   restaurarUbicacion();
   render();
   revisarEsquema();
-  if (!YO.id) {
-    aviso('Tu cuenta todavía no está asociada a una persona del tablero. Avisale a Antonio.');
-  }
 }
 
 // Si la base no tiene todo lo de `supabase/schema.sql`, el tablero se ve pero no puede
@@ -5324,6 +5329,7 @@ async function entrar(){
     else {
       datos = { tareas:[], caja:[], grupos:[], nota:'' };
       YO = { id:'', nombre:'', esMiembro:false };
+      cargarEquipo([]);
       cerrarModales();
       sinAccesoOverlay.hidden = true;
       board.innerHTML = '';

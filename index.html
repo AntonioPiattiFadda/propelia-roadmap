@@ -219,19 +219,12 @@
 /* ============================================================
    CONFIGURACIÓN DEL TABLERO
    ------------------------------------------------------------
-   >>> ANTONIO: lo único que hay que tocar acá es el campo `email`
-   de cada persona. Poné el email EXACTO con el que entra a Supabase
-   (en minúscula). Eso es lo que hace que el tablero sepa quién entró.
-
-   Ojo: escribir el email acá NO da acceso. El acceso se da con una
-   fila en `app_miembros` (ver PENDIENTES-BACKEND.md).
-   Este bloque solo sirve para poner nombre y color a quien ya entró.
-
-   `id` es el valor que queda guardado en la base. No lo cambies:
-   'Loro' y 'Toni' son los que ya están escritos en las tareas viejas.
+   Quién entra al tablero, cómo se llama y de qué color es ya NO se
+   configura acá: sale de la tabla `users` de Supabase (29/9/2026).
+   Dar de alta a alguien es crear su cuenta en Auth y su fila en
+   `users` — ver PENDIENTES-BACKEND.md.
    ============================================================ */
 window.APP_CONFIG = {
-  proyecto: 'propelia',
   titulo: 'Tablero de tareas',
   subtitulo: 'Lorenzo · Antonio · Luis',
   tablas: {
@@ -244,17 +237,11 @@ window.APP_CONFIG = {
   // dibujan igual, así que esto es solo el piso: los casilleros que están listos para
   // recibir algo el día que se abre la pestaña por primera vez.
   sprints: 3,
-  // `caja: true` marca a quien pone plata. La caja solo muestra a esa
-  // gente y el saldo se reparte entre ellos; el resto usa el tablero igual que siempre.
-  personas: [
-    { id: 'Loro', nombre: 'Lorenzo', ini: 'LO', color: '#6E6BA0', email: 'lorenzopiattifadda@gmail.com', caja: true },
-    { id: 'Toni', nombre: 'Antonio', ini: 'AN', color: '#4F7F79', email: 'antonio.piattifadda@gmail.com', caja: true },
-    { id: 'Luis', nombre: 'Luis',    ini: 'LU', color: '#A87A3F', email: 'rubioluis13@gmail.com' },
-  ],
 };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="order-math.js"></script>
+<script src="equipo.js"></script>
 <script src="supabase-sync.js"></script>
 <script src="app.js"></script>
 </body>
