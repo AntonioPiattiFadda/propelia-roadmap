@@ -14,9 +14,9 @@ Diseño completo: `docs/superpowers/specs/2026-09-29-base-nueva-users-crm-design
 |---|---|---|
 | ✅ | Datos del roadmap extraídos (`02-datos-*`, 159 tareas · 3 caja · 8 notas) | 29/9/2026 17:28 UTC |
 | ✅ | Esquema fuente del CRM del producto (`fuente-crm-producto.sql`) | 29/9/2026 |
-| ⏳ | `supabase/schema.sql` con `users` + `crm_*` | pendiente de la spec |
-| ⏳ | `04-reasignar-usuarios.sql` | pendiente de la spec |
-| ⏳ | Front del tablero leyendo `users` | pendiente de la spec |
+| ✅ | `supabase/schema.sql` con `users` + `crm_*` | 29/9/2026, rama `mudanza-base` |
+| ✅ | `04-reasignar-usuarios.sql` | 29/9/2026, rama `mudanza-base` |
+| ✅ | Front del tablero leyendo `users` | 29/9/2026, rama `mudanza-base` |
 
 **El origen sigue vivo, así que los datos envejecen.** Lo que se toque en el tablero después
 de las 17:28 UTC del 29/9 no está en `02-datos-*`. Antes de inyectar, re-extraer (abajo).

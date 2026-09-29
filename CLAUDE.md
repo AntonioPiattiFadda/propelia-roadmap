@@ -7,7 +7,7 @@ y Captalia, con un router al frente); se unificó en un único sistema con tres 
 Lorenzo, Antonio y Luis.
 
 - `index.html` — la app entera. Define `window.APP_CONFIG` (título, `tablas`, `bucket`,
-  `canal`, `personas`) y luego carga, en orden: `order-math.js`,
+  `canal`) y luego carga, en orden: `order-math.js`, `equipo.js`,
   `supabase-sync.js`, `app.js`. Todo el CSS vive en `app.css`.
 - `toniylorete.html` / `captalia.html` — stubs que redirigen a `index.html`. Existen solo
   para que no se rompan enlaces y favoritos viejos. No tienen lógica.
@@ -16,19 +16,36 @@ Lorenzo, Antonio y Luis.
 
 **Regla de oro: la lógica va en `app.js` y los estilos en `app.css`. Nunca en el HTML.**
 
-### Identidad vs. membresía — no confundir
+### Identidad y acceso: la tabla `users`
 
-Dos cosas distintas que se resuelven en lugares distintos:
+**Desde el 29/9/2026 son una sola cosa.** Tener fila activa en `users` ES tener acceso
+(`es_usuario()`, que usan todas las policies) y esa misma fila dice quién sos: nombre,
+iniciales, color y si ponés plata en la caja. El front la lee al entrar
+(`RoadmapSync.cargarUsuarios()` → `cargarEquipo()` → `PERSONAS` / `PERSONAS_CAJA`), y la
+conversión de filas a personas es `personasDesdeUsuarios()`, en `equipo.js`, con su test en
+`scripts/test-equipo.cjs`.
 
-- **Membresía** (¿esta cuenta puede ver el tablero?) sale de `app_miembros` en Supabase,
-  protegida por RLS, vía `RoadmapSync.esMiembro()`. Es lo único que da acceso.
-- **Identidad** (¿esta cuenta es Lorenzo, Antonio o Luis?) sale de `APP_CONFIG.personas`,
-  cruzando el email de la sesión contra el campo `email` de cada persona. Solo sirve para
-  pintar nombre y color, firmar mensajes del chat y resaltar «Lo mío».
-
-Agregar a alguien en `personas` **no le da acceso a nada**. El acceso se otorga con un
-insert en `app_miembros`. Y al revés: una cuenta con membresía pero sin `email` cargado en
-`personas` entra y ve todo, pero el tablero no sabe quién es (avisa en pantalla).
+- **Hasta ese día eran dos**: el acceso salía de `app_miembros` (por email) y la identidad de
+  `APP_CONFIG.personas`, escrita a mano en el HTML. Existía el caso «entraste pero el tablero
+  no sabe quién sos». Ya no existe: sin fila no entrás.
+- **Lo que se guarda en los datos es el uuid de la cuenta**: `pend`, `resp`, `chat[].autor`,
+  los avisos y `cuenta`/`carga` de la caja. Hasta la mudanza eran `'Loro'`, `'Toni'`,
+  `'Luis'`; los reescribió `migracion/04-reasignar-usuarios.sql`.
+- **El front no escribe `users`**: no hay policies de escritura. Altas, cambios y roles van por
+  el MCP o el service role.
+- **La baja es `activo = false`, nunca un `delete`.** Un inactivo no entra (`es_usuario()` lo
+  corta y la RLS le devuelve la lista vacía), pero se sigue pintando: una tarea vieja dice
+  quién la hizo y lo que pagó sigue en el saldo de la caja. Lo que no se hace es **ofrecerlo
+  para elegir**: `elegibles()` lo saca de los menús salvo donde ya está puesto, para poder
+  sacarlo.
+- **`rol` es un enum con un solo valor (`SUPERADMIN`)** y todavía no restringe nada. Un rol
+  nuevo es `alter type user_role add value …`; la primera regla por rol es una policy.
+- **`caja` es un booleano y no un rol**: quién pone plata y qué permisos tiene una cuenta son
+  preguntas distintas.
+- **`PERSONAS` y `PERSONAS_CAJA` son `const` que se llenan en el lugar** (`splice`), no se
+  reasignan: todo el archivo las lee por nombre. Antes de entrar están vacías, así que nada
+  que se calcule al cargar el script puede depender de ellas — por eso `anchoAvatares()` es
+  una función y no la constante `ANCHO_AVATARES` que fue.
 
 ### Modelo de datos
 
@@ -371,7 +388,7 @@ aprendérselo. Además es la que más se cambia, así que tiene que ser un botó
   corría la pastilla de prioridad hasta 50px de una fila a la otra: las dos columnas dejaban de
   leerse bajando justo en la vista donde más filas hay a la vez. El hueco reserva la lista
   entera de gente y las iniciales arrancan pegadas a su izquierda. El ancho lo dibuja el CSS
-  pero el número sale del JS (`ANCHO_AVATARES` → `--avn`, tomado de `APP_CONFIG.personas`, que
+  pero el número sale del JS (`anchoAvatares()` → `--avn`, tomado de `users` —hasta el 29/9/2026 `APP_CONFIG.personas`—, que
   es el techo real: el menú no ofrece a nadie más).
 - **El ancla del bloque es `.pgesp` y no una columna**, justamente porque acá el backlog no
   dibuja ninguna. Ver el punto del título elástico, más arriba: el ancla se movió tres veces
@@ -1037,7 +1054,7 @@ después, sin abrir la conversación de la ficha.
   - **`para` vacío significa «para todos»**, que es exactamente lo que valía para cada aviso
     antes de que el campo existiera: por eso no hay nada que migrar, ni en la base (vive en el
     árbol de `expl`, como el resto del cuadro) ni al leer. Todo lo que lo lee pasa por
-    `destinatariosDe()`, que además filtra a quien ya no está en `APP_CONFIG.personas`: un
+    `destinatariosDe()`, que además filtra a quien ya no está en `users` (hasta el 29/9/2026, `APP_CONFIG.personas`): un
     aviso dirigido a alguien que se fue se volvería invisible para todos.
   - **Acá SÍ se puede sacar al último**, al revés que `pend` y que `carga`. Quitar a todos no
     deja el aviso sin dueño: lo devuelve al equipo, que es el estado de fábrica.
@@ -1117,8 +1134,8 @@ llegaría apagada al tablero, que es justo donde tiene que llamar la atención.
   cualquiera, con el argumento de que una tarea que aparece en el tablero es algo que el equipo
   tiene que notar. En la práctica eso son cuarenta chapas rojas para todos y ninguna dirigida a
   nadie, que es el ruido que hace que se dejen de mirar. Sale de `pend` (`miTarea()`), que es
-  el único lugar donde vive quién la hace. **Contrapartidas asumidas**: sin identidad cargada
-  en `APP_CONFIG.personas` no le suena a nadie —el tablero no sabe quién sos, mal puede decirte
+  el único lugar donde vive quién la hace. **Contrapartidas asumidas**: sin fila en `users`
+  (hasta el 29/9/2026, identidad en `APP_CONFIG.personas`) no le suena a nadie —el tablero no sabe quién sos, mal puede decirte
   que algo es tuyo— y una tarea sin responsable tampoco, que es un caso que la invariante de
   `pend` ya no deja crear.
 - **Lo que hacés vos no te avisa a vos.** Por eso `tareaVacia()` marca la tarea vista para vos

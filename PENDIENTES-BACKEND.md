@@ -13,7 +13,7 @@ El tablero se muda a un proyecto Supabase propio: el paso a paso está en
 ## Montar la base en un proyecto nuevo
 
 1. SQL Editor → correr `supabase/schema.sql` entero. Es idempotente.
-2. Crear las cuentas y darles acceso (abajo).
+2. Crear las cuentas y sus filas en `users` (abajo).
 3. En `supabase-sync.js`, `SUPABASE_URL` y `SUPABASE_ANON_KEY` del proyecto.
 
 Si falta algo del esquema, el tablero lo avisa en el triangulito de la barra lateral
@@ -21,28 +21,22 @@ Si falta algo del esquema, el tablero lo avisa en el triangulito de la barra lat
 
 ---
 
-## Dar acceso: cuenta + `app_miembros` + `personas` del HTML
-
-Son **tres** cosas separadas. Es el error más fácil de cometer acá.
+## Dar de alta a alguien: cuenta + fila en `users`
 
 **a) La cuenta**: `Authentication → Users → Add user`, con email y contraseña, confirmada
 (el front entra con `signInWithPassword`).
 
-**b) El acceso** lo da una fila en `app_miembros`. Sin ella la persona entra, ve «Sin acceso»
-y no lee un solo dato: la RLS se lo impide en la base, no en la pantalla.
+**b) La fila en `users`**, por el MCP (el front no puede escribir esa tabla):
 
 ```sql
-insert into public.app_miembros (email, proyecto)
-values ('<email real, en minúscula>', 'propelia')
-on conflict do nothing;
+insert into public.users (id, email, nombre, iniciales, color, caja)
+select id, email, 'Nombre', 'NO', '#5A7E8C', false
+from auth.users where email = '<email en minúscula>';
 ```
 
-`proyecto` es `'propelia'` aunque la base ya no sea la de Propelia: es la clave que miran
-`es_miembro()` y `APP_CONFIG.proyecto`, no el nombre del proyecto de Supabase.
-
-**c) El nombre y el color** salen del bloque `personas` de `index.html`, cruzando por email.
-Con el email en blanco la persona entra igual, pero el tablero no sabe quién es: no firma sus
-mensajes ni le marca lo suyo.
+Sin la fila, la persona entra y ve «Sin acceso». **Dar de baja** es
+`update users set activo = false where email = …` — nunca un `delete`: las tareas y el CRM
+guardan su uuid.
 
 | Persona | Cuenta | Caja |
 |---|---|---|
@@ -50,17 +44,13 @@ mensajes ni le marca lo suyo.
 | Antonio | `antonio.piattifadda@gmail.com` | sí |
 | Luis | `rubioluis13@gmail.com` | no |
 
-> **No cambiar el campo `id` de `personas`.** `'Loro'` y `'Toni'` son los valores escritos
-> dentro de las tareas (responsable, autor de cada mensaje, `carga` de la caja). Si se tocan,
-> esas asignaciones quedan huérfanas.
-
 ---
 
 ## Adjuntos
 
 Bucket privado `roadmap-adjuntos`. Se lee con URLs firmadas que el front pide al pintar
 (`RoadmapSync.urlFirmada()`); leer, subir y borrar lo cubren las policies de
-`storage.objects`, gateadas por `es_miembro('propelia')`.
+`storage.objects`, gateadas por `es_usuario()`.
 
 Algunos archivos viejos pueden traer `b: 'captalia-adjuntos'` en su JSON. Ese bucket ya no
 existe en el esquema: al 29/9/2026 estaba vacío y ninguna tarea lo referenciaba.
