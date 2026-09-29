@@ -8,6 +8,37 @@ está en este directorio**, no en la memoria de nadie.
 Diseño completo: `docs/superpowers/specs/2026-09-29-base-nueva-users-crm-design.md`
 (sub-proyecto A: `users`, roadmap y esquema del CRM `crm_*`).
 
+## Retomar en una sesión nueva (leer primero)
+
+Todo lo de la mudanza vive en el repo. Una sesión que arranca en frío hace esto:
+
+1. `git switch mudanza-base` — **todo el trabajo está en esta rama y NO en `main`**. El
+   front de la rama espera la tabla `users`; mergearla antes de la inyección deja a los
+   tres en «Sin acceso» contra la base vieja.
+2. Leer, en orden: este archivo → `docs/superpowers/specs/2026-09-29-base-nueva-users-crm-design.md`
+   (el diseño) → `docs/superpowers/plans/2026-09-29-base-nueva-users-crm.md` (lo implementado).
+3. La revisión final de la rama y sus correcciones: ver «Revisión final», abajo.
+4. Validar SQL sin base: `python3 -m venv /tmp/venv-sql && /tmp/venv-sql/bin/pip install -q pglast`
+   y `/tmp/venv-sql/bin/python migracion/validar-sql.py supabase/schema.sql migracion/04-reasignar-usuarios.sql`.
+   Tests del front: `node scripts/test-equipo.cjs && node scripts/test-calcular-orden.cjs`.
+5. Seguir «Inyección», abajo, paso por paso.
+
+**Sobre el MCP**: la re-extracción (paso 0) necesita el proyecto VIEJO y todo lo demás el
+NUEVO. Se puede tener los dos a la vez registrando dos servidores MCP de Supabase con nombres
+distintos (por ejemplo `supabase-viejo` y `supabase-nuevo`, cada uno con el token de su
+cuenta): así se re-extrae y se inyecta en la misma sesión y el tablero queda congelado
+minutos y no horas. Si no, re-extraer con el MCP viejo ANTES de cambiarlo.
+
+**Archivos que no están en git pero sí en disco** (ignorados a propósito):
+- `migracion/02-datos-*.sql` — los datos (tienen la caja). Si faltan, se regeneran con la
+  consulta de «Re-extraer» + `generar-datos.py`.
+- `.superpowers/sdd/2026-09-29-base-nueva-users-crm/progress.md` — el registro de la
+  implementación, con cada decisión tomada (`Ruling:`) y el resultado del dry run.
+
+## Revisión final
+
+_En curso al cierre de la sesión del 29/9/2026._ Los hallazgos y lo corregido se anotan acá.
+
 ## Estado
 
 | | qué | cuándo |
