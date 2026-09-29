@@ -636,7 +636,8 @@ function pintarFiltroPend(){
   boton.classList.toggle('activo', puestas.length > 0);
   // `data-fpend` y no `data-persona`: ese lo engancha el bucle de los chips con un `onclick`
   // directo, y con el mismo atributo cada tilde de acá se contaría dos veces.
-  menu.innerHTML = PERSONAS.map(p => {
+  // Sin los inactivos, igual que `#chipsPend`: elegibles() los deja solo si ya están puestos.
+  menu.innerHTML = elegibles(PERSONAS, puestas).map(p => {
     const on = puestas.includes(p.id);
     return `<button type="button" data-fpend="${escA(p.id)}"${on ? ' class="on"' : ''} aria-pressed="${on}">
       <span class="av mini" style="background:${p.color}">${esc(p.ini)}</span>${esc(p.id === YO.id ? 'Lo mío' : p.nombre)}
