@@ -86,7 +86,7 @@ no hace falta re-extraer.
 | 6. `04-reasignar-usuarios.sql` | ✅ 0 claves viejas · chapas 10 = 10 · `pend`: Antonio 94, Lorenzo 62 |
 | 7. adjuntos | ✅ 78/78, huella `nombre:tamaño` igual al origen (`32bc1825…`); las 53 rutas que guardan las tareas existen. Las otras 25 ya eran huérfanas en el origen |
 | 8. deploy | ✅ `main` en `37904a7` apunta a `itqwxnmuxuiiydsueazb`; antes se trajo la versión de teléfono que `main` tenía y la rama no |
-| 9. prueba de humo | ⏳ la hacen Antonio y Lorenzo contra la versión online |
+| 9. prueba de humo | ✅ online, 29/9/2026: todo anduvo |
 | 10. proyecto viejo | intacto, es la vuelta atrás. Se limpia más adelante, a mano |
 
 **Paso 7 sin service role** (29/9/2026): no se usó `03-copiar-storage.mjs`. Se copió con la
