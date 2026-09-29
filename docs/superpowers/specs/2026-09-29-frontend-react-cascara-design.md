@@ -1,13 +1,18 @@
 # Frontend nuevo en React — sub-proyecto 1: la cáscara
 
-Escrito el 29/9/2026. Rama `frontend-react` (sale de `mudanza-base`), worktree
-`.claude/worktrees/frontend-react`.
+Escrito el 29/9/2026. Rama `frontend-react`, worktree `.claude/worktrees/frontend-react`.
+Salió de `mudanza-base`; desde que la mudanza se mergeó (29/9/2026) va rebasada sobre `main`.
 
 ## 0. Hasta dónde llegamos (para retomar en frío)
 
-- **Estado**: diseño cerrado y aprobado por secciones en el brainstorming (las 1 y 2
-  explícitamente; las 3 y 4 con el «mandale mecha»). **Falta**: que el usuario revise este
-  archivo → `superpowers:writing-plans` → ejecución. **No hay código escrito todavía.**
+- **Estado**: diseño aprobado. El plan es
+  `docs/superpowers/plans/2026-09-29-frontend-react-cascara.md`.
+- **Lo que cambió después de escribir esto** (29/9/2026, al terminar la mudanza):
+  - la base nueva **existe y tiene datos** (`itqwxnmuxuiiydsueazb`): los tipos se **generan**
+    desde ella y no se escriben a mano, y el login se prueba de verdad;
+  - `main` ganó la **versión de teléfono** del tablero (CLAUDE.md, «El teléfono»): el port
+    del Roadmap (sub-proyecto 3) la incluye;
+  - **Luis no se mudó**: los usuarios son dos, Lorenzo y Antonio.
 - Esta spec **reemplaza el supuesto** de `2026-09-29-crm-pantalla-contexto.md`, que daba por
   hecho JS plano sin build. Lo que ese archivo dice del CRM (modelo de datos, qué copiar de
   `/leads`, las preguntas de su sección 8) sigue valiendo para el sub-proyecto 2; lo que dice
@@ -25,9 +30,8 @@ Escrito el 29/9/2026. Rama `frontend-react` (sale de `mudanza-base`), worktree
    2. **el CRM**;
    3. **el Roadmap**, port «igual igual» del tablero vanilla — el más grande (~5300 líneas de
       `app.js` y todas las decisiones de `CLAUDE.md`).
-4. **La base nueva todavía no existe y se construye como si existiera**, contra
-   `supabase/schema.sql`. La prueba de punta a punta queda para después de la inyección
-   (`migracion/PASOS.md`).
+4. ~~La base nueva todavía no existe~~ — **ya existe** (ver arriba). Se construye y se prueba
+   contra ella.
 5. **Reemplazo total**: la raíz del repo pasa a ser el proyecto Vite y se publica en
    **Vercel**. Netlify (`main`) sigue sirviendo el tablero viejo hasta el merge.
 6. **El vanilla se mueve a `legacy/`** y se borra cuando termine el port del Roadmap: es la
@@ -49,7 +53,7 @@ Escrito el 29/9/2026. Rama `frontend-react` (sale de `mudanza-base`), worktree
 │  ├─ layouts/AppLayout.tsx
 │  ├─ lib/supabase.ts, lib/utils.ts, lib/acceso.ts (+ los lib/ que pidan los ui copiados)
 │  ├─ hooks/useUserSession.tsx, hooks/useYo.ts
-│  ├─ types/db.ts                    tipos escritos a mano desde supabase/schema.sql
+│  ├─ types/database.types.ts        tipos generados desde la base nueva
 │  └─ pages/auth/, pages/roadmap/, pages/crm/, pages/caja/
 ├─ legacy/             el tablero vanilla entero (index.html, app.js, app.css,
 │                      supabase-sync.js, equipo.js, order-math.js, stubs .html, scripts/)
@@ -84,9 +88,8 @@ Escrito el 29/9/2026. Rama `frontend-react` (sale de `mudanza-base`), worktree
   mismo; sin esto el usuario vería un tablero vacío sin saber por qué.
 - La decisión vive en una función pura, `accesoDe(fila)` en `lib/acceso.ts`
   (`'cargando' | 'sin-acceso' | 'ok'`), con test. Es la pieza con lógica real de la cáscara.
-- **Tipos de la base escritos a mano** en `src/types/db.ts`, espejando `supabase/schema.sql`
-  (`users`, `roadmap_*`, `crm_*`). Cuando exista la base nueva se reemplazan por los generados
-  (`supabase gen types`) y el diff muestra si algo quedó mal copiado.
+- **Tipos de la base generados** desde la base nueva (MCP `generate_typescript_types`) en
+  `src/types/database.types.ts`. Se regeneran cada vez que cambie `supabase/schema.sql`.
 - **URL y key por variables de entorno** (`import.meta.env.VITE_SUPABASE_*`), no escritas en
   el código como hoy en `supabase-sync.js`. `.env` ya está en `.gitignore`.
 
@@ -121,8 +124,13 @@ Escrito el 29/9/2026. Rama `frontend-react` (sale de `mudanza-base`), worktree
   Framework Vite, build `npm run build`, salida `dist`, variables `VITE_SUPABASE_*` en el
   panel. Los enlaces viejos (`toniylorete.html`, `captalia.html`) mueren con Netlify; se
   acepta. El proyecto de Vercel lo crea el usuario.
-- **Login desde el dominio nuevo**: hay que sumar la URL de Vercel a las *redirect URLs* de
-  Supabase Auth de la base nueva. Anotarlo en `migracion/PASOS.md`.
+- **Login desde el dominio nuevo**: `signInWithPassword` no redirige, así que no hace falta
+  tocar las *redirect URLs* de Supabase Auth. Sí la **Site URL**, si algún día se mandan
+  mails de Auth (hoy no).
+- **Netlify tiene que pasar a publicar `legacy/`** (Site settings → Build & deploy → Publish
+  directory) **antes** de mergear esta rama a `main`. Si no, al mergear Netlify publica la
+  raíz —que pasa a ser el código fuente de Vite— y el tablero que usan todos los días se cae,
+  cuando el Roadmap nuevo todavía es un placeholder.
 
 ## 5. Fuera de alcance (YAGNI)
 
@@ -131,7 +139,7 @@ del producto viene gratis), cualquier dato real en las tres páginas, i18n, PWA.
 
 ## 6. Criterio de terminado
 
-- Con `.env` apuntando a la base nueva (cuando exista): entrás con tu cuenta, ves la barra
+- Con `.env` apuntando a la base nueva: entrás con tu cuenta, ves la barra
   lateral con las tres entradas y tu avatar, navegás entre los placeholders, cerrás sesión.
 - Una cuenta sin fila activa en `users` ve «Tu cuenta no tiene acceso».
 - `vitest run` y `tsc --noEmit` pasan. El tablero viejo se sirve desde `legacy/` sin cambios.

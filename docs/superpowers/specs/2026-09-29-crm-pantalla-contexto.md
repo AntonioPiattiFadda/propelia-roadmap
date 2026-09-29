@@ -16,7 +16,7 @@ compradores (`/leads`) de `propelia-frontend` para que Propelia siga a **sus pro
 (las inmobiliarias que le compran el software) con el mismo modelo que el producto usa para los
 compradores de cada inmobiliaria.
 
-Los usuarios son tres: Lorenzo, Antonio y Luis. Son los mismos del tablero y entran con la misma
+Los usuarios son dos: Lorenzo y Antonio (Luis no se mudó, 29/9/2026). Son los mismos del tablero y entran con la misma
 cuenta.
 
 ## 2. Cómo trabajar (no negociable)
