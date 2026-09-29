@@ -13,9 +13,8 @@
 --   - `captalia_*`: el tablero viejo de Captalia. El front no las lee desde la unificación.
 --   - El bucket `captalia-adjuntos`: está vacío y ninguna tarea lo referencia.
 --   - Todo lo demás de ese proyecto (el CRM: leads, properties, etc.) no es de este tablero.
---   - auth.users: se crean cuentas nuevas. El acceso NO depende del id del usuario sino del
---     email (app_miembros + es_miembro()), así que alcanza con que las cuentas nuevas usen
---     los mismos emails.
+--   - auth.users: las cuentas se crean nuevas en el proyecto nuevo. Quién es quién vive en
+--     `users` (abajo), que reemplazó a `app_miembros` + `APP_CONFIG.personas` el 29/9/2026.
 --
 -- Idempotente: se puede correr dos veces.
 -- ============================================================
@@ -29,22 +28,36 @@ begin
 end;
 $$;
 
--- ---------- Membresía ----------
-create table if not exists public.app_miembros (
-  email    text not null,
-  proyecto text not null,
-  primary key (email, proyecto)
+-- ---------- Usuarios ----------
+-- Tener fila activa acá ES tener acceso, y la fila dice quién sos. Reemplaza a
+-- `app_miembros` (acceso por email) + `APP_CONFIG.personas` (identidad escrita en el HTML).
+do $$ begin
+  create type public.user_role as enum ('SUPERADMIN');
+exception when duplicate_object then null;
+end $$;
+
+create table if not exists public.users (
+  id         uuid primary key references auth.users(id) on delete cascade,
+  email      text not null unique,
+  nombre     text not null,
+  iniciales  text not null,
+  color      text not null,
+  rol        public.user_role not null default 'SUPERADMIN',
+  -- Quién pone plata en la caja. Un booleano y no un rol: quién paga y qué permisos tiene
+  -- una cuenta son dos preguntas distintas.
+  caja       boolean not null default false,
+  -- La baja es esto y nunca un delete: crm_* apunta acá con FK y el roadmap guarda estos
+  -- uuids adentro de su JSON.
+  activo     boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
 -- Va después de la tabla: una función `language sql` se valida al crearla.
-create or replace function public.es_miembro(p text)
+create or replace function public.es_usuario()
 returns boolean language sql stable security definer
 set search_path to 'public' as $$
-  select exists (
-    select 1 from public.app_miembros m
-    where m.proyecto = p
-      and lower(m.email) = lower(auth.jwt()->>'email')
-  );
+  select exists (select 1 from public.users where id = auth.uid() and activo);
 $$;
 
 -- ---------- Tareas ----------
@@ -114,29 +127,33 @@ create trigger roadmap_caja_set_updated_at before update on public.roadmap_caja
 drop trigger if exists roadmap_notas_set_updated_at on public.roadmap_notas;
 create trigger roadmap_notas_set_updated_at before update on public.roadmap_notas
   for each row execute function public.set_updated_at();
+drop trigger if exists users_set_updated_at on public.users;
+create trigger users_set_updated_at before update on public.users
+  for each row execute function public.set_updated_at();
 
 -- ---------- RLS ----------
-alter table public.app_miembros   enable row level security;
+alter table public.users          enable row level security;
 alter table public.roadmap_tareas enable row level security;
 alter table public.roadmap_caja   enable row level security;
 alter table public.roadmap_notas  enable row level security;
 
-drop policy if exists app_miembros_self on public.app_miembros;
-create policy app_miembros_self on public.app_miembros for select
-  using (lower(email) = lower(auth.jwt()->>'email'));
+-- Todo el equipo se ve (avatares, menús, firma del chat). Sin policies de escritura: altas,
+-- cambios y roles van por el MCP o el service role, y nadie se sube de rol desde la consola.
+drop policy if exists users_select on public.users;
+create policy users_select on public.users for select using (public.es_usuario());
 
 drop policy if exists roadmap_tareas_m on public.roadmap_tareas;
 create policy roadmap_tareas_m on public.roadmap_tareas for all
-  using (public.es_miembro('propelia')) with check (public.es_miembro('propelia'));
+  using (public.es_usuario()) with check (public.es_usuario());
 drop policy if exists roadmap_caja_m on public.roadmap_caja;
 create policy roadmap_caja_m on public.roadmap_caja for all
-  using (public.es_miembro('propelia')) with check (public.es_miembro('propelia'));
+  using (public.es_usuario()) with check (public.es_usuario());
 drop policy if exists roadmap_notas_m on public.roadmap_notas;
 create policy roadmap_notas_m on public.roadmap_notas for all
-  using (public.es_miembro('propelia')) with check (public.es_miembro('propelia'));
+  using (public.es_usuario()) with check (public.es_usuario());
 
 -- ---------- Realtime ----------
--- app_miembros no va: el front no se suscribe a ella.
+-- users no va: el front la lee una vez al entrar.
 do $$
 declare t text;
 begin
@@ -155,10 +172,10 @@ on conflict (id) do update set public = false;
 
 drop policy if exists adjuntos_read on storage.objects;
 create policy adjuntos_read on storage.objects for select
-  using (bucket_id = 'roadmap-adjuntos' and public.es_miembro('propelia'));
+  using (bucket_id = 'roadmap-adjuntos' and public.es_usuario());
 drop policy if exists adjuntos_write on storage.objects;
 create policy adjuntos_write on storage.objects for insert
-  with check (bucket_id = 'roadmap-adjuntos' and public.es_miembro('propelia'));
+  with check (bucket_id = 'roadmap-adjuntos' and public.es_usuario());
 drop policy if exists adjuntos_delete on storage.objects;
 create policy adjuntos_delete on storage.objects for delete
-  using (bucket_id = 'roadmap-adjuntos' and public.es_miembro('propelia'));
+  using (bucket_id = 'roadmap-adjuntos' and public.es_usuario());
