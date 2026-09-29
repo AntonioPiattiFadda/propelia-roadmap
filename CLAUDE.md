@@ -38,7 +38,9 @@ conversión de filas a personas es `personasDesdeUsuarios()`, en `equipo.js`, co
   quién la hizo y lo que pagó sigue en el saldo de la caja. Lo que no se hace es **ofrecerlo
   para elegir**: `elegibles()` lo saca de los menús salvo donde ya está puesto, para poder
   sacarlo.
-- **`rol` es un enum con un solo valor (`SUPERADMIN`)** y todavía no restringe nada. Un rol
+- **`rol` es un enum con dos valores (`SUPERADMIN` y `SDR`, este desde el 29/9/2026)** y
+  todavía no restringe nada. El default sigue siendo `SUPERADMIN`: un alta nueva que tenga que
+  ser SDR se marca a mano. Un rol
   nuevo es `alter type user_role add value …`; la primera regla por rol es una policy.
 - **`caja` es un booleano y no un rol**: quién pone plata y qué permisos tiene una cuenta son
   preguntas distintas.

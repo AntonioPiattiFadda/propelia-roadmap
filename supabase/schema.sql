@@ -35,6 +35,9 @@ do $$ begin
   create type public.user_role as enum ('SUPERADMIN');
 exception when duplicate_object then null;
 end $$;
+-- Aparte y no dentro del `create type`: una base que ya tenía el enum no pasaría por ahí.
+-- Todavía no restringe nada; la primera regla por rol es una policy.
+alter type public.user_role add value if not exists 'SDR';
 
 create table if not exists public.users (
   -- restrict y no cascade: borrar la cuenta desde el panel no puede llevarse puesta la fila,
