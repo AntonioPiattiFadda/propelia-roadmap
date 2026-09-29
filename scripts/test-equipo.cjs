@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { personasDesdeUsuarios } = require('../equipo.js');
+const { personasDesdeUsuarios, elegibles, destinatariosActivos } = require('../equipo.js');
 
 const filas = [
   { id:'u-lu', email:'Rubio@X.com', nombre:'Luis',    iniciales:'LU', color:'#A87A3F', caja:false, activo:true },
@@ -32,5 +32,19 @@ const flaca = personasDesdeUsuarios([{ id:'u-x', email:'x@x.com', nombre:'Ximena
 assert.equal(flaca.ini, 'XI');
 assert.match(flaca.color, /^#[0-9A-F]{6}$/i);
 assert.equal(flaca.activo, true);
+
+// elegibles: a quién se le ofrece algo para elegir. El inactivo no, salvo que ya esté puesto
+// (si no, no habría cómo sacarlo). Es también la carga por defecto de un gasto nuevo: lo que
+// se anota hoy no se le carga a alguien que ya se fue.
+assert.deepEqual(elegibles(personas).map(p => p.id), ['u-an', 'u-lu']);
+assert.deepEqual(elegibles(personas, ['u-lo']).map(p => p.id), ['u-an', 'u-lo', 'u-lu']);
+assert.deepEqual(elegibles(caja).map(p => p.id), ['u-an']);
+
+// destinatariosActivos: un aviso dirigido a alguien que se fue (o que no existe) vuelve a ser
+// para todos — si no, no le sonaría a nadie.
+assert.deepEqual(destinatariosActivos(['u-lo'], personas), []);
+assert.deepEqual(destinatariosActivos(['u-lo', 'u-an'], personas), ['u-an']);
+assert.deepEqual(destinatariosActivos(['u-fantasma'], personas), []);
+assert.deepEqual(destinatariosActivos(undefined, personas), []);
 
 console.log('personasDesdeUsuarios: OK');

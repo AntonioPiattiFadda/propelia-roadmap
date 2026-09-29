@@ -37,7 +37,9 @@ exception when duplicate_object then null;
 end $$;
 
 create table if not exists public.users (
-  id         uuid primary key references auth.users(id) on delete cascade,
+  -- restrict y no cascade: borrar la cuenta desde el panel no puede llevarse puesta la fila,
+  -- que las tareas y el CRM referencian. Primero `activo = false`; la cuenta, si hace falta, después.
+  id         uuid primary key references auth.users(id) on delete restrict,
   email      text not null unique,
   nombre     text not null,
   iniciales  text not null,
@@ -456,6 +458,11 @@ begin
                     for each row execute function public.set_updated_at()', t || '_set_updated_at', t);
   end loop;
 end $$;
+
+-- security definer + EXECUTE de fábrica para PUBLIC = cualquiera, incluso sin sesión, podría
+-- llamar a crm_gestion_refresh() por /rpc. Solo recalcula campos derivados, pero no hay por qué dejar abierta esa
+-- puerta: la llaman los triggers, que corren como dueño.
+revoke execute on function public.crm_gestion_refresh(uuid) from public, anon, authenticated;
 
 drop trigger if exists crm_leads_log_stage on public.crm_leads;
 create trigger crm_leads_log_stage after insert or update of funnel_stage_id on public.crm_leads

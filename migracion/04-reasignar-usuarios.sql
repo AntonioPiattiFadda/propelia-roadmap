@@ -8,7 +8,12 @@
 --
 -- OJO con `expl`: se reemplaza como TEXTO y no pasando por jsonb. `jsonb::text` reescribe
 -- el formato ("visto": false, con espacio) y avisosSinVer() busca el literal "visto":false
--- sin parsear: la chapa roja se apagaría en todas las tareas.
+-- sin parsear: la chapa roja se apagaría en todas las tareas. Por eso la verificación cuenta
+-- ese literal antes y después, y aborta si cambia.
+--
+-- Las tablas del roadmap van SIN `public.` a propósito: en la base real se resuelven a
+-- public, y así el ensayo en seco puede correr este mismo archivo contra copias temporales
+-- (pg_temp se busca primero). Ver «Ensayo en seco» al final.
 -- ============================================================
 begin;
 
@@ -26,13 +31,16 @@ do $$ begin
   end if;
 end $$;
 
+-- `create or replace`: si el MCP reusa la conexión, correrlo otra vez no choca con las
+-- funciones de la vez anterior.
+
 -- Un valor suelto: si es una clave, su uuid; si no, tal cual.
-create function pg_temp.m(x text) returns text language sql stable as $$
+create or replace function pg_temp.m(x text) returns text language sql stable as $$
   select coalesce((select uid from _mapa where clave = x), x)
 $$;
 
 -- Un array de strings (pend, carga, para).
-create function pg_temp.m_arr(a jsonb) returns jsonb language sql stable as $$
+create or replace function pg_temp.m_arr(a jsonb) returns jsonb language sql stable as $$
   select case when jsonb_typeof(a) <> 'array' then a else
     coalesce((select jsonb_agg(case when jsonb_typeof(e) = 'string' then to_jsonb(pg_temp.m(e #>> '{}')) else e end
                                order by o)
@@ -40,21 +48,21 @@ create function pg_temp.m_arr(a jsonb) returns jsonb language sql stable as $$
 $$;
 
 -- Un campo string de un objeto, solo si existe y es string.
-create function pg_temp.m_campo(obj jsonb, campo text) returns jsonb language sql stable as $$
+create or replace function pg_temp.m_campo(obj jsonb, campo text) returns jsonb language sql stable as $$
   select case when jsonb_typeof(obj -> campo) = 'string'
               then jsonb_set(obj, array[campo], to_jsonb(pg_temp.m(obj ->> campo)))
               else obj end
 $$;
 
 -- chat: [{autor, ts, texto}]
-create function pg_temp.m_chat(a jsonb) returns jsonb language sql stable as $$
+create or replace function pg_temp.m_chat(a jsonb) returns jsonb language sql stable as $$
   select case when jsonb_typeof(a) <> 'array' then a else
     coalesce((select jsonb_agg(pg_temp.m_campo(m, 'autor') order by o)
               from jsonb_array_elements(a) with ordinality t(m, o)), '[]'::jsonb) end
 $$;
 
 -- subtareas: [{resp, chat:[…], …}]
-create function pg_temp.m_sub(a jsonb) returns jsonb language sql stable as $$
+create or replace function pg_temp.m_sub(a jsonb) returns jsonb language sql stable as $$
   select case when jsonb_typeof(a) <> 'array' then a else
     coalesce((select jsonb_agg(
                 case when jsonb_typeof(s -> 'chat') = 'array'
@@ -67,7 +75,7 @@ $$;
 -- expl en bloques: solo `"autor":"X"`, `"vistoPor":"X"` y los elementos de `"para":[…]`. En
 -- JSON válido esas formas no aparecen dentro de un texto (ahí las comillas van escapadas:
 -- \"autor\":), así que un «Toni» escrito en una explicación no se toca.
-create function pg_temp.m_expl(expl text) returns text language plpgsql stable as $$
+create or replace function pg_temp.m_expl(expl text) returns text language plpgsql stable as $$
 declare
   r record;
   antes text;
@@ -86,55 +94,89 @@ begin
 end;
 $$;
 
--- Conteo de antes, para comparar al final.
-create temp table _antes on commit drop as
-select 'pend' c, e x, count(*) n from public.roadmap_tareas, jsonb_array_elements_text(pend) e group by 1, 2
-union all select 'resp', resp, count(*) from public.roadmap_tareas where resp <> '' group by 1, 2
-union all select 'chat', m ->> 'autor', count(*) from public.roadmap_tareas, jsonb_array_elements(chat) m group by 1, 2
-union all select 'cuenta', cuenta, count(*) from public.roadmap_caja where cuenta <> '' group by 1, 2;
+-- Cuántas veces aparece cada persona en cada campo. Es la misma cuenta antes y después, así
+-- que un campo que el update se olvide aparece como diferencia. `visto:false` no es una
+-- persona: es la cantidad de chapas rojas, que tiene que quedar igual.
+create or replace function pg_temp.conteo() returns table(c text, x text, n numeric) language sql stable as $$
+  select 'pend', e, count(*) from roadmap_tareas, jsonb_array_elements_text(pend) e group by 2
+  union all
+  select 'resp', resp, count(*) from roadmap_tareas where resp <> '' group by 2
+  union all
+  select 'chat', m ->> 'autor', count(*) from roadmap_tareas, jsonb_array_elements(chat) m
+   where jsonb_typeof(m -> 'autor') = 'string' group by 2
+  union all
+  select 'sub.resp', s ->> 'resp', count(*) from roadmap_tareas, jsonb_array_elements(subtareas) s
+   where coalesce(s ->> 'resp', '') <> '' group by 2
+  union all
+  select 'sub.chat', m ->> 'autor', count(*) from roadmap_tareas, jsonb_array_elements(subtareas) s,
+         jsonb_array_elements(case when jsonb_typeof(s -> 'chat') = 'array' then s -> 'chat' else '[]'::jsonb end) m
+   where jsonb_typeof(m -> 'autor') = 'string' group by 2
+  union all
+  select 'expl.' || r[1], r[2], count(*) from roadmap_tareas,
+         regexp_matches(expl, '"(autor|vistoPor)":"([^"]*)"', 'g') r
+   where left(expl, 8) = '<!--b-->' group by 1, 2
+  union all
+  select 'expl.para', trim(both '"' from e), count(*) from roadmap_tareas,
+         regexp_matches(expl, '"para":\[([^\]]*)\]', 'g') r, unnest(string_to_array(r[1], ',')) e
+   where left(expl, 8) = '<!--b-->' and r[1] <> '' group by 2
+  union all
+  select 'caja.cuenta', cuenta, count(*) from roadmap_caja where cuenta <> '' group by 2
+  union all
+  select 'caja.carga', e, count(*) from roadmap_caja, jsonb_array_elements_text(carga) e group by 2
+  union all
+  select 'visto:false', '', count(*) from roadmap_tareas where expl like '%"visto":false%'
+$$;
 
-update public.roadmap_tareas set
+-- La cuenta de antes, ya traducida: donde decía 'Toni' tiene que pasar a decir su uuid.
+-- El `sum` junta la clave con su uuid si una corrida anterior quedó a medias.
+create temp table _antes on commit drop as
+select a.c, coalesce(m.uid, a.x) as x, sum(a.n) as n
+from pg_temp.conteo() a left join _mapa m on m.clave = a.x
+group by 1, 2;
+
+update roadmap_tareas set
   pend      = pg_temp.m_arr(pend),
   resp      = pg_temp.m(resp),
   chat      = pg_temp.m_chat(chat),
   subtareas = pg_temp.m_sub(subtareas),
   expl      = pg_temp.m_expl(expl);
 
-update public.roadmap_caja set
+update roadmap_caja set
   cuenta = pg_temp.m(cuenta),
   carga  = pg_temp.m_arr(carga);
 
 -- ---------- Verificación: si algo no cierra, se deshace todo ----------
 do $$
-declare quedan int; distintos int;
+declare quedan numeric; distintos int; detalle text;
 begin
-  select count(*) into quedan from (
-    select 1 from public.roadmap_tareas, jsonb_array_elements_text(pend) e where e in ('Loro','Toni','Luis')
-    union all select 1 from public.roadmap_tareas where resp in ('Loro','Toni','Luis')
-    union all select 1 from public.roadmap_tareas, jsonb_array_elements(chat) m where m ->> 'autor' in ('Loro','Toni','Luis')
-    union all select 1 from public.roadmap_tareas, jsonb_array_elements(subtareas) s where s ->> 'resp' in ('Loro','Toni','Luis')
-    union all select 1 from public.roadmap_tareas where expl ~ '"(autor|vistoPor)":"(Loro|Toni|Luis)"'
-    union all select 1 from public.roadmap_tareas where expl ~ '"para":\[[^\]]*"(Loro|Toni|Luis)"'
-    union all select 1 from public.roadmap_caja where cuenta in ('Loro','Toni','Luis')
-    union all select 1 from public.roadmap_caja, jsonb_array_elements_text(carga) e where e in ('Loro','Toni','Luis')
-  ) q;
+  select coalesce(sum(n), 0) into quedan from pg_temp.conteo() where x in ('Loro', 'Toni', 'Luis');
   if quedan > 0 then raise exception 'Quedaron % claves viejas sin reasignar', quedan; end if;
 
-  -- Mismas cuentas antes y después, traduciendo la clave al uuid. Los paréntesis del lado
-  -- derecho no son decorativos: sin ellos `except` se aplicaría solo contra el primer select.
-  select count(*) into distintos from (
-    select c, coalesce(m.uid, a.x) x, n from _antes a left join _mapa m on m.clave = a.x
-    except
-    (select 'pend', e, count(*) from public.roadmap_tareas, jsonb_array_elements_text(pend) e group by 2
-     union all select 'resp', resp, count(*) from public.roadmap_tareas where resp <> '' group by 2
-     union all select 'chat', m ->> 'autor', count(*) from public.roadmap_tareas, jsonb_array_elements(chat) m group by 2
-     union all select 'cuenta', cuenta, count(*) from public.roadmap_caja where cuenta <> '' group by 2)
+  -- En las dos direcciones: lo que estaba y no está, y lo que apareció y no estaba.
+  select count(*), string_agg(format('%s %s: %s', c, x, n), '; ') into distintos, detalle from (
+    (select c, x, n from _antes except select c, x, n from pg_temp.conteo())
+    union all
+    (select c, x, n from pg_temp.conteo() except select c, x, n from _antes)
   ) d;
-  if distintos > 0 then raise exception 'Los conteos por persona no coinciden (% diferencias)', distintos; end if;
+  if distintos > 0 then
+    raise exception 'Los conteos no coinciden (incluye la cantidad de "visto":false): %', detalle;
+  end if;
 
-  -- La chapa roja lee el literal: tiene que seguir habiendo la misma cantidad.
-  raise notice 'OK. Avisos sin ver (literal "visto":false): %',
-    (select count(*) from public.roadmap_tareas where expl like '%"visto":false%');
+  raise notice 'OK. Chapas de avisos sin ver: %',
+    (select n from _antes where c = 'visto:false');
 end $$;
 
 commit;
+
+-- ============================================================
+-- Ensayo en seco (contra cualquier base con roadmap_tareas y roadmap_caja, sin escribir nada):
+-- correr, en UNA sola llamada, este archivo con tres cambios —
+--   1. antes de `begin;`:
+--        create temp table roadmap_tareas as select * from public.roadmap_tareas;
+--        create temp table roadmap_caja   as select * from public.roadmap_caja;
+--   2. en lugar del `create temp table _mapa … left join public.users …`:
+--        create temp table _mapa on commit drop as
+--        select * from (values ('Loro','u-lo'),('Toni','u-to'),('Luis','u-lu')) v(clave, uid);
+--   3. `commit;` → `rollback;`
+-- Los updates caen sobre las copias temporales (pg_temp se busca antes que public).
+-- ============================================================

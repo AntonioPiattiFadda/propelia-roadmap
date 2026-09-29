@@ -25,9 +25,26 @@ function personasDesdeUsuarios(filas) {
   return { personas, caja: marcadas.length ? marcadas : personas.slice() };
 }
 
+/* A quién se le puede ofrecer algo para elegir. Los inactivos se pintan —una tarea vieja sigue
+   diciendo quién la hizo— pero no se ofrecen, salvo que ya estén puestos en lo que se está
+   editando: ahí tienen que aparecer, si no no habría cómo sacarlos. Es también a quién se le
+   carga por defecto un gasto nuevo: lo que se anota hoy no es de alguien que ya se fue. */
+function elegibles(lista, marcados = []) {
+  return lista.filter(p => p.activo || marcados.includes(p.id));
+}
+
+/* Para quién es un aviso, contando solo a quien sigue activo. Un aviso dirigido a alguien que
+   se fue (o que no existe) queda sin destinatarios, que es «para todos»: si no, no le sonaría
+   a nadie. */
+function destinatariosActivos(para, personas) {
+  return (para || []).filter(id => personas.some(p => p.id === id && p.activo));
+}
+
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { personasDesdeUsuarios };
+  module.exports = { personasDesdeUsuarios, elegibles, destinatariosActivos };
 }
 if (typeof window !== 'undefined') {
   window.personasDesdeUsuarios = personasDesdeUsuarios;
+  window.elegibles = elegibles;
+  window.destinatariosActivos = destinatariosActivos;
 }

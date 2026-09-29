@@ -37,7 +37,29 @@ minutos y no horas. Si no, re-extraer con el MCP viejo ANTES de cambiarlo.
 
 ## Revisión final
 
-_En curso al cierre de la sesión del 29/9/2026._ Los hallazgos y lo corregido se anotan acá.
+Hecha el 29/9/2026 por un revisor independiente sobre toda la rama. Sin críticos.
+
+**Corregido** (cada uno con su prueba):
+
+| # | hallazgo | arreglo | prueba |
+|---|---|---|---|
+| 1 | un gasto nuevo se le cargaba también a un socio inactivo | `carga` nace con `elegibles(PERSONAS_CAJA)` | `scripts/test-equipo.cjs` |
+| 2 | un aviso dirigido a un inactivo no le sonaba a nadie | `destinatariosActivos()` en `equipo.js` | `scripts/test-equipo.cjs` |
+| 3 | la verificación del 04 no cubría todos los campos ni comparaba las chapas | `pg_temp.conteo()` cuenta todo, antes y después, en las dos direcciones, incluido `"visto":false` | ensayo en seco: versión rota → aborta (10 vs 0); versión real → verde (10 = 10) |
+| 6 | re-correr el 04 en la misma conexión chocaba | `create or replace` | — |
+| 7 | `crm_gestion_refresh()` quedaba llamable sin sesión por `/rpc` | `revoke execute` | comprobación del paso 1 de la inyección |
+| 8 | borrar la cuenta en Auth borraba en cascada la fila de `users` | `on delete restrict` | comprobación del paso 1 de la inyección |
+| 9 | un corte de red al refrescar el token tapaba el tablero con «Sin acceso» | si ya estabas adentro, se queda el equipo que había | revisión del código (no hay test de DOM) |
+
+**Diferidos (menores)**: el chequeo de `users` en `faltantesDeEsquema()` nunca llega a
+correr (sin la tabla nadie pasa de «Sin acceso»); el equipo no se recarga por realtime (un
+alta o baja se ve al recargar); el orden de las personas pasó a ser alfabético (Antonio,
+Lorenzo, Luis) y no el del viejo `personas`.
+
+**Decisiones sobre lo que el revisor dejó abierto**: los chips de filtro no muestran a los
+inactivos (lo pidió el diseño; si hace falta filtrar las tareas de alguien que se fue para
+reasignarlas, se agrega); el front puede escribir `gestion_*` en `crm_leads` igual que en el
+producto (la regla es de B, que es quien dibuja la pantalla).
 
 ## Estado
 
@@ -79,6 +101,12 @@ El resultado no entra en la respuesta y el MCP lo guarda en un `.txt`; esa ruta 
 
 0. Congelar el tablero: avisar a Lorenzo y Luis. Re-extraer justo antes (arriba).
 1. `apply_migration` con `supabase/schema.sql`: `users`, roadmap y `crm_*` con sus siembras.
+   Comprobar (tienen que dar `false`, `r`, 4 y 2):
+   ```sql
+   select has_function_privilege('anon', 'public.crm_gestion_refresh(uuid)', 'execute'),
+          (select confdeltype from pg_constraint where conname = 'users_id_fkey'),
+          (select count(*) from crm_priorities), (select count(*) from crm_funnel_stages);
+   ```
 2. `execute_sql` con cada `02-datos-NN.sql`, en orden. Verificar 159 / 3 / 8.
 3. **Panel → Authentication → Users**: crear las tres cuentas (email + contraseña, confirmadas).
 4. Insertar sus filas en `users` (el `id` sale de `auth.users` por email, no se copia a mano):

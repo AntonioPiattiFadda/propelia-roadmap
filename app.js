@@ -115,10 +115,7 @@ function cargarEquipo(filas){
   PERSONAS.splice(0, PERSONAS.length, ...personas);
   PERSONAS_CAJA.splice(0, PERSONAS_CAJA.length, ...caja);
 }
-/* A quién se le puede ofrecer algo en un menú de elegir. Los inactivos se pintan —una tarea
-   vieja sigue diciendo quién la hizo— pero no se ofrecen, salvo que ya estén puestos en lo
-   que se está editando: ahí tienen que aparecer, si no no habría cómo sacarlos. */
-const elegibles = (lista, marcados = []) => lista.filter(p => p.activo || marcados.includes(p.id));
+// A quién se le ofrece algo para elegir: `elegibles()`, en equipo.js, con su test.
 const persona = id => PERSONAS.find(p => p.id === id) || null;
 const colorPersona = id => persona(id)?.color || '#858A99';
 const iniPersona = id => persona(id)?.ini || '?';
@@ -940,7 +937,7 @@ const nuevoAviso = texto => ({
 
    Ojo: el destinatario decide a quién le SUENA la chapa, no quién puede leerlo. El aviso se
    dibuja igual para cualquiera que entre a la tarea: el cuadro es de la tarea, no un buzón. */
-const destinatariosDe = a => ((a && a.para) || []).filter(id => persona(id));
+const destinatariosDe = a => destinatariosActivos(a && a.para, PERSONAS);
 const avisoParaMi = a => { const p = destinatariosDe(a); return !p.length || p.includes(YO.id); };
 
 /* ---------- la novedad de una actividad ----------
@@ -2213,8 +2210,8 @@ function nuevoMovimiento(fijo){
     monto:0, quien:mio, notas:'', repite:fijo ? 'mensual' : '', origen:'',
     // Nace compartido, que es el caso normal, pero con la lista escrita y no vacía: el
     // vacío es la marca de «esto es de antes de que se pudiera elegir», y una fila nueva
-    // eligió a todos.
-    carga:PERSONAS_CAJA.map(p => p.id),
+    // eligió a todos. «Todos» son los activos: un gasto de hoy no se le carga a quien se fue.
+    carga:elegibles(PERSONAS_CAJA).map(p => p.id),
     orden:RoadmapSync.calcularOrden(ultimo, null),
   };
   datos.caja.push(m);
@@ -5254,7 +5251,13 @@ async function resolverIdentidad(){
   let id = null, filas = [];
   try { id = await RoadmapSync.idActual(); } catch (e) {}
   try { filas = id ? await RoadmapSync.cargarUsuarios() : []; }
-  catch (e) { aviso('No se pudo cargar el equipo: ' + e.message); }
+  catch (e) {
+    aviso('No se pudo cargar el equipo: ' + e.message);
+    // Esto también corre en cada refresco del token. Si ya estabas adentro, un corte de red
+    // no te saca: se queda el equipo que había, en vez de vaciar los nombres del tablero y
+    // taparlo con «Sin acceso».
+    if (YO.esMiembro && YO.id === id) return;
+  }
   cargarEquipo(filas);
   const p = PERSONAS.find(x => x.id === id && x.activo);
   YO = p ? { id:p.id, nombre:p.nombre, esMiembro:true } : { id:'', nombre:'', esMiembro:false };
