@@ -1,6 +1,7 @@
 .claude/
 .mcp.json
-.env
+.env*
+!.env.example
 .superpowers/
 .atl/
 migracion/02-datos-*.sql
