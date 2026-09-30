@@ -14,8 +14,12 @@ hasta que se mergee). Tres páginas en la barra lateral: Roadmap, CRM y Caja. Di
 - **Acceso**: `accesoDe()` en `src/lib/acceso.ts` es la misma regla que `es_usuario()` en la
   base — fila activa en `users` o no pasás. Un error de red NO es «sin acceso».
 - **Variables**: `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (ver `.env.example`).
-- **Deploy**: Vercel. **Netlify publica `legacy/`** (Publish directory) mientras el Roadmap
-  nuevo no esté portado.
+- **Deploy**: Vercel. **Netlify publica `legacy/`** mientras el Roadmap nuevo no esté portado:
+  Base directory = `legacy`, Publish directory = `legacy`, Build command vacío. Con el Base
+  en la raíz, Netlify haría `npm install` de todo Vite/TS en cada deploy del tablero viejo.
+- **`legacy/package.json`** (`{ "type": "commonjs" }`) existe porque la raíz es ESM y los `.js`
+  del vanilla exportan con `module.exports` para sus tests de node: sin él, `module` es
+  undefined y la guarda de export no corre.
 
 **El tablero vanilla vive en `legacy/`** y todo lo que sigue en este archivo lo describe. Es
 la **especificación del port** del Roadmap (sub-proyecto 3): las rutas de archivo que nombra
