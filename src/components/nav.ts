@@ -1,4 +1,4 @@
-import { ListChecks, ListTodo, Users, Wallet, type LucideIcon } from 'lucide-react'
+import { ListChecks, ListTodo, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react'
 
 export type NavItem = { id: string; icon: LucideIcon; label: string; path: string }
 
@@ -8,6 +8,7 @@ export const NAV: NavItem[] = [
   { id: 'roadmap', icon: ListChecks, label: 'Roadmap', path: '/roadmap' },
   { id: 'backlog', icon: ListTodo, label: 'Backlog', path: '/backlog' },
   { id: 'crm', icon: Users, label: 'CRM', path: '/crm' },
+  { id: 'equipo', icon: UsersRound, label: 'Equipo', path: '/equipo' },
   { id: 'caja', icon: Wallet, label: 'Caja', path: '/caja' },
 ]
 

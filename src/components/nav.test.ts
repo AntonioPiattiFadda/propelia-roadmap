@@ -9,7 +9,7 @@ describe('estaActivo', () => {
 })
 
 describe('NAV', () => {
-  it('son las cuatro páginas, en este orden', () => {
-    expect(NAV.map(n => n.path)).toEqual(['/roadmap', '/backlog', '/crm', '/caja'])
+  it('son las cinco páginas, en este orden', () => {
+    expect(NAV.map(n => n.path)).toEqual(['/roadmap', '/backlog', '/crm', '/equipo', '/caja'])
   })
 })
