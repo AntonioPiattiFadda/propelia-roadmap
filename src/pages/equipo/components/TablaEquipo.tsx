@@ -40,7 +40,7 @@ export function TablaEquipo({ filas }: { filas: FilaEquipo[] }) {
           <tr>
             <th className={th}>Cartera</th><th className={th}>Rol</th><th className={th}>Leads activos</th>
             <th className={th}>Por etapa</th><th className={th}>Gestiones vencidas</th>
-            <th className={th}>Tareas vencidas</th><th className={th}>Reuniones este mes</th>
+            <th className={th}>Leads con tareas vencidas</th><th className={th}>Reuniones este mes</th>
           </tr>
         </thead>
         <tbody>
@@ -60,7 +60,7 @@ export function TablaEquipo({ filas }: { filas: FilaEquipo[] }) {
                 <td className="px-4 py-3"><Numero valor={f.leadsActivos} to={enlaceAlCrm({ owners })} /></td>
                 <td className="px-4 py-3"><BarraEtapas fila={f} /></td>
                 <td className="px-4 py-3"><Numero valor={f.gestionesVencidas} alerta to={enlaceAlCrm({ owners, gestion: 'pendiente' })} /></td>
-                <td className="px-4 py-3"><Numero valor={f.tareasVencidas} alerta to={enlaceAlCrm({ owners, overdueOnly: true })} /></td>
+                <td className="px-4 py-3"><Numero valor={f.leadsConTareasVencidas} alerta to={enlaceAlCrm({ owners, overdueOnly: true })} /></td>
                 {/* Sin enlace: la agenda de reuniones está fuera de alcance (spec §8). */}
                 <td className="px-4 py-3"><Numero valor={f.reunionesMes} /></td>
               </tr>

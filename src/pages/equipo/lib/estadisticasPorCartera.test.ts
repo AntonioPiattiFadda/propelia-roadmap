@@ -20,8 +20,8 @@ const lead = (id: string, assigned: string, over: Partial<CrmLeadRow> = {}): Crm
   gestion_reference_at: new Date(2026, 8, 30, 9).toISOString(), gestion_postponed: false, gestion_has_events: true,
   created_by: null, created_at: '', updated_at: '', deleted_at: null, client: null, ...over,
 })
-const tarea = (id: string, assigned: string, due: string): CrmTask => ({
-  id, lead_id: null, title: '', due_date: due, planned_for: null, assigned_to: assigned, completed: false,
+const tarea = (id: string, assigned: string, due: string, leadId: string | null = null): CrmTask => ({
+  id, lead_id: leadId, title: '', due_date: due, planned_for: null, assigned_to: assigned, completed: false,
   completed_at: null, recurrence: null, created_by: null, created_at: '', updated_at: '', deleted_at: null,
 })
 const reunion = (id: string, assigned: string, status: CrmMeeting['status']): CrmMeeting => ({
@@ -39,7 +39,14 @@ describe('estadisticasPorCartera', () => {
       lead('a4', 'ana', { funnel_stage_id: 'vieja' }),          // etapa borrada: se sigue leyendo
       lead('a5', 'ana', { funnel_stage_id: 'desc' }),           // descartado: no es activo
     ],
-    tareasPendientes: [tarea('t1', 'ana', '2026-09-29'), tarea('t2', 'ana', HOY), tarea('t3', 'beto', '2026-09-01')],
+    tareasPendientes: [
+      tarea('t1', 'ana', '2026-09-29', 'a1'),
+      tarea('t1b', 'ana', '2026-09-01', 'a1'),                 // otra vencida del mismo lead: sigue siendo un lead
+      tarea('t2', 'ana', HOY, 'a2'),                           // vence hoy: no está vencida
+      tarea('t3', 'ana', '2026-09-01', 'a5'),                  // lead descartado: no cuenta
+      tarea('t4', 'ana', '2026-09-01'),                        // sin lead: el CRM no la puede mostrar
+      tarea('t5', 'beto', '2026-09-01', 'a3'),                 // lead de ana reasignado, la tarea quedó a nombre de beto
+    ],
     reunionesDelMes: [reunion('r1', 'ana', 'scheduled'), reunion('r2', 'ana', 'completed'), reunion('r3', 'ana', 'cancelled')],
     etapas: ETAPAS,
     hoy: HOY,
@@ -57,12 +64,14 @@ describe('estadisticasPorCartera', () => {
   // Solo a2 (sin eventos): sin etapa no hay plazo, así que a3 está «Gestionado», y a1/a4 tienen
   // una gestión de hoy. Sale de claveDeGestion, la misma regla del CRM.
   it('gestiones vencidas', () => expect(ana.gestionesVencidas).toBe(1))
-  it('tareas vencidas: la de hoy no cuenta', () => {
-    expect(ana.tareasVencidas).toBe(1)
-    expect(beto.tareasVencidas).toBe(1)
+  // Lo que muestra el CRM al tocar el número (overdueOnly sobre la cartera): leads activos de la
+  // cartera con alguna tarea vencida. Se cuenta por el dueño del LEAD, no por el de la tarea.
+  it('leads con tareas vencidas: la regla del chip del CRM', () => {
+    expect(ana.leadsConTareasVencidas).toBe(2) // a1 (dos tareas, un lead) y a3 (tarea a nombre de beto)
+    expect(beto.leadsConTareasVencidas).toBe(0)
   })
   it('reuniones del mes sin las canceladas', () => expect(ana.reunionesMes).toBe(2))
   it('una cartera sin nada da ceros, no revienta', () => {
-    expect(beto).toMatchObject({ leadsActivos: 0, porEtapa: [], gestionesVencidas: 0, reunionesMes: 0 })
+    expect(beto).toMatchObject({ leadsActivos: 0, porEtapa: [], gestionesVencidas: 0, leadsConTareasVencidas: 0, reunionesMes: 0 })
   })
 })
