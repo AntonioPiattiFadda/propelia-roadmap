@@ -668,7 +668,115 @@ begin
   end loop;
 end $$;
 
--- ===== ALTA (Task 2) =====
+-- ---------- Alta: crm_create_lead_with_client ----------
+-- Copia de create_lead_with_client del producto (versión endurecida,
+-- 20260913151338_harden_create_lead_with_client.sql) sin organización, tipo de lead, briefing
+-- ni propiedades. SECURITY DEFINER y no invoker: para reutilizar el cliente tiene que
+-- encontrarlo por teléfono o email AUNQUE sea de una cartera que quien llama no ve. Con invoker
+-- la RLS lo esconde, el lookup no lo encuentra, el insert choca contra el índice único y el
+-- alta falla. Como saltea la RLS, el permiso se chequea a mano al principio.
+--
+-- Los errores son claves fijas (`crm_…`) y no frases: la pantalla las traduce
+-- (src/pages/crm/lib/errores.ts) y una frase cambiada acá no rompería ningún test de allá.
+create or replace function public.crm_create_lead_with_client(
+  p_assigned_to            uuid,
+  -- La manda el front: «hoy» es el de la zona de quien carga, no el UTC del servidor.
+  p_initial_task_due_date  date,
+  p_first_name             text default null,
+  p_last_name              text default null,
+  p_company_name           text default null,
+  p_email                  text default null,
+  p_phone                  text default null,
+  p_channel_id             uuid default null,
+  p_funnel_stage_id        uuid default null
+) returns json language plpgsql security definer set search_path to 'public' as $$
+declare
+  v_phone     text := nullif(btrim(p_phone), '');
+  v_email     text := nullif(btrim(p_email), '');
+  v_stage_id  uuid := p_funnel_stage_id;
+  v_client_id uuid;
+  v_lead_id   uuid;
+  v_reused    boolean := false;
+begin
+  if not public.es_usuario() then
+    raise exception 'crm_sin_acceso';
+  end if;
+  if not public.crm_puede(p_assigned_to, 'write') then
+    raise exception 'crm_sin_permiso_cartera' using errcode = '42501';
+  end if;
+  -- Sin ninguno de los dos no hay con qué deduplicar: el próximo alta del mismo cliente
+  -- crearía otro.
+  if v_phone is null and v_email is null then
+    raise exception 'crm_falta_contacto';
+  end if;
+  -- crm_puede() deja pasar a un SUPERADMIN sobre cualquier id, incluso el de un inactivo.
+  if not exists (select 1 from public.users where id = p_assigned_to and activo) then
+    raise exception 'crm_responsable_inactivo';
+  end if;
+  if p_channel_id is not null and not exists (
+    select 1 from public.crm_channels where id = p_channel_id and deleted_at is null) then
+    raise exception 'crm_canal_invalido';
+  end if;
+  if v_stage_id is null then
+    -- Por value y no por nombre: la etiqueta «Nuevo» se puede renombrar, NEW no.
+    select id into v_stage_id from public.crm_funnel_stages
+     where deleted_at is null order by (value = 'NEW') desc, position asc limit 1;
+  elsif not exists (select 1 from public.crm_funnel_stages where id = v_stage_id and deleted_at is null) then
+    raise exception 'crm_etapa_invalida';
+  end if;
+
+  -- Teléfono primero, como el producto: el email se tipea con más errores.
+  if v_phone is not null then
+    select id into v_client_id from public.crm_clients
+     where phone = v_phone and deleted_at is null limit 1;
+  end if;
+  if v_client_id is null and v_email is not null then
+    select id into v_client_id from public.crm_clients
+     where lower(email) = lower(v_email) and deleted_at is null limit 1;
+  end if;
+
+  if v_client_id is not null then
+    v_reused := true;
+  else
+    begin
+      insert into public.crm_clients (first_name, last_name, company_name, email, phone, created_by)
+      values (nullif(btrim(p_first_name), ''), nullif(btrim(p_last_name), ''),
+              nullif(btrim(p_company_name), ''), v_email, v_phone, auth.uid())
+      returning id into v_client_id;
+    exception when unique_violation then
+      -- Otro alta del mismo cliente ganó la carrera entre el lookup y el insert.
+      select id into v_client_id from public.crm_clients
+       where deleted_at is null
+         and ((v_phone is not null and phone = v_phone)
+           or (v_email is not null and lower(email) = lower(v_email)))
+       limit 1;
+      v_reused := true;
+    end;
+  end if;
+
+  -- El único (client_id, assigned_to) dicho con una clave que la pantalla sabe traducir.
+  if exists (select 1 from public.crm_leads
+             where client_id = v_client_id and assigned_to = p_assigned_to and deleted_at is null) then
+    raise exception 'crm_lead_duplicado';
+  end if;
+
+  insert into public.crm_leads (client_id, assigned_to, funnel_stage_id, channel_id, created_via, created_by)
+  values (v_client_id, p_assigned_to, v_stage_id, p_channel_id, 'manual', auth.uid())
+  returning id into v_lead_id;
+
+  insert into public.crm_tasks (lead_id, title, due_date, assigned_to, created_by)
+  values (v_lead_id, 'Asesorar cliente', p_initial_task_due_date, p_assigned_to, auth.uid());
+
+  return json_build_object('lead_id', v_lead_id, 'client_id', v_client_id, 'client_reused', v_reused);
+end;
+$$;
+
+-- REVOKE primero: un REVOKE ALL posterior se llevaría también el GRANT. Y a PUBLIC, no solo a
+-- anon: anon hereda de PUBLIC.
+revoke all on function public.crm_create_lead_with_client(uuid, date, text, text, text, text, text, uuid, uuid)
+  from public, anon;
+grant execute on function public.crm_create_lead_with_client(uuid, date, text, text, text, text, text, uuid, uuid)
+  to authenticated;
 -- ===== FIN permisos por cartera =====
 
 -- ---------- Siembras (solo si la tabla está vacía: correr dos veces no duplica) ----------

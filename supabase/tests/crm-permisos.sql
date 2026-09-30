@@ -239,7 +239,99 @@ begin
 end $$;
 reset role;
 
--- ===== ALTA (Task 2) =====
+-- ---------- 8. La RPC de alta ----------
+-- A esta altura SDR1 tiene write sobre SDR2 (caso 3) y nada sobre SDR3. El cliente d003 es de
+-- un lead de SDR3: SDR1 no lo ve, y aun así la RPC tiene que encontrarlo y reutilizarlo.
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000c001","role":"authenticated"}';
+do $$
+declare r json; ok boolean; n int;
+begin
+  -- 8a: reutiliza un cliente ajeno por teléfono
+  r := public.crm_create_lead_with_client(
+    p_assigned_to := '00000000-0000-4000-8000-00000000c001', p_initial_task_due_date := date '2026-10-01',
+    p_first_name := 'Otro nombre', p_phone := '+99900000003');
+  if (r->>'client_reused')::boolean is distinct from true
+     or (r->>'client_id')::uuid <> '00000000-0000-4000-8000-00000000d003' then
+    raise exception 'FALLO (8a): no reutilizó el cliente ajeno por teléfono: %', r;
+  end if;
+
+  -- 8b: la tarea «Asesorar cliente», del responsable, con la fecha que mandó el front
+  select count(*) into n from public.crm_tasks
+   where lead_id = (r->>'lead_id')::uuid and title = 'Asesorar cliente'
+     and due_date = date '2026-10-01' and assigned_to = '00000000-0000-4000-8000-00000000c001';
+  if n <> 1 then raise exception 'FALLO (8b): la tarea inicial no quedó bien (encontradas: %)', n; end if;
+
+  -- 8c: el mismo cliente con el mismo responsable es un duplicado
+  ok := false;
+  begin
+    perform public.crm_create_lead_with_client(
+      p_assigned_to := '00000000-0000-4000-8000-00000000c001', p_initial_task_due_date := date '2026-10-01',
+      p_email := 'C3@prueba.test');
+  exception when others then ok := sqlerrm = 'crm_lead_duplicado';
+  end;
+  if not ok then raise exception 'FALLO (8c): no rechazó el duplicado cliente+responsable (por email, sin distinguir mayúsculas)'; end if;
+
+  -- 8d: sin write sobre la cartera destino
+  ok := false;
+  begin
+    perform public.crm_create_lead_with_client(
+      p_assigned_to := '00000000-0000-4000-8000-00000000c003', p_initial_task_due_date := date '2026-10-01',
+      p_phone := '+99900000099');
+  exception when others then ok := sqlerrm = 'crm_sin_permiso_cartera';
+  end;
+  if not ok then raise exception 'FALLO (8d): cargó un lead en una cartera sin write'; end if;
+
+  -- 8e: sin teléfono ni email no hay con qué deduplicar
+  ok := false;
+  begin
+    perform public.crm_create_lead_with_client(
+      p_assigned_to := '00000000-0000-4000-8000-00000000c001', p_initial_task_due_date := date '2026-10-01',
+      p_company_name := 'Sin contacto', p_phone := '  ', p_email := '');
+  exception when others then ok := sqlerrm = 'crm_falta_contacto';
+  end;
+  if not ok then raise exception 'FALLO (8e): aceptó un alta sin teléfono ni email'; end if;
+
+  -- 8f: cliente nuevo en una cartera con write (SDR2)
+  r := public.crm_create_lead_with_client(
+    p_assigned_to := '00000000-0000-4000-8000-00000000c002', p_initial_task_due_date := date '2026-10-01',
+    p_company_name := 'Inmo Nueva', p_email := 'nueva@prueba.test');
+  if (r->>'client_reused')::boolean is distinct from false then
+    raise exception 'FALLO (8f): un cliente nuevo salió como reutilizado: %', r;
+  end if;
+end $$;
+reset role;
+
+-- 8g: un inactivo no puede dar de alta
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000c0f0","role":"authenticated"}';
+do $$
+declare ok boolean := false;
+begin
+  begin
+    perform public.crm_create_lead_with_client(
+      p_assigned_to := '00000000-0000-4000-8000-00000000c0f0', p_initial_task_due_date := date '2026-10-01',
+      p_phone := '+99900000098');
+  exception when others then ok := sqlerrm = 'crm_sin_acceso';
+  end;
+  if not ok then raise exception 'FALLO (8g): un inactivo dio de alta un lead'; end if;
+end $$;
+reset role;
+
+-- 8h: anon ni siquiera la puede ejecutar
+set local role anon;
+do $$
+declare ok boolean := false;
+begin
+  begin
+    perform public.crm_create_lead_with_client(
+      p_assigned_to := '00000000-0000-4000-8000-00000000c001', p_initial_task_due_date := date '2026-10-01',
+      p_phone := '+99900000097');
+  exception when insufficient_privilege then ok := true;
+  end;
+  if not ok then raise exception 'FALLO (8h): anon puede ejecutar la RPC de alta'; end if;
+end $$;
+reset role;
 
 select 'crm-permisos: OK' as resultado;
 rollback;
