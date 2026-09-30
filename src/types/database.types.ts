@@ -212,6 +212,48 @@ export type Database = {
           },
         ]
       }
+      crm_data_access: {
+        Row: {
+          access: string
+          created_at: string
+          id: string
+          subject_id: string
+          updated_at: string
+          viewer_id: string
+        }
+        Insert: {
+          access: string
+          created_at?: string
+          id?: string
+          subject_id: string
+          updated_at?: string
+          viewer_id: string
+        }
+        Update: {
+          access?: string
+          created_at?: string
+          id?: string
+          subject_id?: string
+          updated_at?: string
+          viewer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_data_access_subject_id_fkey"
+            columns: ["subject_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_data_access_viewer_id_fkey"
+            columns: ["viewer_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_funnel_stages: {
         Row: {
           allow_delete: boolean
@@ -832,7 +874,34 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      crm_create_lead_with_client: {
+        Args: {
+          p_assigned_to: string
+          p_channel_id?: string
+          p_company_name?: string
+          p_email?: string
+          p_first_name?: string
+          p_funnel_stage_id?: string
+          p_initial_task_due_date: string
+          p_last_name?: string
+          p_phone?: string
+        }
+        Returns: Json
+      }
+      crm_es_superadmin: { Args: never; Returns: boolean }
       crm_gestion_refresh: { Args: { p_lead_id: string }; Returns: undefined }
+      crm_puede: {
+        Args: { p_nivel: string; p_owner: string }
+        Returns: boolean
+      }
+      crm_puede_cliente: {
+        Args: { p_client_id: string; p_nivel: string }
+        Returns: boolean
+      }
+      crm_puede_lead: {
+        Args: { p_lead_id: string; p_nivel: string }
+        Returns: boolean
+      }
       es_usuario: { Args: never; Returns: boolean }
     }
     Enums: {
