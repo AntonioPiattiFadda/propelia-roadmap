@@ -70,7 +70,15 @@ export function StagesTable({
     const [item] = sortable.splice(fromIdx, 1)
     const newToIdx = sortable.findIndex((s) => s.id === targetId)
     sortable.splice(position === 'after' ? newToIdx + 1 : newToIdx, 0, item)
-    onReorder(sortable.map((s, i) => ({ id: s.id, position: i + 1 })))
+    // Se renumera TODO el funnel, con los bloqueados (Nuevo) en su lugar: si solo se numeraran
+    // los movibles, el primero empataría en position con Nuevo y el orden se desarmaría al re-traer.
+    const reubicadas = [...sortable]
+    const enOrden = inFunnel.map((s) => (s.allow_reorder ? reubicadas.shift()! : s))
+    onReorder(
+      enOrden
+        .map((s, i) => ({ id: s.id, position: i + 1 }))
+        .filter((n) => inFunnel.find((s) => s.id === n.id)?.position !== n.position),
+    )
     dragId.current = null
   }
 

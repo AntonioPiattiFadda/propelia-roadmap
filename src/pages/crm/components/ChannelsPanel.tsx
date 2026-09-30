@@ -54,9 +54,9 @@ export function ChannelsPanel() {
 
   return (
     <div className="max-w-md">
-      <div className="bg-[--surface] border border-[--line] rounded-md overflow-hidden mb-3">
-        <div className="flex items-center justify-between px-3.5 py-2 bg-[--surface-3] border-b border-[--line]">
-          <span className="text-[10px] font-semibold text-[--fg-muted] uppercase tracking-[0.05em]">
+      <div className="bg-(--surface) border border-(--line) rounded-md overflow-hidden mb-3">
+        <div className="flex items-center justify-between px-3.5 py-2 bg-(--surface-3) border-b border-(--line)">
+          <span className="text-[10px] font-semibold text-(--fg-muted) uppercase tracking-[0.05em]">
             Canales de origen. Arrastrá para reordenar
           </span>
         </div>
@@ -87,14 +87,14 @@ export function ChannelsPanel() {
                   }}
                   onDrop={(e) => handleDrop(e, channel.id)}
                   className={cn(
-                    'h-8 border-b border-[--line] last:border-b-0 hover:bg-[--surface-2] transition-colors',
+                    'h-8 border-b border-(--line) last:border-b-0 hover:bg-(--surface-2) transition-colors',
                     dragId.current === channel.id && 'opacity-40',
                     isDropBefore && 'shadow-[inset_0_2px_0_0_var(--brand)]',
                     isDropAfter && 'shadow-[inset_0_-2px_0_0_var(--brand)]',
                   )}
                 >
                   <td className="px-1 text-center select-none">
-                    <span className="text-[--fg-faint] cursor-grab text-sm">⠿</span>
+                    <span className="text-(--fg-faint) cursor-grab text-sm">⠿</span>
                   </td>
                   <td className="px-2.5 py-1">
                     <InlineEditCell
@@ -111,7 +111,7 @@ export function ChannelsPanel() {
                         isPending={m.borrarCanal.isPending}
                       />
                     ) : (
-                      <LockIcon className="size-3 text-[--fg-faint] ml-auto" />
+                      <LockIcon className="size-3 text-(--fg-faint) ml-auto" />
                     )}
                   </td>
                 </tr>
