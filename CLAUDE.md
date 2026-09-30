@@ -28,6 +28,47 @@ hasta que se mergee). Tres páginas en la barra lateral: Roadmap, CRM y Caja. Di
   del vanilla exportan con `module.exports` para sus tests de node: sin él, `module` es
   undefined y la guarda de export no corre.
 
+## El CRM (y Equipo) — `/crm` y `/equipo`
+
+Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
+`docs/superpowers/specs/2026-09-30-crm-pantalla-design.md`; plan en
+`docs/superpowers/plans/2026-09-30-crm-pantalla.md`.
+
+- **Permisos por cartera, en la base.** Cada lead es de una cartera (`assigned_to`); ver o editar
+  la de otro es una fila de `crm_data_access` (`read`/`write`, plana, no transitiva). Todas las
+  policies de las `crm_*` llaman a `crm_puede(owner, nivel)` / `crm_puede_lead(lead, nivel)` /
+  `crm_puede_cliente(cliente, nivel)`, que exigen `es_usuario()`. Un `SUPERADMIN` ve y edita todo y
+  es el único que toca el catálogo (etapas, prioridades, canales) y `crm_data_access`. **Esto
+  cambió lo del 29/9** («cualquiera ve y edita todo el CRM»; «`rol` no restringe nada»).
+- **`src/pages/crm/lib/permisos.ts` es el espejo en pantalla de `crm_puede()`**, no la seguridad:
+  sirve para no ofrecer un botón que la base va a rechazar. Si cambia la regla en `schema.sql`,
+  cambia ahí (misma relación que `accesoDe()` con `es_usuario()`).
+- **Las pruebas de la RLS** están en `supabase/tests/crm-permisos.sql`: se corren enteras con el
+  MCP `execute_sql`, crean sus usuarios adentro de una transacción y terminan en `rollback`. Tienen
+  que devolver `crm-permisos: OK`.
+- **El alta es una RPC** (`crm_create_lead_with_client`, `security definer`): reutiliza el cliente
+  por teléfono/email aunque sea de otra cartera y crea la tarea «Asesorar cliente» con la fecha
+  que manda el front (el «hoy» local). Sus errores son claves (`crm_…`) que traduce
+  `lib/errores.ts`.
+- **La lista se trae entera** (la RLS ya recortó) y filtros, pestañas y contadores salen de
+  funciones puras en `lib/`. Todo filtro vive en la URL (`leadFilterParams.ts`); **`gestion` es la
+  lista de estados EXCLUIDOS**, como en el producto: los enlaces se arman con `enlaceAlCrm()`,
+  nunca a mano. `?owners=` son las carteras mirando y `?lead=` el lead abierto en el dialog.
+- **La gestión la calcula la base** (`crm_leads.gestion_*`, `crm_gestion_refresh()`); el front la
+  compara contra el vencimiento en la zona de quien mira (`gestionDeLead`). El front nunca escribe
+  `gestion_*` ni los historiales.
+- **El catálogo se borra con soft delete**: un lead en una etapa borrada la sigue leyendo por
+  nombre (`catalogoDeEtapas` trae también las borradas); los menús ofrecen solo las vivas.
+- **Qué se copió del producto** (`propelia-frontend/src/pages/leads`, podado de lo inmobiliario):
+  `gestionStatus`, `calendarDeadline`, `discardStage`, `leadFilters`, `leadFilterParams`,
+  `computeLeadListCounters`, `reassignCollisions`, `leadCells`, `LeadRowActions`, `LeadTasksPanel`,
+  `DockedActivityChat`, `ClientFields`, `ReassignLeadsDialog`, `AgentFilterButton`,
+  `BulkActionBar`, el funnel (`StagesTable`, `PriorityPicker`), `ChannelsPanel` y la
+  `VisibilityMatrix` de Equipo. **Nuevo**: `permisos.ts`, `effectiveStage.ts` (acá es resolver por
+  id), `systemComment.ts` (el del producto es el parser de Idealista), el servicio, los hooks,
+  `CrmLeadList`, `LeadDialog`, `MeetingsPanel`, `ActividadLead`, `NewLeadDialog` y
+  `estadisticasPorCartera`.
+
 **El tablero vanilla vive en `legacy/`** y todo lo que sigue en este archivo lo describe. Es
 la **especificación del port** del Roadmap (sub-proyecto 3): las rutas de archivo que nombra
 (`app.js`, `index.html`, `scripts/…`) ahora están adentro de `legacy/`. Se borra cuando el
