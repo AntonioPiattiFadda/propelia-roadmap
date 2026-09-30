@@ -60,15 +60,16 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
 - **El catálogo se borra con soft delete**: un lead en una etapa borrada la sigue leyendo por
   nombre (`catalogoDeEtapas` trae también las borradas); los menús ofrecen solo las vivas.
 - **Qué se copió del producto** (podado de lo inmobiliario):
-  De `propelia-frontend/src/pages/leads`: `gestionStatus`, `calendarDeadline`, `discardStage`,
-  `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`, `leadCells`,
-  `LeadRowActions`, `LeadTasksPanel`, `DockedActivityChat`, `ClientFields`, `ReassignLeadsDialog`,
-  `AgentFilterButton`, `BulkActionBar`. Del funnel en `propelia-frontend/src/pages/clients`:
-  `StagesTable`, `PriorityPicker`. De `propelia-frontend/src/pages/ajustes`: `ChannelsPanel`.
-  De `propelia-frontend/src/pages/equipo`: `VisibilityMatrix`. **Nuevo**: `permisos.ts`,
-  `effectiveStage.ts` (acá es resolver por id), `systemComment.ts` (el del producto es el parser
-  de Idealista), el servicio, los hooks, `CrmLeadList`, `LeadDialog`, `MeetingsPanel`,
-  `ActividadLead`, `NewLeadDialog` y `estadisticasPorCartera`.
+  De `propelia-frontend/src/pages/leads/lib/`: `gestionStatus`, `calendarDeadline`, `discardStage`,
+  `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De
+  `propelia-frontend/src/pages/leads/components/`: `leadCells`, `LeadRowActions`, `LeadTasksPanel`,
+  `DockedActivityChat`, `ClientFields`, `ReassignLeadsDialog`, `AgentFilterButton`, `BulkActionBar`.
+  Del funnel en `propelia-frontend/src/pages/clients/components/FunnelSection/FunnelEditor/`:
+  `StagesTable`, `PriorityPicker`. De `propelia-frontend/src/pages/ajustes/components/`:
+  `ChannelsPanel`. De `propelia-frontend/src/pages/equipo/components/`: `VisibilityMatrix`.
+  **Nuevo**: `permisos.ts`, `effectiveStage.ts` (acá es resolver por id), `systemComment.ts`
+  (el del producto es el parser de Idealista), el servicio, los hooks, `CrmLeadList`, `LeadDialog`,
+  `MeetingsPanel`, `ActividadLead`, `NewLeadDialog` y `estadisticasPorCartera`.
 
 **El tablero vanilla vive en `legacy/`** y todo lo que sigue en este archivo lo describe. Es
 la **especificación del port** del Roadmap (sub-proyecto 3): las rutas de archivo que nombra
