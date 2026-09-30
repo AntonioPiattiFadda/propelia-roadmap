@@ -14,7 +14,7 @@ import { etapaDelLead } from '../lib/effectiveStage'
 import { estadoDeLista } from '../lib/estadoDeLista'
 import { fmtIngresoDate, fmtShortDate } from '../lib/leadCellFormat'
 import {
-  deleteLeadFilterParams, escribirFiltros, escribirLeadAbierto, filtrosDesdeUrl, formatFilterList, LEAD_FILTER_PARAMS_WITH_QUERY,
+  deleteLeadFilterParams, escribirFiltros, escribirLeadAbierto, filtrosDesdeUrl, formatFilterList, LEAD_FILTER_PARAMS_WITH_QUERY, LEAD_PARAM,
 } from '../lib/leadFilterParams'
 import { filterLeads, leadsDeCarteras, type LeadFilterContext, type LeadFilterState } from '../lib/leadFilters'
 import { idsConTareasVencidas, tareasVencidasPorLead } from '../lib/tareas'
@@ -23,6 +23,8 @@ import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
 import { useVisibleAgents } from '../hooks/useVisibleAgents'
 import type { CrmLeadRow, CrmTask, EtapaConPrioridad, Usuario } from '../types'
 import { FiltrosCrm } from './FiltrosCrm'
+import { LeadDialog } from './LeadDialog'
+import { LeadRowActions } from './LeadRowActions'
 import { GestionCell, StageBadge } from './leadCells'
 
 const SIN_TAREAS: CrmTask[] = []
@@ -183,7 +185,7 @@ export function CrmLeadList() {
     setSearchParams(prev => escribirFiltros(prev, patch), { replace: true })
   const limpiarFiltros = () =>
     setSearchParams(prev => deleteLeadFilterParams(prev, LEAD_FILTER_PARAMS_WITH_QUERY), { replace: true })
-  const abrirLead = (leadId: string) =>
+  const abrirLead = (leadId: string | null) =>
     setSearchParams(prev => escribirLeadAbierto(prev, leadId), { replace: true })
 
   const usuariosPorId = useMemo(() => new Map(agentes.usuarios.map(u => [u.id, u])), [agentes.usuarios])
@@ -198,7 +200,18 @@ export function CrmLeadList() {
     puedeEscribir: agentes.puedeEscribir(lead.assigned_to),
     now: ctx.now,
     onAbrir: abrirLead,
+    acciones: <LeadRowActions lead={lead} puedeEscribir={agentes.puedeEscribir(lead.assigned_to)} />,
   })
+
+  // El lead abierto sale de TODOS los leads y no de los visibles: un enlace a `?lead=` tiene que
+  // abrirlo aunque los filtros lo escondan. Las flechas recorren la lista tal como se ve.
+  const leadAbiertoId = searchParams.get(LEAD_PARAM)
+  const leadAbierto = leadAbiertoId ? (leadsQ.data ?? []).find(l => l.id === leadAbiertoId) ?? null : null
+  const indiceAbierto = leadAbierto ? visibles.findIndex(l => l.id === leadAbierto.id) : -1
+  const pasoLead = (delta: -1 | 1) => {
+    const siguiente = visibles[indiceAbierto + delta]
+    if (siguiente) abrirLead(siguiente.id)
+  }
 
   // Sin valores vacíos: un `false` o '' colado dejaría «Ningún lead con  y Etapa.».
   const etiquetasFiltros = [
@@ -284,6 +297,14 @@ export function CrmLeadList() {
           </tbody>
         </table>
       ))}
+
+      <LeadDialog
+        lead={leadAbierto}
+        indice={indiceAbierto}
+        total={visibles.length}
+        onPaso={pasoLead}
+        onCerrar={() => abrirLead(null)}
+      />
     </>
   )
 }

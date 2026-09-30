@@ -13,6 +13,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { cn } from '@/lib/utils'
 import { gestionDeLead, type GestionStatus } from '../lib/gestionStatus'
 import { fmtDueDate } from '../lib/leadCellFormat'
+import { postponeEffectiveAt } from '../lib/postponeTime'
 import { useMarcarGestion } from '../hooks/useLeadMutaciones'
 import type { CrmLeadRow, CrmTask, EtapaConPrioridad } from '../types'
 
@@ -88,9 +89,7 @@ export function PostponePopover({ onPostpone, pending, postponed, trigger, toolt
 
   const confirm = () => {
     if (!date) return
-    // 9am local del día elegido; si es hoy y ya pasaron las 9, ahora mismo
-    const chosen = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 9).getTime()
-    const effectiveAt = new Date(Math.max(chosen, Date.now())).toISOString()
+    const effectiveAt = postponeEffectiveAt(date)
     onPostpone(effectiveAt, note.trim() || undefined)
     close()
   }
