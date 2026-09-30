@@ -21,7 +21,10 @@ const TABLAS: Record<string, QueryKey[]> = {
 export function useCrmRealtime() {
   const qc = useQueryClient()
   useEffect(() => {
-    const canal = supabase.channel('crm')
+    /* Topic único por montaje: `channel()` devuelve el canal existente si el topic se repite, y
+       `removeChannel` es async, así que al pasar del CRM a Equipo el hook nuevo recibiría el canal
+       que se está yendo y sus listeners se perderían (el realtime dejaría de andar sin avisar). */
+    const canal = supabase.channel(`crm-${crypto.randomUUID()}`)
     for (const [tabla, keys] of Object.entries(TABLAS)) {
       canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla }, () => {
         for (const queryKey of keys) void qc.invalidateQueries({ queryKey })
