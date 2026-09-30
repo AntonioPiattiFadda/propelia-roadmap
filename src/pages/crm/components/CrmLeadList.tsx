@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { RotateCw } from 'lucide-react'
 import { AvatarUsuario } from '@/components/AvatarUsuario'
@@ -20,11 +20,16 @@ import { filterLeads, leadsDeCarteras, type LeadFilterContext, type LeadFilterSt
 import { idsConTareasVencidas, tareasVencidasPorLead } from '../lib/tareas'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
+import { useReasignar } from '../hooks/useLeadMutaciones'
 import { useVisibleAgents } from '../hooks/useVisibleAgents'
+import { nombreDe } from '../lib/permisos'
+import type { ReassignCandidate } from '../lib/reassignCollisions'
 import type { CrmLeadRow, CrmTask, EtapaConPrioridad, Usuario } from '../types'
+import { BulkActionBar } from './BulkActionBar'
 import { FiltrosCrm } from './FiltrosCrm'
 import { LeadDialog } from './LeadDialog'
 import { LeadRowActions } from './LeadRowActions'
+import { ReassignLeadsDialog } from './ReassignLeadsDialog'
 import { GestionCell, StageBadge } from './leadCells'
 
 const SIN_TAREAS: CrmTask[] = []
@@ -156,6 +161,21 @@ export function CrmLeadList() {
   // null = la sesión todavía no llegó: nunca se decide «sin leads» sin saber de quién es la cartera.
   const carteras = agentes.selectedIds
 
+  // Reasignar: desde el menú de un renglón se entra al modo selección con ese lead marcado (como
+  // el producto); desde el dialog del lead se reasigna ese solo, sin pasar por la selección.
+  const [seleccionando, setSeleccionando] = useState(false)
+  const [marcados, setMarcados] = useState<Set<string>>(() => new Set())
+  const [aReasignar, setAReasignar] = useState<string[] | null>(null)
+  const reasignar = useReasignar()
+  const empezarSeleccion = (leadId: string) => { setSeleccionando(true); setMarcados(new Set([leadId])) }
+  const salirDeSeleccion = () => { setSeleccionando(false); setMarcados(new Set()) }
+  const alternarMarcado = (leadId: string) => setMarcados(prev => {
+    const next = new Set(prev)
+    if (next.has(leadId)) next.delete(leadId)
+    else next.add(leadId)
+    return next
+  })
+
   const filtros = useMemo(() => filtrosDesdeUrl(searchParams), [searchParams])
   const hoy = localTodayIso()
   const tareas = tareasQ.data ?? SIN_TAREAS
@@ -200,7 +220,12 @@ export function CrmLeadList() {
     puedeEscribir: agentes.puedeEscribir(lead.assigned_to),
     now: ctx.now,
     onAbrir: abrirLead,
-    acciones: <LeadRowActions lead={lead} puedeEscribir={agentes.puedeEscribir(lead.assigned_to)} />,
+    acciones: <LeadRowActions lead={lead} puedeEscribir={agentes.puedeEscribir(lead.assigned_to)} onStartReassign={empezarSeleccion} />,
+    // Solo se puede marcar lo que se puede mover: un lead de una cartera de solo lectura sigue
+    // abriéndose con el clic, como fuera del modo selección.
+    seleccion: seleccionando && agentes.puedeEscribir(lead.assigned_to)
+      ? { marcado: marcados.has(lead.id), onToggle: () => alternarMarcado(lead.id) }
+      : undefined,
   })
 
   // El lead abierto sale de TODOS los leads y no de los visibles: un enlace a `?lead=` tiene que
@@ -212,6 +237,10 @@ export function CrmLeadList() {
     const siguiente = visibles[indiceAbierto + delta]
     if (siguiente) abrirLead(siguiente.id)
   }
+
+  const candidatos = (ids: string[]): ReassignCandidate[] => (leadsQ.data ?? [])
+    .filter(l => ids.includes(l.id))
+    .map(l => ({ id: l.id, clientId: l.client_id, clientName: nombreDelLead(l.client), assignedTo: l.assigned_to }))
 
   // Sin valores vacíos: un `false` o '' colado dejaría «Ningún lead con  y Etapa.».
   const etiquetasFiltros = [
@@ -304,7 +333,32 @@ export function CrmLeadList() {
         total={visibles.length}
         onPaso={pasoLead}
         onCerrar={() => abrirLead(null)}
+        onStartReassign={leadId => setAReasignar([leadId])}
       />
+
+      {seleccionando && (
+        <BulkActionBar
+          selectedCount={marcados.size}
+          totalCount={visibles.length}
+          confirmLabel="Reasignar leads"
+          onCancel={salirDeSeleccion}
+          onConfirm={() => setAReasignar([...marcados])}
+        />
+      )}
+
+      {aReasignar && (
+        <ReassignLeadsDialog
+          open
+          onOpenChange={abierto => { if (!abierto) setAReasignar(null) }}
+          candidatos={candidatos(aReasignar)}
+          leads={leadsQ.data ?? []}
+          isPending={reasignar.isPending}
+          onConfirm={(nuevo, mover) => reasignar.mutate(
+            { items: mover.map(c => ({ leadId: c.id, deNombre: nombreDe(agentes.usuarios, c.assignedTo) })), nuevo },
+            { onSettled: () => { setAReasignar(null); salirDeSeleccion() } },
+          )}
+        />
+      )}
     </>
   )
 }
