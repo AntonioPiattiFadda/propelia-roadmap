@@ -31,6 +31,7 @@ export function RequireAcceso() {
         titulo="No pudimos cargar tu cuenta"
         texto="Puede ser la conexión. Probá de nuevo en un momento."
         onReintentar={() => yo.refetch()}
+        reintentando={yo.isFetching}
       />
     )
   }
