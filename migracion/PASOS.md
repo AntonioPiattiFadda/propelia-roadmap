@@ -226,3 +226,12 @@ El resultado no entra en la respuesta y el MCP lo guarda en un `.txt`; esa ruta 
    `supabase-sync.js`, en el mismo deploy (cada mitad sola no anda).
 9. Prueba de humo: login de los dos, responsables bien, una captura, un chat, un gasto.
 10. El proyecto viejo, intacto. Se limpia más adelante, a mano.
+
+## Después de la mudanza: el frontend nuevo (29/9/2026)
+
+La raíz del repo pasa a ser un proyecto Vite + React (rama `frontend-react`, plan en
+`docs/superpowers/plans/2026-09-29-frontend-react-cascara.md`). El tablero vanilla se mudó a
+`legacy/`. **Antes de mergear `frontend-react` a `main`, Netlify tiene que publicar `legacy/`**
+(Site settings → Build & deploy → Publish directory = `legacy`): si no, al mergear publica el
+código fuente de Vite y el tablero de todos los días se cae. El frontend nuevo se publica en
+Vercel.
