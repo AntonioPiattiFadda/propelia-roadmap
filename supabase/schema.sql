@@ -639,11 +639,25 @@ end $$;
 create policy crm_clients_leer on public.crm_clients for select using (
   public.crm_puede_cliente(id, 'read') or public.crm_es_superadmin()
   or (public.es_usuario() and created_by = auth.uid()));
-create policy crm_clients_escribir on public.crm_clients for all
+-- Escribir va partido en insert/update/delete y NO en un `for all`: un cliente es compartido
+-- entre carteras, y `crm_leads.client_id … on delete cascade` corre por fuera de la RLS. Con
+-- `for all`, alguien con write sobre UN lead del cliente podía borrarlo y arrastrar los leads,
+-- tareas y comentarios de carteras que ni siquiera puede leer. Borrar un cliente es solo del
+-- SUPERADMIN; el resto, si hace falta, es una baja lógica por update.
+drop policy if exists crm_clients_escribir on public.crm_clients;
+drop policy if exists crm_clients_insertar on public.crm_clients;
+drop policy if exists crm_clients_editar on public.crm_clients;
+drop policy if exists crm_clients_borrar on public.crm_clients;
+create policy crm_clients_insertar on public.crm_clients for insert
+  with check (public.crm_puede_cliente(id, 'write') or public.crm_es_superadmin()
+  or (public.es_usuario() and created_by = auth.uid()));
+create policy crm_clients_editar on public.crm_clients for update
   using (public.crm_puede_cliente(id, 'write') or public.crm_es_superadmin()
   or (public.es_usuario() and created_by = auth.uid()))
   with check (public.crm_puede_cliente(id, 'write') or public.crm_es_superadmin()
   or (public.es_usuario() and created_by = auth.uid()));
+create policy crm_clients_borrar on public.crm_clients for delete
+  using (public.crm_es_superadmin());
 
 -- crm_data_access: cada uno ve lo que le dieron; solo un SUPERADMIN lo cambia.
 create policy crm_data_access_leer on public.crm_data_access for select using (

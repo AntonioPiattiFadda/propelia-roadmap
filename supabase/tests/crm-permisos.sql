@@ -333,5 +333,46 @@ begin
 end $$;
 reset role;
 
+-- ---------- 9. Borrar un cliente es solo del SUPERADMIN ----------
+-- Desde 8a SDR1 tiene un lead sobre d003, el cliente que comparte con el lead e003 de SDR3 (sobre
+-- quien SDR1 no tiene nada). Con write sobre SU lead podía editar el cliente; si además pudiera
+-- borrarlo, el `on delete cascade` de crm_leads —que corre por fuera de la RLS— se llevaría el
+-- lead de SDR3 con sus tareas y comentarios.
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000c001","role":"authenticated"}';
+do $$
+declare n int; ok boolean := false;
+begin
+  select count(*) into n from public.crm_clients where id = '00000000-0000-4000-8000-00000000d003';
+  if n <> 1 then raise exception 'FALLO (9a): SDR1 no ve el cliente d003 a través de su lead (premisa del caso)'; end if;
+  begin
+    delete from public.crm_clients where id = '00000000-0000-4000-8000-00000000d003';
+    get diagnostics n = row_count;
+    ok := n = 0;
+  exception when insufficient_privilege then ok := true;
+  end;
+  if not ok then raise exception 'FALLO (9b): SDR1 borró un cliente compartido con otra cartera'; end if;
+end $$;
+reset role;
+
+do $$
+begin
+  if not exists (select 1 from public.crm_leads where id = '00000000-0000-4000-8000-00000000e003') then
+    raise exception 'FALLO (9c): el lead de SDR3 desapareció al intentar borrar su cliente';
+  end if;
+end $$;
+
+-- El SUPERADMIN sí borra (d005, el cliente sin leads del caso 6).
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000c0a0","role":"authenticated"}';
+do $$
+declare n int;
+begin
+  delete from public.crm_clients where id = '00000000-0000-4000-8000-00000000d005';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALLO (9d): el SUPERADMIN no pudo borrar un cliente'; end if;
+end $$;
+reset role;
+
 select 'crm-permisos: OK' as resultado;
 rollback;
