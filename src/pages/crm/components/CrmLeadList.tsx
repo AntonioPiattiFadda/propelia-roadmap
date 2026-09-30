@@ -114,7 +114,8 @@ function LeadCard({ lead, etapa, responsable, esMio, vencidas, puedeEscribir, no
         if (seleccion) seleccion.onToggle()
         else onAbrir(lead.id)
       }}
-      onKeyDown={e => { if (e.key === 'Enter' && !seleccion) onAbrir(lead.id) }}
+      // Solo el Enter de la tarjeta misma: el de un botón interno (gestión, posponer) burbujea hasta acá.
+      onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget && !seleccion) onAbrir(lead.id) }}
       className="flex flex-col gap-2 bg-card px-3 py-3 [border-bottom:1px_solid_var(--line-soft)]"
     >
       <div className="flex items-center gap-2.5">
