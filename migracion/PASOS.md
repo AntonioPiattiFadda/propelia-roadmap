@@ -232,6 +232,8 @@ El resultado no entra en la respuesta y el MCP lo guarda en un `.txt`; esa ruta 
 La raíz del repo pasa a ser un proyecto Vite + React (rama `frontend-react`, plan en
 `docs/superpowers/plans/2026-09-29-frontend-react-cascara.md`). El tablero vanilla se mudó a
 `legacy/`. **Antes de mergear `frontend-react` a `main`, Netlify tiene que publicar `legacy/`**
-(Site settings → Build & deploy → Publish directory = `legacy`): si no, al mergear publica el
+(Site settings → Build & deploy: **Base directory = `legacy`, Publish directory = `legacy`,
+Build command vacío**; con el Base en la raíz Netlify haría `npm install` de todo Vite en cada
+deploy del tablero viejo): si no, al mergear publica el
 código fuente de Vite y el tablero de todos los días se cae. El frontend nuevo se publica en
 Vercel.

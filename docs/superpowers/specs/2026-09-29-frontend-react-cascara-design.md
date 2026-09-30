@@ -127,8 +127,9 @@ Salió de `mudanza-base`; desde que la mudanza se mergeó (29/9/2026) va rebasad
 - **Login desde el dominio nuevo**: `signInWithPassword` no redirige, así que no hace falta
   tocar las *redirect URLs* de Supabase Auth. Sí la **Site URL**, si algún día se mandan
   mails de Auth (hoy no).
-- **Netlify tiene que pasar a publicar `legacy/`** (Site settings → Build & deploy → Publish
-  directory) **antes** de mergear esta rama a `main`. Si no, al mergear Netlify publica la
+- **Netlify tiene que pasar a publicar `legacy/`** (Site settings → Build & deploy: **Base
+  directory = `legacy`, Publish directory = `legacy`, Build command vacío**; con el Base en la
+  raíz haría `npm install` de todo Vite/TS en cada deploy) **antes** de mergear esta rama a `main`. Si no, al mergear Netlify publica la
   raíz —que pasa a ser el código fuente de Vite— y el tablero que usan todos los días se cae,
   cuando el Roadmap nuevo todavía es un placeholder.
 
