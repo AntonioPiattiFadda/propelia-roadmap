@@ -49,7 +49,7 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
 - **El alta es una RPC** (`crm_create_lead_with_client`, `security definer`): reutiliza el cliente
   por teléfono/email aunque sea de otra cartera y crea la tarea «Asesorar cliente» con la fecha
   que manda el front (el «hoy» local). Sus errores son claves (`crm_…`) que traduce
-  `lib/errores.ts`.
+  `src/pages/crm/lib/errores.ts`.
 - **La lista se trae entera** (la RLS ya recortó) y filtros, pestañas y contadores salen de
   funciones puras en `lib/`. Todo filtro vive en la URL (`leadFilterParams.ts`); **`gestion` es la
   lista de estados EXCLUIDOS**, como en el producto: los enlaces se arman con `enlaceAlCrm()`,
@@ -59,15 +59,16 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   `gestion_*` ni los historiales.
 - **El catálogo se borra con soft delete**: un lead en una etapa borrada la sigue leyendo por
   nombre (`catalogoDeEtapas` trae también las borradas); los menús ofrecen solo las vivas.
-- **Qué se copió del producto** (`propelia-frontend/src/pages/leads`, podado de lo inmobiliario):
-  `gestionStatus`, `calendarDeadline`, `discardStage`, `leadFilters`, `leadFilterParams`,
-  `computeLeadListCounters`, `reassignCollisions`, `leadCells`, `LeadRowActions`, `LeadTasksPanel`,
-  `DockedActivityChat`, `ClientFields`, `ReassignLeadsDialog`, `AgentFilterButton`,
-  `BulkActionBar`, el funnel (`StagesTable`, `PriorityPicker`), `ChannelsPanel` y la
-  `VisibilityMatrix` de Equipo. **Nuevo**: `permisos.ts`, `effectiveStage.ts` (acá es resolver por
-  id), `systemComment.ts` (el del producto es el parser de Idealista), el servicio, los hooks,
-  `CrmLeadList`, `LeadDialog`, `MeetingsPanel`, `ActividadLead`, `NewLeadDialog` y
-  `estadisticasPorCartera`.
+- **Qué se copió del producto** (podado de lo inmobiliario):
+  De `propelia-frontend/src/pages/leads`: `gestionStatus`, `calendarDeadline`, `discardStage`,
+  `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`, `leadCells`,
+  `LeadRowActions`, `LeadTasksPanel`, `DockedActivityChat`, `ClientFields`, `ReassignLeadsDialog`,
+  `AgentFilterButton`, `BulkActionBar`. Del funnel en `propelia-frontend/src/pages/clients`:
+  `StagesTable`, `PriorityPicker`. De `propelia-frontend/src/pages/ajustes`: `ChannelsPanel`.
+  De `propelia-frontend/src/pages/equipo`: `VisibilityMatrix`. **Nuevo**: `permisos.ts`,
+  `effectiveStage.ts` (acá es resolver por id), `systemComment.ts` (el del producto es el parser
+  de Idealista), el servicio, los hooks, `CrmLeadList`, `LeadDialog`, `MeetingsPanel`,
+  `ActividadLead`, `NewLeadDialog` y `estadisticasPorCartera`.
 
 **El tablero vanilla vive en `legacy/`** y todo lo que sigue en este archivo lo describe. Es
 la **especificación del port** del Roadmap (sub-proyecto 3): las rutas de archivo que nombra
