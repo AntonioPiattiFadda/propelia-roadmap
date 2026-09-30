@@ -634,12 +634,16 @@ begin
 end $$;
 
 -- Clientes. `created_by` porque el alta crea primero el cliente y después el lead: sin esa rama
--- el cliente recién creado no se podría ni leer de vuelta.
+-- el cliente recién creado no se podría ni leer de vuelta. El SUPERADMIN ve todo: también el
+-- cliente sin ningún lead activo, que por la cartera no lo vería nadie.
 create policy crm_clients_leer on public.crm_clients for select using (
-  public.crm_puede_cliente(id, 'read') or (public.es_usuario() and created_by = auth.uid()));
+  public.crm_puede_cliente(id, 'read') or public.crm_es_superadmin()
+  or (public.es_usuario() and created_by = auth.uid()));
 create policy crm_clients_escribir on public.crm_clients for all
-  using (public.crm_puede_cliente(id, 'write') or (public.es_usuario() and created_by = auth.uid()))
-  with check (public.crm_puede_cliente(id, 'write') or (public.es_usuario() and created_by = auth.uid()));
+  using (public.crm_puede_cliente(id, 'write') or public.crm_es_superadmin()
+  or (public.es_usuario() and created_by = auth.uid()))
+  with check (public.crm_puede_cliente(id, 'write') or public.crm_es_superadmin()
+  or (public.es_usuario() and created_by = auth.uid()));
 
 -- crm_data_access: cada uno ve lo que le dieron; solo un SUPERADMIN lo cambia.
 create policy crm_data_access_leer on public.crm_data_access for select using (

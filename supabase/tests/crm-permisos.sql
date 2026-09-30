@@ -210,6 +210,14 @@ begin
   if n = 0 then raise exception 'FALLO (6b): el SUPERADMIN no pudo editar una etapa'; end if;
   insert into public.crm_data_access (viewer_id, subject_id, access)
   values ('00000000-0000-4000-8000-00000000c003', '00000000-0000-4000-8000-00000000c001', 'read');
+  -- Un cliente sin ningún lead, creado por nadie: solo el SUPERADMIN puede verlo y editarlo.
+  insert into public.crm_clients (id, first_name, company_name, phone, email)
+  values ('00000000-0000-4000-8000-00000000d005', 'Cinco', 'Inmo Sin Lead', '+99900000005', 'c5@prueba.test');
+  select count(*) into n from public.crm_clients where id = '00000000-0000-4000-8000-00000000d005';
+  if n <> 1 then raise exception 'FALLO (6c): el SUPERADMIN no ve un cliente sin leads'; end if;
+  update public.crm_clients set notes = 'admin' where id = '00000000-0000-4000-8000-00000000d005';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALLO (6d): el SUPERADMIN no pudo editar un cliente sin leads'; end if;
 end $$;
 reset role;
 
