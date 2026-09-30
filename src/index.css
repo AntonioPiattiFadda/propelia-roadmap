@@ -1,0 +1,755 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is([data-theme="dark"] *), &:is(.dark *));
+
+/* ============================================================
+   Design Tokens — Light (default)
+   ============================================================ */
+:root, [data-theme="light"] {
+  /* Propelia Blue #3644F2 = oklch(0.51 0.253 270) — blue-first system (2026-08) */
+  --brand-h: 270;
+  --brand-c: 0.25;
+
+  --brand-50:  oklch(0.975 calc(var(--brand-c) * 0.18) var(--brand-h));
+  --brand-100: oklch(0.94  calc(var(--brand-c) * 0.40) var(--brand-h));
+  --brand-200: oklch(0.88  calc(var(--brand-c) * 0.65) var(--brand-h));
+  --brand-300: oklch(0.78  calc(var(--brand-c) * 0.85) var(--brand-h));
+  --brand-400: oklch(0.68  calc(var(--brand-c) * 1.00) var(--brand-h));
+  --brand-500: oklch(0.58  calc(var(--brand-c) * 1.00) var(--brand-h));
+  --brand-600: oklch(0.50  calc(var(--brand-c) * 0.95) var(--brand-h));
+  --brand-700: oklch(0.42  calc(var(--brand-c) * 0.85) var(--brand-h));
+  --brand-800: oklch(0.34  calc(var(--brand-c) * 0.70) var(--brand-h));
+  --brand-900: oklch(0.26  calc(var(--brand-c) * 0.55) var(--brand-h));
+  --brand:         #3644F2;
+  --brand-hover:   var(--brand-600);
+  --brand-active:  var(--brand-700);
+  --brand-electric:#536EFF;
+  --brand-sky:     #72C7F8;
+  --lavender:      #E8EBFF;
+  --brand-fg:      #ffffff;
+  --brand-soft:    var(--brand-50);
+  --brand-soft-fg: var(--brand-700);
+
+  --bg:        #ffffff;
+  --bg-page:   #ffffff;
+  --surface:   #ffffff;
+  --surface-2: #F8FAFF;
+  --surface-3: #F3F7FF;
+
+  --line:        #DDE3F2;
+  --line-strong: #C9D2EE;
+  --line-soft:   #E9EDF7;
+
+  --navy:       #172052;
+  --fg:         #080D41;
+  --fg-2:       #5F6885;
+  --fg-muted:   #8992AA;
+  --fg-faint:   #B6BECF;
+  --fg-inverse: #ffffff;
+
+  --success:      #5E9634;
+  --success-soft: #EEF7E8;
+  --success-fg:   #5E9634;
+  --warning:      #D99A24;
+  --warning-soft: #FFF6E3;
+  --warning-fg:   #D99A24;
+  --danger:       #D94A4A;
+  --danger-soft:  #FFF0F0;
+  --danger-fg:    #D94A4A;
+  /* Tonos oscuros para TEXTO sobre los rellenos `-soft`: `--success` y `--danger`
+     sobre su propio soft no llegan a 4,5:1, así que un badge de una palabra queda
+     por debajo de AA. Estos sí. Sólo para texto — los rellenos siguen siendo los soft. */
+  --success-strong: #4A7527;
+  --danger-strong:  #B23A3A;
+  --info:         #536EFF;
+  --info-soft:    #EEF1FF;
+  --info-fg:      #536EFF;
+
+  --shadow-sm: 0 1px 3px rgba(8,13,65,0.05);
+  --shadow-md: 0 6px 20px rgba(8,13,65,0.08);
+  --shadow-lg: 0 14px 40px rgba(8,13,65,0.10);
+}
+
+/* ============================================================
+   Design Tokens — Dark
+   ============================================================ */
+[data-theme="dark"], .dark {
+  --brand-50:  oklch(0.20 calc(var(--brand-c) * 0.50) var(--brand-h));
+  --brand-100: oklch(0.26 calc(var(--brand-c) * 0.70) var(--brand-h));
+  --brand-200: oklch(0.34 calc(var(--brand-c) * 0.85) var(--brand-h));
+  --brand-300: oklch(0.45 calc(var(--brand-c) * 1.00) var(--brand-h));
+  --brand-400: oklch(0.56 calc(var(--brand-c) * 1.05) var(--brand-h));
+  --brand-500: oklch(0.66 calc(var(--brand-c) * 1.05) var(--brand-h));
+  --brand-600: oklch(0.74 calc(var(--brand-c) * 0.95) var(--brand-h));
+  --brand-700: oklch(0.82 calc(var(--brand-c) * 0.80) var(--brand-h));
+  --brand-800: oklch(0.90 calc(var(--brand-c) * 0.55) var(--brand-h));
+  --brand-900: oklch(0.96 calc(var(--brand-c) * 0.30) var(--brand-h));
+  --brand:         var(--brand-400);
+  --brand-hover:   var(--brand-500);
+  --brand-active:  var(--brand-600);
+  --brand-electric:#536EFF;
+  --brand-sky:     #72C7F8;
+  --lavender:      var(--brand-100);
+  --brand-fg:      oklch(0.14 0.02 270);
+  --brand-soft:    var(--brand-50);
+  --brand-soft-fg: var(--brand-700);
+
+  --bg:        oklch(0.14 0.02 270);
+  --bg-page:   oklch(0.12 0.022 270);
+  --surface:   oklch(0.17 0.022 270);
+  --surface-2: oklch(0.20 0.024 270);
+  --surface-3: oklch(0.24 0.026 270);
+
+  --line:        rgba(255,255,255,0.10);
+  --line-strong: rgba(255,255,255,0.18);
+  --line-soft:   rgba(255,255,255,0.07);
+
+  --navy:       oklch(0.82 0.04 270);
+  --fg:         oklch(0.94 0.012 270);
+  --fg-2:       oklch(0.82 0.016 270);
+  --fg-muted:   oklch(0.62 0.02 270);
+  --fg-faint:   oklch(0.46 0.022 270);
+  --fg-inverse: oklch(0.14 0.02 270);
+
+  --success:      oklch(0.72 0.16 155);
+  --success-soft: oklch(0.24 0.06 155);
+  --success-fg:   oklch(0.86 0.13 155);
+  --warning:      oklch(0.80 0.16 75);
+  --warning-soft: oklch(0.26 0.06 75);
+  --warning-fg:   oklch(0.88 0.14 75);
+  --danger:       oklch(0.70 0.18 25);
+  --danger-soft:  oklch(0.26 0.07 25);
+  --danger-fg:    oklch(0.86 0.14 25);
+  /* En oscuro el relleno soft ya es oscuro: el tono que contrasta es el CLARO, no el
+     oscuro del tema claro. Por eso apuntan a los `-fg`, que es justo el que se usa
+     sobre soft en este tema. */
+  --success-strong: var(--success-fg);
+  --danger-strong:  var(--danger-fg);
+  --info:         oklch(0.72 0.14 235);
+  --info-soft:    oklch(0.24 0.06 235);
+  --info-fg:      oklch(0.86 0.12 235);
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.50);
+  --shadow-md: 0 6px 20px rgba(0,0,0,0.55);
+  --shadow-lg: 0 24px 48px rgba(0,0,0,0.65);
+}
+
+/* ============================================================
+   Tipografía, Spacing, Radii
+   ============================================================ */
+:root {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
+
+  /* Gradientes Propelia — solo estos tres (ver skill propelia-design):
+     ai = CTAs/IA, soft = fondos suaves, deep = banners premium (con moderación) */
+  --grad-ai:   linear-gradient(135deg, #394BF4 0%, #536EFF 52%, #72C7F8 100%);
+  --grad-soft: linear-gradient(135deg, #F3F7FF 0%, #E8EBFF 55%, #FFFFFF 100%);
+  --grad-deep: linear-gradient(135deg, #080D41 0%, #172052 55%, #394BF4 100%);
+
+  --r-sm:   6px;
+  --r-md:   8px;
+  --r-lg:   12px;
+  --r-xl:   16px;
+  --r-pill: 20px;
+  --r-full: 9999px;
+
+  --width-sidebar: 220px;
+
+  /* Alto que el teclado virtual le come a la pantalla. Lo escribe `useKeyboardInset`
+     (montado una sola vez en App) leyendo `window.visualViewport`; fuera de móvil, o
+     con el teclado cerrado, queda en 0 y ninguna regla que lo use hace nada.
+
+     Hace falta porque `position: fixed` se ancla al viewport de LAYOUT, que el teclado
+     NO encoge: una hoja inferior o el compositor de un chat quedan dibujados detrás de
+     las teclas. Restando este valor vuelven a quedar a la vista. */
+  --kb-inset: 0px;
+}
+
+/* ============================================================
+   Tailwind @theme — bridge design tokens → shadcn + utilities
+   ============================================================ */
+@theme {
+  --color-background:             var(--bg);
+  --color-foreground:             var(--fg);
+  --color-card:                   var(--surface);
+  --color-card-foreground:        var(--fg);
+  --color-popover:                var(--surface);
+  --color-popover-foreground:     var(--fg);
+  --color-primary:                var(--brand);
+  --color-primary-foreground:     var(--brand-fg);
+  --color-secondary:              var(--surface-2);
+  --color-secondary-foreground:   var(--fg-2);
+  --color-muted:                  var(--surface-2);
+  --color-muted-foreground:       var(--fg-muted);
+  --color-accent:                 var(--surface-3);
+  --color-accent-foreground:      var(--fg);
+  --color-destructive:            var(--danger);
+  --color-destructive-foreground: var(--fg-inverse);
+  --color-border:                 var(--line);
+  --color-input:                  var(--line);
+  --color-ring:                   var(--brand);
+
+  --color-success:      var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning:      var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger:       var(--danger);
+  --color-danger-soft:  var(--danger-soft);
+  --color-info:         var(--info);
+  --color-info-soft:    var(--info-soft);
+
+  --font-family-sans: var(--font-sans);
+  --font-family-mono: var(--font-mono);
+
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+
+  --color-sidebar:                    var(--surface);
+  --color-sidebar-foreground:         var(--fg);
+  --color-sidebar-accent:             var(--surface-2);
+  --color-sidebar-accent-foreground:  var(--fg);
+  --color-sidebar-primary:            var(--brand);
+  --color-sidebar-primary-foreground: var(--brand-fg);
+  --color-sidebar-border:             var(--line);
+  --color-sidebar-ring:               var(--brand);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up:   accordion-up 0.2s ease-out;
+  --animate-bounce-sm:      bounce-sm 0.6s infinite;
+  --animate-hero-float:     hero-float 5.5s ease-in-out infinite;
+  --animate-badge-pulse-sm: badge-pulse-sm 2.8s ease-in-out infinite;
+  --animate-badge-pulse-lg: badge-pulse-lg 2.2s ease-in-out infinite;
+  --animate-visit-prompt-glow: visit-prompt-glow 2.4s ease-in-out 3;
+  --animate-field-flash:    field-flash 1s cubic-bezier(0.16, 0.84, 0.24, 1);
+  --animate-clause-rise:    clause-rise 0.4s cubic-bezier(0.16, 0.84, 0.24, 1);
+  --animate-typing-wave:    typing-wave 1.2s ease-in-out infinite;
+}
+
+@keyframes accordion-down {
+  from { height: 0; }
+  to   { height: var(--radix-accordion-content-height); }
+}
+@keyframes accordion-up {
+  from { height: var(--radix-accordion-content-height); }
+  to   { height: 0; }
+}
+@keyframes bounce-sm {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(2px); }
+}
+@keyframes hero-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-12px); }
+}
+/* El color lo pone quien las usa via --badge-pulse-color. Dos variantes porque
+   el halo distingue la gravedad: sm para local, lg para la base remota. */
+@keyframes badge-pulse-sm {
+  0%, 100% {
+    border-color: var(--badge-pulse-color);
+    box-shadow: 0 0 0 0 var(--badge-pulse-color);
+  }
+  50% {
+    border-color: color-mix(in oklab, var(--badge-pulse-color) 55%, transparent);
+    box-shadow: 0 0 0 3px transparent;
+  }
+}
+@keyframes badge-pulse-lg {
+  0%, 100% {
+    border-color: var(--badge-pulse-color);
+    box-shadow: 0 0 0 0 var(--badge-pulse-color);
+  }
+  50% {
+    border-color: color-mix(in oklab, var(--badge-pulse-color) 40%, transparent);
+    box-shadow: 0 0 0 10px transparent;
+  }
+}
+/* El emergente de "pasar a Agendado" tiene que encontrarse solo sin quedar latiendo
+   para siempre: el halo late tres veces y se apaga. La sombra base va repetida en los
+   dos pasos porque `box-shadow` se anima entero — si el 50% no la repitiera, la
+   tarjeta perdería su elevación en cada latido. */
+@keyframes visit-prompt-glow {
+  0%, 100% {
+    box-shadow:
+      0 18px 45px -14px color-mix(in oklab, var(--brand-900) 55%, transparent),
+      0 0 0 0 color-mix(in oklab, var(--brand-500) 40%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 18px 45px -14px color-mix(in oklab, var(--brand-900) 55%, transparent),
+      0 0 0 9px transparent;
+  }
+}
+/* Editor de documentos: un campo que acaba de rellenar el asistente destella una
+   vez y se queda en su fondo azul de "generado por IA". Termina en ese mismo
+   color y no en transparente para que no parpadee al acabar la animación. */
+@keyframes field-flash {
+  0%   { background-color: color-mix(in oklab, var(--brand-sky) 55%, transparent); }
+  100% { background-color: var(--brand-soft); }
+}
+/* Entrada de una cláusula que la IA acaba de insertar en el documento. */
+@keyframes clause-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+/* "Escribiendo" del chat: cada punto sube y se ilumina con su propio desfase, así los
+   tres juntos hacen la onda de WhatsApp. En reposo quedan a media luz, no apagados. */
+@keyframes typing-wave {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30%           { transform: translateY(-4px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-hero-float,
+  .animate-badge-pulse-sm,
+  .animate-badge-pulse-lg,
+  .animate-visit-prompt-glow,
+  .animate-field-flash,
+  .animate-clause-rise,
+  .animate-typing-wave {
+    animation: none;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  /* La scrollbar clásica de Windows roba ~15px de viewport al aparecer: sin gutter
+     reservado, expandir un accordion (o cualquier cambio de alto que cruce el
+     viewport) refluye toda la página en horizontal. */
+  html {
+    scrollbar-gutter: stable;
+  }
+  /* react-remove-scroll (Radix Select/Dialog) compensa la scrollbar con un
+     margin-right !important en body, pero el gutter de arriba ya reserva ese
+     espacio: sin esto, abrir un dropdown corre todo el layout 15px. El atributo
+     duplicado gana en especificidad al estilo que inyecta la librería. */
+  body[data-scroll-locked][data-scroll-locked] {
+    margin-right: 0 !important;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    margin: 0;
+  }
+  #root {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+  }
+  /* Tailwind's preflight resetea el cursor de <button> a `default` — la mayoría de
+     los botones de este proyecto son <button> crudos (no el componente Button), así
+     que sin esto no muestran cursor pointer. */
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+[data-sonner-toast][data-type="success"] [data-icon] {
+  color: var(--success);
+}
+[data-sonner-toast][data-type="error"] [data-icon] {
+  color: var(--danger);
+}
+
+/* Barra de progreso de duración del toast (sonner no la trae de fábrica).
+   Se pinta como capa de background del propio toast — ver toastOptions.style
+   en sonner.tsx: la primera capa es un gradient de la altura de la barra y la
+   segunda el color de la card. El border-radius del toast recorta el background
+   solo, así la barra queda flush a los bordes y sigue la curva de la esquina
+   sin geometría a mano. Lo que se anima es background-size (animable, y las
+   animaciones CSS le ganan al style inline en la cascada).
+   La duración por toast llega vía --toast-duration (default 4s, el de sonner);
+   los toasts de loading no expiran, así que no llevan barra. */
+[data-sonner-toast]:not([data-type="loading"]) {
+  animation: toast-progress var(--toast-duration, 4s) linear forwards;
+}
+[data-sonner-toast][data-type="success"] {
+  --toast-bar-color: var(--success);
+}
+[data-sonner-toast][data-type="error"] {
+  --toast-bar-color: var(--danger);
+}
+[data-sonner-toast][data-type="warning"] {
+  --toast-bar-color: var(--warning);
+}
+[data-sonner-toast][data-type="info"] {
+  --toast-bar-color: var(--info);
+}
+/* Sonner pausa su timer mientras el cursor está sobre el toaster —
+   la barra se pausa con él para no mentir sobre el tiempo restante. */
+[data-sonner-toaster]:hover [data-sonner-toast] {
+  animation-play-state: paused;
+}
+
+@keyframes toast-progress {
+  from {
+    background-size: 100% 3px, auto;
+  }
+  to {
+    background-size: 0% 3px, auto;
+  }
+}
+
+
+/* Escala de toda la app. Va en 0,9: el diseño se calibró mirándolo con el zoom del
+   navegador al 90%, y se pidió que todas las páginas internas y la ficha del inmueble
+   se vean igual que leads, que ya estaba en ese escalón.
+
+   Contra: el cuerpo de texto queda por debajo de los 11 px REALES en pantalla. Si
+   alguna vez vuelve la queja de legibilidad, el valor se sube acá y solo acá.
+
+   Se usa `zoom` y no `transform: scale` porque `zoom` reflowea de verdad: las tablas
+   siguen midiendo el ancho real disponible en vez de quedar escaladas con espacio
+   muerto al costado. Un solo lugar para tocar la proporción de todas las páginas.
+
+   Ojo: no se puede poner en un `position: fixed` centrado con `left: 50%` (los
+   diálogos), porque el navegador escala también ese `left` y lo descentra. Ahí va
+   en un wrapper interno — ver PropertyDetailDialog. */
+.ui-scale {
+  --ui-scale: 0.9;
+  zoom: var(--ui-scale);
+}
+
+/* Alto de la barra de pestañas de móvil (ver MobileTabBar).
+   Es la ÚNICA fuente del número: la barra se dibuja con este alto, las páginas se
+   despejan con este padding, y todo lo que va `fixed` abajo (el botón de Propelia, su
+   globo, la barra de selección de leads, el badge de base local) se levanta con esto.
+   Sin un solo lugar, cualquier retoque del alto deja algo tapado.
+
+   Fuera de móvil vale 0px a propósito: así los `calc` de abajo son los de siempre y no
+   hace falta duplicarlos dentro de una media query. */
+:root {
+  --tabbar-h: 0px;
+}
+
+@media (max-width: 767px) {
+  :root {
+    --tabbar-h: calc(56px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* "App shell" en móvil: el documento NO scrollea nunca; el que scrollea es el `main`.
+
+     Con el scroll en la ventana, iOS esconde la barra del navegador al bajar y todo lo
+     que va `fixed` con `bottom: 0` baja con el nuevo borde de la pantalla: la barra de
+     pestañas se veía más abajo en /leads (que crece con la lista) que en la home (que
+     mide justo la pantalla). Con el documento quieto la barra del navegador no se
+     mueve y la de pestañas queda en el mismo lugar en todas las páginas.
+
+     `overscroll-behavior: none` apaga el rebote del documento, que también movía las
+     capas fijas. */
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* Acá y no en cada página: la barra tapa los últimos 56px de la pantalla, así que el
+     final de CUALQUIER página quedaría debajo. El `main` del layout es el ancestro
+     común de todas y está fuera de los `.ui-scale`, donde el padding son píxeles
+     reales.
+
+     `100dvh` y no `100%`: es la misma base de la que restan `.home-mobile-shell` y
+     `.ui-screen-h`, así que la home entra justa en el `main` y no abre un segundo
+     scroll. Todo lo que dependía del scroll de la ventana en móvil (el virtualizador de
+     LeadList) lee ahora el de este elemento. */
+  main[data-slot='sidebar-inset'] {
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    padding-bottom: var(--tabbar-h);
+  }
+}
+
+/* Un escalón más chico todavía (0,9 × 0,9) para el panel de leads: se pidió verlo un
+   10% más chico que el resto de las páginas. Va con doble clase por especificidad.
+
+   Ojo: acá el cuerpo de texto (`text-xs`, 12px) cae a ~9,7px REALES en pantalla. */
+.ui-scale.ui-scale-sm {
+  --ui-scale: 0.81;
+}
+
+/* Misma escala que `.ui-scale.ui-scale-sm`, pero SÓLO de 768px para arriba.
+   En móvil el zoom no ayuda: achica los objetivos táctiles por debajo de los 44px que
+   hacen falta para tocar con el pulgar (los botones de llamar y WhatsApp de la tarjeta
+   de lead quedarían en 36px reales). Debajo del punto de corte la escala queda en 1 y
+   `--ui-scale` no se declara, así que los fallbacks de `.ui-scale-reset` y
+   `.ui-screen-h` la leen como 1 y no hacen nada. */
+@media (min-width: 768px) {
+  .ui-scale-md {
+    --ui-scale: 0.81;
+    zoom: var(--ui-scale);
+  }
+}
+
+/* Contra-escala para lo que se ancla al viewport con `position: fixed`. Adentro de un
+   `zoom` el navegador escala también su `left`/`top`, así que la barra de selección de
+   leads se despegaría del borde del sidebar. Los zoom anidados se multiplican, así que
+   esto la devuelve a escala 1. Fuera de `.ui-scale` el fallback la deja en 1 y no hace
+   nada. */
+.ui-scale-reset {
+  zoom: calc(1 / var(--ui-scale, 1));
+}
+
+/* Alto de arranque de la fila de tareas + agenda + plan de la home: la pantalla
+   entera menos lo que tiene que asomar abajo (cabecera de la página, padding,
+   gap, y las pestañas de objetivos con su barra de fechas). El que quiera el
+   tablero de objetivos completo, scrollea.
+
+   El `/ var(--ui-scale)` es la contra-escala: adentro del `zoom` de arriba,
+   `100vh` se dibuja al 90%, igual que le pasa al `left`/`top` de lo que va
+   fijo. Sin dividir, la fila arrancaría un 10% más baja de lo pedido.
+
+   No va como clase de Tailwind porque la división y la resta del calc necesitan
+   espacios, y ahí terminan escritos con guiones bajos: acá se lee. */
+@media (min-width: 1024px) {
+  .home-main-row {
+    /* 8rem: lo que se le descuenta a la pantalla es la cabecera de la página —una
+       sola línea de título y fecha, con los contadores a la derecha— más el asomo de
+       los objetivos por abajo. Estaba en 14rem y las tres tarjetas quedaban
+       apretadas: el chat mostraba dos globos, la agenda un par de horas y las tareas
+       media lista. Bajó a 10rem y después a 8rem; los objetivos siguen asomando lo
+       suficiente para saber que hay algo más abajo.
+
+       La tira de contadores no entra en esta cuenta: mide menos que el bloque de
+       título, así que va en la cabecera sin agrandarla. */
+    /* Con las solapas (Tareas del día / Objetivos / En gestión) ya no asoma nada
+       abajo: se descuenta la cabecera, el padding y la tira de solapas. */
+    min-height: calc(100vh / var(--ui-scale, 1) - 10.5rem);
+  }
+}
+
+/* En móvil la home deja de ser una fila de tres columnas y pasa a tres pestañas
+   que se turnan: la pantalla entera, para que cada una scrollee adentro en vez
+   de estirar la página. Sin alto fijo, la cabecera y los contadores se irían
+   scrolleando con el contenido y el agente perdería de vista la alarma del día.
+
+   `dvh` y no `vh`: en el teléfono la barra del navegador entra y sale, y con
+   `vh` el pie de la pestaña abierta quedaría siempre debajo de ella. La división
+   por `--ui-scale` es la misma contra-escala que usa `.home-main-row`.
+
+   Y menos `--kb-inset` (ver useKeyboardInset): `dvh` describe la ventana, no lo que
+   se ve, así que NO encoge cuando aparece el teclado. Sin la resta, el compositor
+   del chat de Propelin —que vive al pie de la pestaña— queda dibujado detrás de las
+   teclas justo cuando se lo acaba de tocar.
+
+   Y menos `--tabbar-h`: el `main` que la contiene ya reserva abajo el alto de la barra
+   de pestañas (ver MobileTabBar). Sin restarlo, la home mediría la pantalla entera
+   DENTRO de ese hueco y el pie de la pestaña abierta quedaría debajo de la barra. */
+@media (max-width: 767px) {
+  .home-mobile-shell {
+    height: calc((100dvh - var(--kb-inset, 0px) - var(--tabbar-h)) / var(--ui-scale, 1));
+  }
+}
+
+/* Auto-zoom de iOS al enfocar un campo.
+
+   Safari en iPhone hace zoom sobre cualquier campo de texto cuyo tipo se RENDERICE por
+   debajo de 16px, y al desenfocar no siempre vuelve: la pantalla queda agrandada y
+   corrida. No hay forma de apagarlo desde el viewport — iOS ignora `maximum-scale` y
+   `user-scalable=no` a propósito, por accesibilidad. La única palanca es el tamaño.
+
+   Los 16px van DIVIDIDOS por `--ui-scale` porque la app corre dentro de `.ui-scale`
+   (`zoom: 0.9`): declarar `16px` a secas se renderiza como 14,4 y el zoom salta igual.
+   Fuera de `.ui-scale` el fallback deja los 16px tal cual.
+
+   Va con `!important` porque compite contra utilidades de Tailwind (`text-xs`,
+   `text-sm`), que le ganan en especificidad a un selector de elemento. No es una
+   preferencia de diseño: es un piso que impone el sistema operativo.
+
+   Los campos que no reciben texto (casillas, radios, rangos) quedan afuera: no
+   disparan el zoom y el tipo no los afecta. */
+@media (max-width: 767px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  textarea,
+  select {
+    font-size: calc(16px / var(--ui-scale, 1)) !important;
+  }
+}
+
+/* Alto de pantalla completa para las páginas que lo necesitan (agenda, alta de
+   inmueble). Reemplaza a `h-screen`/`h-full` adentro de `.ui-scale`: ahí `100vh`
+   se dibuja al 90% como todo lo demás y la página quedaría corta contra el borde
+   de abajo. Es la misma contra-escala que usa `.home-main-row`.
+
+   Se le resta `--tabbar-h` porque estas páginas piden la pantalla entera: sin la resta
+   medirían 100vh dentro de un `main` que ya reserva el alto de la barra de pestañas, y
+   el desborde se lo comería la barra. Fuera de móvil la variable es 0px. */
+.ui-screen-h {
+  height: calc((100vh - var(--tabbar-h)) / var(--ui-scale, 1));
+}
+
+/* Ventana a pantalla completa en móvil, descontando el teclado.
+
+   Dos problemas en la misma clase, porque siempre aparecen juntos:
+
+   1. El diálogo de serie está centrado con `left: 50%` + `translate(-50%,-50%)`. En
+      390px eso deja una ventana recortada por los dos lados y el contenido apretado.
+   2. El alto sale de `100dvh` MENOS `--kb-inset` (ver useKeyboardInset). `dvh` describe
+      la ventana, no lo que se ve: no encoge al aparecer el teclado, así que sin la resta
+      el pie de la ventana —el botón de guardar, el campo recién enfocado— queda dibujado
+      detrás de las teclas.
+
+   No va como utilidades de Tailwind porque el `calc` necesita espacios alrededor del
+   `-`, y en un valor arbitrario esos espacios se escriben con guiones bajos. */
+@media (max-width: 767px) {
+  .dialog-fullscreen-mobile {
+    top: 0;
+    left: 0;
+    width: 100vw;
+    max-width: none;
+    height: calc(100dvh - var(--kb-inset, 0px));
+    max-height: none;
+    /* `translate` Y `transform`: el centrado del diálogo viene de `translate-x-[-50%]`,
+       que en Tailwind v4 compila a la propiedad `translate`, no a `transform`. Anulando
+       sólo `transform` la ventana se seguía yendo media pantalla arriba y a la izquierda.
+
+       Ojo con `translate: none`: el minificador del build (Lightning CSS) lo trata como
+       redundante al lado de `transform: none` y lo BORRA. En `npm run dev` se veía bien y
+       en producción la ventana volvía a irse arriba a la izquierda. `translate: 0 0` corre
+       la misma suerte. Lo que sí sobrevive son las variables: la utilidad compila a
+       `translate: var(--tw-translate-x) var(--tw-translate-y)`, así que ponerlas en 0
+       anula el centrado sin escribir la propiedad `translate`. */
+    --tw-translate-x: 0;
+    --tw-translate-y: 0;
+    transform: none;
+    border-radius: 0;
+    border: 0;
+  }
+}
+
+/* Un contrato del editor de documentos no es interfaz: es el papel que la agencia
+   imprime y firma. Va en la serif del sistema (no hay webfonts en la app) para que
+   se lea como un contrato y no como una pantalla más del CRM.
+
+   Los informes NO la usan: se leen de un vistazo, así que se quedan en la sans. */
+.doc-serif {
+  font-family: ui-serif, Georgia, 'Times New Roman', serif;
+}
+
+/* Un hueco vacío ('falta') tiene que notarse en PANTALLA, no sólo en el papel.
+   El backend real manda `value: null` (parsePatch.ts), que el front vuelve ''
+   (Documentos.tsx) — sin ancho mínimo, el span queda en unos pocos píxeles de
+   `px-0.5` y nadie nota que hay algo para completar. El mock que se usó para
+   probar esta pantalla siempre traía un placeholder entre corchetes
+   (`[precio]`), que sí le daba ancho al span; el servidor real no lo hace.
+
+   Mismo criterio que ya existe para impresión más abajo (`.doc-field[data-
+   field-status='falta']` adentro de `@media print`): acá es la misma regla,
+   pero fuera del bloque de impresión, porque la pantalla es la única superficie
+   donde una persona puede encontrar el hueco y llenarlo. */
+.doc-field[data-field-status='falta'] {
+  display: inline-block;
+  min-width: 4em;
+}
+
+/* ============================================================
+   Impresión del documento vivo (DocumentPaper)
+   ============================================================
+   Se eligió imprimir desde el navegador (Ctrl+P → Guardar como PDF) en vez de
+   sumar una librería de PDF, con la condición de que el lienzo se diseñara
+   print-first desde el principio. Esto es esa condición cumplida. */
+@media print {
+  /* El papel real: A4 con sus márgenes. Los pone la página, no el padding de
+     pantalla de `DocumentPaper` (que se anula con `print:px-0 print:py-0`) —
+     si los dos pusieran margen, la hoja saldría con el doble. */
+  @page {
+    size: A4;
+    margin: 18mm 16mm;
+  }
+
+  /* Todo lo que no es el documento: el raíl, el chat, el panel de resumen, el
+     `PageHeader`, el separador arrastrable, y —dentro de un campo— el volado
+     "IA", el botón de confirmar y el tooltip de procedencia. Una clase en el
+     JSX en vez de una lista de selectores acá: se lee en el punto donde
+     alguien agrega un panel nuevo y se pregunta si imprime. */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Imprimir siempre en claro, sin importar el tema del árbol. Si un ancestro
+     trae `[data-theme="dark"]` o `.dark` (hoy sólo el raíl lo usa localmente,
+     pero nada impide que mañana se aplique más arriba), sin esto la hoja sale
+     negra o con texto claro invisible sobre papel blanco — el error más caro y
+     más fácil de cometer de todo este módulo.
+     Repite a propósito los valores del bloque `:root, [data-theme="light"]`:
+     es el único lugar del archivo donde un hex fijo es correcto, porque el
+     objetivo es anular el tema oscuro, no respetarlo. */
+  [data-theme='dark'],
+  .dark {
+    color-scheme: light;
+    --bg: #ffffff;
+    --bg-page: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f8faff;
+    --surface-3: #f3f7ff;
+    --line: #dde3f2;
+    --line-strong: #c9d2ee;
+    --line-soft: #e9edf7;
+    --fg: #080d41;
+    --fg-2: #5f6885;
+    --fg-muted: #8992aa;
+    --fg-faint: #b6bece;
+  }
+
+  /* El estado de un campo (fondo azul de IA, punteado ámbar de lo que falta)
+     es señal de edición: en el papel firmado no va. Pero un hueco vacío tiene
+     que seguir viéndose — si un dato falta, el PDF no puede disimularlo — así
+     que se vuelve una línea de subrayado lisa en vez de invisible. */
+  .doc-field {
+    background-color: transparent !important;
+    color: var(--fg) !important;
+    border-style: none !important;
+    border-radius: 0 !important;
+  }
+  .doc-field[data-field-status='falta'] {
+    border-bottom: 1px solid var(--fg) !important;
+    /* En uso real el placeholder ("[nombre del comprador]") le da ancho al
+       span, pero si algún día llegara vacío la línea tiene que seguir
+       viéndose — si no, un dato que falta se disimularía como uno completo. */
+    display: inline-block;
+    min-width: 4em;
+  }
+
+  /* Que no quede una única línea de un párrafo cruzando de una página a la
+     otra. `break-inside-avoid` por bloque ya evita partir una cláusula
+     entera; esto cubre el caso más chico, dentro del bloque. */
+  .doc-serif {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* El breakpoint móvil (`@media (max-width: 767px)`, más arriba en este
+     archivo) TAMBIÉN matchea al imprimir: el `@page` de acá arriba es A4 menos
+     18mm/16mm de márgenes, ≈673px de caja de página — por debajo de los 768px
+     del breakpoint. Mismo mecanismo que vuelve visible la barra de pestañas de
+     móvil en Crítico 2 de la revisión.
+
+     Sin esto, `html/body` quedan con `overflow: hidden` y el `main` con una
+     altura fija (`100dvh`) y su propio scroll: un contenedor de altura fija
+     RECORTA en vez de paginar. Un contrato de varias páginas imprimiría UNA
+     sola página, con el resto del documento perdido en el corte.
+
+     Va acá, al lado del resto de las reglas de impresión, para que el orden en
+     el archivo dé la pista de qué le gana a qué: estas reglas vienen DESPUÉS
+     del bloque móvil, así que en la cascada (misma especificidad) ganan ellas
+     al imprimir. El `!important` es una segunda red por si algún día se
+     reordena el archivo. */
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    overscroll-behavior: auto !important;
+  }
+
+  main[data-slot='sidebar-inset'] {
+    height: auto !important;
+    overflow-y: visible !important;
+    overscroll-behavior-y: auto !important;
+    padding-bottom: 0 !important;
+  }
+}

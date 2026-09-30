@@ -5,3 +5,5 @@
 .atl/
 migracion/02-datos-*.sql
 migracion/.env
+node_modules/
+dist/
