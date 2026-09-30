@@ -14,6 +14,10 @@ describe('mensajeDeLogin', () => {
     expect(mensajeDeLogin(new TypeError('Failed to fetch'))).toBe('No hay conexión con el servidor. Probá de nuevo.')
   })
 
+  it('sin red en Safari', () => {
+    expect(mensajeDeLogin(new TypeError('Load failed'))).toBe('No hay conexión con el servidor. Probá de nuevo.')
+  })
+
   it('cualquier otro error muestra su texto', () => {
     expect(mensajeDeLogin(new Error('Algo raro'))).toBe('Algo raro')
   })
