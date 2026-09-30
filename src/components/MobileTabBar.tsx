@@ -1,5 +1,7 @@
 import { Link, useLocation } from 'react-router-dom'
+import { CircleUserRound } from 'lucide-react'
 import { Icon } from '@/components/ui/icon'
+import { useSidebar } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
 import { NAV, estaActivo } from '@/components/nav'
 
@@ -8,6 +10,7 @@ import { NAV, estaActivo } from '@/components/nav'
    inferior del `main`: se toca en un solo lugar. */
 export function MobileTabBar() {
   const { pathname } = useLocation()
+  const { setOpenMobile } = useSidebar()
   return (
     <nav
       aria-label="Navegación principal"
@@ -30,6 +33,17 @@ export function MobileTabBar() {
           </Link>
         )
       })}
+      {/* La barra lateral es la única que tiene la cuenta (quién sos, cerrar sesión) y en el
+          teléfono es un panel que alguien tiene que abrir. El producto lo abre desde su
+          PageHeader, que acá no existe; sin este botón nadie podría salir. */}
+      <button
+        type="button"
+        onClick={() => setOpenMobile(true)}
+        className="flex flex-1 flex-col items-center justify-center gap-1 text-[11px] font-medium leading-none text-muted-foreground"
+      >
+        <Icon icon={CircleUserRound} size="lg" />
+        <span>Cuenta</span>
+      </button>
     </nav>
   )
 }
