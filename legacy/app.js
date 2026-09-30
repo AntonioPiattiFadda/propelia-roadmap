@@ -146,6 +146,22 @@ try {
   UI.terminadasAbiertas = !!guardado.terminadasAbiertas;
   UI.sprints = Number(guardado.sprints) || 0;
 } catch (e) { /* preferencia local, si no se puede leer no importa */ }
+
+/* Embebido en la app React (29/9/2026, `src/pages/roadmap/TableroLegacy.tsx`): cada ruta de
+   allá abre una vista de acá —`/roadmap` el tablero, `/backlog` el backlog— y la pide por la
+   URL (`?embed=1&vista=…`). La URL le gana a lo guardado, porque la ruta ES la elección.
+   Embebido no se dibuja la navegación entre vistas (`html.embed` en app.css): a dónde ir lo
+   dice la barra de React, y dos lugares para lo mismo son dos lugares que hay que aprenderse.
+   Todo lo demás de la barra lateral —quién sos, exportar, cerrar sesión— se queda. */
+const EMBED = (() => {
+  try {
+    const q = new URLSearchParams(location.search);
+    const v = q.get('vista');
+    if (v && VISTAS.some(x => x.id === v)) UI.vista = v;
+    return q.get('embed') === '1';
+  } catch (e) { return false; }
+})();
+if (EMBED) document.documentElement.classList.add('embed');
 function guardarUI(){
   try {
     localStorage.setItem('tablero-ui', JSON.stringify({

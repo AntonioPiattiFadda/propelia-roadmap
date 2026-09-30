@@ -17,6 +17,13 @@ hasta que se mergee). Tres páginas en la barra lateral: Roadmap, CRM y Caja. Di
 - **Deploy**: Vercel. **Netlify publica `legacy/`** mientras el Roadmap nuevo no esté portado:
   Base directory = `legacy`, Publish directory = `legacy`, Build command vacío. Con el Base
   en la raíz, Netlify haría `npm install` de todo Vite/TS en cada deploy del tablero viejo.
+- **`/roadmap` y `/backlog` son el tablero vanilla en un iframe** (29/9/2026), mientras el port
+  no esté hecho. `servirLegacy()` en `vite.config.ts` sirve `legacy/` bajo `/legacy/` en dev y
+  lo copia a `dist/legacy/` en el build, sin `scripts/` ni su `package.json`: la carpeta no se
+  mueve y Netlify sigue igual. La URL es `/legacy/index.html?embed=1&vista=estado|backlog`
+  (`urlDelLegacy()`); con `embed=1` el vanilla le da prioridad a la vista de la URL y esconde
+  su navegación entre vistas (`html.embed`). La sesión se comparte sola: mismo origen, mismo
+  `localStorage`, siempre que el `.env` apunte al mismo proyecto que `legacy/supabase-sync.js`.
 - **`legacy/package.json`** (`{ "type": "commonjs" }`) existe porque la raíz es ESM y los `.js`
   del vanilla exportan con `module.exports` para sus tests de node: sin él, `module` es
   undefined y la guarda de export no corre.

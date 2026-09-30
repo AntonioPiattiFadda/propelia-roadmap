@@ -1650,3 +1650,12 @@ button.pgpill:hover{filter:brightness(.96)}
   .cjfijo{padding:9px 10px}
   .cjfijo .cjcarga{width:auto}
 }
+
+/* ---------- embebido en la app React ----------
+   `html.embed` lo pone app.js cuando la URL trae `embed=1`. Se va solo la navegación entre
+   vistas —la barra de React ya la dice—; el resto de la barra lateral se queda. Sin la barra
+   de pestañas de abajo, el `＋` flotante baja a donde ella estaba. */
+html.embed .side-nav,html.embed .tabbar{display:none!important}
+@media(max-width:760px){
+  html.embed .fab{bottom:calc(16px + env(safe-area-inset-bottom))}
+}

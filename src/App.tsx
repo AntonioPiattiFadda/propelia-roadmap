@@ -6,6 +6,7 @@ import { AuthPageShell } from '@/pages/auth/AuthPageShell'
 import { SignIn } from '@/pages/auth/SignIn'
 import { PublicRoutesAuthCheck, RequireAcceso, RequireAuth } from '@/pages/auth/guards'
 import { Roadmap } from '@/pages/roadmap/Roadmap'
+import { Backlog } from '@/pages/roadmap/Backlog'
 import { Crm } from '@/pages/crm/Crm'
 import { Caja } from '@/pages/caja/Caja'
 import { NotFound } from '@/pages/NotFound'
@@ -38,6 +39,7 @@ const App = () => (
           <Route element={<RequireAcceso />}>
             <Route element={<AppLayout />}>
               <Route path="/roadmap" element={<Roadmap />} />
+              <Route path="/backlog" element={<Backlog />} />
               <Route path="/crm" element={<Crm />} />
               <Route path="/caja" element={<Caja />} />
             </Route>
