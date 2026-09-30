@@ -194,6 +194,11 @@ export function CrmLeadList() {
     () => leadsDeCarteras(leadsQ.data ?? SIN_LEADS, carteras ?? SIN_IDS), [leadsQ.data, carteras])
   const visibles = useMemo(() => filterLeads(deCarteras, filtros, ctx), [deCarteras, filtros, ctx])
   const contadores = useMemo(() => computeLeadListCounters(deCarteras, filtros, ctx), [deCarteras, filtros, ctx])
+  // Lo marcado sobrevive a los filtros, la búsqueda y el cambio de cartera, pero reasignar mueve
+  // leads de cartera: solo cuenta y solo se manda lo que se está viendo. Si no, la barra dice «5 de
+  // 3» y se mueven leads que nadie estaba mirando. Se cruza al usarlo y no se borra la marca: volver
+  // a sacar el filtro devuelve la selección como estaba.
+  const marcadosVisibles = useMemo(() => visibles.filter(l => marcados.has(l.id)).map(l => l.id), [visibles, marcados])
   const estado = estadoDeLista({
     cargando: leadsQ.isLoading || carteras === null,
     error: leadsQ.error,
@@ -338,11 +343,11 @@ export function CrmLeadList() {
 
       {seleccionando && (
         <BulkActionBar
-          selectedCount={marcados.size}
+          selectedCount={marcadosVisibles.length}
           totalCount={visibles.length}
           confirmLabel="Reasignar leads"
           onCancel={salirDeSeleccion}
-          onConfirm={() => setAReasignar([...marcados])}
+          onConfirm={() => setAReasignar(marcadosVisibles)}
         />
       )}
 
