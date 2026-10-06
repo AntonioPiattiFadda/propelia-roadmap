@@ -61,6 +61,15 @@ Deno.test('crearMiembro: valida email, contraseña, nombre y rol', async () => {
   }
 })
 
+Deno.test('crearMiembro: un email con ñ o tildes se rechaza antes de crear nada', async () => {
+  for (const email of ['jesus.muñoz@propelia.es', 'andrés@propelia.es']) {
+    const { db, llamadas } = fakeDb()
+    const r = await crearMiembro('c', { ...VALIDO, email }, db)
+    assertEquals(r, { ok: false, status: 400, error: 'El email no puede llevar tildes ni ñ' })
+    assertEquals(llamadas.cuentas.length, 0)
+  }
+})
+
 Deno.test('crearMiembro: crea la cuenta y la fila, con caja en false', async () => {
   const { db, llamadas } = fakeDb({ coloresUsados: async () => [PALETA[0]] })
   const r = await crearMiembro('c', VALIDO, db)

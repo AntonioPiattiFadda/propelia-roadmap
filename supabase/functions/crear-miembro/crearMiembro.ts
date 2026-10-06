@@ -48,6 +48,9 @@ export async function crearMiembro(callerId: string, input: CrearMiembroInput, d
 
   const email = input.email.trim().toLowerCase()
   const nombre = input.nombre.trim()
+  // Antes que la forma: GoTrue rechaza lo que no es ASCII («invalid format», en inglés), y un
+  // apellido con ñ o tilde es justo el error que se comete al tipear el mail de alguien.
+  if (/[^\x00-\x7F]/.test(email)) return falla(400, 'El email no puede llevar tildes ni ñ')
   if (!EMAIL.test(email)) return falla(400, 'El email no es válido')
   if (input.password.length < 6) return falla(400, 'La contraseña tiene que tener al menos 6 caracteres')
   if (!nombre) return falla(400, 'Falta el nombre')

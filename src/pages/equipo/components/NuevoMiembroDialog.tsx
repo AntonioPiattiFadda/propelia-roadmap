@@ -35,8 +35,11 @@ export function NuevoMiembroDialog({ open, onOpenChange }: Props) {
     onError: (e: Error) => { toast.error(e.message || 'No se pudo crear el miembro') },
   })
 
+  // La edge function lo rechaza igual: acá es para decirlo antes de mandar.
+  const conTildes = /[^\x00-\x7F]/.test(form.email)
   const noCoinciden = form.password_confirm.length > 0 && form.password !== form.password_confirm
   const valido =
+    !conTildes &&
     EMAIL.test(form.email.trim()) &&
     form.password.length >= 6 &&
     form.password === form.password_confirm &&
@@ -62,6 +65,7 @@ export function NuevoMiembroDialog({ open, onOpenChange }: Props) {
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="nuevo-miembro-email">Email</Label>
               <Input id="nuevo-miembro-email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+              {conTildes && <p className="text-xs text-destructive">El email no puede llevar tildes ni ñ</p>}
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
