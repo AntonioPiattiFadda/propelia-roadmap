@@ -8,7 +8,7 @@ import { Icon } from '@/components/ui/icon'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { localTodayIso } from '@/lib/calendarDate'
 import { cn } from '@/lib/utils'
-import { contactoDelCliente, nombreDelLead } from '../lib/clientData'
+import { nombreDelLead } from '../lib/clientData'
 import { computeLeadListCounters } from '../lib/computeLeadListCounters'
 import { etapaDelLead } from '../lib/effectiveStage'
 import { estadoDeLista } from '../lib/estadoDeLista'
@@ -17,7 +17,7 @@ import {
   deleteLeadFilterParams, escribirFiltros, escribirLeadAbierto, filtrosDesdeUrl, formatFilterList, LEAD_FILTER_PARAMS_WITH_QUERY, LEAD_PARAM,
 } from '../lib/leadFilterParams'
 import { filterLeads, leadsDeCarteras, type LeadFilterContext, type LeadFilterState } from '../lib/leadFilters'
-import { idsConTareasVencidas, tareasVencidasPorLead } from '../lib/tareas'
+import { idsConTareasVencidas } from '../lib/tareas'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
 import { useReasignar } from '../hooks/useLeadMutaciones'
@@ -42,7 +42,6 @@ type RenglonProps = {
   responsable: Usuario | undefined
   /** El anillo de «es mío» solo dice algo con más de una cartera en pantalla. */
   esMio: boolean | null
-  vencidas: CrmTask[]
   puedeEscribir: boolean
   now: number
   onAbrir: (leadId: string) => void
@@ -53,7 +52,7 @@ type RenglonProps = {
 }
 
 // Los portales (popovers, menús) burbujean por el árbol de React aunque su DOM viva afuera: sin
-// este corte, un clic adentro del menú de posponer abriría el lead. Y la casilla de selección
+// este corte, un clic adentro del popover de gestión abriría el lead. Y la casilla de selección
 // vive adentro de un `data-row-actions`: su clic lo atiende ella, no el renglón (si no, marcaría
 // y desmarcaría en el mismo clic).
 function clicDelRenglon(e: React.MouseEvent<HTMLElement>): boolean {
@@ -61,8 +60,7 @@ function clicDelRenglon(e: React.MouseEvent<HTMLElement>): boolean {
   return e.currentTarget.contains(target) && !target.closest('[data-row-actions]')
 }
 
-function LeadRow({ lead, etapa, responsable, esMio, vencidas, puedeEscribir, now, onAbrir, acciones, seleccion }: RenglonProps) {
-  const contacto = contactoDelCliente(lead.client)
+function LeadRow({ lead, etapa, responsable, esMio, puedeEscribir, now, onAbrir, acciones, seleccion }: RenglonProps) {
   return (
     <tr
       onClick={e => {
@@ -87,20 +85,15 @@ function LeadRow({ lead, etapa, responsable, esMio, vencidas, puedeEscribir, now
           <AvatarUsuario usuario={responsable} anillo={esMio === true} />
           <div className="min-w-0">
             <div className="truncate text-[14px] font-semibold text-foreground">{nombreDelLead(lead.client)}</div>
-            {contacto && contacto !== nombreDelLead(lead.client) && (
-              <div className="truncate text-[12px] text-(--fg-muted)">{contacto}</div>
-            )}
           </div>
         </div>
       </td>
       <td className="px-[18px] py-[11px] text-[12.5px] text-(--fg-2)">
         <div className="truncate">{lead.client?.phone ?? ''}</div>
-        <div className="truncate text-(--fg-muted)">{lead.client?.email ?? ''}</div>
       </td>
       <td className="px-[18px] py-[11px]"><StageBadge etapa={etapa} /></td>
       <td className="px-[18px] py-[11px]">
-        <GestionCell lead={lead} toleranceHours={etapa?.management_tolerance_hours} overdueTasks={vencidas}
-          puedeEscribir={puedeEscribir} now={now} />
+        <GestionCell lead={lead} toleranceHours={etapa?.management_tolerance_hours} puedeEscribir={puedeEscribir} now={now} />
       </td>
       <td className="whitespace-nowrap px-[18px] py-[11px] text-[12.5px] tabular-nums text-(--fg-muted)">
         {fmtShortDate(lead.last_important_event_at)}
@@ -111,7 +104,7 @@ function LeadRow({ lead, etapa, responsable, esMio, vencidas, puedeEscribir, now
 }
 
 /** El mismo renglón en el teléfono: empresa arriba, etapa y gestión abajo. */
-function LeadCard({ lead, etapa, responsable, esMio, vencidas, puedeEscribir, now, onAbrir, acciones, seleccion }: RenglonProps) {
+function LeadCard({ lead, etapa, responsable, esMio, puedeEscribir, now, onAbrir, acciones, seleccion }: RenglonProps) {
   return (
     <div
       role="button"
@@ -134,22 +127,19 @@ function LeadCard({ lead, etapa, responsable, esMio, vencidas, puedeEscribir, no
         <AvatarUsuario usuario={responsable} anillo={esMio === true} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-semibold text-foreground">{nombreDelLead(lead.client)}</div>
-          <div className="truncate text-[12.5px] text-(--fg-muted)">
-            {[contactoDelCliente(lead.client), lead.client?.phone].filter(Boolean).join(' · ')}
-          </div>
+          <div className="truncate text-[12.5px] text-(--fg-muted)">{lead.client?.phone ?? ''}</div>
         </div>
         <span data-row-actions>{acciones}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <StageBadge etapa={etapa} />
-        <GestionCell lead={lead} toleranceHours={etapa?.management_tolerance_hours} overdueTasks={vencidas}
-          puedeEscribir={puedeEscribir} now={now} />
+        <GestionCell lead={lead} toleranceHours={etapa?.management_tolerance_hours} puedeEscribir={puedeEscribir} now={now} />
       </div>
     </div>
   )
 }
 
-const HEADERS = ['', 'Alta', 'Lead', 'Contacto', 'Etapa', 'Gestión', 'Última actividad', '']
+const HEADERS = ['', 'Alta', 'Lead', 'Teléfono', 'Etapa', 'Gestión', 'Última actividad', '']
 
 export function CrmLeadList() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -179,7 +169,6 @@ export function CrmLeadList() {
   const filtros = useMemo(() => filtrosDesdeUrl(searchParams), [searchParams])
   const hoy = localTodayIso()
   const tareas = tareasQ.data ?? SIN_TAREAS
-  const vencidasPorLead = useMemo(() => tareasVencidasPorLead(tareas, hoy), [tareas, hoy])
   const overdueLeadIds = useMemo(() => idsConTareasVencidas(tareas, hoy), [tareas, hoy])
   // Un solo «ahora» por pintada (ver LeadFilterContext). `dataUpdatedAt` va en las dependencias a
   // propósito: cada vez que llegan datos nuevos (realtime, mutación) se toma un «ahora» nuevo, así
@@ -221,7 +210,6 @@ export function CrmLeadList() {
     etapa: etapaDelLead(lead, cat.etapasPorId),
     responsable: usuariosPorId.get(lead.assigned_to),
     esMio: variasCarteras ? lead.assigned_to === agentes.myId : null,
-    vencidas: vencidasPorLead.get(lead.id) ?? SIN_TAREAS,
     puedeEscribir: agentes.puedeEscribir(lead.assigned_to),
     now: ctx.now,
     onAbrir: abrirLead,

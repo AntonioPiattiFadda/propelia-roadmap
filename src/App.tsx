@@ -41,11 +41,15 @@ const App = () => (
             <Route element={<AppLayout />}>
               <Route element={<RequireRol />}>
                 <Route path="/roadmap" element={<Roadmap />} />
-                <Route path="/backlog" element={<Backlog />} />
+                <Route path="/roadmap/backlog" element={<Backlog />} />
                 <Route path="/crm" element={<Crm />} />
                 <Route path="/equipo" element={<Equipo />} />
                 <Route path="/caja" element={<Caja />} />
               </Route>
+              {/* La ruta vieja, de cuando el backlog era una página hermana: que no se rompan los
+                  favoritos. Va AFUERA de `RequireRol`: `/backlog` no está en `NAV` y el guard la
+                  rebotaría al inicio antes de redirigir. El guard la mira recién en el destino. */}
+              <Route path="/backlog" element={<Navigate to="/roadmap/backlog" replace />} />
             </Route>
           </Route>
         </Route>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mensajeDeError, SIN_PERMISO } from './errores'
+import { FALTA_MIGRACION, mensajeDeError, SIN_PERMISO } from './errores'
 
 describe('mensajeDeError', () => {
   it('las claves de la RPC', () => {
@@ -22,6 +22,12 @@ describe('mensajeDeError', () => {
       .toBe('Ya hay otro cliente con ese teléfono.')
     expect(mensajeDeError({ code: '23505', message: 'duplicate key value violates unique constraint "crm_clients_email_active_uidx"' }))
       .toBe('Ya hay otro cliente con ese email.')
+  })
+  it('una columna que la base todavía no tiene', () => {
+    expect(mensajeDeError({ code: 'PGRST204', message: "Could not find the 'website' column of 'crm_clients' in the schema cache" }))
+      .toBe(FALTA_MIGRACION)
+    expect(mensajeDeError({ code: '42703', message: 'column "city" of relation "crm_clients" does not exist' }))
+      .toBe(FALTA_MIGRACION)
   })
   it('sin red', () => expect(mensajeDeError(new TypeError('Failed to fetch'))).toBe('No hay conexión. Probá de nuevo.'))
   it('lo desconocido no se muestra crudo', () => {

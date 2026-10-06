@@ -34,6 +34,33 @@ export function contactoDelCliente(client: ClienteNombrable | null | undefined):
   return [client?.first_name, client?.last_name].filter(Boolean).join(' ').trim()
 }
 
+/** Las iniciales del círculo del perfil: una por cada una de las dos primeras palabras, o las dos
+ *  primeras letras si es una sola («Remax» → «RE»: una letra sola en un círculo dice poco). */
+export function inicialesDe(nombre: string): string {
+  const palabras = nombre.trim().split(/\s+/).filter(Boolean)
+  if (palabras.length === 0) return ''
+  const letras = palabras.length === 1 ? [...palabras[0]].slice(0, 2) : palabras.slice(0, 2).map(p => [...p][0])
+  return letras.join('').toLocaleUpperCase('es')
+}
+
+type ClienteConContactos = Pick<CrmClient, 'first_name' | 'last_name' | 'phone'
+  | 'alternative_phone_1' | 'alternative_phone_1_note' | 'alternative_phone_2' | 'alternative_phone_2_note'>
+
+/**
+ * Con quién se puede hablar en la inmobiliaria: la persona principal y las de los dos teléfonos
+ * alternativos, cuya nota dice quién es. No hay tabla de contactos; son esos tres casilleros, y
+ * uno vacío no es nadie. Sin nombre, el principal con teléfono se llama «Contacto principal» y el
+ * alternativo por su número: es lo único que lo distingue.
+ */
+export function contactosDelCliente(client: ClienteConContactos | null | undefined): string[] {
+  if (!client) return []
+  const persona = [client.first_name, client.last_name].filter(Boolean).join(' ').trim()
+  const principal = persona || (client.phone?.trim() ? 'Contacto principal' : '')
+  const otros = ([['alternative_phone_1', 'alternative_phone_1_note'], ['alternative_phone_2', 'alternative_phone_2_note']] as const)
+    .map(([tel, nota]) => client[nota]?.trim() || client[tel]?.trim() || '')
+  return [...new Set([principal, ...otros].filter(Boolean))]
+}
+
 /**
  * Cómo se llama un lead en la lista, el dialog y los carteles. La empresa manda; después la
  * persona; después cualquier dato que lo identifique. Un cliente puede no tener teléfono ni

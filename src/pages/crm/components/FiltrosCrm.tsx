@@ -6,29 +6,8 @@ import {
 import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
 import type { LeadListCounters } from '../lib/computeLeadListCounters'
-import type { GestionKey } from '../lib/gestionStatus'
-import { GESTION_KEYS, soloGestion } from '../lib/leadFilterParams'
 import { PRIORITY_NONE, type LeadFilterState } from '../lib/leadFilters'
 import type { CrmPriority, EtapaConPrioridad } from '../types'
-
-type Pestaña = 'todos' | GestionKey
-
-const PESTAÑAS: { id: Pestaña; label: string }[] = [
-  { id: 'todos', label: 'Todos' },
-  { id: 'pendiente', label: 'Pendientes' },
-  { id: 'gestionado', label: 'Al día' },
-  { id: 'pospuesto', label: 'Pospuestos' },
-]
-
-// Qué pestaña corresponde a lo excluido en la URL. Una combinación que no es ninguna (alguien
-// editó la URL a mano) deja las cuatro apagadas en vez de mentir con una.
-function pestañaDe(excluidos: Set<GestionKey>): Pestaña | null {
-  if (excluidos.size === 0) return 'todos'
-  return GESTION_KEYS.find(k => {
-    const solo = soloGestion(k)
-    return solo.size === excluidos.size && [...solo].every(x => excluidos.has(x))
-  }) ?? null
-}
 
 const chip = (activo: boolean) => cn(
   'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[12.5px] transition-colors',
@@ -38,7 +17,7 @@ const chip = (activo: boolean) => cn(
 )
 
 /**
- * Buscador, pestañas de gestión y chips. Todo vive en la URL (lo escribe `escribirFiltros`): la
+ * Buscador y chips. Todo vive en la URL (lo escribe `escribirFiltros`): la
  * lista, un enlace de Equipo y el botón «atrás» dicen lo mismo. Cada número es «cuántos quedarían
  * si prendo esto», de `computeLeadListCounters`.
  */
@@ -50,13 +29,9 @@ export function FiltrosCrm({ filtros, contadores, etapas, prioridades, onCambiar
   onCambiar: (patch: Partial<LeadFilterState>) => void
   onLimpiar: () => void
 }) {
-  const activa = pestañaDe(filtros.gestionExcluded)
-  const cuenta: Record<Pestaña, number> = {
-    todos: contadores.gestionTotal,
-    pendiente: contadores.pendienteCount,
-    gestionado: contadores.gestionadoCount,
-    pospuesto: contadores.pospuestoCount,
-  }
+  /* El filtro de gestión no tiene más control acá (las pestañas Todos / Pendientes / Al día /
+     Pospuestos se sacaron por pedido), pero sigue viviendo en la URL: un enlace de Equipo lo trae
+     puesto. Por eso cuenta para «Limpiar filtros», que es la única forma de sacarlo. */
   const hayFiltros = filtros.q.trim() !== '' || filtros.stageFilter.size > 0 || filtros.gestionExcluded.size > 0
     || filtros.overdueOnly || filtros.includeDiscarded || filtros.excludedPriorities.size > 0
 
@@ -68,9 +43,9 @@ export function FiltrosCrm({ filtros, contadores, etapas, prioridades, onCambiar
   }
 
   return (
-    <div className="flex flex-col gap-2 px-3 pb-2 max-md:px-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="relative block w-72 max-md:w-full">
+    // Un solo renglón: el buscador y a su derecha los filtros. Si no entran, bajan solos.
+    <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2 max-md:px-2">
+        <span className="relative mr-0.5 block w-72 max-md:w-full">
           <Icon icon={Search} size="sm" className="pointer-events-none absolute left-[10px] top-1/2 -translate-y-1/2 text-(--fg-muted)" />
           <input
             type="text"
@@ -83,26 +58,6 @@ export function FiltrosCrm({ filtros, contadores, etapas, prioridades, onCambiar
           />
         </span>
 
-        <div role="tablist" aria-label="Estado de gestión" className="inline-flex rounded-lg bg-(--surface-2) p-0.5 [border:1px_solid_var(--line)]">
-          {PESTAÑAS.map(p => (
-            <button
-              key={p.id}
-              type="button"
-              role="tab"
-              aria-selected={activa === p.id}
-              onClick={() => onCambiar({ gestionExcluded: p.id === 'todos' ? new Set() : soloGestion(p.id) })}
-              className={cn(
-                'h-8 cursor-pointer rounded-md px-3 text-[12.5px] transition-colors',
-                activa === p.id ? 'bg-card font-semibold text-foreground shadow-xs' : 'text-(--fg-2) hover:text-foreground',
-              )}
-            >
-              {p.label} <span className="tabular-nums text-(--fg-muted)">{cuenta[p.id]}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1.5">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className={chip(filtros.stageFilter.size > 0)}>
@@ -161,7 +116,13 @@ export function FiltrosCrm({ filtros, contadores, etapas, prioridades, onCambiar
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <button type="button" aria-pressed={filtros.overdueOnly} className={chip(filtros.overdueOnly)}
+        {/* Con alguna tarea vencida el chip se pone rojo: es el aviso que antes daba la agenda roja de
+            cada renglón, que se sacó de la lista. */}
+        <button type="button" aria-pressed={filtros.overdueOnly}
+          className={contadores.overdueLeadCount > 0
+            ? cn(chip(false), 'text-(--danger-fg) bg-(--danger-soft) [border:1px_solid_var(--danger)] hover:bg-(--danger-soft)',
+              filtros.overdueOnly && 'font-semibold [border-width:1.5px]')
+            : chip(filtros.overdueOnly)}
           onClick={() => onCambiar({ overdueOnly: !filtros.overdueOnly })}>
           Tareas vencidas <span className="tabular-nums">{contadores.overdueLeadCount}</span>
         </button>
@@ -177,7 +138,6 @@ export function FiltrosCrm({ filtros, contadores, etapas, prioridades, onCambiar
             Limpiar filtros
           </Button>
         )}
-      </div>
     </div>
   )
 }

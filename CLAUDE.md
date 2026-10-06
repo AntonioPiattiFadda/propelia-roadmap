@@ -18,11 +18,17 @@ hasta que se mergee). Tres páginas en la barra lateral: Roadmap, CRM y Caja. Di
   barra lateral, la de pestañas y el guard `RequireRol` (`pages/auth/guards.tsx`), que devuelve a
   la primera página permitida. **Es solo el front**: la RLS de las `roadmap_*`, el bucket y el
   iframe `legacy/` siguen abiertos a cualquier `es_usuario()` — un SDR los lee por la API.
+  Los `hijos` llevan sus propios `roles` (`navDe` los recorta) y `puedeEntrar` valida contra la
+  entrada **más específica** que calce, no contra el padre. El redirect de `/backlog` va afuera
+  de `RequireRol`: adentro, el guard lo rebotaría al inicio antes de redirigir.
 - **Variables**: `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (ver `.env.example`).
 - **Deploy**: Vercel. **Netlify publica `legacy/`** mientras el Roadmap nuevo no esté portado:
   Base directory = `legacy`, Publish directory = `legacy`, Build command vacío. Con el Base
   en la raíz, Netlify haría `npm install` de todo Vite/TS en cada deploy del tablero viejo.
-- **`/roadmap` y `/backlog` son el tablero vanilla en un iframe** (29/9/2026), mientras el port
+- **El backlog es un subgrupo del Roadmap** (5/10/2026): vive en `/roadmap/backlog` y en la
+  barra lateral cuelga de «Roadmap» (`hijos` en `src/components/nav.ts`). `/backlog` redirige,
+  para no romper favoritos. La barra de pestañas del teléfono solo muestra el primer nivel.
+- **`/roadmap` y `/roadmap/backlog` son el tablero vanilla en un iframe** (29/9/2026), mientras el port
   no esté hecho. `servirLegacy()` en `vite.config.ts` sirve `legacy/` bajo `/legacy/` en dev y
   lo copia a `dist/legacy/` en el build, sin `scripts/` ni su `package.json`: la carpeta no se
   mueve y Netlify sigue igual. La URL es `/legacy/index.html?embed=1&vista=estado|backlog`
@@ -64,6 +70,21 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   `gestion_*` ni los historiales.
 - **El catálogo se borra con soft delete**: un lead en una etapa borrada la sigue leyendo por
   nombre (`catalogoDeEtapas` trae también las borradas); los menús ofrecen solo las vivas.
+- **Lo que trae la importación desde Excel vive en `crm_clients`** (6/10/2026): `import_batch`
+  (el lote, ej. `BCN-S01`), `batch_activated_on` («Activada para el SDR»), `selection_reason`
+  (`inmovilla`/`new`/`small`: con qué ángulo abre la llamada el SDR), el origen de cada teléfono
+  (`phone_source`, `alternative_phone_{1,2}_source`: `agency_web`/`legal_notice`/`google_maps`/
+  `company_registry`), `google_maps_phone` e `idealista_phone`. Los valores de los `check` están
+  repetidos en `MOTIVOS_DE_SELECCION` y `ORIGENES_DE_TELEFONO` (`lib/inmobiliaria.ts`): si se
+  agrega uno, va en los dos lados. Sin `unique` a propósito. **PENDIENTE de migración** como el
+  resto de los datos de la inmobiliaria: el front lee lo que haya y al guardar avisa
+  `FALTA_MIGRACION`. Se ven en la pestaña de la inmobiliaria; el origen, al lado de cada teléfono.
+  - **`idealista_phone` es último recurso**: es un redirector de Idealista y a la agencia le entra
+    como un cliente interesado en un piso, no como una llamada comercial. Va último entre los
+    teléfonos, con el aviso escrito (no en un tooltip), y **nunca es el número por defecto**. Hoy
+    ninguna pantalla elige un «teléfono principal» con respaldo (la lista muestra `phone` y nada
+    más); si alguna vez lo hace, va en una función pura de `lib/` con tests y el de Idealista entra
+    solo si `phone`, los alternativos y `google_maps_phone` están vacíos.
 - **Qué se copió del producto** (podado de lo inmobiliario):
   De `propelia-frontend/src/pages/leads/lib/`: `gestionStatus`, `calendarDeadline`, `discardStage`,
   `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De

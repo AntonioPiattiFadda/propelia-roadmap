@@ -20,12 +20,12 @@ import type { CrmLeadRow, CrmTask, EtapaConPrioridad } from '../types'
 export type OverdueTask = Pick<CrmTask, 'id' | 'title' | 'due_date'>
 
 /** La etapa con el color de su prioridad: la prioridad cuelga de la etapa (`crm_leads` no tiene propia). */
-export function StageBadge({ etapa }: { etapa: EtapaConPrioridad | null }) {
+export function StageBadge({ etapa, className }: { etapa: EtapaConPrioridad | null; className?: string }) {
   if (!etapa) return <span className="text-xs text-(--fg-faint)">Sin etapa</span>
   return (
     <Badge
       variant="secondary"
-      className="gap-1.5 text-[11px] font-semibold py-[3px] px-[9px] bg-(--surface-3) text-foreground [border:0.5px_solid_var(--line)]"
+      className={cn('gap-1.5 text-[11px] font-semibold py-[3px] px-[9px] bg-(--surface-3) text-foreground [border:0.5px_solid_var(--line)]', className)}
       title={etapa.priority ? `Prioridad: ${etapa.priority.name}` : 'Sin prioridad'}
     >
       <span aria-hidden className="size-[7px] rounded-full" style={{ background: etapa.priority?.color ?? 'var(--line-strong)' }} />
@@ -188,10 +188,11 @@ export function AgendaIcon({ overdueTasks }: { overdueTasks: OverdueTask[] }) {
   )
 }
 
-export function GestionCell({ lead, toleranceHours, overdueTasks, puedeEscribir, now }: {
+// En la lista va el badge solo: el reloj de posponer y la agenda se sacaron por pedido (6/10/2026).
+// Que hay tareas vencidas lo dice el filtro «Tareas vencidas», que se pone rojo.
+export function GestionCell({ lead, toleranceHours, puedeEscribir, now }: {
   lead: CrmLeadRow
   toleranceHours: number | null | undefined
-  overdueTasks: OverdueTask[]
   /** Sin write sobre la cartera el badge se ve pero no se toca: la base lo rechazaría igual. */
   puedeEscribir: boolean
   now: number
@@ -201,14 +202,6 @@ export function GestionCell({ lead, toleranceHours, overdueTasks, puedeEscribir,
   return (
     <div className="flex items-center gap-1" data-row-actions>
       <GestionBadge status={status} onConfirm={() => mark.mutate({ action: 'MANUAL' })} pending={mark.isPending || !puedeEscribir} />
-      {puedeEscribir && (
-        <PostponePopover
-          onPostpone={(effectiveAt, note) => mark.mutate({ action: 'POSTPONED', effective_at: effectiveAt, note: note ?? null })}
-          pending={mark.isPending}
-          postponed={status.postponed}
-        />
-      )}
-      <AgendaIcon overdueTasks={overdueTasks} />
     </div>
   )
 }
