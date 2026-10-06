@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
+import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
 import { localTodayIso } from '@/lib/calendarDate'
 import { useCarteras } from '@/pages/crm/hooks/useCarteras'
 import { useCrmCatalogos } from '@/pages/crm/hooks/useCrmCatalogos'
@@ -7,15 +9,18 @@ import { useCrmLeads, useReunionesDelMes, useTareasPendientes } from '@/pages/cr
 import { useCrmRealtime } from '@/pages/crm/hooks/useCrmRealtime'
 import { TablaEquipo } from './components/TablaEquipo'
 import { VisibilityMatrix } from './components/VisibilityMatrix'
+import { NuevoMiembroDialog } from './components/NuevoMiembroDialog'
 import { estadisticasPorCartera } from './lib/estadisticasPorCartera'
 
 type Pestaña = 'tabla' | 'visibilidad'
 
 /* Equipo: los números por cartera y quién ve a quién. Comparte la cache con el CRM (mismas keys):
-   entrar acá después del CRM no pide nada de nuevo. Sin alta de miembros: `users` sigue por MCP. */
+   entrar acá después del CRM no pide nada de nuevo. El alta de miembros va por la edge function
+   `crear-miembro` (solo SUPERADMIN); bajas y cambios de `users` siguen por MCP. */
 export function Equipo() {
   useCrmRealtime()
   const [pestaña, setPestaña] = useState<Pestaña>('tabla')
+  const [nuevoAbierto, setNuevoAbierto] = useState(false)
   const { visibles, esSuperadmin, isLoading: cargandoCarteras } = useCarteras()
   const { etapasPorId, isLoading: cargandoCatalogos } = useCrmCatalogos()
   const leadsQ = useCrmLeads()
@@ -51,6 +56,13 @@ export function Equipo() {
             ))}
           </div>
         )}
+        {/* Solo SUPERADMIN: la edge function lo exige igual. */}
+        {esSuperadmin && (
+          <Button size="sm" className="ml-auto" onClick={() => setNuevoAbierto(true)}>
+            <Plus className="size-4" />
+            Nuevo miembro
+          </Button>
+        )}
       </header>
       {pestaña === 'visibilidad' && esSuperadmin ? (
         <VisibilityMatrix />
@@ -64,6 +76,7 @@ export function Equipo() {
       ) : (
         <TablaEquipo filas={filas} />
       )}
+      <NuevoMiembroDialog open={nuevoAbierto} onOpenChange={setNuevoAbierto} />
     </div>
   )
 }

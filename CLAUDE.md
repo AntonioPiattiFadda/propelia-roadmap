@@ -113,8 +113,12 @@ conversión de filas a personas es `personasDesdeUsuarios()`, en `equipo.js`, co
 - **Lo que se guarda en los datos es el uuid de la cuenta**: `pend`, `resp`, `chat[].autor`,
   los avisos y `cuenta`/`carga` de la caja. Hasta la mudanza eran `'Loro'`, `'Toni'`,
   `'Luis'`; los reescribió `migracion/04-reasignar-usuarios.sql`.
-- **El front no escribe `users`**: no hay policies de escritura. Altas, cambios y roles van por
-  el MCP o el service role.
+- **El front no escribe `users`**: no hay policies de escritura. **El alta** (6/10/2026) es el
+  botón «Nuevo miembro» de `/equipo`, que llama a la edge function `crear-miembro`
+  (`supabase/functions/crear-miembro/`, tests con `deno test` ahí adentro): un SUPERADMIN activo
+  crea la cuenta de auth y su fila. Iniciales y color salen solos y **`caja` nace en false**, que
+  entrar al reparto mueve los saldos de todos. No hay trigger sobre `auth.users`: si la fila falla,
+  la función borra la cuenta. Cambios, bajas, `caja` y roles siguen por el MCP o el service role.
 - **La baja es `activo = false`, nunca un `delete`.** Un inactivo no entra (`es_usuario()` lo
   corta y la RLS le devuelve la lista vacía), pero se sigue pintando: una tarea vieja dice
   quién la hizo y lo que pagó sigue en el saldo de la caja. Lo que no se hace es **ofrecerlo
