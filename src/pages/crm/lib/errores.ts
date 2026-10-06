@@ -3,6 +3,11 @@
 
 export const SIN_PERMISO = 'No tenés permiso sobre esa cartera.'
 
+/* Una columna que el front ya conoce y la base todavía no (PGRST204 la contesta PostgREST desde su
+   caché de esquema; 42703 es Postgres). Pasa con los datos de la inmobiliaria mientras no se corra
+   su `alter table` de supabase/schema.sql: no es un error de quien escribe. */
+export const FALTA_MIGRACION = 'Falta correr la migración de la base para guardar este dato.'
+
 // Las claves de crm_create_lead_with_client (supabase/schema.sql) y la de `unaFila()` del servicio.
 const CLAVES: Record<string, string> = {
   crm_sin_acceso: 'Tu cuenta no tiene acceso al CRM.',
@@ -20,6 +25,7 @@ export function mensajeDeError(error: unknown, porDefecto = 'Algo salió mal. Pr
   const message = typeof e.message === 'string' ? e.message : ''
   const code = typeof e.code === 'string' ? e.code : ''
   for (const [clave, texto] of Object.entries(CLAVES)) if (message.includes(clave)) return texto
+  if (code === 'PGRST204' || code === '42703') return FALTA_MIGRACION
   if (code === '42501' || /row-level security/i.test(message)) return SIN_PERMISO
   if (code === '23505') {
     if (message.includes('crm_clients_phone')) return 'Ya hay otro cliente con ese teléfono.'

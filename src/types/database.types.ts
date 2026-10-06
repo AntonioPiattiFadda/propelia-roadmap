@@ -104,55 +104,127 @@ export type Database = {
       }
       crm_clients: {
         Row: {
+          agents_count: number | null
           alternative_phone_1: string | null
           alternative_phone_1_note: string | null
+          alternative_phone_1_notes: string | null
+          alternative_phone_1_role: string | null
+          alternative_phone_1_source: string | null
           alternative_phone_2: string | null
           alternative_phone_2_note: string | null
+          alternative_phone_2_notes: string | null
+          alternative_phone_2_role: string | null
+          alternative_phone_2_source: string | null
+          batch_activated_on: string | null
           company_name: string | null
+          contact_notes: string | null
+          contact_role: string | null
+          city: string | null
           created_at: string
           created_by: string | null
+          current_crm: string | null
           deleted_at: string | null
           email: string | null
           first_name: string | null
+          google_maps_phone: string | null
           id: string
+          idealista_phone: string | null
+          idealista_url: string | null
+          idealista_listings: number | null
+          idealista_years: number | null
+          import_batch: string | null
           last_name: string | null
+          neighborhood: string | null
           notes: string | null
+          office_address: string | null
           phone: string | null
+          phone_source: string | null
+          sdr_advice: string | null
+          selection_reason: string | null
           updated_at: string
+          website: string | null
         }
         Insert: {
+          agents_count?: number | null
           alternative_phone_1?: string | null
           alternative_phone_1_note?: string | null
+          alternative_phone_1_notes?: string | null
+          alternative_phone_1_role?: string | null
+          alternative_phone_1_source?: string | null
           alternative_phone_2?: string | null
           alternative_phone_2_note?: string | null
+          alternative_phone_2_notes?: string | null
+          alternative_phone_2_role?: string | null
+          alternative_phone_2_source?: string | null
+          batch_activated_on?: string | null
           company_name?: string | null
+          contact_notes?: string | null
+          contact_role?: string | null
+          city?: string | null
           created_at?: string
           created_by?: string | null
+          current_crm?: string | null
           deleted_at?: string | null
           email?: string | null
           first_name?: string | null
+          google_maps_phone?: string | null
           id?: string
+          idealista_phone?: string | null
+          idealista_url?: string | null
+          idealista_listings?: number | null
+          idealista_years?: number | null
+          import_batch?: string | null
           last_name?: string | null
+          neighborhood?: string | null
           notes?: string | null
+          office_address?: string | null
           phone?: string | null
+          phone_source?: string | null
+          sdr_advice?: string | null
+          selection_reason?: string | null
           updated_at?: string
+          website?: string | null
         }
         Update: {
+          agents_count?: number | null
           alternative_phone_1?: string | null
           alternative_phone_1_note?: string | null
+          alternative_phone_1_notes?: string | null
+          alternative_phone_1_role?: string | null
+          alternative_phone_1_source?: string | null
           alternative_phone_2?: string | null
           alternative_phone_2_note?: string | null
+          alternative_phone_2_notes?: string | null
+          alternative_phone_2_role?: string | null
+          alternative_phone_2_source?: string | null
+          batch_activated_on?: string | null
           company_name?: string | null
+          contact_notes?: string | null
+          contact_role?: string | null
+          city?: string | null
           created_at?: string
           created_by?: string | null
+          current_crm?: string | null
           deleted_at?: string | null
           email?: string | null
           first_name?: string | null
+          google_maps_phone?: string | null
           id?: string
+          idealista_phone?: string | null
+          idealista_url?: string | null
+          idealista_listings?: number | null
+          idealista_years?: number | null
+          import_batch?: string | null
           last_name?: string | null
+          neighborhood?: string | null
           notes?: string | null
+          office_address?: string | null
           phone?: string | null
+          phone_source?: string | null
+          sdr_advice?: string | null
+          selection_reason?: string | null
           updated_at?: string
+          website?: string | null
         }
         Relationships: [
           {

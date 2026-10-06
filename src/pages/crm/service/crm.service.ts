@@ -106,7 +106,18 @@ export async function updateLead(id: string, patch: LeadPatch): Promise<CrmLead>
 
 export type ClientePatch = Pick<TablesUpdate<'crm_clients'>,
   'company_name' | 'first_name' | 'last_name' | 'email' | 'phone' | 'alternative_phone_1'
-  | 'alternative_phone_1_note' | 'alternative_phone_2' | 'alternative_phone_2_note' | 'notes'>
+  | 'alternative_phone_1_note' | 'alternative_phone_2' | 'alternative_phone_2_note' | 'notes'
+  // Los datos de la inmobiliaria. Pueden no existir todavía en la base (ver supabase/schema.sql):
+  // por eso se guardan de a uno y nunca junto con otro campo, y las lecturas van con `*`.
+  | 'website' | 'idealista_url' | 'city' | 'neighborhood' | 'office_address' | 'agents_count' | 'current_crm' | 'sdr_advice'
+  | 'idealista_years' | 'idealista_listings'
+  // Rol y notas de cada contacto: mismo caso, pendientes de migración.
+  | 'contact_role' | 'contact_notes' | 'alternative_phone_1_role' | 'alternative_phone_1_notes'
+  | 'alternative_phone_2_role' | 'alternative_phone_2_notes'
+  // Lo que trae la importación desde Excel (lote, motivo, origen de cada teléfono y los teléfonos
+  // de Google Maps e Idealista): mismo caso, pendientes de migración.
+  | 'import_batch' | 'batch_activated_on' | 'selection_reason' | 'phone_source'
+  | 'alternative_phone_1_source' | 'alternative_phone_2_source' | 'google_maps_phone' | 'idealista_phone'>
 
 export async function updateCliente(id: string, patch: ClientePatch): Promise<CrmClient> {
   const { data, error } = await supabase.from('crm_clients').update(patch).eq('id', id).select()
@@ -115,9 +126,16 @@ export async function updateCliente(id: string, patch: ClientePatch): Promise<Cr
 }
 
 // ---------- Actividad ----------
-export async function crearComentario(input: { lead_id: string; description: string; comment_type?: 'MANUAL' | 'SYSTEM' }): Promise<CrmComment> {
+export async function crearComentario(input: {
+  lead_id: string; description: string; comment_type?: 'MANUAL' | 'SYSTEM'
+  /** La meta de la actividad (llamada, con quién): ver `armarMetaDeActividad`. */
+  long_description?: string | null
+}): Promise<CrmComment> {
   const { data, error } = await supabase.from('crm_comments')
-    .insert({ lead_id: input.lead_id, description: input.description, comment_type: input.comment_type ?? 'MANUAL' })
+    .insert({
+      lead_id: input.lead_id, description: input.description, comment_type: input.comment_type ?? 'MANUAL',
+      long_description: input.long_description ?? null,
+    })
     .select().single()
   if (error) throw error
   return data

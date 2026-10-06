@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import propeliaIcon from '@/assets/propelia-icon.png'
-import { NAV, estaActivo } from '@/components/nav'
+import { NAV, entradaActiva, estaActivo } from '@/components/nav'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { useCerrarSesion } from '@/hooks/useCerrarSesion'
@@ -15,6 +15,9 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   useSidebar,
 } from '@/components/ui/sidebar'
 
@@ -71,12 +74,28 @@ export function Sidebar() {
           <SidebarMenu>
             {NAV.map(item => (
               <SidebarMenuItem key={item.id}>
-                <SidebarMenuButton asChild isActive={estaActivo(pathname, item.path)} tooltip={item.label}>
+                <SidebarMenuButton asChild isActive={entradaActiva(pathname, item)} tooltip={item.label}>
                   <Link to={item.path} onClick={cerrarEnTelefono}>
                     <item.icon />
                     <span className="truncate">{item.label}</span>
                   </Link>
                 </SidebarMenuButton>
+                {/* Siempre desplegado: son uno o dos hijos y plegarlos sería un clic de más
+                    para llegar al backlog. Con la barra en íconos se esconde solo. */}
+                {item.hijos && (
+                  <SidebarMenuSub>
+                    {item.hijos.map(hijo => (
+                      <SidebarMenuSubItem key={hijo.id}>
+                        <SidebarMenuSubButton asChild isActive={estaActivo(pathname, hijo.path)}>
+                          <Link to={hijo.path} onClick={cerrarEnTelefono}>
+                            <hijo.icon />
+                            <span className="truncate">{hijo.label}</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    ))}
+                  </SidebarMenuSub>
+                )}
               </SidebarMenuItem>
             ))}
           </SidebarMenu>

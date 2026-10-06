@@ -16,6 +16,12 @@ export function useCrmCatalogos() {
     () => (q.data?.prioridades ?? []).filter(p => p.deleted_at == null), [q.data])
   const canalesActivos = useMemo(
     () => (q.data?.canales ?? []).filter(c => c.deleted_at == null), [q.data])
+  // Con los borrados, por lo mismo que las etapas: el origen de un lead viejo se sigue leyendo.
+  const canalesPorId = useMemo(
+    () => new Map((q.data?.canales ?? []).map(c => [c.id, c])), [q.data])
   const descartada = useMemo(() => findDiscardedStage(etapasActivas) ?? null, [etapasActivas])
-  return { etapasPorId, etapasActivas, prioridadesActivas, canalesActivos, descartada, isLoading: q.isLoading, error: q.error }
+  return {
+    etapasPorId, etapasActivas, prioridadesActivas, canalesActivos, canalesPorId, descartada,
+    isLoading: q.isLoading, error: q.error,
+  }
 }

@@ -263,6 +263,58 @@ create unique index if not exists crm_clients_email_active_uidx on public.crm_cl
   where deleted_at is null and email is not null and email <> '';
 create unique index if not exists crm_clients_phone_active_uidx on public.crm_clients (phone)
   where deleted_at is null and phone is not null and phone <> '';
+-- Lo que se sabe de la inmobiliaria (la pestaña con su nombre en el dialog del lead). Van como
+-- `add column` y no en el `create table` para que alcance con correr esto sobre una base que ya
+-- tiene la tabla. PENDIENTE de correr en el proyecto: hasta entonces el front lee lo que haya y
+-- al guardar avisa que falta la migración (ver `FALTA_MIGRACION` en src/pages/crm/lib/errores.ts).
+alter table public.crm_clients add column if not exists website       text;
+alter table public.crm_clients add column if not exists idealista_url text;
+alter table public.crm_clients add column if not exists city          text;
+-- El barrio donde opera y la dirección de la oficina. Texto libre; mismo trato: PENDIENTE.
+alter table public.crm_clients add column if not exists neighborhood   text;
+alter table public.crm_clients add column if not exists office_address text;
+alter table public.crm_clients add column if not exists agents_count  integer
+  check (agents_count is null or agents_count >= 0);
+alter table public.crm_clients add column if not exists current_crm   text;
+-- Cuánto hace que publica en Idealista y cuántos inmuebles tiene ahí: dicen el tamaño real de la
+-- inmobiliaria mejor que el número de agentes. Enteros, nunca negativos.
+alter table public.crm_clients add column if not exists idealista_years    integer
+  check (idealista_years is null or idealista_years >= 0);
+alter table public.crm_clients add column if not exists idealista_listings integer
+  check (idealista_listings is null or idealista_listings >= 0);
+-- El consejo para el SDR sobre cómo encarar esta inmobiliaria. Por ahora se escribe a mano; la idea
+-- es que lo genere Claude más adelante, y esta columna es donde va a quedar. Mismo trato: PENDIENTE.
+alter table public.crm_clients add column if not exists sdr_advice    text;
+-- El rol (texto libre) y las notas de cada contacto: el principal y los dos alternativos. Mismo
+-- trato que las de arriba: PENDIENTE de correr, y el front guarda cada una por separado.
+alter table public.crm_clients add column if not exists contact_role             text;
+alter table public.crm_clients add column if not exists contact_notes            text;
+alter table public.crm_clients add column if not exists alternative_phone_1_role  text;
+alter table public.crm_clients add column if not exists alternative_phone_1_notes text;
+alter table public.crm_clients add column if not exists alternative_phone_2_role  text;
+alter table public.crm_clients add column if not exists alternative_phone_2_notes text;
+-- Lo que trae la importación desde Excel. Mismo trato: PENDIENTE de correr. Sin `unique` a
+-- propósito: el Excel puede repetir datos y deduplicar es cosa de quien prepara la importación.
+-- El lote del que salió (ej.: `BCN-S01`) y el día en que se activó para el SDR.
+alter table public.crm_clients add column if not exists import_batch       text;
+alter table public.crm_clients add column if not exists batch_activated_on date;
+-- Por qué se eligió la inmobiliaria: le dice al SDR con qué ángulo abrir la llamada (usa
+-- Inmovilla, es nueva, es pequeña). Los valores son los de `MOTIVOS_DE_SELECCION` del front.
+alter table public.crm_clients add column if not exists selection_reason   text
+  check (selection_reason is null or selection_reason in ('inmovilla', 'new', 'small'));
+-- De dónde salió cada uno de los tres teléfonos. Los valores son los de `ORIGENES_DE_TELEFONO`.
+alter table public.crm_clients add column if not exists phone_source               text
+  check (phone_source is null or phone_source in ('agency_web', 'legal_notice', 'google_maps', 'company_registry'));
+alter table public.crm_clients add column if not exists alternative_phone_1_source text
+  check (alternative_phone_1_source is null or alternative_phone_1_source in ('agency_web', 'legal_notice', 'google_maps', 'company_registry'));
+alter table public.crm_clients add column if not exists alternative_phone_2_source text
+  check (alternative_phone_2_source is null or alternative_phone_2_source in ('agency_web', 'legal_notice', 'google_maps', 'company_registry'));
+-- El teléfono tal como figura en la ficha de Google Maps, aparte de los otros tres.
+alter table public.crm_clients add column if not exists google_maps_phone  text;
+-- El teléfono de Idealista: ÚLTIMO RECURSO, solo si no hay ningún otro. Es un redirector de
+-- Idealista: a la agencia le entra como un cliente interesado en un piso, no como una llamada
+-- comercial. Por eso nunca es el número que se ofrece para llamar por defecto.
+alter table public.crm_clients add column if not exists idealista_phone    text;
 
 create table if not exists public.crm_leads (
   id                      uuid primary key default gen_random_uuid(),

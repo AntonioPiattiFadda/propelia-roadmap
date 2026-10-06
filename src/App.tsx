@@ -40,7 +40,9 @@ const App = () => (
           <Route element={<RequireAcceso />}>
             <Route element={<AppLayout />}>
               <Route path="/roadmap" element={<Roadmap />} />
-              <Route path="/backlog" element={<Backlog />} />
+              <Route path="/roadmap/backlog" element={<Backlog />} />
+              {/* La ruta vieja, de cuando el backlog era una página hermana: que no se rompan los favoritos. */}
+              <Route path="/backlog" element={<Navigate to="/roadmap/backlog" replace />} />
               <Route path="/crm" element={<Crm />} />
               <Route path="/equipo" element={<Equipo />} />
               <Route path="/caja" element={<Caja />} />
