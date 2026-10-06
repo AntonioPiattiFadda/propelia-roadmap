@@ -1,0 +1,455 @@
+create or replace function public.set_updated_at()
+returns trigger language plpgsql as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+do $$ begin
+  create type public.user_role as enum ('SUPERADMIN');
+exception when duplicate_object then null;
+end $$;
+
+create table if not exists public.users (
+  id         uuid primary key references auth.users(id) on delete restrict,
+  email      text not null unique,
+  nombre     text not null,
+  iniciales  text not null,
+  color      text not null,
+  rol        public.user_role not null default 'SUPERADMIN',
+  caja       boolean not null default false,
+  activo     boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create or replace function public.es_usuario()
+returns boolean language sql stable security definer
+set search_path to 'public' as $$
+  select exists (select 1 from public.users where id = auth.uid() and activo);
+$$;
+
+create table if not exists public.roadmap_tareas (
+  id         text primary key,
+  modulo     text not null default '',
+  tarea      text not null default '',
+  expl       text not null default '',
+  resp       text not null default '',
+  estado     text not null default 'Pendiente',
+  img        text not null default '',
+  com        text not null default '',
+  fecha      date,
+  files      jsonb not null default '[]'::jsonb,
+  orden      double precision not null,
+  updated_at timestamptz not null default now(),
+  chat       jsonb not null default '[]'::jsonb,
+  subtareas  jsonb not null default '[]'::jsonb,
+  prioridad  text not null default 'semanal',
+  tipo       text not null default 'nuevo',
+  hoy        boolean not null default false,
+  pend       jsonb not null default '[]'::jsonb,
+  creada     timestamptz not null default now(),
+  backlog    boolean not null default false,
+  sprint     smallint,
+  dep        text,
+  loom       text
+);
+create index if not exists roadmap_tareas_backlog_idx on public.roadmap_tareas (backlog, sprint, orden);
+create index if not exists roadmap_tareas_hoy_idx     on public.roadmap_tareas (hoy) where hoy;
+
+create table if not exists public.roadmap_caja (
+  id         text primary key,
+  fecha      date,
+  concepto   text not null default '',
+  categoria  text not null default '',
+  monto      numeric not null default 0,
+  cuenta     text not null default '',
+  notas      text not null default '',
+  orden      double precision not null,
+  updated_at timestamptz not null default now(),
+  repite     text not null default '',
+  origen     text not null default '',
+  carga      jsonb not null default '[]'::jsonb
+);
+create index if not exists roadmap_caja_origen_idx on public.roadmap_caja (origen) where origen <> '';
+
+create table if not exists public.roadmap_notas (
+  id         text primary key,
+  titulo     text not null default '',
+  texto      text not null default '',
+  orden      double precision not null,
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists roadmap_tareas_set_updated_at on public.roadmap_tareas;
+create trigger roadmap_tareas_set_updated_at before update on public.roadmap_tareas
+  for each row execute function public.set_updated_at();
+drop trigger if exists roadmap_caja_set_updated_at on public.roadmap_caja;
+create trigger roadmap_caja_set_updated_at before update on public.roadmap_caja
+  for each row execute function public.set_updated_at();
+drop trigger if exists roadmap_notas_set_updated_at on public.roadmap_notas;
+create trigger roadmap_notas_set_updated_at before update on public.roadmap_notas
+  for each row execute function public.set_updated_at();
+drop trigger if exists users_set_updated_at on public.users;
+create trigger users_set_updated_at before update on public.users
+  for each row execute function public.set_updated_at();
+
+alter table public.users          enable row level security;
+alter table public.roadmap_tareas enable row level security;
+alter table public.roadmap_caja   enable row level security;
+alter table public.roadmap_notas  enable row level security;
+
+drop policy if exists users_select on public.users;
+create policy users_select on public.users for select using (public.es_usuario());
+
+drop policy if exists roadmap_tareas_m on public.roadmap_tareas;
+create policy roadmap_tareas_m on public.roadmap_tareas for all
+  using (public.es_usuario()) with check (public.es_usuario());
+drop policy if exists roadmap_caja_m on public.roadmap_caja;
+create policy roadmap_caja_m on public.roadmap_caja for all
+  using (public.es_usuario()) with check (public.es_usuario());
+drop policy if exists roadmap_notas_m on public.roadmap_notas;
+create policy roadmap_notas_m on public.roadmap_notas for all
+  using (public.es_usuario()) with check (public.es_usuario());
+
+do $$
+declare t text;
+begin
+  foreach t in array array['roadmap_tareas','roadmap_caja','roadmap_notas'] loop
+    if not exists (select 1 from pg_publication_tables
+                   where pubname='supabase_realtime' and schemaname='public' and tablename=t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
+
+insert into storage.buckets (id, name, public)
+values ('roadmap-adjuntos', 'roadmap-adjuntos', false)
+on conflict (id) do update set public = false;
+
+drop policy if exists adjuntos_read on storage.objects;
+create policy adjuntos_read on storage.objects for select
+  using (bucket_id = 'roadmap-adjuntos' and public.es_usuario());
+drop policy if exists adjuntos_write on storage.objects;
+create policy adjuntos_write on storage.objects for insert
+  with check (bucket_id = 'roadmap-adjuntos' and public.es_usuario());
+drop policy if exists adjuntos_delete on storage.objects;
+create policy adjuntos_delete on storage.objects for delete
+  using (bucket_id = 'roadmap-adjuntos' and public.es_usuario());
+
+do $$ begin
+  create type public.crm_management_action as enum ('MANUAL', 'POSTPONED');
+exception when duplicate_object then null;
+end $$;
+
+create table if not exists public.crm_priorities (
+  id                         uuid primary key default gen_random_uuid(),
+  name                       text not null,
+  color                      text not null,
+  position                   integer not null default 0,
+  management_tolerance_hours integer default 24,
+  show_in_filters            boolean not null default true,
+  created_at                 timestamptz not null default now(),
+  updated_at                 timestamptz not null default now(),
+  deleted_at                 timestamptz
+);
+
+create table if not exists public.crm_funnel_stages (
+  id                         uuid primary key default gen_random_uuid(),
+  label                      text not null default '',
+  value                      text not null default '',
+  position                   integer not null default 0,
+  priority_id                uuid references public.crm_priorities(id),
+  is_out_of_funnel           boolean not null default false,
+  allow_delete               boolean not null default false,
+  allow_reorder              boolean not null default false,
+  allow_rename               boolean not null default true,
+  management_tolerance_hours integer,
+  created_at                 timestamptz not null default now(),
+  updated_at                 timestamptz not null default now(),
+  deleted_at                 timestamptz
+);
+
+create table if not exists public.crm_channels (
+  id           uuid primary key default gen_random_uuid(),
+  label        text not null,
+  position     integer not null default 0,
+  allow_delete boolean not null default true,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  deleted_at   timestamptz
+);
+
+create table if not exists public.crm_clients (
+  id                       uuid primary key default gen_random_uuid(),
+  first_name               text,
+  last_name                text,
+  company_name             text,
+  email                    text,
+  phone                    text,
+  alternative_phone_1      text,
+  alternative_phone_1_note text,
+  alternative_phone_2      text,
+  alternative_phone_2_note text,
+  notes                    text,
+  created_by               uuid default auth.uid() references public.users(id) on delete restrict,
+  created_at               timestamptz not null default now(),
+  updated_at               timestamptz not null default now(),
+  deleted_at               timestamptz
+);
+create unique index if not exists crm_clients_email_active_uidx on public.crm_clients (lower(email))
+  where deleted_at is null and email is not null and email <> '';
+create unique index if not exists crm_clients_phone_active_uidx on public.crm_clients (phone)
+  where deleted_at is null and phone is not null and phone <> '';
+
+create table if not exists public.crm_leads (
+  id                      uuid primary key default gen_random_uuid(),
+  client_id               uuid not null references public.crm_clients(id) on delete cascade,
+  assigned_to             uuid not null references public.users(id) on delete restrict,
+  funnel_stage_id         uuid references public.crm_funnel_stages(id) on delete set null,
+  channel_id              uuid references public.crm_channels(id) on delete set null,
+  discard_reason          text,
+  created_via             text not null default 'manual',
+  last_important_event_at timestamptz not null default now(),
+  last_opened_at          timestamptz,
+  gestion_reference_at    timestamptz,
+  gestion_postponed       boolean not null default false,
+  gestion_has_events      boolean not null default false,
+  created_by              uuid default auth.uid() references public.users(id) on delete restrict,
+  created_at              timestamptz not null default now(),
+  updated_at              timestamptz not null default now(),
+  deleted_at              timestamptz
+);
+create unique index if not exists crm_leads_client_assignee_active_uidx
+  on public.crm_leads (client_id, assigned_to) where deleted_at is null;
+create index if not exists crm_leads_gestion_reference_at_idx
+  on public.crm_leads (gestion_reference_at desc nulls last) where deleted_at is null;
+
+create table if not exists public.crm_meetings (
+  id            uuid primary key default gen_random_uuid(),
+  lead_id       uuid references public.crm_leads(id) on delete cascade,
+  assigned_to   uuid not null references public.users(id) on delete restrict,
+  starts_at     timestamptz not null,
+  ends_at       timestamptz not null,
+  status        text not null default 'scheduled'
+                check (status in ('scheduled', 'completed', 'cancelled')),
+  title         text,
+  description   text,
+  cancel_reason text,
+  created_by    uuid default auth.uid() references public.users(id) on delete restrict,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now(),
+  deleted_at    timestamptz,
+  constraint crm_meetings_time_valid check (ends_at > starts_at)
+);
+create index if not exists crm_meetings_lead_idx on public.crm_meetings (lead_id) where deleted_at is null;
+
+create table if not exists public.crm_tasks (
+  id           uuid primary key default gen_random_uuid(),
+  lead_id      uuid references public.crm_leads(id) on delete cascade,
+  title        text not null,
+  due_date     date,
+  planned_for  date,
+  assigned_to  uuid not null default auth.uid() references public.users(id) on delete restrict,
+  completed    boolean not null default false,
+  completed_at timestamptz,
+  recurrence   text check (recurrence is null
+                or recurrence in ('daily', 'weekdays', 'weekly', 'biweekly', 'monthly')),
+  created_by   uuid default auth.uid() references public.users(id) on delete restrict,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  deleted_at   timestamptz
+);
+create index if not exists crm_tasks_assigned_pending_idx on public.crm_tasks (assigned_to, completed, due_date);
+create index if not exists crm_tasks_lead_idx on public.crm_tasks (lead_id) where deleted_at is null;
+
+create table if not exists public.crm_comments (
+  id               uuid primary key default gen_random_uuid(),
+  lead_id          uuid not null references public.crm_leads(id) on delete cascade,
+  description      text not null,
+  long_description text,
+  comment_type     text not null default 'MANUAL' check (comment_type in ('MANUAL', 'SYSTEM')),
+  created_by       uuid default auth.uid() references public.users(id) on delete restrict,
+  created_at       timestamptz not null default now(),
+  deleted_at       timestamptz
+);
+
+create table if not exists public.crm_management_events (
+  id           uuid primary key default gen_random_uuid(),
+  lead_id      uuid not null references public.crm_leads(id) on delete cascade,
+  action       public.crm_management_action not null,
+  effective_at timestamptz not null default now(),
+  note         text,
+  created_by   uuid default auth.uid() references public.users(id) on delete restrict,
+  created_at   timestamptz not null default now(),
+  deleted_at   timestamptz
+);
+create index if not exists crm_management_events_lead_effective_idx
+  on public.crm_management_events (lead_id, effective_at desc);
+
+create table if not exists public.crm_stage_history (
+  id            uuid primary key default gen_random_uuid(),
+  lead_id       uuid not null references public.crm_leads(id) on delete cascade,
+  from_stage_id uuid references public.crm_funnel_stages(id),
+  to_stage_id   uuid not null references public.crm_funnel_stages(id),
+  changed_by    uuid references public.users(id) on delete restrict,
+  changed_at    timestamptz not null default now()
+);
+
+create table if not exists public.crm_assignment_history (
+  id           uuid primary key default gen_random_uuid(),
+  lead_id      uuid not null references public.crm_leads(id) on delete cascade,
+  from_user_id uuid references public.users(id) on delete restrict,
+  to_user_id   uuid not null references public.users(id) on delete restrict,
+  changed_by   uuid references public.users(id) on delete restrict,
+  changed_at   timestamptz not null default now()
+);
+
+create or replace function public.crm_log_stage_change()
+returns trigger language plpgsql security definer set search_path to 'public' as $$
+begin
+  if tg_op = 'INSERT' and new.funnel_stage_id is not null then
+    insert into public.crm_stage_history (lead_id, from_stage_id, to_stage_id, changed_by)
+    values (new.id, null, new.funnel_stage_id, auth.uid());
+  elsif tg_op = 'UPDATE' and new.funnel_stage_id is not null
+        and old.funnel_stage_id is distinct from new.funnel_stage_id then
+    insert into public.crm_stage_history (lead_id, from_stage_id, to_stage_id, changed_by)
+    values (new.id, old.funnel_stage_id, new.funnel_stage_id, auth.uid());
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.crm_log_assignment_change()
+returns trigger language plpgsql security definer set search_path to 'public' as $$
+begin
+  insert into public.crm_assignment_history (lead_id, from_user_id, to_user_id, changed_by)
+  values (new.id, old.assigned_to, new.assigned_to, auth.uid());
+  return new;
+end;
+$$;
+
+create or replace function public.crm_gestion_refresh(p_lead_id uuid)
+returns void language sql security definer set search_path to 'public' as $$
+  with ganador as (
+    select e.effective_at, e.action
+    from public.crm_management_events e
+    where e.lead_id = p_lead_id and e.deleted_at is null
+    order by e.effective_at desc, e.created_at desc
+    limit 1
+  ), calc as (
+    select coalesce(g.effective_at, l.created_at)       as reference_at,
+           coalesce(g.action = 'POSTPONED', false)       as postponed,
+           g.effective_at is not null                    as has_events
+    from public.crm_leads l left join ganador g on true
+    where l.id = p_lead_id
+  )
+  update public.crm_leads l
+  set gestion_reference_at = c.reference_at,
+      gestion_postponed    = c.postponed,
+      gestion_has_events   = c.has_events
+  from calc c
+  where l.id = p_lead_id
+    and (l.gestion_reference_at is distinct from c.reference_at
+      or l.gestion_postponed    is distinct from c.postponed
+      or l.gestion_has_events   is distinct from c.has_events);
+$$;
+
+create or replace function public.crm_gestion_from_event()
+returns trigger language plpgsql security definer set search_path to 'public' as $$
+begin
+  if tg_op in ('INSERT', 'UPDATE') then
+    perform public.crm_gestion_refresh(new.lead_id);
+  end if;
+  if tg_op = 'DELETE' or (tg_op = 'UPDATE' and old.lead_id is distinct from new.lead_id) then
+    perform public.crm_gestion_refresh(old.lead_id);
+  end if;
+  return null;
+end;
+$$;
+
+create or replace function public.crm_gestion_from_lead()
+returns trigger language plpgsql security definer set search_path to 'public' as $$
+begin
+  perform public.crm_gestion_refresh(new.id);
+  return null;
+end;
+$$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['crm_priorities','crm_funnel_stages','crm_channels','crm_clients',
+                           'crm_leads','crm_meetings','crm_tasks'] loop
+    execute format('drop trigger if exists %I on public.%I', t || '_set_updated_at', t);
+    execute format('create trigger %I before update on public.%I
+                    for each row execute function public.set_updated_at()', t || '_set_updated_at', t);
+  end loop;
+end $$;
+
+revoke execute on function public.crm_gestion_refresh(uuid) from public, anon, authenticated;
+
+drop trigger if exists crm_leads_log_stage on public.crm_leads;
+create trigger crm_leads_log_stage after insert or update of funnel_stage_id on public.crm_leads
+  for each row execute function public.crm_log_stage_change();
+drop trigger if exists crm_leads_log_assignment on public.crm_leads;
+create trigger crm_leads_log_assignment after update of assigned_to on public.crm_leads
+  for each row when (old.assigned_to is distinct from new.assigned_to)
+  execute function public.crm_log_assignment_change();
+drop trigger if exists crm_leads_gestion on public.crm_leads;
+create trigger crm_leads_gestion after insert on public.crm_leads
+  for each row execute function public.crm_gestion_from_lead();
+drop trigger if exists crm_management_events_gestion on public.crm_management_events;
+create trigger crm_management_events_gestion after insert or update or delete on public.crm_management_events
+  for each row execute function public.crm_gestion_from_event();
+
+do $$
+declare t text;
+begin
+  foreach t in array array['crm_priorities','crm_funnel_stages','crm_channels','crm_clients',
+                           'crm_leads','crm_meetings','crm_tasks','crm_comments',
+                           'crm_management_events'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists %I on public.%I', t || '_equipo', t);
+    execute format('create policy %I on public.%I for all
+                    using (public.es_usuario()) with check (public.es_usuario())', t || '_equipo', t);
+  end loop;
+  foreach t in array array['crm_stage_history','crm_assignment_history'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists %I on public.%I', t || '_lectura', t);
+    execute format('create policy %I on public.%I for select using (public.es_usuario())', t || '_lectura', t);
+  end loop;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['crm_leads','crm_tasks','crm_comments','crm_management_events','crm_meetings'] loop
+    if not exists (select 1 from pg_publication_tables
+                   where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;
+
+insert into public.crm_priorities (name, color, position, management_tolerance_hours)
+select * from (values
+  ('Verde',       '#639922', 1,  24),
+  ('Amarillo',    '#EF9F27', 2, 168),
+  ('Rojo',        '#E24B4A', 3, 336),
+  ('Oportunidad', '#B84300', 4,  24)
+) v(name, color, position, management_tolerance_hours)
+where not exists (select 1 from public.crm_priorities);
+
+insert into public.crm_funnel_stages
+  (label, value, position, priority_id, management_tolerance_hours,
+   is_out_of_funnel, allow_delete, allow_reorder, allow_rename)
+select * from (values
+  ('Nuevo',      'NEW',       1, (select id from public.crm_priorities where name = 'Verde'), 24,
+   false, false, false, true),
+  ('Descartado', 'DISCARDED', 2, null::uuid, null::integer,
+   true,  false, false, false)
+) v(label, value, position, priority_id, management_tolerance_hours,
+    is_out_of_funnel, allow_delete, allow_reorder, allow_rename)
+where not exists (select 1 from public.crm_funnel_stages);;

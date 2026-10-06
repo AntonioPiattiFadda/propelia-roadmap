@@ -22,6 +22,44 @@ hasta que se mergee). Tres páginas en la barra lateral: Roadmap, CRM y Caja. Di
   entrada **más específica** que calce, no contra el padre. El redirect de `/backlog` va afuera
   de `RequireRol`: adentro, el guard lo rebotaría al inicio antes de redirigir.
 - **Variables**: `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (ver `.env.example`).
+
+## Migraciones — SIEMPRE con el CLI
+
+Desde el 6/10/2026 (patrón copiado de `propelia-frontend` y `ms-frontend`). El proyecto es
+`Propelia` (`itqwxnmuxuiiydsueazb`) y **no hay staging**: lo que se aplica, se aplica en producción.
+Trabajan dos personas, así que **toda migración queda como archivo en `supabase/migrations/` y
+se commitea**. Una aplicada por fuera del CLI no deja rastro en el repo y el otro no puede saber
+qué cambió.
+
+```bash
+supabase migration new <nombre>   # crea supabase/migrations/<timestamp>_<nombre>.sql
+# escribir el SQL en ese archivo (y el mismo cambio en supabase/schema.sql)
+supabase migration list           # local y remoto tienen que coincidir antes de aplicar
+supabase db push                  # aplica al remoto y lo registra
+```
+
+- **Claude crea las migraciones, nunca las aplica.** `supabase db push` lo corre siempre la
+  persona, a mano, desde su terminal (`! supabase db push` en esta sesión).
+- **Prohibido** `mcp__supabase__apply_migration` o cualquier camino que aplique DDL directo al
+  remoto. `mcp__supabase__execute_sql` **sí**, pero **solo para leer**: inspeccionar el esquema,
+  `pg_policies`, `pg_proc`, verificar que una migración quedó corrida, correr
+  `supabase/tests/crm-permisos.sql` (que termina en `rollback`).
+- **Quién hace qué** — se mira `git config user.email` del repo, **no** el `userEmail` de la
+  sesión de Claude Code, que puede mostrar el de otra persona:
+  - **Lorenzo** (`lorenzopiattifadda@gmail.com`): crea la migración y la commitea en su rama,
+    **pero no la aplica**. No se le propone `db push` ni se le pasa el comando. Al terminar se le
+    recuerda que la aplica Antonio después de revisarla y mergearla.
+  - **Antonio** (`antonio.piattifadda@gmail.com`): revisa, mergea y aplica con `supabase db push`.
+    Si el archivo tiene un timestamp anterior a la última migración ya aplicada, se **renombra con
+    un timestamp nuevo** antes de aplicar (el contenido no cambia, solo el nombre).
+- **`supabase/schema.sql` sigue siendo la foto entera** para levantar un proyecto vacío. Las
+  migraciones son la historia sobre el proyecto que ya existe: todo cambio va en los dos lados.
+- **Las funciones se migran con `create or replace function` completo**, nunca un fragmento: el
+  archivo es el registro que va a leer el otro.
+- **Las cuatro primeras** (`schema_inicial`, `rol_sdr`, `crm_permisos_por_cartera` y su `_fix_1`)
+  se aplicaron por MCP antes de esta regla: están en la base y no tenían archivo. Se bajaron con
+  `supabase migration fetch --linked`. No se tocan.
+- Nada de `db pull`, `db reset` ni `migration repair` sobre producción.
 - **Deploy**: Vercel. **Netlify publica `legacy/`** mientras el Roadmap nuevo no esté portado:
   Base directory = `legacy`, Publish directory = `legacy`, Build command vacío. Con el Base
   en la raíz, Netlify haría `npm install` de todo Vite/TS en cada deploy del tablero viejo.
@@ -76,9 +114,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   (`phone_source`, `alternative_phone_{1,2}_source`: `agency_web`/`legal_notice`/`google_maps`/
   `company_registry`), `google_maps_phone` e `idealista_phone`. Los valores de los `check` están
   repetidos en `MOTIVOS_DE_SELECCION` y `ORIGENES_DE_TELEFONO` (`lib/inmobiliaria.ts`): si se
-  agrega uno, va en los dos lados. Sin `unique` a propósito. **PENDIENTE de migración** como el
-  resto de los datos de la inmobiliaria: el front lee lo que haya y al guardar avisa
-  `FALTA_MIGRACION`. Se ven en la pestaña de la inmobiliaria; el origen, al lado de cada teléfono.
+  agrega uno, va en los dos lados. Sin `unique` a propósito. Entraron a la base con el resto
+  de los datos de la inmobiliaria en la migración `20261006123359_crm_clients_inmobiliaria`;
+  `FALTA_MIGRACION` sigue en `errores.ts` para la próxima columna que llegue antes que su
+  migración. Se ven en la pestaña de la inmobiliaria; el origen, al lado de cada teléfono.
   - **`idealista_phone` es último recurso**: es un redirector de Idealista y a la agencia le entra
     como un cliente interesado en un piso, no como una llamada comercial. Va último entre los
     teléfonos, con el aviso escrito (no en un tooltip), y **nunca es el número por defecto**. Hoy

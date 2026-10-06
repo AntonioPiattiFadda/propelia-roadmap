@@ -265,12 +265,11 @@ create unique index if not exists crm_clients_phone_active_uidx on public.crm_cl
   where deleted_at is null and phone is not null and phone <> '';
 -- Lo que se sabe de la inmobiliaria (la pestaña con su nombre en el dialog del lead). Van como
 -- `add column` y no en el `create table` para que alcance con correr esto sobre una base que ya
--- tiene la tabla. PENDIENTE de correr en el proyecto: hasta entonces el front lee lo que haya y
--- al guardar avisa que falta la migración (ver `FALTA_MIGRACION` en src/pages/crm/lib/errores.ts).
+-- tiene la tabla. En el proyecto entraron con la migración `20261006123359_crm_clients_inmobiliaria`.
 alter table public.crm_clients add column if not exists website       text;
 alter table public.crm_clients add column if not exists idealista_url text;
 alter table public.crm_clients add column if not exists city          text;
--- El barrio donde opera y la dirección de la oficina. Texto libre; mismo trato: PENDIENTE.
+-- El barrio donde opera y la dirección de la oficina. Texto libre.
 alter table public.crm_clients add column if not exists neighborhood   text;
 alter table public.crm_clients add column if not exists office_address text;
 alter table public.crm_clients add column if not exists agents_count  integer
@@ -283,17 +282,17 @@ alter table public.crm_clients add column if not exists idealista_years    integ
 alter table public.crm_clients add column if not exists idealista_listings integer
   check (idealista_listings is null or idealista_listings >= 0);
 -- El consejo para el SDR sobre cómo encarar esta inmobiliaria. Por ahora se escribe a mano; la idea
--- es que lo genere Claude más adelante, y esta columna es donde va a quedar. Mismo trato: PENDIENTE.
+-- es que lo genere Claude más adelante, y esta columna es donde va a quedar.
 alter table public.crm_clients add column if not exists sdr_advice    text;
--- El rol (texto libre) y las notas de cada contacto: el principal y los dos alternativos. Mismo
--- trato que las de arriba: PENDIENTE de correr, y el front guarda cada una por separado.
+-- El rol (texto libre) y las notas de cada contacto: el principal y los dos alternativos. El
+-- front guarda cada una por separado.
 alter table public.crm_clients add column if not exists contact_role             text;
 alter table public.crm_clients add column if not exists contact_notes            text;
 alter table public.crm_clients add column if not exists alternative_phone_1_role  text;
 alter table public.crm_clients add column if not exists alternative_phone_1_notes text;
 alter table public.crm_clients add column if not exists alternative_phone_2_role  text;
 alter table public.crm_clients add column if not exists alternative_phone_2_notes text;
--- Lo que trae la importación desde Excel. Mismo trato: PENDIENTE de correr. Sin `unique` a
+-- Lo que trae la importación desde Excel. Sin `unique` a
 -- propósito: el Excel puede repetir datos y deduplicar es cosa de quien prepara la importación.
 -- El lote del que salió (ej.: `BCN-S01`) y el día en que se activó para el SDR.
 alter table public.crm_clients add column if not exists import_batch       text;
