@@ -37,7 +37,7 @@ export function SignIn() {
         <Label htmlFor="email">Correo electrónico</Label>
         <div className="relative">
           <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input id="email" type="email" required autoComplete="email" className="pl-10"
+          <Input id="email" type="email" required autoComplete="email" className="pl-10" placeholder="ejemplo@correo.com"
             value={email} onChange={e => setEmail(e.target.value)} />
         </div>
       </div>
@@ -46,7 +46,7 @@ export function SignIn() {
         <Label htmlFor="password">Contraseña</Label>
         <div className="relative">
           <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input id="password" type={verPassword ? 'text' : 'password'} required autoComplete="current-password"
+          <Input id="password" type={verPassword ? 'text' : 'password'} required autoComplete="current-password" placeholder="Tu contraseña"
             className="pl-10 pr-10" value={password} onChange={e => setPassword(e.target.value)} />
           <button type="button" onClick={() => setVerPassword(v => !v)}
             aria-label={verPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
