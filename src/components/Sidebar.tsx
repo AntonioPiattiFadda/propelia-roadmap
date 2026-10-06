@@ -2,7 +2,7 @@ import { useRef } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { LogOut } from 'lucide-react'
 import propeliaIcon from '@/assets/propelia-icon.png'
-import { NAV, estaActivo } from '@/components/nav'
+import { estaActivo, navDe } from '@/components/nav'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { useCerrarSesion } from '@/hooks/useCerrarSesion'
@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/sidebar'
 
 /* La del producto, recortada: un solo grupo de navegación, quién sos y cerrar sesión. Sin
-   badges de superadmin ni tutorial — `rol` todavía no restringe nada. Se abre al pasar el
+   badges de superadmin ni tutorial. Ofrece solo las páginas de tu rol (`navDe`). Se abre al pasar el
    cursor, como la del tablero vanilla y la del producto. */
 export function Sidebar() {
   const { pathname } = useLocation()
@@ -69,7 +69,7 @@ export function Sidebar() {
         <SidebarGroup>
           <SidebarGroupLabel>Principal</SidebarGroupLabel>
           <SidebarMenu>
-            {NAV.map(item => (
+            {(yo ? navDe(yo.rol) : []).map(item => (
               <SidebarMenuItem key={item.id}>
                 <SidebarMenuButton asChild isActive={estaActivo(pathname, item.path)} tooltip={item.label}>
                   <Link to={item.path} onClick={cerrarEnTelefono}>

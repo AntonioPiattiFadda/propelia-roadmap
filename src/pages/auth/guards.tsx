@@ -1,7 +1,8 @@
-import { Navigate, Outlet } from 'react-router-dom'
+import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { accesoDe } from '@/lib/acceso'
+import { inicioDe, puedeEntrar } from '@/components/nav'
 import { PantallaAcceso } from './PantallaAcceso'
 
 /** Sin sesión → al login. */
@@ -44,4 +45,14 @@ export function RequireAcceso() {
     )
   }
   return <Outlet />
+}
+
+/** Una página que no es de tu rol te devuelve a la primera que sí (`NAV`). Va debajo de
+    `RequireAcceso`, que ya garantizó la fila: acá `yo` sale de la caché, sin otro viaje. */
+export function RequireRol() {
+  const { pathname } = useLocation()
+  const { userSession } = useUserSession()
+  const { data: yo } = useYo(userSession?.user.id)
+  if (!yo) return null
+  return puedeEntrar(yo.rol, pathname) ? <Outlet /> : <Navigate to={inicioDe(yo.rol)} replace />
 }

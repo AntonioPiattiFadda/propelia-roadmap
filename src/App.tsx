@@ -4,7 +4,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { AppLayout } from '@/layouts/AppLayout'
 import { AuthPageShell } from '@/pages/auth/AuthPageShell'
 import { SignIn } from '@/pages/auth/SignIn'
-import { PublicRoutesAuthCheck, RequireAcceso, RequireAuth } from '@/pages/auth/guards'
+import { PublicRoutesAuthCheck, RequireAcceso, RequireAuth, RequireRol } from '@/pages/auth/guards'
 import { Roadmap } from '@/pages/roadmap/Roadmap'
 import { Backlog } from '@/pages/roadmap/Backlog'
 import { Crm } from '@/pages/crm/Crm'
@@ -39,11 +39,13 @@ const App = () => (
         <Route element={<RequireAuth />}>
           <Route element={<RequireAcceso />}>
             <Route element={<AppLayout />}>
-              <Route path="/roadmap" element={<Roadmap />} />
-              <Route path="/backlog" element={<Backlog />} />
-              <Route path="/crm" element={<Crm />} />
-              <Route path="/equipo" element={<Equipo />} />
-              <Route path="/caja" element={<Caja />} />
+              <Route element={<RequireRol />}>
+                <Route path="/roadmap" element={<Roadmap />} />
+                <Route path="/backlog" element={<Backlog />} />
+                <Route path="/crm" element={<Crm />} />
+                <Route path="/equipo" element={<Equipo />} />
+                <Route path="/caja" element={<Caja />} />
+              </Route>
             </Route>
           </Route>
         </Route>

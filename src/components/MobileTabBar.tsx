@@ -3,7 +3,9 @@ import { CircleUserRound } from 'lucide-react'
 import { Icon } from '@/components/ui/icon'
 import { useSidebar } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
-import { NAV, estaActivo } from '@/components/nav'
+import { estaActivo, navDe } from '@/components/nav'
+import { useUserSession } from '@/hooks/useUserSession'
+import { useYo } from '@/hooks/useYo'
 
 /* Navegación fija abajo, solo bajo 768px. Va en el layout y no en cada página. Su alto se
    publica en `--tabbar-h` (index.css, copiado del producto), y de ahí lo lee el padding
@@ -11,12 +13,14 @@ import { NAV, estaActivo } from '@/components/nav'
 export function MobileTabBar() {
   const { pathname } = useLocation()
   const { setOpenMobile } = useSidebar()
+  const { userSession } = useUserSession()
+  const { data: yo } = useYo(userSession?.user.id)
   return (
     <nav
       aria-label="Navegación principal"
       className="no-print fixed inset-x-0 bottom-0 z-40 flex h-(--tabbar-h) items-stretch border-t border-border bg-card pb-[env(safe-area-inset-bottom,0px)] md:hidden"
     >
-      {NAV.map(item => {
+      {(yo ? navDe(yo.rol) : []).map(item => {
         const activo = estaActivo(pathname, item.path)
         return (
           <Link

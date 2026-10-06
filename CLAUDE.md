@@ -13,6 +13,11 @@ hasta que se mergee). Tres páginas en la barra lateral: Roadmap, CRM y Caja. Di
   typecheck sí anda desde WSL: `node node_modules/typescript/bin/tsc -b`.
 - **Acceso**: `accesoDe()` en `src/lib/acceso.ts` es la misma regla que `es_usuario()` en la
   base — fila activa en `users` o no pasás. Un error de red NO es «sin acceso».
+- **Páginas por rol** (6/10/2026): `SUPERADMIN` entra a todo; `SDR` solo a `/crm`. La regla es
+  `NAV[].roles` en `src/components/nav.ts` (`navDe`, `puedeEntrar`, `inicioDe`): de ahí leen la
+  barra lateral, la de pestañas y el guard `RequireRol` (`pages/auth/guards.tsx`), que devuelve a
+  la primera página permitida. **Es solo el front**: la RLS de las `roadmap_*`, el bucket y el
+  iframe `legacy/` siguen abiertos a cualquier `es_usuario()` — un SDR los lee por la API.
 - **Variables**: `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (ver `.env.example`).
 - **Deploy**: Vercel. **Netlify publica `legacy/`** mientras el Roadmap nuevo no esté portado:
   Base directory = `legacy`, Publish directory = `legacy`, Build command vacío. Con el Base
@@ -115,8 +120,8 @@ conversión de filas a personas es `personasDesdeUsuarios()`, en `equipo.js`, co
   quién la hizo y lo que pagó sigue en el saldo de la caja. Lo que no se hace es **ofrecerlo
   para elegir**: `elegibles()` lo saca de los menús salvo donde ya está puesto, para poder
   sacarlo.
-- **`rol` es un enum con dos valores (`SUPERADMIN` y `SDR`, este desde el 29/9/2026)** y
-  todavía no restringe nada. El default sigue siendo `SUPERADMIN`: un alta nueva que tenga que
+- **`rol` es un enum con dos valores (`SUPERADMIN` y `SDR`, este desde el 29/9/2026)**. En la
+  base restringe el CRM; en el front, desde el 6/10/2026, qué páginas ve cada uno (ver arriba). El default sigue siendo `SUPERADMIN`: un alta nueva que tenga que
   ser SDR se marca a mano. Un rol
   nuevo es `alter type user_role add value …`; la primera regla por rol es una policy.
 - **`caja` es un booleano y no un rol**: quién pone plata y qué permisos tiene una cuenta son
