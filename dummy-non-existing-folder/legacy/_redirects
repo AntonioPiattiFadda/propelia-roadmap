@@ -1,0 +1,3 @@
+# Netlify: cualquier ruta que no matchee un archivo real cae en Captalia.
+# (host-agnóstico: 404.html cubre el mismo caso en cualquier otro hosting estático)
+/*  /captalia.html  302

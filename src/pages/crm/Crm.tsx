@@ -6,6 +6,7 @@ import { Icon } from '@/components/ui/icon'
 import { AgentFilterButton } from './components/AgentFilterButton'
 import { CrmLeadList } from './components/CrmLeadList'
 import { FunnelConfigDialog } from './components/FunnelConfigDialog'
+import { ImportarLoteDialog } from './components/ImportarLoteDialog'
 import { ManageChannelsDialog } from './components/ManageChannelsDialog'
 import { NewLeadDialog } from './components/NewLeadDialog'
 import { useCarteras } from './hooks/useCarteras'
@@ -32,6 +33,8 @@ export function Crm() {
             funnel de todos. En el teléfono no: se configura una vez al mes, desde el escritorio. */}
         {esSuperadmin && (
           <div className="hidden md:contents">
+            {/* Importar lotes también es de escritorio y de SUPERADMIN: la RPC lo exige igual. */}
+            <ImportarLoteDialog />
             <FunnelConfigDialog />
             <ManageChannelsDialog />
           </div>

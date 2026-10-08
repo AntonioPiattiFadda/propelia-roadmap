@@ -3,7 +3,7 @@ import { FALTA_MIGRACION, mensajeDeError, SIN_PERMISO } from './errores'
 
 describe('mensajeDeError', () => {
   it('las claves de la RPC', () => {
-    expect(mensajeDeError({ message: 'crm_lead_duplicado', code: 'P0001' })).toBe('Ese cliente ya tiene un lead con ese responsable.')
+    expect(mensajeDeError({ message: 'crm_lead_duplicado', code: 'P0001' })).toBe('Ese cliente ya tiene un lead: una inmobiliaria no se repite.')
     expect(mensajeDeError({ message: 'crm_falta_contacto' })).toBe('Falta teléfono o email.')
     expect(mensajeDeError({ message: 'crm_sin_permiso_cartera', code: '42501' })).toBe(SIN_PERMISO)
   })
@@ -13,9 +13,16 @@ describe('mensajeDeError', () => {
   it('un update que la RLS dejó en cero filas', () => {
     expect(mensajeDeError(new Error('crm_sin_fila'))).toBe(SIN_PERMISO)
   })
-  it('el único cliente+responsable al reasignar', () => {
-    expect(mensajeDeError({ code: '23505', message: 'duplicate key value violates unique constraint "crm_leads_client_assignee_active_uidx"' }))
-      .toBe('Ese responsable ya tiene un lead de ese cliente.')
+  it('un lead por cliente', () => {
+    expect(mensajeDeError({ code: '23505', message: 'duplicate key value violates unique constraint "crm_leads_client_active_uidx"' }))
+      .toBe('Ese cliente ya tiene un lead: una inmobiliaria no se repite.')
+  })
+  it('la misma ficha de Idealista en dos clientes', () => {
+    expect(mensajeDeError({ code: '23505', message: 'duplicate key value violates unique constraint "crm_clients_idealista_url_active_uidx"' }))
+      .toBe('Ya hay otra inmobiliaria con esa ficha de Idealista.')
+  })
+  it('las claves del import', () => {
+    expect(mensajeDeError({ message: 'crm_lote_vacio', code: 'P0001' })).toBe('El archivo no tiene filas para importar.')
   })
   it('email o teléfono repetido al editar un cliente', () => {
     expect(mensajeDeError({ code: '23505', message: 'duplicate key value violates unique constraint "crm_clients_phone_active_uidx"' }))

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tablero de tareas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- ===== Barra lateral del sistema =====
+     Vive plegada a una canaleta de íconos mientras se trabaja y se abre sola al pasar el
+     cursor. Adentro va TODO lo que no es una tarea: a dónde ir (tablero, backlog, caja),
+     quién sos, exportar y cerrar sesión. Eso es lo que dejó al encabezado en una sola
+     línea de filtros, que es puro tablero ganado.
+
+     El panel que se abre es `.side-in`, que está posicionado sobre la canaleta y no la
+     empuja: si el ancho de la barra fuera parte del flujo, cada vez que el mouse la roza se
+     reacomodaría el tablero entero. -->
+<aside class="side" id="side">
+  <div class="side-in">
+    <div class="side-top">
+      <div class="mark"></div>
+      <div class="side-brand"><b id="tituloApp">Tablero de tareas</b><span id="subtituloApp"></span></div>
+    </div>
+
+    <nav class="side-nav" id="views" aria-label="Vistas del tablero"></nav>
+
+    <div class="side-pie">
+      <!-- Aclaraciones para quien configura la base: un solo renglón que despliega el
+           detalle al pasar el cursor, para no comerse una franja entera del tablero. -->
+      <div class="nota-dev" id="avisoEsquema" hidden>
+        <button class="nota-btn" type="button" aria-label="Falta un paso en la base de datos" aria-describedby="avisoEsquemaTexto">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6 2.9 19.4h18.2L12 3.6z"/><path d="M12 9.8v4.1M12 17.1v.1"/></svg>
+          <span class="side-txt">Falta un paso en la base</span>
+        </button>
+        <div class="nota-pop" id="avisoEsquemaTexto" role="tooltip"></div>
+      </div>
+      <span class="me" id="yoNombre"></span>
+      <button class="side-act" id="bCsv" type="button" title="Exportar todo a CSV">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 19.5h15"/></svg>
+        <span class="side-txt">Exportar</span>
+      </button>
+      <button class="side-act" id="bCerrarSesion" type="button" title="Cerrar sesión">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4.5h4a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5h-4M9.5 15.5 5 12l4.5-3.5M5 12h10"/></svg>
+        <span class="side-txt">Cerrar sesión</span>
+      </button>
+    </div>
+  </div>
+</aside>
+
+<div class="shell">
+<header class="top">
+  <!-- Una sola línea: filtros a la izquierda, lo que se hace a la derecha. Las vistas se
+       mudaron a la barra lateral, así que acá no queda nada que compita por el renglón. -->
+  <div class="bar">
+    <!-- Encabezado del teléfono. Va SIEMPRE en el HTML y lo esconde el CSS arriba de 760px:
+         cuál de las dos cabeceras corresponde es una pregunta de ancho de pantalla, y el ancho
+         no se sabe desde el JS — la misma regla que ya tenían el riel y los avatares de la fila.
+         En el escritorio esto no existe: la vista la dice la barra lateral y el contador, su
+         renglón. -->
+    <div class="mhead">
+      <div class="mtit"><b id="mVista"></b><small id="mCont"></small></div>
+      <button class="micon" id="bBuscar" type="button" aria-label="Buscar" aria-expanded="false">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      </button>
+      <!-- El avatar abre el cajón con lo que en el escritorio vive en la barra lateral: quién
+           sos, el aviso de esquema, exportar y cerrar sesión. Las vistas NO están ahí adentro:
+           esas son la barra de abajo. -->
+      <button class="myo" id="bYo" type="button" aria-label="Abrir el menú del tablero" aria-expanded="false"></button>
+    </div>
+
+    <div class="filters" id="filtros">
+      <div class="search">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input type="search" id="q" placeholder="Buscar…  ( / )">
+      </div>
+      <div class="chips" id="chipsPend"></div>
+      <!-- El mismo filtro de personas que los chips de al lado, con la forma del de prioridad.
+           En 390px de ancho tres chips con avatar no entran en el renglón, así que en el
+           teléfono se elige de un menú. Las dos formas van siempre en el HTML y escriben en el
+           mismo `UI.f.pend`; cuál se ve la decide el CSS. -->
+      <div class="selmulti" id="fPend">
+        <button type="button" class="sel" aria-haspopup="true" aria-expanded="false">Responsable</button>
+        <div class="selmenu" hidden role="group" aria-label="Filtrar por responsable"></div>
+      </div>
+      <!-- Prioridad admite varias a la vez, así que no puede ser un <select>: es un botón
+           con un menú de tildes. Ocupa lo mismo que el select que reemplazó para no
+           ganarle un renglón a la barra. -->
+      <div class="selmulti" id="fPrioridad">
+        <button type="button" class="sel" aria-haspopup="true" aria-expanded="false">Prioridad</button>
+        <div class="selmenu" hidden role="group" aria-label="Filtrar por prioridad"></div>
+      </div>
+      <span class="spacer"></span>
+      <!-- Acá vivía el segmentado de layout: columnas, filas y lista. Las dos de tarjetas se
+           sacaron el 26/8/2026 por pedido y quedó una sola forma de dibujar el tablero, así que
+           el segmentado se fue entero: un selector de una opción no es un selector. -->
+      <span class="estado-guardado" id="estadoGuardado" aria-live="polite"></span>
+    </div>
+
+    <!-- Fuera de `#filtros` a propósito: la caja esconde los filtros enteros, y la campana
+         y «Nueva tarea» tienen que seguir estando igual. -->
+    <div class="bar-acciones">
+      <button class="campana" id="campana" type="button" hidden>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8.5a6 6 0 1 0-12 0c0 6-2.2 7.5-2.2 7.5h16.4S18 14.5 18 8.5z"/><path d="M13.7 19.5a2 2 0 0 1-3.4 0"/></svg>
+        <b>0</b>
+      </button>
+      <button class="btn primary" id="bNueva">+ Nueva tarea</button>
+    </div>
+  </div>
+</header>
+
+<main class="board" id="board">
+  <!-- Esqueleto de la carga inicial: bloques con renglones, que es la forma que tiene el
+       tablero ahora. Eran tres columnas de tarjetas hasta el 26/8/2026 — un esqueleto con la
+       silueta de un tablero que ya no existe promete durante medio segundo una pantalla que
+       después no llega. No lo prende ni lo apaga el JS: el primer `render()` lo pisa solo. -->
+  <div class="esqueleto" aria-hidden="true">
+    <div class="esq-bloq"><div class="esq-cab shimmer"></div><div class="esq-fila shimmer"></div><div class="esq-fila shimmer"></div><div class="esq-fila shimmer"></div></div>
+    <div class="esq-bloq"><div class="esq-cab shimmer"></div><div class="esq-fila shimmer"></div><div class="esq-fila shimmer"></div></div>
+    <div class="esq-bloq"><div class="esq-cab shimmer"></div><div class="esq-fila shimmer"></div></div>
+  </div>
+</main>
+</div><!-- /.shell -->
+
+<!-- ===== Lo propio del teléfono =====
+     Las tres piezas van siempre en el HTML y el CSS las esconde arriba de 760px. Están fuera
+     de `.shell` porque las tres son `position:fixed`: apoyadas encima del tablero y no dentro
+     del flujo, igual que el panel de la barra lateral.
+
+     La barra de abajo la llena `pintarChrome()` con las mismas `VISTAS` y el mismo
+     `data-vista` que la barra lateral, así que el enganche de las vistas la cubre sola: no hay
+     un segundo lugar donde acordarse de agregar una pestaña. -->
+<nav class="tabbar" id="tabbar" aria-label="Vistas del tablero"></nav>
+<!-- El `＋` flotante reemplaza a «+ Nueva tarea» del encabezado, que en el teléfono no entra.
+     Hace exactamente lo mismo: es el mismo manejador, no una copia. -->
+<button class="fab" id="bFab" type="button">＋</button>
+<!-- El fondo del cajón. Sin él, la única forma de cerrarlo sería volver a tocar el avatar. -->
+<div class="side-scrim" id="sideScrim" hidden></div>
+
+<!-- ===== Modal: tarea ===== -->
+<div class="scrim" id="scrimTarea">
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Detalle de la tarea">
+    <div class="m-h">
+      <textarea id="tTitulo" rows="1" placeholder="Título de la tarea"></textarea>
+      <button class="btn ghost" data-close aria-label="Cerrar">✕</button>
+    </div>
+    <div class="m-b">
+      <!-- Toda la clasificación en una sola línea. Cada píxel que no se gasta acá arriba
+           es un píxel más para la explicación, que es donde se trabaja de verdad. -->
+      <div class="barra-campos">
+        <select id="tEstado" aria-label="Estado"></select>
+        <select id="tPrioridad" aria-label="Prioridad"></select>
+        <select id="tSprint" aria-label="Grupo del backlog"></select>
+        <!-- Área y «Depende de» vivían en el panel de la fila del backlog. Al pasar la lista
+             al formato del diseño, la fila quedó con el título y las catalogaciones y nada
+             más, así que los dos campos se mudaron acá, que es donde ya está el resto de la
+             clasificación. Son texto libre a propósito: la mitad de las dependencias reales
+             no son otra tarea del tablero, y obligarlas a serlo hace que nadie las anote. -->
+        <label class="bar-campo">
+          <span>Área</span>
+          <input type="text" id="tArea" placeholder="De qué parte es" aria-label="Área">
+        </label>
+        <label class="bar-campo">
+          <span>Depende</span>
+          <input type="text" id="tDep" placeholder="T04, diseño cerrado…" aria-label="Depende de">
+        </label>
+        <span class="sep"></span>
+        <div class="pend" id="tPend" role="group" aria-label="Pendiente de acción"></div>
+      </div>
+
+      <!-- Explicación. No es un textarea: acá se pegan capturas y quedan adentro del
+           texto, en el lugar donde estaba el cursor. Lo demás de la ficha se pliega para
+           dejarle el alto a este campo, que es donde se trabaja de verdad. -->
+      <div class="field">
+        <div class="field-h">
+          <label id="tDescLbl">Explicación</label>
+          <!-- La misma explicación, con estructura: renglones, encabezados, desplegables,
+               checklist y subpáginas. Una vez que la tarea tiene página, acá se lee y allá
+               se escribe: dos editores sobre el mismo campo se pisarían el formato. -->
+          <button class="pglink" type="button" id="tPagina">Abrir como página ↗</button>
+        </div>
+        <div class="rico" id="tDesc" contenteditable="true" role="textbox" aria-multiline="true"
+             aria-labelledby="tDescLbl"
+             data-ph="Qué hay que hacer y por qué. El detalle completo: qué pasa hoy, cómo tendría que quedar, y con qué se da por terminada. Pegá capturas con Ctrl+V y entran acá mismo."></div>
+      </div>
+
+      <!-- Checklist: una línea por paso, sin responsable ni detalle. Es una lista para
+           tachar mientras se trabaja, no una tarea adentro de otra tarea. -->
+      <details class="field sec" id="tSecPasos">
+        <summary>Checklist <span class="sec-n" id="tPasosCount"></span></summary>
+        <div class="pasos" id="tPasos"></div>
+        <input class="paso-new" type="text" id="tPasoNew" aria-label="Agregar un paso al checklist" placeholder="Agregar paso y Enter">
+      </details>
+
+      <!-- Conversación: se lee como un texto corrido. Lo único que distingue a una
+           persona de otra es el color de su letra. -->
+      <details class="field sec" id="tSecChat">
+        <summary>Conversación <span class="sec-n" id="tChatCount"></span></summary>
+        <div class="conver">
+          <div class="conver-log" id="tChat"></div>
+          <textarea class="conver-in" id="tMsg" aria-label="Escribir en la conversación" placeholder="Escribí acá. Enter guarda lo escrito; Shift+Enter baja de línea."></textarea>
+        </div>
+      </details>
+
+      <details class="field sec" id="tSecFiles">
+        <summary>Archivos <span class="sec-n" id="tFilesCount"></span></summary>
+        <div class="files" id="tFiles"></div>
+        <div class="drop-files" id="tDrop">Arrastrá archivos acá o hacé clic para elegirlos</div>
+        <input type="file" id="tFileIn" multiple hidden>
+      </details>
+    </div>
+    <div class="m-f">
+      <button class="btn danger" id="tDel">Eliminar tarea</button>
+      <!-- El mismo botón para los dos lados: dice a dónde va la tarea, no dónde está. -->
+      <button class="btn" id="tBacklog"></button>
+      <span class="spacer"></span>
+      <span class="hint" id="tMeta"></span>
+      <button class="btn primary" data-close>Listo</button>
+    </div>
+  </div>
+</div>
+
+<!-- El selector de archivos de la página de una tarea. Va suelto acá y no adentro del modal
+     porque la página no es el modal: son dos pantallas distintas sobre la misma tarea. -->
+<input type="file" id="pgFileIn" multiple hidden>
+
+<div class="scrim lightbox" id="lightbox"><img id="lbImg" alt=""></div>
+<div id="grip" aria-hidden="true"></div>
+
+<!-- ===== Sesión ===== -->
+<div class="login-overlay" id="loginOverlay" hidden>
+  <form class="login-modal" id="loginForm">
+    <h2>Iniciar sesión</h2>
+    <label class="lbl" for="loginEmail">Email</label>
+    <input class="fld" type="email" id="loginEmail" required autocomplete="username">
+    <label class="lbl" for="loginPassword">Contraseña</label>
+    <input class="fld" type="password" id="loginPassword" required autocomplete="current-password">
+    <div class="login-error" id="loginError" hidden></div>
+    <button class="btn primary block" type="submit">Entrar</button>
+  </form>
+</div>
+
+<div class="login-overlay" id="sinAccesoOverlay" hidden>
+  <div class="login-modal">
+    <h2>Sin acceso</h2>
+    <p>Esta cuenta todavía no tiene permiso para ver el tablero. Pedile a Antonio que la agregue.</p>
+    <button class="btn primary block" type="button" id="bSinAccesoSalir">Cerrar sesión</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ============================================================
+   CONFIGURACIÓN DEL TABLERO
+   ------------------------------------------------------------
+   Quién entra al tablero, cómo se llama y de qué color es ya NO se
+   configura acá: sale de la tabla `users` de Supabase (29/9/2026).
+   Dar de alta a alguien es crear su cuenta en Auth y su fila en
+   `users` — ver PENDIENTES-BACKEND.md.
+   ============================================================ */
+window.APP_CONFIG = {
+  titulo: 'Tablero de tareas',
+  subtitulo: 'Lorenzo · Antonio',
+  tablas: {
+    tareas: 'roadmap_tareas',
+    caja: 'roadmap_caja',
+  },
+  bucket: 'roadmap-adjuntos',
+  canal: 'roadmap-sync',
+  // Cuántos sprints muestra el backlog aunque estén vacíos. Los que tengan tareas se
+  // dibujan igual, así que esto es solo el piso: los casilleros que están listos para
+  // recibir algo el día que se abre la pestaña por primera vez.
+  sprints: 3,
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="order-math.js"></script>
+<script src="equipo.js"></script>
+<script src="supabase-sync.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

@@ -3,8 +3,9 @@ import { toast } from 'sonner'
 import { mensajeDeError } from '../lib/errores'
 import { aplicarGestionOptimista, type ManagementAction } from '../lib/gestionStatus'
 import { comentarioDescarte, comentarioReasignacion } from '../lib/systemComment'
+import type { FilaDelLote } from '../lib/importarLote'
 import {
-  crearComentario, crearEventoGestion, crearLeadConCliente, reasignarLead, updateCliente, updateLead,
+  crearComentario, crearEventoGestion, crearLeadConCliente, importarLote, reasignarLead, updateCliente, updateLead,
   type AltaLead, type ClientePatch, type LeadPatch,
 } from '../service/crm.service'
 import type { CrmLeadRow, LeadDetalle, Usuario } from '../types'
@@ -131,6 +132,21 @@ export function useCrearLead() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: CRM_KEYS.leads })
       void qc.invalidateQueries({ queryKey: CRM_KEYS.tareasPendientes })
+    },
+  })
+}
+
+/* El import de un lote. Sin optimismo: son cientos de filas que decide la base. El simulacro no
+   escribe nada, así que solo el de verdad re-trae (los leads y el catálogo, por las etiquetas). */
+export function useImportarLote() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (v: { assignedTo: string; filas: FilaDelLote[]; simular: boolean }) =>
+      importarLote(v.assignedTo, v.filas, v.simular),
+    onSettled: (_r, _e, v) => {
+      if (v.simular) return
+      void qc.invalidateQueries({ queryKey: CRM_KEYS.leads })
+      void qc.invalidateQueries({ queryKey: CRM_KEYS.catalogos })
     },
   })
 }

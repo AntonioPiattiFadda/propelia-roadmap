@@ -18,7 +18,7 @@ const cliente = (over: Partial<CrmClient> = {}): CrmClient => ({
   id: 'c', first_name: null, last_name: null, company_name: null, email: null, phone: null,
   alternative_phone_1: null, alternative_phone_1_note: null, alternative_phone_2: null, alternative_phone_2_note: null,
   notes: null, created_by: null, created_at: '', updated_at: '', deleted_at: null,
-  website: null, idealista_url: null, city: null, neighborhood: null, office_address: null, agents_count: null, current_crm: null, sdr_advice: null, idealista_years: null, idealista_listings: null,
+  website: null, idealista_url: null, city: null, neighborhood: null, office_address: null, agents_count: null, current_crm: null, current_crm_id: null, google_maps_url: null, sdr_advice: null, idealista_years: null, idealista_listings: null,
   contact_role: null, contact_notes: null, alternative_phone_1_role: null, alternative_phone_1_notes: null,
   alternative_phone_2_role: null, alternative_phone_2_notes: null,
   import_batch: null, batch_activated_on: null, selection_reason: null, phone_source: null,

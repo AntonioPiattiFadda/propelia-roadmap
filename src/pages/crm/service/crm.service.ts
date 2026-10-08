@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
-import type { TablesInsert, TablesUpdate } from '@/types/database.types'
+import type { Json, TablesInsert, TablesUpdate } from '@/types/database.types'
 import type { ManagementAction } from '../lib/gestionStatus'
+import type { FilaDelLote } from '../lib/importarLote'
 import type { NivelAcceso } from '../lib/permisos'
 import type {
   CrmChannel, CrmClient, CrmComment, CrmDataAccess, CrmLead, CrmLeadRow, CrmManagementEvent, CrmMeeting,
@@ -210,6 +211,25 @@ export async function crearLeadConCliente(input: AltaLead): Promise<ResultadoAlt
   })
   if (error) throw error
   return data as unknown as ResultadoAlta
+}
+
+// ---------- Importar un lote del Excel (solo SUPERADMIN: la RPC lo exige) ----------
+export type ResultadoDeFila = {
+  fila: number
+  empresa: string
+  resultado: 'nueva' | 'posible_repetida' | 'contactos_nuevos' | 'sin_novedad'
+  /** El aviso de posible repetida, o los contactos que se suman. */
+  detalle: string | null
+}
+export type ResultadoDelImport = { filas: ResultadoDeFila[]; etiquetas_nuevas: string[]; simulado: boolean }
+
+/** Con `simular` la base hace todo y lo deshace: es el preview, y cuenta exactamente lo que va a pasar. */
+export async function importarLote(assignedTo: string, filas: FilaDelLote[], simular: boolean): Promise<ResultadoDelImport> {
+  const { data, error } = await supabase.rpc('crm_importar_lote', {
+    p_assigned_to: assignedTo, p_filas: filas as unknown as Json, p_simular: simular,
+  })
+  if (error) throw error
+  return data as unknown as ResultadoDelImport
 }
 
 /**
