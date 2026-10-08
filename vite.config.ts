@@ -35,6 +35,9 @@ function servirLegacy(): Plugin {
       })
     },
     closeBundle() {
+      // Vitest también cierra el bundle, con un outDir falso (`dummy-non-existing-folder`): sin
+      // este corte, cada corrida de tests dejaba una copia de legacy/ en la raíz del repo.
+      if (process.env.VITEST) return
       fs.cpSync(LEGACY, path.join(salida, 'legacy'), {
         recursive: true,
         filter: src => !NO_PUBLICAR.has(path.relative(LEGACY, src).split(path.sep)[0]),

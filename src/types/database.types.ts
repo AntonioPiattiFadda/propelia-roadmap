@@ -123,10 +123,12 @@ export type Database = {
           created_at: string
           created_by: string | null
           current_crm: string | null
+          current_crm_id: string | null
           deleted_at: string | null
           email: string | null
           first_name: string | null
           google_maps_phone: string | null
+          google_maps_url: string | null
           id: string
           idealista_phone: string | null
           idealista_url: string | null
@@ -164,10 +166,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_crm?: string | null
+          current_crm_id?: string | null
           deleted_at?: string | null
           email?: string | null
           first_name?: string | null
           google_maps_phone?: string | null
+          google_maps_url?: string | null
           id?: string
           idealista_phone?: string | null
           idealista_url?: string | null
@@ -205,10 +209,12 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           current_crm?: string | null
+          current_crm_id?: string | null
           deleted_at?: string | null
           email?: string | null
           first_name?: string | null
           google_maps_phone?: string | null
+          google_maps_url?: string | null
           id?: string
           idealista_phone?: string | null
           idealista_url?: string | null
@@ -629,6 +635,30 @@ export type Database = {
         }
         Relationships: []
       }
+      crm_software: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          id: string
+          label: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          label: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          label?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       crm_stage_history: {
         Row: {
           changed_at: string
@@ -962,6 +992,10 @@ export type Database = {
       }
       crm_es_superadmin: { Args: never; Returns: boolean }
       crm_gestion_refresh: { Args: { p_lead_id: string }; Returns: undefined }
+      crm_importar_lote: {
+        Args: { p_assigned_to: string; p_filas: Json; p_simular?: boolean }
+        Returns: Json
+      }
       crm_puede: {
         Args: { p_nivel: string; p_owner: string }
         Returns: boolean

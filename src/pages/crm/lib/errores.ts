@@ -16,8 +16,11 @@ const CLAVES: Record<string, string> = {
   crm_responsable_inactivo: 'Ese responsable ya no está activo.',
   crm_canal_invalido: 'Ese canal ya no existe. Recargá la página.',
   crm_etapa_invalida: 'Esa etapa ya no existe. Recargá la página.',
-  crm_lead_duplicado: 'Ese cliente ya tiene un lead con ese responsable.',
+  crm_lead_duplicado: 'Ese cliente ya tiene un lead: una inmobiliaria no se repite.',
   crm_sin_fila: SIN_PERMISO,
+  // Las de crm_importar_lote.
+  crm_lote_vacio: 'El archivo no tiene filas para importar.',
+  crm_lote_grande: 'El archivo tiene demasiadas filas: partilo en lotes más chicos.',
 }
 
 export function mensajeDeError(error: unknown, porDefecto = 'Algo salió mal. Probá de nuevo.'): string {
@@ -30,7 +33,8 @@ export function mensajeDeError(error: unknown, porDefecto = 'Algo salió mal. Pr
   if (code === '23505') {
     if (message.includes('crm_clients_phone')) return 'Ya hay otro cliente con ese teléfono.'
     if (message.includes('crm_clients_email')) return 'Ya hay otro cliente con ese email.'
-    return 'Ese responsable ya tiene un lead de ese cliente.'
+    if (message.includes('crm_clients_idealista_url')) return 'Ya hay otra inmobiliaria con esa ficha de Idealista.'
+    return 'Ese cliente ya tiene un lead: una inmobiliaria no se repite.'
   }
   if (error instanceof TypeError || /Failed to fetch|NetworkError|fetch failed/i.test(message)) {
     return 'No hay conexión. Probá de nuevo.'

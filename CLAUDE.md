@@ -124,6 +124,18 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
     ninguna pantalla elige un «teléfono principal» con respaldo (la lista muestra `phone` y nada
     más); si alguna vez lo hace, va en una función pura de `lib/` con tests y el de Idealista entra
     solo si `phone`, los alternativos y `google_maps_phone` están vacíos.
+- **Importar un lote del Excel** (7/10/2026): botón «Importar lote» de la cabecera, solo
+  SUPERADMIN. Formato BCN-S01, columnas por nombre; si el archivo tiene un error, no entra nada.
+  La RPC `crm_importar_lote` corre primero en simulacro (hace todo y lo deshace) para el preview.
+  Diseño y reglas en `docs/superpowers/specs/2026-10-07-crm-importar-lote-design.md`.
+  - **Una inmobiliaria no se repite**: una ficha de Idealista es un cliente (único por
+    `crm_url_clave(idealista_url)`) y un cliente tiene **un** lead, sea de quien sea
+    (`crm_leads (client_id)` único; antes era uno por comercial). Vale también para el alta a mano.
+  - Repetida = misma ficha: no se crea nada; si trae contactos nuevos, se agregan al final de
+    `sdr_advice` («NUEVOS CONTACTOS»). Ficha nueva que comparte teléfono, email o nombre: se crea
+    con «POSIBLE REPETIDA» arriba del consejo. Sin historial: el SDR edita esos bloques.
+  - `sdr_research` va a `sdr_advice`; `phone` y los alternativos no se cargan (ya están en el
+    research); `current_crm` es una etiqueta de `crm_software` (`current_crm_id`).
 - **Qué se copió del producto** (podado de lo inmobiliario):
   De `propelia-frontend/src/pages/leads/lib/`: `gestionStatus`, `calendarDeadline`, `discardStage`,
   `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De
