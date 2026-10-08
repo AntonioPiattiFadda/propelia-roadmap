@@ -8,3 +8,4 @@ migracion/02-datos-*.sql
 migracion/.env
 node_modules/
 dist/
+dummy-non-existing-folder/
