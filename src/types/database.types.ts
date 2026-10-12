@@ -785,50 +785,107 @@ export type Database = {
           },
         ]
       }
-      roadmap_caja: {
+      expense_presets: {
         Row: {
-          carga: Json
-          categoria: string
-          concepto: string
-          cuenta: string
-          fecha: string | null
+          created_at: string
+          default_amount: number | null
+          deleted_at: string | null
+          due_day: number | null
+          expense_type: string
           id: string
-          monto: number
-          notas: string
-          orden: number
-          origen: string
-          repite: string
+          name: string
+          recurrence: string
           updated_at: string
         }
         Insert: {
-          carga?: Json
-          categoria?: string
-          concepto?: string
-          cuenta?: string
-          fecha?: string | null
-          id: string
-          monto?: number
-          notas?: string
-          orden: number
-          origen?: string
-          repite?: string
+          created_at?: string
+          default_amount?: number | null
+          deleted_at?: string | null
+          due_day?: number | null
+          expense_type: string
+          id?: string
+          name: string
+          recurrence?: string
           updated_at?: string
         }
         Update: {
-          carga?: Json
-          categoria?: string
-          concepto?: string
-          cuenta?: string
-          fecha?: string | null
+          created_at?: string
+          default_amount?: number | null
+          deleted_at?: string | null
+          due_day?: number | null
+          expense_type?: string
           id?: string
-          monto?: number
-          notas?: string
-          orden?: number
-          origen?: string
-          repite?: string
+          name?: string
+          recurrence?: string
           updated_at?: string
         }
         Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount: number
+          created_at: string
+          created_by: string | null
+          date: string | null
+          deleted_at: string | null
+          expense_name: string
+          expense_type: string
+          id: string
+          notes: string | null
+          period: string
+          preset_id: string | null
+          recurrence: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          created_by?: string | null
+          date?: string | null
+          deleted_at?: string | null
+          expense_name: string
+          expense_type: string
+          id?: string
+          notes?: string | null
+          period: string
+          preset_id?: string | null
+          recurrence?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          created_by?: string | null
+          date?: string | null
+          deleted_at?: string | null
+          expense_name?: string
+          expense_type?: string
+          id?: string
+          notes?: string | null
+          period?: string
+          preset_id?: string | null
+          recurrence?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_preset_id_fkey"
+            columns: ["preset_id"]
+            isOneToOne: false
+            referencedRelation: "expense_presets"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       roadmap_notas: {
         Row: {
@@ -996,6 +1053,11 @@ export type Database = {
         Args: { p_assigned_to: string; p_filas: Json; p_simular?: boolean }
         Returns: Json
       }
+      crm_lineas_de_seccion: {
+        Args: { p_texto: string; p_titulo: string }
+        Returns: string[]
+      }
+      crm_normalizar: { Args: { p: string }; Returns: string }
       crm_puede: {
         Args: { p_nivel: string; p_owner: string }
         Returns: boolean
@@ -1008,6 +1070,8 @@ export type Database = {
         Args: { p_lead_id: string; p_nivel: string }
         Returns: boolean
       }
+      crm_telefonos: { Args: { p: string }; Returns: string[] }
+      crm_url_clave: { Args: { p: string }; Returns: string }
       es_usuario: { Args: never; Returns: boolean }
     }
     Enums: {

@@ -95,21 +95,80 @@ create index if not exists roadmap_tareas_backlog_idx on public.roadmap_tareas (
 create index if not exists roadmap_tareas_hoy_idx     on public.roadmap_tareas (hoy) where hoy;
 
 -- ---------- Caja ----------
-create table if not exists public.roadmap_caja (
-  id         text primary key,
-  fecha      date,
-  concepto   text not null default '',
-  categoria  text not null default '',
-  monto      numeric not null default 0,
-  cuenta     text not null default '',
-  notas      text not null default '',
-  orden      double precision not null,
-  updated_at timestamptz not null default now(),
-  repite     text not null default '',
-  origen     text not null default '',
-  carga      jsonb not null default '[]'::jsonb
+-- Gastos fijos y variables (11/10/2026), copiado y podado de ms-frontend. Reemplazó a
+-- `roadmap_caja`, la del tablero vanilla; el porqué está en la migración `expenses`.
+
+-- Plantillas.
+-- Un gasto fijo es una plantilla más una fila de `expenses` por período. Mientras el
+-- período no tiene su fila, la plantilla cuenta igual como comprometido (con `default_amount`).
+create table if not exists public.expense_presets (
+  id             uuid primary key default gen_random_uuid(),
+  name           text not null,
+  expense_type   text not null check (expense_type in ('FIXED', 'VARIABLE')),
+  recurrence     text not null default 'ONE_TIME' check (recurrence in ('MONTHLY', 'ONE_TIME')),
+  default_amount numeric check (default_amount is null or default_amount > 0),
+  due_day        integer check (due_day between 1 and 31),
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now(),
+  deleted_at     timestamptz
 );
-create index if not exists roadmap_caja_origen_idx on public.roadmap_caja (origen) where origen <> '';
+
+-- Gastos.
+-- `preset_id` nulo es un gasto suelto. `period` ('YYYY-MM') es el mes al que se imputa, que no
+-- tiene por qué ser el de `date` (el día en que se pagó, si se pagó).
+create table if not exists public.expenses (
+  id           uuid primary key default gen_random_uuid(),
+  preset_id    uuid references public.expense_presets(id) on delete restrict,
+  expense_name text not null,
+  expense_type text not null check (expense_type in ('FIXED', 'VARIABLE')),
+  amount       numeric not null check (amount > 0),
+  date         date,
+  period       text not null check (period ~ '^\d{4}-(0[1-9]|1[0-2])$'),
+  recurrence   text not null default 'MONTHLY' check (recurrence in ('MONTHLY', 'ONE_TIME')),
+  status       text not null default 'PAID' check (status in ('PENDING', 'PAID')),
+  notes        text,
+  created_by   uuid default auth.uid() references public.users(id) on delete restrict,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  deleted_at   timestamptz
+);
+create index if not exists expenses_period_idx on public.expenses (period)
+  where deleted_at is null;
+create index if not exists expenses_preset_idx on public.expenses (preset_id)
+  where deleted_at is null;
+-- Esto no está en ms-frontend: una etiqueta fija tiene a lo sumo un gasto vivo por mes. Sin el
+-- índice, dos clics en «Pagar» lo cobran dos veces. Solo los fijos: los variables también llevan
+-- etiqueta y puede haber varios por mes.
+create unique index if not exists expenses_preset_period_key
+  on public.expenses (preset_id, period)
+  where expense_type = 'FIXED' and deleted_at is null;
+-- Un fijo cargado está pagado: su pendiente es el mes sin fila, no una fila en PENDING.
+alter table public.expenses drop constraint if exists expenses_fixed_paid_check;
+alter table public.expenses add constraint expenses_fixed_paid_check
+  check (expense_type <> 'FIXED' or status = 'PAID');
+-- Una etiqueta no se repite (sin importar mayúsculas); las borradas no cuentan.
+create unique index if not exists expense_presets_name_key
+  on public.expense_presets (lower(name))
+  where deleted_at is null;
+
+drop trigger if exists expense_presets_set_updated_at on public.expense_presets;
+create trigger expense_presets_set_updated_at before update on public.expense_presets
+  for each row execute function public.set_updated_at();
+drop trigger if exists expenses_set_updated_at on public.expenses;
+create trigger expenses_set_updated_at before update on public.expenses
+  for each row execute function public.set_updated_at();
+
+-- RLS.
+-- La misma regla que tenía roadmap_caja: cualquiera con fila activa en `users`.
+alter table public.expense_presets enable row level security;
+alter table public.expenses        enable row level security;
+
+drop policy if exists expense_presets_m on public.expense_presets;
+create policy expense_presets_m on public.expense_presets for all
+  using (public.es_usuario()) with check (public.es_usuario());
+drop policy if exists expenses_m on public.expenses;
+create policy expenses_m on public.expenses for all
+  using (public.es_usuario()) with check (public.es_usuario());
 
 -- ---------- Notas (grupos del backlog + hoja de notas) ----------
 create table if not exists public.roadmap_notas (
@@ -122,12 +181,9 @@ create table if not exists public.roadmap_notas (
 
 -- ---------- Triggers de updated_at ----------
 -- En el origen roadmap_tareas usaba `roadmap_set_updated_at()`, un gemelo idéntico de
--- `set_updated_at()`. Acá se usa una sola función para las tres.
+-- `set_updated_at()`. Acá se usa una sola función para todas.
 drop trigger if exists roadmap_tareas_set_updated_at on public.roadmap_tareas;
 create trigger roadmap_tareas_set_updated_at before update on public.roadmap_tareas
-  for each row execute function public.set_updated_at();
-drop trigger if exists roadmap_caja_set_updated_at on public.roadmap_caja;
-create trigger roadmap_caja_set_updated_at before update on public.roadmap_caja
   for each row execute function public.set_updated_at();
 drop trigger if exists roadmap_notas_set_updated_at on public.roadmap_notas;
 create trigger roadmap_notas_set_updated_at before update on public.roadmap_notas
@@ -139,7 +195,6 @@ create trigger users_set_updated_at before update on public.users
 -- ---------- RLS ----------
 alter table public.users          enable row level security;
 alter table public.roadmap_tareas enable row level security;
-alter table public.roadmap_caja   enable row level security;
 alter table public.roadmap_notas  enable row level security;
 
 -- Todo el equipo se ve (avatares, menús, firma del chat). Sin policies de escritura: altas,
@@ -150,9 +205,6 @@ create policy users_select on public.users for select using (public.es_usuario()
 drop policy if exists roadmap_tareas_m on public.roadmap_tareas;
 create policy roadmap_tareas_m on public.roadmap_tareas for all
   using (public.es_usuario()) with check (public.es_usuario());
-drop policy if exists roadmap_caja_m on public.roadmap_caja;
-create policy roadmap_caja_m on public.roadmap_caja for all
-  using (public.es_usuario()) with check (public.es_usuario());
 drop policy if exists roadmap_notas_m on public.roadmap_notas;
 create policy roadmap_notas_m on public.roadmap_notas for all
   using (public.es_usuario()) with check (public.es_usuario());
@@ -162,7 +214,7 @@ create policy roadmap_notas_m on public.roadmap_notas for all
 do $$
 declare t text;
 begin
-  foreach t in array array['roadmap_tareas','roadmap_caja','roadmap_notas'] loop
+  foreach t in array array['roadmap_tareas','roadmap_notas'] loop
     if not exists (select 1 from pg_publication_tables
                    where pubname='supabase_realtime' and schemaname='public' and tablename=t) then
       execute format('alter publication supabase_realtime add table public.%I', t);
