@@ -408,7 +408,7 @@ create index if not exists crm_leads_gestion_reference_at_idx
 -- Desde cuándo volver a llamar a un descartado que «no califica, pero podría calificar» (descarte +
 -- 6 meses). La escribe el front al descartar y la borra al volver al funnel; la lista los vuelve a
 -- mostrar en «Para recontactar». `discard_reason` guarda el código del motivo (`MOTIVOS_DE_DESCARTE`
--- del front); los descartes de antes guardan texto libre. Migración `20261010210000_crm_etapas_y_motivos_descarte`.
+-- del front); los descartes de antes guardan texto libre. Migración `20261012214308_crm_etapas_y_motivos_descarte`.
 alter table public.crm_leads add column if not exists recontact_at date;
 
 create table if not exists public.crm_meetings (
@@ -1238,9 +1238,10 @@ select * from (values
 ) v(name, color, position, management_tolerance_hours)
 where not exists (select 1 from public.crm_priorities);
 
--- Las etapas del SDR (10/10/2026, migración `20261010210000_crm_etapas_y_motivos_descarte`). La
--- primera es la NEW de siempre, renombrada: el alta y el importador la buscan por `value`. Las del
--- medio son CUSTOM, como las que se crean desde la configuración del funnel.
+-- Las etapas del SDR (10/10/2026). La primera es la NEW de siempre, renombrada: el alta y el
+-- importador la buscan por `value`. Las del medio son CUSTOM, como las que se crean desde la
+-- configuración del funnel. Solo para un proyecto vacío: en producción no hubo migración de
+-- etapas (ya tenía las suyas armadas a mano) y se acomodan desde la configuración del funnel.
 insert into public.crm_funnel_stages
   (label, value, position, priority_id, management_tolerance_hours,
    is_out_of_funnel, allow_delete, allow_reorder, allow_rename)
