@@ -1,0 +1,1150 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Caja — mock</title>
+<style>
+/* Tokens copiados de src/index.css (tema claro). */
+:root{
+  --brand:#3644F2; --brand-hover:oklch(0.50 0.2375 270); --brand-700:oklch(0.42 0.2125 270);
+  --brand-200:oklch(0.88 0.1625 270); --brand-soft:oklch(0.975 0.045 270);
+  --bg-page:#fff; --surface:#fff; --surface-2:#F8FAFF; --surface-3:#F3F7FF;
+  --line:#DDE3F2; --line-strong:#C9D2EE; --line-soft:#E9EDF7;
+  --fg:#080D41; --fg-2:#5F6885; --fg-muted:#8992AA; --fg-faint:#B6BECF;
+  --success-soft:#EEF7E8; --success-strong:#4A7527;
+  --warning:#D99A24; --warning-soft:#FFF6E3; --warning-strong:#8A5A0B;
+  --danger:#D94A4A;
+  /* El paso 2 del selector (naranja) es propio del componente de ms-frontend. */
+  --step2:#a8501b; --step2-soft:#fbeee3; --step2-line:#e6c4a6;
+  --shadow-sm:0 1px 3px rgba(8,13,65,.05); --shadow-md:0 6px 20px rgba(8,13,65,.08); --shadow-lg:0 14px 40px rgba(8,13,65,.10);
+  --font-sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-sans);font-size:14px;color:var(--fg);background:var(--bg-page);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer}
+button:disabled{cursor:not-allowed}
+.num{font-variant-numeric:tabular-nums}
+
+.mock-banner{background:var(--warning-soft);color:var(--warning-strong);border-bottom:1px solid #f1dfb4;font-size:12px;padding:7px 16px;text-align:center}
+.page{max-width:1120px;margin:0 auto;padding:24px 24px 72px}
+h1{font-size:22px;font-weight:650;letter-spacing:-.01em;margin:0 0 16px}
+
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:20px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:8px;font-size:13px;font-weight:600;white-space:nowrap;transition:background .15s}
+.btn-primary{background:var(--brand);color:#fff}
+.btn-primary:hover{background:var(--brand-hover)}
+.btn-ghost{border:1px solid var(--line-strong);background:#fff}
+.btn-ghost:hover{background:var(--surface-2)}
+
+/* ===================== DatesSelectorV2 ===================== */
+.dsv2{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.dsv2-label{font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-muted)}
+.dsv2-modes{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--line-strong);background:var(--surface-2);border-radius:8px}
+.dsv2-modes button{height:30px;padding:0 12px;border-radius:6px;font-size:12px;font-weight:500;color:var(--fg-2);transition:color .15s}
+.dsv2-modes button:hover{color:var(--fg)}
+.dsv2-modes button[aria-pressed=true]{background:#fff;color:var(--brand-700);box-shadow:var(--shadow-sm)}
+.dsv2-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.dsv2-today{width:80px;height:30px;flex-shrink:0;border-radius:6px;font-size:12px;font-weight:600;border:1px solid var(--brand-200);background:var(--brand-soft);color:var(--brand-700)}
+.dsv2-today:hover:not(:disabled){background:#fff}
+.dsv2-today:disabled{border-color:var(--line);background:var(--surface-2);color:var(--fg-muted);font-weight:500}
+.dsv2-sep{width:1px;height:24px;background:var(--line);flex-shrink:0}
+.dsv2-field{display:inline-flex;align-items:center;height:36px;overflow:hidden;border:1px solid var(--line-strong);border-radius:8px;background:#fff;box-shadow:var(--shadow-sm);transition:border-color .15s,box-shadow .15s}
+.dsv2-field.active{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.dsv2-field .lbl{display:flex;align-items:center;height:100%;padding:0 10px;border-right:1px solid var(--line-soft);font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-muted)}
+.dsv2-field.active .lbl{color:var(--brand-700)}
+.dsv2-step{display:grid;place-items:center;width:28px;height:100%;color:var(--fg-muted)}
+.dsv2-step:first-of-type{border-right:1px solid var(--line-soft)}
+.dsv2-step:last-of-type{border-left:1px solid var(--line-soft)}
+.dsv2-step:hover:not(:disabled){background:var(--surface-2);color:var(--fg)}
+.dsv2-step:disabled{opacity:.3}
+.dsv2-val{width:160px;height:100%;padding:0 12px;font-size:13px;font-weight:500;white-space:nowrap;font-variant-numeric:tabular-nums}
+.dsv2-val:hover{background:var(--surface-2)}
+.dsv2-pop{position:absolute;top:100%;left:0;z-index:30;margin-top:6px;display:flex;overflow:hidden;border:1px solid var(--line);border-radius:12px;background:#fff;box-shadow:var(--shadow-lg);width:max-content;max-width:calc(100vw - 2rem)}
+.dsv2-presets{display:flex;flex-direction:column;gap:1px;min-width:168px;padding:8px;border-right:1px solid var(--line-soft)}
+.dsv2-presets .ttl{padding:4px 8px;font-size:10px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-muted)}
+.dsv2-plist{display:flex;flex-direction:column;gap:1px}
+.dsv2-plist button{padding:6px 10px;border-radius:6px;text-align:left;font-size:13px;white-space:nowrap;color:var(--fg-2)}
+.dsv2-plist button:hover{background:var(--surface-2);color:var(--fg)}
+.dsv2-plist button[aria-pressed=true]{background:var(--brand-soft);color:var(--brand-700);font-weight:600}
+.dsv2-cal{width:288px;padding:10px;flex-shrink:0}
+.dsv2-hint{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;padding:6px 10px;border:1px solid var(--brand-200);border-radius:6px;background:var(--brand-soft);color:var(--brand-700);font-size:12px;line-height:1.35}
+.dsv2-hint .n{display:grid;place-items:center;width:18px;height:18px;flex-shrink:0;border-radius:50%;background:var(--brand-700);color:#fff;font-size:10px;font-weight:500;margin-top:1px}
+.dsv2-hint.paso2{border-color:var(--step2-line);background:var(--step2-soft);color:var(--step2)}
+.dsv2-hint.paso2 .n{background:var(--step2)}
+.dsv2-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.dsv2-nav b{font-size:13px;font-weight:600}
+.dsv2-nav button{display:grid;place-items:center;width:24px;height:24px;border:1px solid var(--line-strong);border-radius:6px;color:var(--fg-2)}
+.dsv2-nav button:hover{background:var(--surface-2)}
+.dsv2-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px}
+.dsv2-grid .wd{padding-bottom:4px;text-align:center;font-size:10px;color:var(--fg-muted)}
+.dsv2-day{aspect-ratio:1;border-radius:6px;font-size:12px;font-variant-numeric:tabular-nums;transition:background .1s}
+.dsv2-day:hover{background:var(--surface-3)}
+.dsv2-day.out{color:var(--fg-muted)}
+.dsv2-day.hoy{color:var(--brand-700);font-weight:600}
+.dsv2-day.in{background:var(--brand-soft);border-radius:0}
+.dsv2-day.ini,.dsv2-day.fin{background:var(--brand);color:#fff;font-weight:600}
+.dsv2-day.ini:not(.fin){border-top-right-radius:0;border-bottom-right-radius:0}
+.dsv2-day.fin:not(.ini){border-top-left-radius:0;border-bottom-left-radius:0}
+.dsv2-day.ancla{box-shadow:0 0 0 1px #fff,0 0 0 3px var(--step2)}
+svg.ch{width:14px;height:14px}
+
+/* ===================== Resumen ===================== */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+.stat{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:#fff}
+.stat .k{font-size:11px;font-weight:500;letter-spacing:.05em;text-transform:uppercase;color:var(--fg-muted)}
+.stat .v{font-size:22px;font-weight:650;margin-top:4px;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.stat .s{font-size:12px;color:var(--fg-2);margin-top:2px}
+.stat.aviso{background:var(--warning-soft);border-color:#f1dfb4}
+.stat.aviso .v{color:var(--warning-strong)}
+
+/* ===================== Lista ===================== */
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.seg{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--line-strong);background:var(--surface-2);border-radius:8px}
+.seg button{height:28px;padding:0 12px;border-radius:6px;font-size:12px;font-weight:500;color:var(--fg-2)}
+.seg button .c{color:var(--fg-muted);font-weight:400;margin-left:4px}
+.seg button[aria-pressed=true]{background:#fff;color:var(--brand-700);box-shadow:var(--shadow-sm)}
+.toolbar .rango{font-size:12px;color:var(--fg-muted)}
+.toolbar .der{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+/* Switch «+ Pendientes» (el <Switch> de shadcn de ms-frontend: BalanceRow.tsx). */
+.sw{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:500;color:var(--fg-2);cursor:pointer;user-select:none}
+.sw input{position:absolute;opacity:0;pointer-events:none}
+.sw .track{position:relative;width:32px;height:18px;border-radius:9px;background:var(--line-strong);transition:background .15s}
+.sw .track::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:var(--shadow-sm);transition:transform .15s}
+.sw input:checked + .track{background:var(--brand)}
+.sw input:checked + .track::after{transform:translateX(14px)}
+.sw input:focus-visible + .track{box-shadow:0 0 0 3px var(--brand-soft)}
+.stat.apagada .v{color:var(--fg-faint)}
+
+.lista{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#fff}
+.mes{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--surface-2);border-top:1px solid var(--line-soft);font-size:12px;font-weight:600;color:var(--fg-2)}
+.mes:first-child{border-top:0}
+.mes span:first-child{text-transform:capitalize}
+.fila{display:grid;grid-template-columns:52px minmax(0,1fr) 200px 110px 96px;align-items:center;gap:12px;padding:11px 16px;border-top:1px solid var(--line-soft)}
+.mes + .fila{border-top:0}
+.fila:hover{background:var(--surface-2)}
+.f-fecha{display:flex;flex-direction:column;align-items:center;line-height:1.1}
+.f-fecha b{font-size:16px;font-weight:650;font-variant-numeric:tabular-nums}
+.f-fecha span{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--fg-muted)}
+.f-nombre .nom{font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.f-nombre .sub{font-size:12px;color:var(--fg-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.f-tags{display:flex;gap:6px;align-items:center}
+.tipo{display:inline-flex;justify-content:center;width:70px;padding:2px 0;border-radius:20px;font-size:11px;font-weight:600}
+.tipo.fijo{background:var(--brand-soft);color:var(--brand-700)}
+.tipo.var{background:var(--surface-3);color:var(--fg-2)}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+.chip.pagado{background:var(--success-soft);color:var(--success-strong)}
+.chip.pendiente{background:var(--warning-soft);color:var(--warning-strong)}
+.f-monto{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.f-monto.estimado{color:var(--fg-muted);font-weight:500}
+.f-acc{display:flex;justify-content:flex-end;gap:4px}
+.mini{height:26px;padding:0 10px;border-radius:6px;font-size:12px;font-weight:600;border:1px solid var(--brand-200);background:var(--brand-soft);color:var(--brand-700)}
+.mini:hover{background:#fff}
+.x{display:grid;place-items:center;width:26px;height:26px;border-radius:6px;color:var(--fg-faint);opacity:0}
+.fila:hover .x{opacity:1}
+.x:hover{background:#fff;color:var(--danger)}
+.vacio{padding:48px 16px;text-align:center;color:var(--fg-muted)}
+.vacio p{margin:0 0 14px}
+
+/* ===================== Modal ===================== */
+.overlay{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:16px;background:rgba(8,13,65,.28)}
+.dialog{width:100%;max-width:440px;background:#fff;border-radius:16px;box-shadow:var(--shadow-lg);overflow:hidden}
+.dialog header{padding:18px 20px 6px}
+.dialog header h2{font-size:16px;font-weight:650;margin:0}
+.dialog header p{margin:4px 0 0;font-size:12.5px;color:var(--fg-muted)}
+.dialog .body{padding:12px 20px 4px;display:flex;flex-direction:column;gap:12px}
+.campo{display:flex;flex-direction:column;gap:5px}
+.campo label,.campo .lab{font-size:12px;font-weight:600;color:var(--fg-2)}
+.campo input,.campo textarea,.campo select{height:36px;padding:0 10px;border:1px solid var(--line-strong);border-radius:8px;background:#fff;font-size:13.5px;outline:none}
+.campo textarea{height:64px;padding:8px 10px;resize:vertical}
+.campo input:focus,.campo textarea:focus,.campo select:focus{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.dos{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg-2)}
+.ayuda{font-size:12px;color:var(--fg-muted);margin:-4px 0 0}
+.err{font-size:12px;color:var(--danger);min-height:16px}
+/* Combobox de etiquetas (BusinessExpenseNameInput). */
+.cb{position:relative}
+.cb input{width:100%}
+.cb-pop{position:absolute;z-index:5;top:100%;left:0;right:0;margin-top:4px;max-height:240px;overflow-y:auto;padding:4px;border:1px solid var(--line);border-radius:8px;background:#fff;box-shadow:var(--shadow-md)}
+.cb-grp{padding:4px 6px}
+.cb-grp .tipo{width:auto;padding:2px 7px;font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+.cb-opt{display:flex;justify-content:space-between;align-items:baseline;gap:12px;width:100%;padding:7px 8px;border-radius:6px;text-align:left;font-size:13.5px}
+.cb-opt.act,.cb-opt:hover{background:var(--surface-3)}
+.cb-meta{font-size:12px;color:var(--fg-muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.cb-nueva{color:var(--brand-700);font-weight:550;border-top:1px solid var(--line-soft);margin-top:4px;padding-top:9px}
+.cb-msg{margin:0;padding:10px 8px;font-size:12px;color:var(--fg-muted);text-align:center}
+.cb-info{display:flex;align-items:center;flex-wrap:wrap;gap:4px;min-height:18px;font-size:12px;color:var(--fg-2)}
+.cb-info .tipo{width:auto;padding:1px 8px;margin-right:2px}
+.cb-ya{color:var(--warning-strong);font-weight:600}
+.overlay-2{z-index:60;background:rgba(8,13,65,.18)}
+/* Gestionar etiquetas (ExpensePresetsManager). */
+.head-acc{display:flex;gap:8px}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-danger:hover{background:#b23a3a}
+.g-head{display:flex;align-items:center;justify-content:space-between;padding-bottom:10px!important}
+.g-body{max-height:min(60vh,520px);overflow-y:auto;gap:18px!important;padding-top:4px!important}
+.g-add{width:100%;justify-content:center}
+.et-sec{margin:0 0 6px;padding:0 4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-muted)}
+.et-sec span{font-weight:500;margin-left:4px}
+.et-lista{border:1px solid var(--line-soft);border-radius:12px;overflow:hidden}
+.et-row{display:flex;align-items:center;gap:8px;padding:9px 10px 9px 12px}
+.et-row + .et-row{border-top:1px solid var(--line-soft)}
+.et-row:hover{background:var(--surface-2)}
+.et-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.et-nom{font-size:13.5px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.et-meta{font-size:12px;color:var(--fg-muted);font-variant-numeric:tabular-nums}
+.et-acc{display:flex;gap:2px;opacity:0;transition:opacity .15s}
+.et-row:hover .et-acc,.et-row:focus-within .et-acc{opacity:1}
+.et-btn{display:grid;place-items:center;width:28px;height:28px;border-radius:6px;color:var(--fg-muted)}
+.et-btn:hover{background:#fff;color:var(--fg)}
+.et-btn.del:hover{color:var(--danger)}
+.prop{gap:8px!important}
+.prop-opt{display:flex;flex-direction:column;gap:2px;width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:12px;text-align:left;transition:border-color .15s,background .15s}
+.prop-opt b{font-size:13.5px;font-weight:600}
+.prop-opt span{font-size:12px;color:var(--fg-muted)}
+.prop-opt.forward:hover{border-color:var(--brand-200);background:var(--brand-soft)}
+.prop-opt.all:hover{border-color:#f1dfb4;background:var(--warning-soft)}
+.prop-opt.none:hover{border-color:var(--line-strong);background:var(--surface-2)}
+.dialog footer:empty{padding:0 0 10px}
+@media (max-width:760px){ .et-acc{opacity:1} }
+.dialog footer{display:flex;justify-content:flex-end;gap:8px;padding:12px 20px 18px}
+
+/* ===================== Teléfono ===================== */
+@media (max-width:760px){
+  .page{padding:16px 16px 72px}
+  .stats{grid-template-columns:1fr 1fr}
+  .fila{grid-template-columns:40px minmax(0,1fr) auto;grid-template-areas:"fecha nombre monto" "fecha tags acc";row-gap:6px}
+  .f-fecha{grid-area:fecha}.f-nombre{grid-area:nombre}.f-tags{grid-area:tags}.f-monto{grid-area:monto}.f-acc{grid-area:acc}
+  .x{opacity:1}
+}
+@media (max-width:640px){
+  .dsv2,.dsv2-row{width:100%}
+  .dsv2-sep{display:none}
+  .dsv2-field{width:100%}
+  .dsv2-val{flex:1;width:auto}
+  .dsv2-pop{flex-direction:column;width:100%}
+  .dsv2-presets{border-right:0;border-bottom:1px solid var(--line-soft);min-width:0}
+  .dsv2-plist{flex-direction:row;overflow-x:auto;gap:4px}
+  .dsv2-plist button{flex-shrink:0}
+  .dsv2-cal{width:100%}
+  .dsv2-day{min-height:44px;aspect-ratio:auto}
+  .head-acc{width:100%}
+  .head-acc .btn{flex:1;justify-content:center}
+  .dos{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="mock-banner">Mock — datos de ejemplo en memoria, no toca la base. Modelo: <code>expense_presets</code> + <code>expenses</code>.</div>
+
+<main class="page">
+  <h1>Caja</h1>
+  <div class="head">
+    <div id="selector"></div>
+    <div class="head-acc">
+      <button class="btn btn-ghost" data-gestionar title="Gestionar etiquetas"><svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>Etiquetas</button>
+      <button class="btn btn-primary" data-nuevo>+ Nuevo gasto</button>
+    </div>
+  </div>
+
+  <section class="stats" id="stats"></section>
+
+  <div class="toolbar">
+    <div class="seg" id="filtroTipo" role="group" aria-label="Tipo de gasto"></div>
+    <div class="der">
+      <label class="sw" title="Sumar a la lista y a los totales lo que todavía no se pagó: variables pendientes y fijos sin pagar en el período">
+        <input type="checkbox" id="withPending" role="switch"><span class="track" aria-hidden="true"></span>+ Pendientes
+      </label>
+      <span class="rango" id="rangoTxt"></span>
+    </div>
+  </div>
+  <section class="lista" id="lista"></section>
+</main>
+
+<div id="modal"></div>
+<div id="modal2"></div>
+<div id="modal3"></div>
+<div id="modal4"></div>
+<div id="modal5"></div>
+
+<script>
+/* ============================================================
+   Fechas: CalendarDay = 'YYYY-MM-DD' local, como @/lib/dates de ms-frontend.
+   ============================================================ */
+const pad = n => String(n).padStart(2, '0');
+const toDay = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseDay = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (s, n) => { const d = parseDay(s); d.setDate(d.getDate() + n); return toDay(d); };
+const todayLocal = () => toDay(new Date());
+const monthStart = s => { const d = parseDay(s); return toDay(new Date(d.getFullYear(), d.getMonth(), 1)); };
+const monthEnd = s => { const d = parseDay(s); return toDay(new Date(d.getFullYear(), d.getMonth() + 1, 0)); };
+const addMonths = (s, n) => { const d = parseDay(s); return toDay(new Date(d.getFullYear(), d.getMonth() + n, 1)); };
+const mondayOf = s => addDays(s, -((parseDay(s).getDay() + 6) % 7));
+const fmtDay = (s, opts) => parseDay(s).toLocaleDateString('es-ES', opts);
+const periodOf = s => s.slice(0, 7);
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+const monthTitle = s => cap(fmtDay(s, { month: 'long', year: 'numeric' }));
+const periodTitle = p => monthTitle(p + '-01');
+/** Día de vencimiento dentro del período; un 31 en febrero cae el último día. */
+function dueDate(period, dueDay) {
+  const [y, m] = period.split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return toDay(new Date(y, m - 1, Math.min(dueDay || 1, last)));
+}
+const money = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
+const eur = n => money.format(n);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+/* ============================================================
+   Datos de ejemplo, relativos al mes actual. Columnas = las de la migración.
+   ============================================================ */
+const TODAY = todayLocal();
+const M0 = monthStart(TODAY), M1 = addMonths(M0, -1), M2 = addMonths(M0, -2);
+const dia = (mes, n) => dueDate(periodOf(mes), n);
+let seq = 100;
+const uid = () => 'id' + (++seq);
+
+const presets = [
+  { id: 'p1', name: 'Google Workspace', expense_type: 'FIXED', recurrence: 'MONTHLY', default_amount: 36, due_day: 1, created_at: M2 },
+  { id: 'p2', name: 'Hetzner — servidor app Idealista', expense_type: 'FIXED', recurrence: 'MONTHLY', default_amount: 25, due_day: 3, created_at: M2 },
+  { id: 'p3', name: 'Supabase', expense_type: 'FIXED', recurrence: 'MONTHLY', default_amount: 10, due_day: 3, created_at: M2 },
+  { id: 'p6', name: 'Coworking', expense_type: 'FIXED', recurrence: 'MONTHLY', default_amount: 280, due_day: 5, created_at: M2 },
+  { id: 'p4', name: 'Vercel Pro', expense_type: 'FIXED', recurrence: 'MONTHLY', default_amount: 20, due_day: 15, created_at: M2 },
+  { id: 'p5', name: 'Claude Team', expense_type: 'FIXED', recurrence: 'MONTHLY', default_amount: 150, due_day: 20, created_at: M1 },
+  // Etiquetas variables: no generan pendientes por período, solo agrupan los gastos sueltos.
+  ...[['v1', 'Anuncios LinkedIn'], ['v2', 'Comidas y reuniones'], ['v3', 'Freelance'], ['v4', 'Datos y scraping'],
+      ['v5', 'Viajes'], ['v6', 'Material de oficina'], ['v7', 'Registro de marca']].map(([id, name]) =>
+    ({ id, name, expense_type: 'VARIABLE', recurrence: 'ONE_TIME', default_amount: null, due_day: null, created_at: M2 })),
+];
+
+const expenses = [];
+const fijo = (p, mes, status, date) => expenses.push({
+  id: uid(), preset_id: p.id, expense_name: p.name, expense_type: 'FIXED', amount: p.default_amount,
+  date, period: periodOf(mes), recurrence: 'MONTHLY', status, notes: null, deleted_at: null });
+const variable = (presetId, amount, date, status = 'PAID', notes = null) => expenses.push({
+  id: uid(), preset_id: presetId, expense_name: presets.find(p => p.id === presetId).name, expense_type: 'VARIABLE', amount,
+  date, period: periodOf(date), recurrence: 'ONE_TIME', status, notes, deleted_at: null });
+
+for (const mes of [M2, M1]) for (const p of presets)
+  if (p.expense_type === 'FIXED' && periodOf(p.created_at) <= periodOf(mes)) fijo(p, mes, 'PAID', dia(mes, p.due_day));
+fijo(presets[0], M0, 'PAID', dia(M0, 1));
+fijo(presets[1], M0, 'PAID', dia(M0, 3));
+fijo(presets[2], M0, 'PAID', dia(M0, 3));
+// Coworking, Vercel y Claude de este mes: sin cargar = pendientes (los pone la etiqueta).
+
+variable('v1', 120, dia(M0, 2), 'PAID', 'Campaña BCN');
+variable('v2', 46.5, dia(M0, 7), 'PAID', 'Inmobiliaria de Gràcia, por el lote BCN-S01');
+variable('v3', 300, dia(M0, 9), 'PENDING', 'Diseño landing — factura recibida, se paga a fin de mes');
+variable('v4', 80, dia(M1, 4), 'PAID', 'Base de agencias');
+variable('v5', 64.9, dia(M1, 12), 'PAID', 'Tren a Madrid');
+variable('v1', 120, dia(M1, 22));
+variable('v6', 18.4, dia(M1, 27));
+variable('v7', 150, dia(M2, 10));
+variable('v1', 90, dia(M2, 18));
+
+/* ============================================================
+   DatesSelectorV2 — port vanilla de ms-frontend/src/components/admin/datesSelectorV2.
+   Mismo contrato: lo único que sale es { mode, from, to }; el atajo muere adentro.
+   ============================================================ */
+const SELECTOR_LABEL = 'Selector de fechas';
+const MODE_LABEL = { single: 'Día', range: 'Rango' };
+const ACTIVATED_MODES = ['single', 'range'];
+const WEEKDAYS = ['lu', 'ma', 'mi', 'ju', 'vi', 'sá', 'do'];
+const DAY_FORMAT = { day: 'numeric', month: 'short', year: 'numeric' };
+const SHORT_DAY_FORMAT = { day: 'numeric', month: 'short' };
+const ICON_L = '<svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>';
+const ICON_R = '<svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>';
+
+const oneDay = d => ({ from: d, to: d });
+const weekFrom = mon => ({ from: mon, to: addDays(mon, 6) });
+const PRESETS = [
+  { key: 'hoy', label: 'Hoy', scope: 'single', resolve: () => oneDay(todayLocal()) },
+  { key: 'ayer', label: 'Ayer', scope: 'single', resolve: () => oneDay(addDays(todayLocal(), -1)) },
+  { key: 'anteayer', label: 'Anteayer', scope: 'single', resolve: () => oneDay(addDays(todayLocal(), -2)) },
+  { key: 'haceUnaSemana', label: 'Hace una semana', scope: 'single', resolve: () => oneDay(addDays(todayLocal(), -7)) },
+  { key: 'estaSemana', label: 'Esta semana', scope: 'range', resolve: () => weekFrom(mondayOf(todayLocal())) },
+  { key: 'estaSemanaHastaHoy', label: 'Esta semana hasta hoy', scope: 'range',
+    available: () => mondayOf(todayLocal()) !== todayLocal(),
+    resolve: () => ({ from: mondayOf(todayLocal()), to: todayLocal() }) },
+  { key: 'semanaPasada', label: 'Semana pasada', scope: 'range', resolve: () => weekFrom(addDays(mondayOf(todayLocal()), -7)) },
+  { key: 'ultimos7', label: 'Últimos 7 días', scope: 'range', resolve: () => ({ from: addDays(todayLocal(), -6), to: todayLocal() }) },
+  { key: 'ultimos30', label: 'Últimos 30 días', scope: 'range', resolve: () => ({ from: addDays(todayLocal(), -29), to: todayLocal() }) },
+  { key: 'esteMes', label: 'Este mes entero', scope: 'range', resolve: () => ({ from: monthStart(todayLocal()), to: monthEnd(todayLocal()) }) },
+  { key: 'esteMesHastaHoy', label: 'Este mes hasta hoy', scope: 'range', resolve: () => ({ from: monthStart(todayLocal()), to: todayLocal() }) },
+  { key: 'mesPasado', label: 'Mes pasado', scope: 'range', resolve: () => { const l = addDays(monthStart(todayLocal()), -1); return { from: monthStart(l), to: monthEnd(l) }; } },
+  { key: 'esteTrimestre', label: 'Este trimestre', scope: 'range', resolve: () => {
+      const d = parseDay(todayLocal()); const f = Math.floor(d.getMonth() / 3) * 3;
+      return { from: toDay(new Date(d.getFullYear(), f, 1)), to: toDay(new Date(d.getFullYear(), f + 3, 0)) }; } },
+  { key: 'esteAnio', label: 'Este año', scope: 'range', resolve: () => { const y = parseDay(todayLocal()).getFullYear(); return { from: `${y}-01-01`, to: `${y}-12-31` }; } },
+];
+const presetsForMode = mode => PRESETS.filter(p => p.scope === (mode === 'single' ? 'single' : 'range') && (p.available?.() ?? true));
+const activePresetKey = (v) => presetsForMode(v.mode).find(p => { const r = p.resolve(); return r.from === v.from && r.to === v.to; })?.key ?? null;
+
+// Arranca en «Este mes entero»: la caja se mira por mes.
+let sel = { mode: 'range', ...PRESETS.find(p => p.key === 'esteMes').resolve() };
+let ui = { open: false, anchor: null, navMonth: monthStart(sel.from) };
+
+function emit(mode, from, to) { sel = { mode, from, to }; renderTodo(); }
+
+function grid(navMonth) {
+  const first = monthStart(navMonth);
+  const lead = (parseDay(first).getDay() + 6) % 7;
+  const start = addDays(first, -lead);
+  return Array.from({ length: 42 }, (_, i) => addDays(start, i));
+}
+
+function dayField(id, label, day, active) {
+  return `<span class="dsv2-field ${active ? 'active' : ''}">
+    <span class="lbl">${label}</span>
+    <button class="dsv2-step" data-act="${id}-prev" aria-label="${label}: día anterior">${ICON_L}</button>
+    <button class="dsv2-val" data-act="open" aria-expanded="${ui.open}">${fmtDay(day, DAY_FORMAT)}</button>
+    <button class="dsv2-step" data-act="${id}-next" aria-label="${label}: día siguiente">${ICON_R}</button>
+  </span>`;
+}
+
+function renderSelector() {
+  const isSingle = sel.mode === 'single';
+  const today = todayLocal();
+  const isOnToday = isSingle && sel.from === today;
+  const shortcutDisabled = !isSingle || isOnToday;
+  const shortcutLabel = !isSingle ? 'Rango' : isOnToday ? 'Hoy' : 'Ir a hoy';
+  const hint = isSingle ? 'Elegí el día'
+    : ui.anchor ? `Ahora el hasta · desde ${fmtDay(ui.anchor, SHORT_DAY_FORMAT)}` : 'Elegí el día desde';
+  const activeKey = activePresetKey(sel);
+  const navIdx = parseDay(ui.navMonth).getMonth();
+
+  let html = `<div class="dsv2" role="group" aria-label="${SELECTOR_LABEL}" title="${SELECTOR_LABEL}">
+    <span class="dsv2-label">${SELECTOR_LABEL}</span>`;
+  if (ACTIVATED_MODES.length > 1) {
+    html += `<div class="dsv2-modes" role="group" aria-label="Modo">${ACTIVATED_MODES.map(m =>
+      `<button data-act="mode:${m}" aria-pressed="${sel.mode === m}">${MODE_LABEL[m]}</button>`).join('')}</div>`;
+  }
+  html += `<div class="dsv2-row">
+    <button class="dsv2-today" data-act="today" ${shortcutDisabled ? 'disabled' : ''}>${shortcutLabel}</button>
+    <span class="dsv2-sep" aria-hidden="true"></span>
+    ${dayField('from', isSingle ? 'Fecha' : 'Desde', sel.from, ui.open && !ui.anchor)}
+    ${isSingle ? '' : dayField('to', 'Hasta', sel.to, ui.open && !!ui.anchor)}
+  </div>`;
+  if (ui.open) {
+    html += `<div class="dsv2-pop" title="">
+      <div class="dsv2-presets"><span class="ttl">Atajos</span><div class="dsv2-plist">${presetsForMode(sel.mode).map(p =>
+        `<button data-act="preset:${p.key}" aria-pressed="${activeKey === p.key}">${p.label}</button>`).join('')}</div></div>
+      <div class="dsv2-cal">
+        <div class="dsv2-hint ${ui.anchor ? 'paso2' : ''}"><span class="n">${ui.anchor ? 2 : 1}</span><span>${hint}</span></div>
+        <div class="dsv2-nav">
+          <button data-act="month-prev" aria-label="Mes anterior">${ICON_L}</button>
+          <b>${monthTitle(ui.navMonth)}</b>
+          <button data-act="month-next" aria-label="Mes siguiente">${ICON_R}</button>
+        </div>
+        <div class="dsv2-grid">${WEEKDAYS.map(d => `<span class="wd">${d}</span>`).join('')}${grid(ui.navMonth).map(day => {
+          const c = ['dsv2-day'];
+          if (parseDay(day).getMonth() !== navIdx) c.push('out');
+          const ini = day === sel.from, fin = day === sel.to;
+          if (day > sel.from && day < sel.to) c.push('in');
+          if (ini) c.push('ini'); if (fin) c.push('fin');
+          if (day === ui.anchor) c.push('ancla');
+          if (day === today && !ini && !fin) c.push('hoy');
+          return `<button class="${c.join(' ')}" data-act="day:${day}">${parseDay(day).getDate()}</button>`;
+        }).join('')}</div>
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+  document.getElementById('selector').innerHTML = html;
+}
+
+function onSelectorAction(act) {
+  const isSingle = sel.mode === 'single';
+  const [k, arg] = act.split(':');
+  const close = () => { ui.open = false; ui.anchor = null; };
+  switch (k) {
+    case 'mode': {
+      if (arg === sel.mode) return;
+      close();
+      if (arg === 'single') return emit('single', sel.from, sel.from);
+      const exp = sel.from === sel.to ? { from: addDays(sel.to, -6), to: sel.to } : sel;
+      return emit(arg, exp.from, exp.to);
+    }
+    case 'open':
+      ui.open = !ui.open; ui.anchor = null;
+      if (ui.open) ui.navMonth = monthStart(sel.from);
+      return renderSelector();
+    case 'today':
+      ui.anchor = null; ui.navMonth = monthStart(todayLocal());
+      return emit('single', todayLocal(), todayLocal());
+    case 'from-prev': case 'from-next': {
+      const from = addDays(sel.from, k === 'from-prev' ? -1 : 1);
+      return isSingle ? emit('single', from, from) : emit(sel.mode, from, from > sel.to ? from : sel.to);
+    }
+    case 'to-prev': case 'to-next': {
+      const to = addDays(sel.to, k === 'to-prev' ? -1 : 1);
+      return emit(sel.mode, sel.from, to < sel.from ? sel.from : to);
+    }
+    case 'month-prev': case 'month-next':
+      ui.navMonth = addMonths(ui.navMonth, k === 'month-prev' ? -1 : 1);
+      return renderSelector();
+    case 'preset': {
+      const r = PRESETS.find(p => p.key === arg).resolve();
+      ui.anchor = null; ui.navMonth = monthStart(r.from);
+      return emit(sel.mode, r.from, r.to);
+    }
+    case 'day': {
+      if (isSingle) { ui.open = false; return emit('single', arg, arg); }
+      if (ui.anchor) {
+        // Queda abierto: cerrar el rango es justo cuando querés verlo y corregirlo.
+        const a = ui.anchor; ui.anchor = null;
+        return a <= arg ? emit(sel.mode, a, arg) : emit(sel.mode, arg, a);
+      }
+      ui.anchor = arg;
+      return emit(sel.mode, arg, arg);
+    }
+  }
+}
+
+const selectorRoot = document.getElementById('selector');
+selectorRoot.addEventListener('click', ev => {
+  ev.dsv2 = true; // el repintado saca el target del DOM: el click de afuera no puede usar contains()
+  const b = ev.target.closest('[data-act]');
+  if (b && !b.disabled) onSelectorAction(b.dataset.act);
+});
+document.addEventListener('click', ev => {
+  if (ev.dsv2 || !ui.open) return;
+  ui.open = false; ui.anchor = null; renderSelector();
+});
+document.addEventListener('keydown', ev => {
+  if (ev.key !== 'Escape') return;
+  if (sub) return cerrarSub();
+  if (pago) return cerrarPago();
+  if (nueva) return cerrarNueva();
+  if (modal) return cerrarModal();
+  if (gestion) return cerrarGestion();
+  if (ui.open) { ui.open = false; ui.anchor = null; renderSelector(); }
+});
+
+/* ============================================================
+   La lista: qué gastos caen en [from, to].
+   - Variable: por `date`.
+   - Fijo: una fila por plantilla y por mes que toque el rango. Si el mes ya tiene su
+     fila en `expenses` (se pagó), es esa; si no, la pone la etiqueta como pendiente. Cae en el
+     rango por su fecha de pago o, si no se pagó, por su vencimiento.
+   ============================================================ */
+let filtroTipo = 'all';
+
+/* «+ Pendientes», como en ms-frontend: prendido de fábrica y en la URL solo cuando se apaga
+   (`?withPending=0`), así un enlace sin el parámetro muestra todo. Apagado, la lista y los
+   totales son solo lo pagado: se van los variables PENDING y los fijos sin pagar del período. */
+let withPending = new URLSearchParams(location.search).get('withPending') !== '0';
+function setWithPending(value) {
+  withPending = value;
+  const url = new URL(location.href);
+  if (value) url.searchParams.delete('withPending'); else url.searchParams.set('withPending', '0');
+  try { history.replaceState(null, '', url); } catch { /* file:// en algunos navegadores */ }
+  renderLista();
+}
+document.getElementById('withPending').addEventListener('change', ev => setWithPending(ev.target.checked));
+
+function filasDelRango(from, to) {
+  const vivos = expenses.filter(e => !e.deleted_at);
+  const filas = [];
+  const subFijo = p => p?.due_day ? `Mensual · vence el ${p.due_day}` : 'Mensual';
+  for (const e of vivos) {
+    if (e.expense_type === 'VARIABLE') {
+      if (!e.date || e.date < from || e.date > to) continue;
+      filas.push({ kind: 'VARIABLE', fecha: e.date, nombre: e.expense_name, sub: e.notes || '', status: e.status, amount: e.amount, expense: e });
+    } else {
+      // Los fijos ya cargados salen del gasto y no de la etiqueta: sobreviven a que la eliminen
+      // o le cambien el tipo. El nombre es el que quedó guardado en el gasto (`expense_name`).
+      const p = presets.find(x => x.id === e.preset_id);
+      const fecha = e.date ?? dueDate(e.period, p?.due_day);
+      if (fecha < from || fecha > to) continue;
+      filas.push({ kind: 'FIXED', fecha, nombre: e.expense_name, sub: subFijo(p), preset: p, period: e.period,
+                   expense: e, status: e.status, amount: e.amount });
+    }
+  }
+  // Pendientes: cada etiqueta fija viva, en cada mes del rango que todavía no tiene su gasto.
+  for (let mes = monthStart(from); mes <= to; mes = addMonths(mes, 1)) {
+    const period = periodOf(mes);
+    for (const p of presets) {
+      if (p.expense_type !== 'FIXED' || p.deleted_at || periodOf(p.created_at) > period) continue;
+      if (vivos.some(x => x.preset_id === p.id && x.period === period)) continue;
+      const fecha = dueDate(period, p.due_day);
+      if (fecha < from || fecha > to) continue;
+      filas.push({ kind: 'FIXED', fecha, nombre: p.name, sub: subFijo(p), preset: p, period,
+                   expense: null, status: 'NONE', amount: p.default_amount ?? 0 });
+    }
+  }
+  const visibles = withPending ? filas : filas.filter(f => f.status === 'PAID');
+  return visibles.sort((a, b) => b.fecha.localeCompare(a.fecha) || a.nombre.localeCompare(b.nombre));
+}
+
+// Un fijo sin cargar en el período ES el pendiente: mismo cartel que un variable pendiente.
+const CHIP = { PAID: ['pagado', 'Pagado'], PENDING: ['pendiente', 'Pendiente'], NONE: ['pendiente', 'Pendiente'] };
+
+function filaHTML(f) {
+  const [cls, txt] = CHIP[f.status];
+  let acc = '';
+  // Pagar abre un dialog en los dos casos: hay que decir cuándo se pagó.
+  if (f.status === 'NONE') acc = `<button class="mini" data-pagar-fijo="${f.preset.id}|${f.period}">Pagar</button>`;
+  else {
+    if (f.status === 'PENDING') acc += `<button class="mini" data-pagar="${f.expense.id}">Pagar</button>`;
+    acc += `<button class="x" data-borrar="${f.expense.id}" title="Borrar" aria-label="Borrar">✕</button>`;
+  }
+  const fechaTitle = f.status === 'PAID' ? 'Pagado el' : 'Vence el';
+  return `<div class="fila">
+    <div class="f-fecha" title="${fechaTitle} ${fmtDay(f.fecha, DAY_FORMAT)}"><b>${parseDay(f.fecha).getDate()}</b><span>${fmtDay(f.fecha, { month: 'short' }).replace('.', '')}</span></div>
+    <div class="f-nombre"><div class="nom">${esc(f.nombre)}</div>${f.sub ? `<div class="sub">${esc(f.sub)}</div>` : ''}</div>
+    <div class="f-tags"><span class="tipo ${f.kind === 'FIXED' ? 'fijo' : 'var'}">${f.kind === 'FIXED' ? 'Fijo' : 'Variable'}</span><span class="chip ${cls}">${txt}</span></div>
+    <div class="f-monto ${f.status === 'NONE' ? 'estimado' : ''}" ${f.status === 'NONE' ? 'title="Monto habitual de la etiqueta: el real se pone al pagar"' : ''}>${eur(f.amount)}</div>
+    <div class="f-acc">${acc}</div>
+  </div>`;
+}
+
+const suma = arr => arr.reduce((s, f) => s + f.amount, 0);
+
+function renderStats(filas) {
+  const pagado = filas.filter(f => f.status === 'PAID');
+  const porPagar = filas.filter(f => f.status !== 'PAID');
+  const sinReg = filas.filter(f => f.status === 'NONE').length;
+  const fijos = filas.filter(f => f.kind === 'FIXED'), vars = filas.filter(f => f.kind === 'VARIABLE');
+  document.getElementById('stats').innerHTML = `
+    <div class="stat"><div class="k">Total del período</div><div class="v">${eur(suma(filas))}</div><div class="s">${filas.length} gastos</div></div>
+    <div class="stat"><div class="k">Pagado</div><div class="v">${eur(suma(pagado))}</div><div class="s">${pagado.length} gastos</div></div>
+    ${withPending
+      ? `<div class="stat ${porPagar.length ? 'aviso' : ''}"><div class="k">Por pagar</div><div class="v">${eur(suma(porPagar))}</div><div class="s">${porPagar.length} pendientes${sinReg ? ` · ${sinReg} fijos sin pagar` : ''}</div></div>`
+      // Apagado no se dibuja «0 €»: no es que no haya nada por pagar, es que no se está mirando.
+      : `<div class="stat apagada"><div class="k">Por pagar</div><div class="v">—</div><div class="s">Pendientes ocultos</div></div>`}
+    <div class="stat"><div class="k">Fijos · Variables</div><div class="v">${eur(suma(fijos))}</div><div class="s">+ ${eur(suma(vars))} variables</div></div>`;
+}
+
+function renderLista() {
+  const todas = filasDelRango(sel.from, sel.to);
+  document.getElementById('withPending').checked = withPending;
+  renderStats(todas);
+  const n = { all: todas.length, FIXED: todas.filter(f => f.kind === 'FIXED').length, VARIABLE: todas.filter(f => f.kind === 'VARIABLE').length };
+  document.getElementById('filtroTipo').innerHTML = [['all', 'Todos'], ['FIXED', 'Fijos'], ['VARIABLE', 'Variables']].map(([k, l]) =>
+    `<button data-tipo="${k}" aria-pressed="${filtroTipo === k}">${l}<span class="c">${n[k]}</span></button>`).join('');
+  document.getElementById('rangoTxt').textContent = sel.from === sel.to
+    ? fmtDay(sel.from, { weekday: 'long', day: 'numeric', month: 'long' })
+    : `${fmtDay(sel.from, DAY_FORMAT)} → ${fmtDay(sel.to, DAY_FORMAT)}`;
+
+  const filas = filtroTipo === 'all' ? todas : todas.filter(f => f.kind === filtroTipo);
+  const lista = document.getElementById('lista');
+  if (!filas.length) {
+    lista.innerHTML = `<div class="vacio"><p>No hay gastos en este período.</p><button class="btn btn-ghost" data-nuevo>+ Nuevo gasto</button></div>`;
+    return;
+  }
+  // Separador por mes solo si el rango toca más de uno: en un mes solo, el título repetiría el selector.
+  const varios = periodOf(sel.from) !== periodOf(sel.to);
+  let html = '', mesActual = null;
+  for (const f of filas) {
+    const p = periodOf(f.fecha);
+    if (varios && p !== mesActual) {
+      mesActual = p;
+      const delMes = filas.filter(x => periodOf(x.fecha) === p);
+      html += `<div class="mes"><span>${periodTitle(p).toLowerCase()}</span><span class="num">${eur(suma(delMes))}</span></div>`;
+    }
+    html += filaHTML(f);
+  }
+  lista.innerHTML = html;
+}
+
+function renderTodo() { renderSelector(); renderLista(); }
+
+document.addEventListener('click', ev => {
+  const t = ev.target.closest('[data-tipo],[data-nuevo],[data-gestionar],[data-pagar-fijo],[data-pagar],[data-borrar]');
+  if (!t) return;
+  if (t.dataset.tipo) { filtroTipo = t.dataset.tipo; return renderLista(); }
+  if (t.hasAttribute('data-nuevo')) return abrirModal();
+  if (t.hasAttribute('data-gestionar')) return abrirGestion();
+  if (t.dataset.pagarFijo) { const [pid, period] = t.dataset.pagarFijo.split('|'); return abrirModal({ tipo: 'FIXED', presetId: pid, period }); }
+  if (t.dataset.pagar) return abrirPago(t.dataset.pagar);
+  if (t.dataset.borrar) { const e = expenses.find(x => x.id === t.dataset.borrar); e.deleted_at = new Date().toISOString(); return renderLista(); }
+});
+
+/* ============================================================
+   Alta de gasto — como NewExpenseDialog de ms-frontend: todo gasto lleva etiqueta
+   (un preset), también los variables. La etiqueta se busca con un combobox que es el
+   port de BusinessExpenseNameInput: filtra los presets del tipo elegido mientras escribís
+   y, si el nombre no existe, ofrece crearla ahí mismo.
+   ============================================================ */
+const $ = id => document.getElementById(id);
+const EXPENSE_TYPE_LABELS = { FIXED: 'Fijo', VARIABLE: 'Variable' };
+const presetsVivos = tipo => presets.filter(p => !p.deleted_at && p.expense_type === tipo);
+const mismoNombre = (a, b) => a.trim().toLowerCase() === b.trim().toLowerCase();
+const montoInput = n => n == null ? '' : String(n).replace('.', ',');
+const parseMonto = s => Number(String(s ?? '').trim().replace(/\./g, '').replace(',', '.'));
+
+let modal = null;   // el alta: { tipo, presetId, etiqueta, monto, fecha, period, estado, notas }
+let nueva = null;   // «Nueva etiqueta», encima del alta: { name, tipo, monto, dia }
+let cb = { open: false, idx: 0 };
+
+function abrirModal(init = {}) {
+  modal = { tipo: init.tipo ?? 'FIXED', presetId: null, etiqueta: '', monto: '', fecha: todayLocal(),
+            period: init.period ?? periodOf(todayLocal()), estado: 'PAID', notas: '' };
+  if (init.presetId) tomarPreset(presets.find(p => p.id === init.presetId));
+  cb = { open: false, idx: 0 };
+  renderModal();
+  (init.presetId ? $('fMonto') : $('fEtiqueta')).focus();
+}
+function cerrarModal() { modal = null; nueva = null; $('modal').innerHTML = ''; $('modal2').innerHTML = ''; }
+
+/** Elegir una etiqueta trae su tipo y su monto habitual, como el onPresetSelect de allá. */
+function tomarPreset(p) {
+  modal.presetId = p.id;
+  modal.etiqueta = p.name;
+  modal.tipo = p.expense_type;
+  if (p.default_amount != null) modal.monto = montoInput(p.default_amount);
+}
+const presetElegido = () => presets.find(p => p.id === modal?.presetId) ?? null;
+
+function segHTML(attr, actual, opciones) {
+  return `<div class="seg" role="group">${opciones.map(([v, l]) =>
+    `<button type="button" ${attr}="${v}" aria-pressed="${actual === v}">${l}</button>`).join('')}</div>`;
+}
+
+function renderModal() {
+  const m = modal, fijo = m.tipo === 'FIXED';
+  if (fijo) m.estado = 'PAID';   // cargar un fijo ES pagarlo: el pendiente es el que todavía no se cargó
+  const pendiente = m.estado === 'PENDING';
+  $('modal').innerHTML = `<div class="overlay" data-cerrar>
+    <form class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgT" novalidate>
+      <header><h2 id="dlgT">Nuevo gasto · ${EXPENSE_TYPE_LABELS[m.tipo]}</h2></header>
+      <div class="body">
+        <div class="campo"><span class="lab">Tipo</span>${segHTML('data-tipo-gasto', m.tipo, [['FIXED', 'Fijo'], ['VARIABLE', 'Variable']])}</div>
+        <div class="campo">
+          <label for="fEtiqueta">Etiqueta *</label>
+          <div class="cb">
+            <input id="fEtiqueta" autocomplete="off" placeholder="Etiqueta..." value="${esc(m.etiqueta)}"
+              role="combobox" aria-expanded="false" aria-controls="cbPop" aria-autocomplete="list">
+            <div id="cbPop"></div>
+          </div>
+          <div class="cb-info" id="cbInfo"></div>
+        </div>
+        ${fijo ? `<div class="campo"><label for="fPeriod">Período que cubre *</label><input id="fPeriod" type="month" value="${m.period}"></div>` : ''}
+        ${fijo ? '' : `<div class="campo"><span class="lab">Estado</span>${segHTML('data-estado', m.estado, [['PAID', 'Pagado'], ['PENDING', 'Pendiente']])}</div>`}
+        <div class="dos">
+          <div class="campo"><label for="fMonto">Monto (€) *</label><input id="fMonto" inputmode="decimal" placeholder="0,00" value="${esc(m.monto)}"></div>
+          <div class="campo"><label for="fFecha">${pendiente ? 'Fecha esperada *' : 'Fecha de pago *'}</label><input id="fFecha" type="date" value="${m.fecha}"></div>
+        </div>
+        ${fijo ? '' : `<div class="campo"><label for="fNotas">Notas</label><textarea id="fNotas" placeholder="Opcional">${esc(m.notas)}</textarea></div>`}
+        <div class="err" id="fErr"></div>
+      </div>
+      <footer><button type="button" class="btn btn-ghost" data-cerrar>Cancelar</button><button type="submit" class="btn btn-primary">Guardar</button></footer>
+    </form></div>`;
+  renderInfo();
+}
+
+/* ---------- El combobox de etiquetas ---------- */
+function opcionesCb() {
+  const txt = modal.etiqueta.trim().toLowerCase();
+  const lista = presetsVivos(modal.tipo);
+  const filtradas = txt ? lista.filter(p => p.name.toLowerCase().includes(txt)) : lista;
+  const exacta = lista.some(p => mismoNombre(p.name, modal.etiqueta));
+  const items = filtradas.map(p => ({ kind: 'preset', p }));
+  if (txt && !exacta) items.push({ kind: 'nueva' });
+  return { items, vacia: lista.length === 0 };
+}
+
+function renderCbPop() {
+  const pop = $('cbPop'), input = $('fEtiqueta');
+  if (!pop) return;
+  input.setAttribute('aria-expanded', String(cb.open));
+  if (!cb.open) { pop.innerHTML = ''; return; }
+  const { items, vacia } = opcionesCb();
+  cb.idx = Math.min(cb.idx, Math.max(items.length - 1, 0));
+  let html;
+  if (vacia && !modal.etiqueta.trim()) html = `<p class="cb-msg">Escribí un nombre para crear tu primera etiqueta</p>`;
+  else if (!items.length) html = `<p class="cb-msg">Sin resultados</p>`;
+  else {
+    const presetsHtml = items.filter(i => i.kind === 'preset').map(i => {
+      const k = items.indexOf(i), p = i.p;
+      const meta = p.expense_type === 'FIXED'
+        ? [p.default_amount != null ? eur(p.default_amount) : null, p.due_day ? `vence el ${p.due_day}` : null].filter(Boolean).join(' · ')
+        : '';
+      return `<button type="button" class="cb-opt ${k === cb.idx ? 'act' : ''}" data-cb="${k}" role="option" aria-selected="${k === cb.idx}">
+        <span>${esc(p.name)}</span>${meta ? `<span class="cb-meta">${meta}</span>` : ''}</button>`;
+    }).join('');
+    const kNueva = items.findIndex(i => i.kind === 'nueva');
+    html = (presetsHtml ? `<div class="cb-grp"><span class="tipo ${modal.tipo === 'FIXED' ? 'fijo' : 'var'}">${EXPENSE_TYPE_LABELS[modal.tipo]}</span></div>${presetsHtml}` : '')
+      + (kNueva >= 0 ? `<button type="button" class="cb-opt cb-nueva ${kNueva === cb.idx ? 'act' : ''}" data-cb="${kNueva}" role="option">+ Crear etiqueta “${esc(modal.etiqueta.trim())}”</button>` : '');
+  }
+  pop.innerHTML = `<div class="cb-pop" role="listbox">${html}</div>`;
+  pop.querySelector('.cb-opt.act')?.scrollIntoView({ block: 'nearest' });
+}
+
+/** Debajo del campo: qué etiqueta quedó elegida y, si es un fijo, si ese mes ya está cargado. */
+function renderInfo() {
+  const info = $('cbInfo'), p = presetElegido();
+  if (!info) return;
+  if (!p) { info.innerHTML = ''; return; }
+  let txt = `<span class="tipo ${p.expense_type === 'FIXED' ? 'fijo' : 'var'}">${EXPENSE_TYPE_LABELS[p.expense_type]}</span>`;
+  if (p.expense_type === 'FIXED') {
+    txt += ` Mensual${p.due_day ? ` · vence el ${p.due_day}` : ''}${p.default_amount != null ? ` · ${eur(p.default_amount)} habitual` : ''}`;
+    if (ya(p.id, modal.period)) txt += ` <b class="cb-ya">· ${periodTitle(modal.period).toLowerCase()} ya está pagado</b>`;
+  }
+  info.innerHTML = txt;
+}
+const ya = (presetId, period) => expenses.some(e => !e.deleted_at && e.preset_id === presetId && e.period === period);
+
+function elegirOpcion(item) {
+  if (item.kind === 'nueva') return abrirNueva(modal.etiqueta.trim());
+  tomarPreset(item.p);
+  $('fEtiqueta').value = item.p.name;
+  if ($('fMonto')) $('fMonto').value = modal.monto;
+  cb.open = false; renderCbPop(); renderInfo();
+  $('fMonto').focus(); $('fMonto').select();
+}
+
+const modalEl = $('modal');
+modalEl.addEventListener('input', ev => {
+  const id = ev.target.id;
+  if (id === 'fEtiqueta') {
+    modal.etiqueta = ev.target.value;
+    // Escribir el nombre exacto también elige, como en ms-frontend.
+    const exacta = presetsVivos(modal.tipo).find(p => mismoNombre(p.name, modal.etiqueta));
+    modal.presetId = exacta?.id ?? null;
+    if (exacta?.default_amount != null) { modal.monto = montoInput(exacta.default_amount); $('fMonto').value = modal.monto; }
+    cb.open = true; cb.idx = 0; renderCbPop(); renderInfo();
+  }
+  if (id === 'fMonto') modal.monto = ev.target.value;
+  if (id === 'fFecha') modal.fecha = ev.target.value;
+  if (id === 'fNotas') modal.notas = ev.target.value;
+  if (id === 'fPeriod') { modal.period = ev.target.value; renderInfo(); }
+});
+modalEl.addEventListener('focusin', ev => {
+  if (ev.target.id === 'fEtiqueta' && !cb.open) { cb.open = true; cb.idx = 0; renderCbPop(); }
+});
+modalEl.addEventListener('keydown', ev => {
+  if (ev.target.id !== 'fEtiqueta') return;
+  const { items } = opcionesCb();
+  if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') {
+    ev.preventDefault();
+    if (!cb.open) { cb.open = true; cb.idx = 0; }
+    else if (items.length) cb.idx = (cb.idx + (ev.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    renderCbPop();
+  } else if (ev.key === 'Enter' && cb.open && items.length) {
+    ev.preventDefault();          // si no, el Enter manda el formulario
+    elegirOpcion(items[cb.idx]);
+  } else if (ev.key === 'Escape' && cb.open) {
+    ev.stopPropagation();         // cierra la lista, no el modal
+    cb.open = false; renderCbPop();
+  }
+});
+// Opciones con mousedown + preventDefault: el input no pierde el foco antes del clic.
+modalEl.addEventListener('mousedown', ev => {
+  const opt = ev.target.closest('[data-cb]');
+  if (opt) { ev.preventDefault(); return elegirOpcion(opcionesCb().items[Number(opt.dataset.cb)]); }
+  if (cb.open && !ev.target.closest('.cb')) {
+    cb.open = false; renderCbPop();
+    // Salir sin una etiqueta que exista la borra: un gasto no queda con un nombre suelto.
+    if (!presetElegido()) { modal.etiqueta = ''; $('fEtiqueta').value = ''; }
+  }
+});
+modalEl.addEventListener('click', ev => {
+  if (ev.target.matches('[data-cerrar]')) return cerrarModal();
+  const b = ev.target.closest('[data-tipo-gasto],[data-estado]');
+  if (!b) return;
+  if (b.dataset.tipoGasto && b.dataset.tipoGasto !== modal.tipo) {
+    // Las etiquetas son de un tipo: cambiar de tipo suelta la elegida.
+    modal.tipo = b.dataset.tipoGasto;
+    if (presetElegido()?.expense_type !== modal.tipo) { modal.presetId = null; modal.etiqueta = ''; }
+  }
+  if (b.dataset.estado) modal.estado = b.dataset.estado;
+  cb.open = false;
+  renderModal();
+});
+
+modalEl.addEventListener('submit', ev => {
+  ev.preventDefault();
+  const m = modal, p = presetElegido(), fijo = m.tipo === 'FIXED';
+  const err = msg => { $('fErr').textContent = msg; };
+  const amount = parseMonto(m.monto);
+  if (!p) return err('Elegí una etiqueta o creala.');
+  if (!(amount > 0)) return err('El monto tiene que ser mayor que cero.');
+  if (fijo && !m.period) return err('Falta el período que cubre.');
+  if (!m.fecha) return err('Falta la fecha.');
+  // Una etiqueta fija tiene a lo sumo un gasto vivo por mes (índice único en la base).
+  if (fijo && ya(p.id, m.period)) return err(`${periodTitle(m.period)} ya está pagado para ${p.name}.`);
+  expenses.push({
+    id: uid(), preset_id: p.id, expense_name: p.name, expense_type: m.tipo, amount,
+    date: m.fecha, period: fijo ? m.period : periodOf(m.fecha),
+    recurrence: fijo ? 'MONTHLY' : 'ONE_TIME', status: m.estado, notes: fijo ? null : (m.notas.trim() || null), deleted_at: null,
+  });
+  cerrarModal(); renderLista();
+});
+
+/* ---------- «Nueva etiqueta» (PresetCreateDialog), encima del alta ---------- */
+function abrirNueva(name) {
+  nueva = { name, tipo: modal?.tipo ?? 'FIXED', monto: '', dia: '' };
+  cb.open = false; renderCbPop();
+  renderNueva();
+  (name ? ($('nMonto') ?? $('nName')) : $('nName')).focus();
+}
+function cerrarNueva() { nueva = null; $('modal2').innerHTML = ''; $('fEtiqueta')?.focus(); }
+const nombreRepetido = name => presets.some(p => !p.deleted_at && mismoNombre(p.name, name));
+
+function renderNueva() {
+  const n = nueva, fijo = n.tipo === 'FIXED';
+  $('modal2').innerHTML = `<div class="overlay overlay-2" data-ncerrar>
+    <form class="dialog" role="dialog" aria-modal="true" aria-labelledby="nT" novalidate style="max-width:420px">
+      <header><h2 id="nT">Nueva etiqueta</h2></header>
+      <div class="body">
+        <div class="campo"><label for="nName">Nombre</label><input id="nName" placeholder="Ej: Alquiler" value="${esc(n.name)}">
+          <span class="err" id="nErr"></span></div>
+        <div class="campo"><span class="lab">Tipo</span>${segHTML('data-ntipo', n.tipo, [['FIXED', 'Fijo'], ['VARIABLE', 'Variable']])}</div>
+        ${fijo ? `<div class="campo"><label for="nMonto">Monto habitual (€)</label><input id="nMonto" inputmode="decimal" placeholder="0,00" value="${esc(n.monto)}">
+            <p class="ayuda" style="margin:0">Se usa como estimado en la lista y al cargar el gasto.</p></div>
+          <div class="campo"><label for="nDia">Día de vencimiento</label>
+            <div class="check"><input id="nDia" type="number" min="1" max="31" placeholder="Ej: 10" value="${esc(n.dia)}" style="width:96px"> de cada mes</div></div>` : ''}
+      </div>
+      <footer><button type="button" class="btn btn-ghost" data-ncerrar>Cancelar</button><button type="submit" class="btn btn-primary" id="nOk">Crear etiqueta</button></footer>
+    </form></div>`;
+  validarNueva();
+}
+function validarNueva() {
+  const rep = nombreRepetido(nueva.name);
+  $('nErr').textContent = rep ? 'Ya existe una etiqueta con ese nombre.' : '';
+  $('nOk').disabled = rep || !nueva.name.trim();
+}
+
+const modal2El = $('modal2');
+modal2El.addEventListener('input', ev => {
+  const k = { nName: 'name', nMonto: 'monto', nDia: 'dia' }[ev.target.id];
+  if (!k) return;
+  nueva[k] = ev.target.value;
+  if (k === 'name') validarNueva();
+});
+modal2El.addEventListener('click', ev => {
+  if (ev.target.matches('[data-ncerrar]')) return cerrarNueva();
+  const b = ev.target.closest('[data-ntipo]');
+  if (b) { nueva.tipo = b.dataset.ntipo; renderNueva(); }
+});
+modal2El.addEventListener('submit', ev => {
+  ev.preventDefault();
+  const n = nueva, fijo = n.tipo === 'FIXED';
+  if (!n.name.trim() || nombreRepetido(n.name)) return;
+  const monto = parseMonto(n.monto), dia = Number(n.dia);
+  const p = { id: uid(), name: n.name.trim(), expense_type: n.tipo, recurrence: fijo ? 'MONTHLY' : 'ONE_TIME',
+              default_amount: fijo && monto > 0 ? monto : null, due_day: fijo && dia >= 1 && dia <= 31 ? dia : null,
+              created_at: todayLocal() };
+  presets.push(p);
+  nueva = null; $('modal2').innerHTML = '';
+  renderGestion();
+  // Una etiqueta fija nueva ya es un pendiente de este mes: la lista tiene que mostrarlo.
+  if (!modal) return renderLista();
+  // Vuelve al alta con la etiqueta recién creada ya elegida (onCreated de allá).
+  tomarPreset(p);
+  renderModal();
+  $('fMonto').focus();
+});
+
+/* ---------- «Confirmar pago» de un variable pendiente (PayPendingExpenseDialog) ---------- */
+let pago = null;   // { id, monto, fecha }
+function abrirPago(id) {
+  const e = expenses.find(x => x.id === id);
+  pago = { id, monto: montoInput(e.amount), fecha: todayLocal() };
+  $('modal3').innerHTML = `<div class="overlay" data-pcerrar>
+    <form class="dialog" role="dialog" aria-modal="true" aria-labelledby="pT" novalidate style="max-width:400px">
+      <header><h2 id="pT">Confirmar pago — ${esc(e.expense_name)}</h2>${e.notes ? `<p>${esc(e.notes)}</p>` : ''}</header>
+      <div class="body">
+        <div class="dos">
+          <div class="campo"><label for="pMonto">Monto (€) *</label><input id="pMonto" inputmode="decimal" value="${esc(pago.monto)}"></div>
+          <div class="campo"><label for="pFecha">Fecha de pago *</label><input id="pFecha" type="date" value="${pago.fecha}"></div>
+        </div>
+        <div class="err" id="pErr"></div>
+      </div>
+      <footer><button type="button" class="btn btn-ghost" data-pcerrar>Cancelar</button><button type="submit" class="btn btn-primary">Confirmar pago</button></footer>
+    </form></div>`;
+  $('pFecha').focus();
+}
+function cerrarPago() { pago = null; $('modal3').innerHTML = ''; }
+const modal3El = $('modal3');
+modal3El.addEventListener('input', ev => {
+  if (ev.target.id === 'pMonto') pago.monto = ev.target.value;
+  if (ev.target.id === 'pFecha') pago.fecha = ev.target.value;
+});
+modal3El.addEventListener('click', ev => { if (ev.target.matches('[data-pcerrar]')) cerrarPago(); });
+modal3El.addEventListener('submit', ev => {
+  ev.preventDefault();
+  const amount = parseMonto(pago.monto);
+  if (!(amount > 0)) return ($('pErr').textContent = 'El monto tiene que ser mayor que cero.');
+  if (!pago.fecha) return ($('pErr').textContent = 'Falta la fecha de pago.');
+  const e = expenses.find(x => x.id === pago.id);
+  Object.assign(e, { status: 'PAID', amount, date: pago.fecha, period: periodOf(pago.fecha) });
+  cerrarPago(); renderLista();
+});
+
+/* ============================================================
+   «Gestionar etiquetas» — ExpensePresetsManager + PresetEditDialog de ms-frontend.
+   La lista va en #modal4; editar, eliminar y la pregunta de propagación van encima, en #modal5.
+   «Agregar nueva etiqueta» reusa el mismo «Nueva etiqueta» del alta (#modal2).
+   ============================================================ */
+let gestion = false;
+let sub = null;   // { kind: 'editar' | 'eliminar' | 'propagar', presetId, ... }
+const ICON_EDIT = '<svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/></svg>';
+const ICON_TRASH = '<svg class="ch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
+const gastosDe = presetId => expenses.filter(e => !e.deleted_at && e.preset_id === presetId);
+
+function abrirGestion() { gestion = true; renderGestion(); }
+function cerrarGestion() { gestion = false; $('modal4').innerHTML = ''; }
+
+function filaEtiqueta(p) {
+  const meta = [];
+  if (p.default_amount != null) meta.push(eur(p.default_amount));
+  if (p.due_day != null) meta.push(`vence el ${p.due_day}`);
+  const n = gastosDe(p.id).length;
+  meta.push(n === 1 ? '1 gasto' : `${n} gastos`);
+  return `<div class="et-row">
+    <div class="et-txt"><span class="et-nom">${esc(p.name)}</span><span class="et-meta">${meta.join(' · ')}</span></div>
+    <div class="et-acc">
+      <button type="button" class="et-btn" data-et-editar="${p.id}" title="Editar" aria-label="Editar ${esc(p.name)}">${ICON_EDIT}</button>
+      <button type="button" class="et-btn del" data-et-eliminar="${p.id}" title="Eliminar" aria-label="Eliminar ${esc(p.name)}">${ICON_TRASH}</button>
+    </div>
+  </div>`;
+}
+
+function renderGestion() {
+  if (!gestion) return;
+  const secciones = [['FIXED', 'Fijos'], ['VARIABLE', 'Variables']]
+    .map(([t, titulo]) => [titulo, presetsVivos(t).sort((a, b) => a.name.localeCompare(b.name))])
+    .filter(([, lista]) => lista.length);
+  const cuerpo = secciones.length
+    ? secciones.map(([titulo, lista]) => `<section><p class="et-sec">${titulo} <span>${lista.length}</span></p>
+        <div class="et-lista">${lista.map(filaEtiqueta).join('')}</div></section>`).join('')
+    : `<p class="cb-msg">No hay etiquetas creadas todavía.</p>`;
+  $('modal4').innerHTML = `<div class="overlay" data-gcerrar>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="gT" style="max-width:480px">
+      <header class="g-head"><h2 id="gT">Gestionar etiquetas</h2><button type="button" class="et-btn" data-gcerrar aria-label="Cerrar">✕</button></header>
+      <div class="body g-body">${cuerpo}</div>
+      <footer><button type="button" class="btn btn-primary g-add" data-et-nueva>+ Agregar nueva etiqueta</button></footer>
+    </div></div>`;
+}
+
+$('modal4').addEventListener('click', ev => {
+  if (ev.target.matches('[data-gcerrar]')) return cerrarGestion();
+  const b = ev.target.closest('[data-et-editar],[data-et-eliminar],[data-et-nueva]');
+  if (!b) return;
+  if (b.dataset.etEditar) return abrirEditar(b.dataset.etEditar);
+  if (b.dataset.etEliminar) { sub = { kind: 'eliminar', presetId: b.dataset.etEliminar }; return renderSub(); }
+  abrirNueva('');
+});
+
+/* ---------- Editar ---------- */
+function abrirEditar(id) {
+  const p = presets.find(x => x.id === id);
+  sub = { kind: 'editar', presetId: id, name: p.name, tipo: p.expense_type, monto: montoInput(p.default_amount), dia: p.due_day ? String(p.due_day) : '' };
+  renderSub();
+  $('eName').focus();
+}
+const repetidoMenos = (name, id) => presets.some(p => !p.deleted_at && p.id !== id && mismoNombre(p.name, name));
+
+function renderSub() {
+  if (!sub) { $('modal5').innerHTML = ''; return; }
+  const p = presets.find(x => x.id === sub.presetId);
+  let html;
+  if (sub.kind === 'editar') {
+    const fijo = sub.tipo === 'FIXED';
+    html = `<form class="dialog" role="dialog" aria-modal="true" aria-labelledby="sT" novalidate style="max-width:420px">
+      <header><h2 id="sT">Editar etiqueta</h2></header>
+      <div class="body">
+        <div class="campo"><label for="eName">Nombre</label><input id="eName" value="${esc(sub.name)}"><span class="err" id="eErr"></span></div>
+        <div class="campo"><span class="lab">Tipo</span>${segHTML('data-etipo', sub.tipo, [['FIXED', 'Fijo'], ['VARIABLE', 'Variable']])}</div>
+        ${fijo ? `<div class="campo"><label for="eMonto">Monto habitual (€)</label><input id="eMonto" inputmode="decimal" placeholder="0,00" value="${esc(sub.monto)}">
+            <p class="ayuda" style="margin:0">Se usa como estimado en la lista y al cargar el gasto.</p></div>
+          <div class="campo"><label for="eDia">Día de vencimiento</label>
+            <div class="check"><input id="eDia" type="number" min="1" max="31" placeholder="Ej: 10" value="${esc(sub.dia)}" style="width:96px"> de cada mes</div></div>` : ''}
+      </div>
+      <footer><button type="button" class="btn btn-ghost" data-scerrar>Cancelar</button><button type="submit" class="btn btn-primary" id="eOk">Guardar</button></footer>
+    </form>`;
+  } else if (sub.kind === 'eliminar') {
+    const n = gastosDe(p.id).length;
+    html = `<form class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="sT" novalidate style="max-width:420px">
+      <header><h2 id="sT">¿Eliminar la etiqueta «${esc(p.name)}»?</h2>
+        <p>Los gastos ya registrados con esta etiqueta${n ? ` (${n})` : ''} no se van a eliminar. Solo no vas a poder usarla para nuevos gastos.${
+          p.expense_type === 'FIXED' ? ' Y deja de aparecer como pendiente en los meses que no se pagó.' : ''}</p></header>
+      <footer><button type="button" class="btn btn-ghost" data-scerrar>Cancelar</button><button type="submit" class="btn btn-danger">Eliminar</button></footer>
+    </form>`;
+  } else {
+    const opciones = [
+      ['forward', 'Cambió ahora — actualizar de este mes en adelante', 'Los gastos históricos quedan como estaban.'],
+      ['all', 'Me equivoqué — corregir todos los registros históricos', 'Todos los gastos con esta etiqueta se actualizan.'],
+      ['none', 'Solo la etiqueta — no tocar los gastos registrados', 'El cambio aplica solo a nuevos gastos.'],
+    ];
+    html = `<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="sT" style="max-width:460px">
+      <header><h2 id="sT">¿Cómo aplicás el cambio?</h2>
+        <p>Cambiaste ${sub.campos.join(' y ')} de la etiqueta. ¿Qué hacemos con los gastos ya registrados?</p></header>
+      <div class="body prop">${opciones.map(([k, t, d]) =>
+        `<button type="button" class="prop-opt ${k}" data-scope="${k}"><b>${t}</b><span>${d}</span></button>`).join('')}</div>
+      <footer></footer>
+    </div>`;
+  }
+  $('modal5').innerHTML = `<div class="overlay overlay-2" ${sub.kind === 'propagar' ? '' : 'data-scerrar'}>${html}</div>`;
+  if (sub.kind === 'editar') validarEditar();
+}
+function validarEditar() {
+  const rep = repetidoMenos(sub.name, sub.presetId);
+  $('eErr').textContent = rep ? 'Ya existe una etiqueta con ese nombre.' : '';
+  $('eOk').disabled = rep || !sub.name.trim();
+}
+// La pregunta de propagación no se cierra con un clic afuera: el cambio de la etiqueta ya se
+// guardó y falta decidir qué pasa con los gastos. Cerrarla equivale a «solo la etiqueta».
+function cerrarSub() {
+  sub = null; $('modal5').innerHTML = '';
+  renderGestion(); renderLista();
+}
+
+const modal5El = $('modal5');
+modal5El.addEventListener('input', ev => {
+  const k = { eName: 'name', eMonto: 'monto', eDia: 'dia' }[ev.target.id];
+  if (!k) return;
+  sub[k] = ev.target.value;
+  if (k === 'name') validarEditar();
+});
+modal5El.addEventListener('click', ev => {
+  if (ev.target.matches('[data-scerrar]')) return cerrarSub();
+  const t = ev.target.closest('[data-etipo]');
+  if (t) { sub.tipo = t.dataset.etipo; return renderSub(); }
+  const sc = ev.target.closest('[data-scope]');
+  if (sc) propagar(sc.dataset.scope);
+});
+modal5El.addEventListener('submit', ev => {
+  ev.preventDefault();
+  const p = presets.find(x => x.id === sub.presetId);
+  if (sub.kind === 'eliminar') {
+    // Soft delete, como allá: los gastos quedan y siguen leyendo su nombre.
+    p.deleted_at = new Date().toISOString();
+    return cerrarSub();
+  }
+  if (!sub.name.trim() || repetidoMenos(sub.name, p.id)) return;
+  const fijo = sub.tipo === 'FIXED';
+  const monto = parseMonto(sub.monto), dia = Number(sub.dia);
+  const campos = [], cambios = {};
+  if (sub.name.trim() !== p.name) { campos.push('el nombre'); cambios.expense_name = sub.name.trim(); }
+  if (sub.tipo !== p.expense_type) {
+    campos.push(`el tipo a ${EXPENSE_TYPE_LABELS[sub.tipo].toLowerCase()}`);
+    cambios.expense_type = sub.tipo; cambios.recurrence = fijo ? 'MONTHLY' : 'ONE_TIME';
+  }
+  Object.assign(p, {
+    name: sub.name.trim(), expense_type: sub.tipo, recurrence: fijo ? 'MONTHLY' : 'ONE_TIME',
+    default_amount: fijo && monto > 0 ? monto : null, due_day: fijo && dia >= 1 && dia <= 31 ? dia : null,
+  });
+  // El monto y el vencimiento no se copian a los gastos: solo el nombre y el tipo piden la
+  // pregunta. Y sin gastos registrados no hay nada que preguntar.
+  if (campos.length && gastosDe(p.id).length) { sub = { kind: 'propagar', presetId: p.id, campos, cambios }; return renderSub(); }
+  cerrarSub();
+});
+
+function propagar(scope) {
+  const desde = periodOf(todayLocal());
+  if (scope !== 'none')
+    for (const e of gastosDe(sub.presetId))
+      if (scope === 'all' || e.period >= desde) Object.assign(e, sub.cambios);
+  cerrarSub();
+}
+
+renderTodo();
+</script>
+</body>
+</html>

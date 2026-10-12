@@ -7,14 +7,16 @@ const SIZES = { sm: 'size-7 text-[11px]', md: 'size-9 text-[13px]' } as const
    neutro a propósito; acá cada persona YA tiene su color en `users` y el tablero lo usa hace
    meses (barra lateral, avatares de la lista), así que el CRM lo respeta: es el mismo dato en
    todo el sistema. El nombre completo va en el `title` y el `aria-label`. */
-export function AvatarUsuario({ usuario, size = 'sm', anillo = false, className }: {
+export function AvatarUsuario({ usuario, size = 'sm', anillo = false, titulo, className }: {
   usuario: Pick<Usuario, 'nombre' | 'iniciales' | 'color'> | null | undefined
   size?: keyof typeof SIZES
   /** «Este es mío»: solo tiene algo que decir cuando hay más de una cartera en pantalla. */
   anillo?: boolean
+  /** Lo que dicen el `title` y el `aria-label`; por defecto, «Responsable: …» (el del CRM). */
+  titulo?: string
   className?: string
 }) {
-  const label = usuario ? `Responsable: ${usuario.nombre}` : 'Sin responsable'
+  const label = titulo ?? (usuario ? `Responsable: ${usuario.nombre}` : 'Sin responsable')
   return (
     <span
       role="img"
