@@ -34,7 +34,6 @@ export function Equipo() {
     reunionesDelMes: reunionesQ.data ?? [],
     etapas: etapasPorId,
     hoy: localTodayIso(),
-    now: Date.now(),
   }), [visibles, leadsQ.data, tareasQ.data, reunionesQ.data, etapasPorId])
 
   // Mientras no se sabe quién sos (sesión/permisos) `visibles` es []: sin este corte se pintaría

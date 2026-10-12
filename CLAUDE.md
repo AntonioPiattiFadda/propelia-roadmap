@@ -87,7 +87,7 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   la de otro es una fila de `crm_data_access` (`read`/`write`, plana, no transitiva). Todas las
   policies de las `crm_*` llaman a `crm_puede(owner, nivel)` / `crm_puede_lead(lead, nivel)` /
   `crm_puede_cliente(cliente, nivel)`, que exigen `es_usuario()`. Un `SUPERADMIN` ve y edita todo y
-  es el único que toca el catálogo (etapas, prioridades, canales) y `crm_data_access`. **Esto
+  es el único que toca el catálogo (etapas y canales) y `crm_data_access`. **Esto
   cambió lo del 29/9** («cualquiera ve y edita todo el CRM»; «`rol` no restringe nada»).
 - **`src/pages/crm/lib/permisos.ts` es el espejo en pantalla de `crm_puede()`**, no la seguridad:
   sirve para no ofrecer un botón que la base va a rechazar. Si cambia la regla en `schema.sql`,
@@ -96,16 +96,37 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   MCP `execute_sql`, crean sus usuarios adentro de una transacción y terminan en `rollback`. Tienen
   que devolver `crm-permisos: OK`.
 - **El alta es una RPC** (`crm_create_lead_with_client`, `security definer`): reutiliza el cliente
-  por teléfono/email aunque sea de otra cartera y crea la tarea «Asesorar cliente» con la fecha
-  que manda el front (el «hoy» local). Sus errores son claves (`crm_…`) que traduce
+  por teléfono/email aunque sea de otra cartera, y crea la tarea «Asesorar cliente» del
+  responsable con vencimiento `p_initial_task_due_date` (el «hoy» local de quien carga), como el
+  producto. Se sacó el 10/10/2026 y volvió el 12/10 antes de aplicarse. Sus errores son claves (`crm_…`) que traduce
   `src/pages/crm/lib/errores.ts`.
 - **La lista se trae entera** (la RLS ya recortó) y filtros, pestañas y contadores salen de
-  funciones puras en `lib/`. Todo filtro vive en la URL (`leadFilterParams.ts`); **`gestion` es la
-  lista de estados EXCLUIDOS**, como en el producto: los enlaces se arman con `enlaceAlCrm()`,
-  nunca a mano. `?owners=` son las carteras mirando y `?lead=` el lead abierto en el dialog.
-- **La gestión la calcula la base** (`crm_leads.gestion_*`, `crm_gestion_refresh()`); el front la
-  compara contra el vencimiento en la zona de quien mira (`gestionDeLead`). El front nunca escribe
-  `gestion_*` ni los historiales.
+  funciones puras en `lib/`. Todo filtro vive en la URL (`leadFilterParams.ts`): los enlaces se
+  arman con `enlaceAlCrm()`, nunca a mano. `?owners=` son las carteras mirando y `?lead=` el lead
+  abierto en el dialog. El front nunca escribe `gestion_*` ni los historiales.
+- **Sin prioridades ni gestión en el front desde el 10/10/2026** (se sacaron para rediseñarlas de
+  cero): ni el color de prioridad de la etapa, ni el catálogo `crm_priorities`, ni las columnas de
+  prioridad y tiempo de gestión del funnel, ni Pendiente/Gestionado/Pospuesto, ni «Posponer», ni
+  «Gestiones vencidas» en Equipo. Los `?gestion=` y `?excluded=` de un enlace viejo se ignoran. **La
+  base no se tocó**: `crm_priorities`, `crm_funnel_stages.priority_id`/`management_tolerance_hours`,
+  `crm_leads.gestion_*`, `crm_management_events` y `crm_gestion_refresh()` siguen ahí. La Actividad
+  del lead sigue pintando los eventos de gestión viejos (`lib/actividad.ts`).
+- **Si un contacto es decisor vive en el contacto** (12/10/2026): `contact_is_decision_maker` y
+  `alternative_phone_{1,2}_is_decision_maker` en `crm_clients` (null = no se sabe), con su Sí/No al
+  lado del rol en el perfil. La llamada pregunta «¿Es decisor?» solo mientras el perfil no lo sepa
+  (`decisorSabido`); contestar «Sí» con **un solo** contacto elegido lo marca (`campoDelNuevoDecisor`).
+  «No» no se guarda solo, y con varios elegidos no se sabe cuál decide. Reglas en `lib/clientData.ts`.
+- **Registrar una actividad obliga a elegir la etapa** (12/10/2026): «El lead queda en» arranca
+  **vacío** y registrar sin elegir lo marca en rojo y no registra, para que avanzar al lead no
+  dependa de acordarse. Hubo unas horas una etapa sugerida precargada (`etapaSugerida()`) y se sacó
+  por pedido: precargada, se confirmaba sin leerla. El contacto fallido no pide ni mueve nada.
+  La etapa se escribe recién con la actividad guardada. Reemplazó al toast «¿Pasar a …?».
+  El formulario es la misma ventana flotante y no modal que «Nueva tarea» (`VentanaFlotante`):
+  mientras se registra se puede usar el resto de la pantalla.
+- **Lo registrado a mano se puede borrar** (12/10/2026): nota, llamada y contacto fallido llevan
+  un tacho al pasar el mouse. Es soft delete de `crm_comments` (la RLS ya deja: write sobre el
+  lead), sin confirmar y con «Deshacer» en el aviso. Lo del sistema (etapa, responsable, tareas,
+  demos) no se borra desde la actividad. Borrar no deshace la etapa elegida al registrar.
 - **El catálogo se borra con soft delete**: un lead en una etapa borrada la sigue leyendo por
   nombre (`catalogoDeEtapas` trae también las borradas); los menús ofrecen solo las vivas.
 - **Lo que trae la importación desde Excel vive en `crm_clients`** (6/10/2026): `import_batch`
@@ -119,8 +140,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   `FALTA_MIGRACION` sigue en `errores.ts` para la próxima columna que llegue antes que su
   migración. Se ven en la pestaña de la inmobiliaria; el origen, al lado de cada teléfono.
   - **`idealista_phone` es último recurso**: es un redirector de Idealista y a la agencia le entra
-    como un cliente interesado en un piso, no como una llamada comercial. Va último entre los
-    teléfonos, con el aviso escrito (no en un tooltip), y **nunca es el número por defecto**. Hoy
+    como un cliente interesado en un piso, no como una llamada comercial. **No es un contacto**
+    (12/10/2026, por pedido): vive en «Datos de la inmobiliaria» con el aviso escrito (no en un
+    tooltip), y el perfil ya no lo copia a un alternativo como hace con el de Google Maps. Los que
+    se copiaron antes siguen en su contacto. **Nunca es el número por defecto**. Hoy
     ninguna pantalla elige un «teléfono principal» con respaldo (la lista muestra `phone` y nada
     más); si alguna vez lo hace, va en una función pura de `lib/` con tests y el de Idealista entra
     solo si `phone`, los alternativos y `google_maps_phone` están vacíos.
@@ -137,12 +160,12 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   - `sdr_research` va a `sdr_advice`; `phone` y los alternativos no se cargan (ya están en el
     research); `current_crm` es una etiqueta de `crm_software` (`current_crm_id`).
 - **Qué se copió del producto** (podado de lo inmobiliario):
-  De `propelia-frontend/src/pages/leads/lib/`: `gestionStatus`, `calendarDeadline`, `discardStage`,
+  De `propelia-frontend/src/pages/leads/lib/`: `discardStage`,
   `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De
   `propelia-frontend/src/pages/leads/components/`: `leadCells`, `LeadRowActions`, `LeadTasksPanel`,
   `DockedActivityChat`, `ClientFields`, `ReassignLeadsDialog`, `AgentFilterButton`, `BulkActionBar`.
   Del funnel en `propelia-frontend/src/pages/clients/components/FunnelSection/FunnelEditor/`:
-  `StagesTable`, `PriorityPicker`. De `propelia-frontend/src/pages/ajustes/components/`:
+  `StagesTable`. De `propelia-frontend/src/pages/ajustes/components/`:
   `ChannelsPanel`. De `propelia-frontend/src/pages/equipo/components/`: `VisibilityMatrix`.
   **Nuevo**: `permisos.ts`, `effectiveStage.ts` (acá es resolver por id), `systemComment.ts`
   (el del producto es el parser de Idealista), el servicio, los hooks, `CrmLeadList`, `LeadDialog`,

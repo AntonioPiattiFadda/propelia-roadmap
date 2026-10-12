@@ -1,5 +1,5 @@
 import { fmtDayMonth, fmtDueLabel, shiftIsoDate, toIsoDate } from '@/lib/calendarDate'
-import type { EtapaConPrioridad, LeadDetalle, Usuario } from '../types'
+import type { CrmStage, LeadDetalle, Usuario } from '../types'
 import { nombreDe } from './permisos'
 
 /* La actividad del lead en una sola lista: lo que se escribió (comentarios MANUAL), lo que dejó
@@ -8,13 +8,16 @@ import { nombreDe } from './permisos'
    con esto», y la respuesta es en orden. */
 export type ItemActividad = {
   id: string
-  tipo: 'comentario' | 'llamada' | 'sistema' | 'gestion' | 'pospuesto' | 'etapa' | 'asignacion' | 'reunion' | 'tarea'
+  tipo: 'comentario' | 'llamada' | 'sistema' | 'gestion' | 'pospuesto' | 'etapa' | 'asignacion' | 'reunion' | 'tarea' | 'consejo'
   /** Cuándo pasó (no cuándo vence): lo que ordena la lista. */
   fecha: string
   texto: string
   autorId: string | null
   /** Con quién de la inmobiliaria (solo notas y llamadas; vacío = no se dijo). */
   con?: string[]
+  /** Solo llamadas: qué pasó y si fue con un decisor. */
+  resultado?: ResultadoDeLlamada
+  decisor?: boolean
 }
 
 /* Qué fue una actividad escrita a mano —nota o llamada— y con quién, colgado del comentario en
@@ -25,7 +28,15 @@ export type ItemActividad = {
    largo de verdad, no tiene que leerse como una llamada. Se guardan los nombres y no el casillero:
    el teléfono alternativo de hoy puede ser otra persona mañana, y la llamada fue con quien fue. */
 const MARCA_ACTIVIDAD = '<!--act-->'
-export type MetaDeActividad = { tipo: 'nota' | 'llamada'; con: string[] }
+/** Qué pasó en una llamada. Opcional: las llamadas anteriores al 10/10/2026 no lo dicen. */
+export type ResultadoDeLlamada = 'contestada' | 'no_respondida'
+export type MetaDeActividad = {
+  tipo: 'nota' | 'llamada'
+  con: string[]
+  resultado?: ResultadoDeLlamada
+  /** Si quien atendió decide. Solo tiene sentido en una llamada contestada. */
+  decisor?: boolean
+}
 
 /** Lo que va a `long_description`. Una nota sin nadie no guarda nada: es un comentario de siempre. */
 export function armarMetaDeActividad(meta: MetaDeActividad): string | null {
@@ -38,24 +49,62 @@ export function leerMetaDeActividad(guardado: string | null): MetaDeActividad | 
   try {
     const m: unknown = JSON.parse(guardado.slice(MARCA_ACTIVIDAD.length))
     if (typeof m !== 'object' || m === null) return null
-    const { tipo, con } = m as Record<string, unknown>
+    const { tipo, con, resultado, decisor } = m as Record<string, unknown>
     if (tipo !== 'nota' && tipo !== 'llamada') return null
     if (!Array.isArray(con) || !con.every(c => typeof c === 'string')) return null
-    return { tipo, con }
+    if (resultado !== undefined && resultado !== 'contestada' && resultado !== 'no_respondida') return null
+    if (decisor !== undefined && typeof decisor !== 'boolean') return null
+    return {
+      tipo, con,
+      ...(resultado !== undefined && { resultado }),
+      ...(decisor !== undefined && { decisor }),
+    }
   } catch { return null }
 }
 
+export type ResumenDeLlamadas = { contestadas: number; decisores: number; noRespondidas: number }
+
+/** El contador del día. Se le pasa el `long_description` de cada comentario: lo que no es una
+ *  llamada con resultado (notas, comentarios viejos, llamadas de antes de que existiera) no
+ *  cuenta. Las de decisor son también contestadas: es un subconjunto, no una tercera bolsa. */
+export function resumenDeLlamadas(guardados: readonly (string | null)[]): ResumenDeLlamadas {
+  const r: ResumenDeLlamadas = { contestadas: 0, decisores: 0, noRespondidas: 0 }
+  for (const g of guardados) {
+    const m = leerMetaDeActividad(g)
+    if (m?.tipo !== 'llamada') continue
+    if (m.resultado === 'no_respondida') r.noRespondidas++
+    else if (m.resultado === 'contestada') {
+      r.contestadas++
+      if (m.decisor) r.decisores++
+    }
+  }
+  return r
+}
+
+/** Lo que hace falta de la inmobiliaria para dibujar su consejo en la actividad. */
+export type ClienteConConsejo = { id: string; sdr_advice: string | null; created_at: string }
+
 export function lineaDeTiempo(
-  detalle: LeadDetalle, etapas: ReadonlyMap<string, EtapaConPrioridad>, usuarios: Usuario[],
+  detalle: LeadDetalle, etapas: ReadonlyMap<string, CrmStage>, usuarios: Usuario[],
+  cliente?: ClienteConConsejo | null,
 ): ItemActividad[] {
-  const etapa = (id: string | null) => (id ? etapas.get(id)?.label ?? '(etapa borrada)' : '')
+  const etapa = (id: string | null) => (id ? etapas.get(id)?.label ?? '(estado borrado)' : '')
+  const consejo = cliente?.sdr_advice?.trim()
   const items: ItemActividad[] = [
+    /* El consejo de Claude para el SDR se lee acá y en ningún otro lado (12/10/2026 salió del
+       perfil del lead): es lo que tiene abierto el SDR mientras llama. No es un comentario
+       guardado: sale de `crm_clients.sdr_advice` en cada pintado. Se fecha cuando llegó la
+       inmobiliaria: es lo primero. */
+    ...(cliente && consejo
+      ? [{ id: `consejo-${cliente.id}`, tipo: 'consejo' as const, fecha: cliente.created_at, texto: consejo, autorId: null }]
+      : []),
     ...detalle.comments.map(c => {
       if (c.comment_type === 'SYSTEM') return { id: c.id, tipo: 'sistema' as const, fecha: c.created_at, texto: c.description, autorId: c.created_by }
       const meta = leerMetaDeActividad(c.long_description)
       return {
         id: c.id, tipo: meta?.tipo === 'llamada' ? 'llamada' as const : 'comentario' as const,
         fecha: c.created_at, texto: c.description, autorId: c.created_by, con: meta?.con ?? [],
+        resultado: meta?.resultado, decisor: meta?.decisor,
       }
     }),
     ...detalle.events.map(e => ({
@@ -68,9 +117,10 @@ export function lineaDeTiempo(
         + (e.note ? ` · ${e.note}` : ''),
       autorId: e.created_by,
     })),
-    ...detalle.stageHistory.map(h => ({
+    // La etapa con la que nace el lead no es algo que pasó: solo se cuentan los cambios.
+    ...detalle.stageHistory.filter(h => h.from_stage_id != null).map(h => ({
       id: h.id, tipo: 'etapa' as const, fecha: h.changed_at,
-      texto: h.from_stage_id ? `Etapa: ${etapa(h.from_stage_id)} → ${etapa(h.to_stage_id)}` : `Entró en ${etapa(h.to_stage_id)}`,
+      texto: `Estado: ${etapa(h.from_stage_id)} → ${etapa(h.to_stage_id)}`,
       autorId: h.changed_by,
     })),
     ...detalle.assignmentHistory.map(h => ({

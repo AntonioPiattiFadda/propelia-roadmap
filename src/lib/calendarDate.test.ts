@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fmtDueLabel, isOverdue, localTodayIso, periodBounds, shiftIsoDate, startOfMonthIso, daysInMonth } from './calendarDate'
+import { fmtDueLabel, isOverdue, localTodayIso, periodBounds, shiftIsoDate, startOfMonthIso, startOfWeekIso, daysInMonth } from './calendarDate'
 
 afterEach(() => { vi.useRealTimers() })
 
@@ -50,5 +50,14 @@ describe('el mes', () => {
     const { start, end } = periodBounds('2026-09-01', 30)
     expect(new Date(start).getDate()).toBe(1)
     expect(new Date(end).getMonth()).toBe(9) // 1 de octubre, exclusivo
+  })
+})
+
+describe('la semana', () => {
+  it('arranca el lunes, aunque caiga en el mes anterior', () => {
+    expect(startOfWeekIso('2026-10-12')).toBe('2026-10-12') // lunes
+    expect(startOfWeekIso('2026-10-14')).toBe('2026-10-12') // miércoles
+    expect(startOfWeekIso('2026-10-18')).toBe('2026-10-12') // domingo
+    expect(startOfWeekIso('2026-10-01')).toBe('2026-09-28') // jueves
   })
 })

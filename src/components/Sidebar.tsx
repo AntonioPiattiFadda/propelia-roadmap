@@ -1,6 +1,7 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { LogOut } from 'lucide-react'
+import { CalendarClock, LogOut } from 'lucide-react'
+import { PlanningDiario } from '@/components/PlanningDiario'
 import propeliaIcon from '@/assets/propelia-icon.png'
 import { entradaActiva, estaActivo, navDe } from '@/components/nav'
 import { useUserSession } from '@/hooks/useUserSession'
@@ -48,8 +49,10 @@ export function Sidebar() {
   }
   // En el teléfono el panel tapa la pantalla: si no se cierra al elegir, llegás a la página sin verla.
   const cerrarEnTelefono = () => { if (isMobile) setOpenMobile(false) }
+  const [planningAbierto, setPlanningAbierto] = useState(false)
 
   return (
+    <>
     <SidebarRoot collapsible="icon" onMouseEnter={alEntrar} onMouseLeave={alSalir}>
       <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-1">
         <SidebarMenu>
@@ -101,6 +104,22 @@ export function Sidebar() {
           </SidebarMenu>
         </SidebarGroup>
 
+        {/* No es una página: es un panel que se despliega encima de la que estés mirando, para
+            consultar el esqueleto del día sin irte de lo que estabas haciendo. */}
+        <SidebarGroup>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                tooltip="Planning diario"
+                onClick={() => { cerrarEnTelefono(); setPlanningAbierto(true) }}
+              >
+                <CalendarClock />
+                <span className="truncate">Planning diario</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarGroup>
+
         {/* `mt-auto` la empuja al fondo: el hueco queda entre la navegación y la cuenta. */}
         <SidebarGroup className="mt-auto">
           <SidebarGroupLabel>Cuenta</SidebarGroupLabel>
@@ -130,5 +149,7 @@ export function Sidebar() {
         </SidebarGroup>
       </SidebarContent>
     </SidebarRoot>
+    <PlanningDiario open={planningAbierto} onOpenChange={setPlanningAbierto} />
+    </>
   )
 }

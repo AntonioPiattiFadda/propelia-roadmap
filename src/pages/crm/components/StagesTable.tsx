@@ -1,48 +1,33 @@
 import { useRef, useState } from 'react'
-import type { CrmPriority, EtapaConPrioridad } from '../types'
+import type { CrmStage } from '../types'
 import { InlineEditCell } from '@/components/ui/inline-edit-cell'
 import { InlineDeleteButton } from '@/components/ui/inline-delete-button'
 import { GripVertical, LockIcon, PlusIcon } from 'lucide-react'
 import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
 import { LockedLabel } from '@/components/ui/locked-label'
-import { ManagementToleranceSelect } from './ManagementToleranceSelect'
-import { PriorityPicker } from './PriorityPicker'
 
 type DropTarget = { id: string; position: 'before' | 'after' } | null
 
 type Props = {
-  stages: EtapaConPrioridad[]
-  priorities: CrmPriority[]
-  onUpdate: (id: string, payload: { label?: string; priority_id?: string | null; management_tolerance_hours?: number | null }) => void
+  stages: CrmStage[]
+  onUpdate: (id: string, payload: { label?: string }) => void
   onCreate: () => void
   onDelete: (id: string) => void
   onReorder: (items: { id: string; position: number }[]) => void
   isDeletePending?: boolean
-  onRenamePriority: (id: string, name: string) => void
-  onDeletePriority: (id: string) => void
-  onCreatePriority: () => Promise<string | null>
-  onReorderPriorities: (items: { id: string; position: number }[]) => void
-  isPriorityDeletePending?: boolean
 }
 
-/** Alto de fila y de los controles: la tabla entra sin scroll dentro del diálogo. */
-const CONTROL_CLASS =
-  'h-[26px] w-full max-w-full text-[12.5px] rounded-[7px] border-transparent bg-transparent shadow-none hover:bg-(--surface-3) hover:border-(--line) transition-colors px-[7px]'
+/* Sin las columnas de prioridad y de tiempo de gestión desde el 10/10/2026: se sacaron del front
+   para rediseñarlas. `priority_id` y `management_tolerance_hours` siguen en la base, sin tocar. */
 
 export function StagesTable({
   stages,
-  priorities,
   onUpdate,
   onCreate,
   onDelete,
   onReorder,
   isDeletePending,
-  onRenamePriority,
-  onDeletePriority,
-  onCreatePriority,
-  onReorderPriorities,
-  isPriorityDeletePending,
 }: Props) {
   const dragId = useRef<string | null>(null)
   const [dropTarget, setDropTarget] = useState<DropTarget>(null)
@@ -88,7 +73,7 @@ export function StagesTable({
    * se borra, así que esas dos columnas sólo gastaban los ~90px de ancho que la
    * segunda columna necesita para existir sin apretar el rótulo del estado.
    */
-  const renderRow = (stage: EtapaConPrioridad, isDraggable: boolean, num?: string, compact = false) => {
+  const renderRow = (stage: CrmStage, isDraggable: boolean, num?: string, compact = false) => {
     const isBeingDragged = dragId.current === stage.id
     const isDropBefore = dropTarget?.id === stage.id && dropTarget.position === 'before'
     const isDropAfter = dropTarget?.id === stage.id && dropTarget.position === 'after'
@@ -148,25 +133,6 @@ export function StagesTable({
               />
           }
         </td>
-        <td className="px-2 py-1">
-          <PriorityPicker
-            priorities={priorities}
-            value={stage.priority_id ?? null}
-            onChange={(priorityId) => onUpdate(stage.id, { priority_id: priorityId })}
-            onRename={onRenamePriority}
-            onDelete={onDeletePriority}
-            onCreate={onCreatePriority}
-            onReorder={onReorderPriorities}
-            isDeletePending={isPriorityDeletePending}
-          />
-        </td>
-        <td className="px-2 py-1">
-          <ManagementToleranceSelect
-            value={stage.management_tolerance_hours}
-            onChange={(hours) => onUpdate(stage.id, { management_tolerance_hours: hours })}
-            className={CONTROL_CLASS}
-          />
-        </td>
         {!compact && (
           <td className="px-2 py-1 text-right">
             {stage.allow_delete
@@ -190,8 +156,6 @@ export function StagesTable({
     <colgroup>
       <col className="w-12" />
       <col />
-      <col className="w-[168px]" />
-      <col className="w-[152px]" />
       <col className="w-11" />
     </colgroup>
   )
@@ -199,8 +163,6 @@ export function StagesTable({
   const columnsCompact = (
     <colgroup>
       <col />
-      <col className="w-[140px]" />
-      <col className="w-[132px]" />
     </colgroup>
   )
 
@@ -220,7 +182,7 @@ export function StagesTable({
        de alto para mostrar dos filas. Al costado usan el ancho que ya sobraba y el
        diálogo entra sin scroll. Debajo de lg vuelven a apilarse, que es lo único que
        entra en una pantalla angosta. */
-    <div className="grid gap-3 items-start lg:grid-cols-[minmax(0,1fr)_minmax(0,400px)]">
+    <div className="grid gap-3 items-start lg:grid-cols-[minmax(0,1fr)_minmax(0,260px)]">
       <div className={cardClass}>
         {/* Una sola línea: el título y el botón. La bajada explicativa se sacó — lo que
             hace cada columna ya lo dice su rótulo. */}
@@ -242,8 +204,6 @@ export function StagesTable({
             <tr className="bg-(--surface-2)">
               <th className="text-[10.5px] text-(--fg-2) font-bold uppercase tracking-[0.07em] px-1.5 py-1 border-b border-(--line-strong) text-right">#</th>
               <th className={headCell}>Estado</th>
-              <th className={headCell}>Prioridad</th>
-              <th className={headCell}>Tiempo de gestión</th>
               <th className="border-b border-(--line-strong)" />
             </tr>
           </thead>
@@ -272,8 +232,6 @@ export function StagesTable({
             <thead>
               <tr className="bg-(--surface-2)">
                 <th className={headCell}>Estado</th>
-                <th className={headCell}>Prioridad</th>
-                <th className={headCell}>Tiempo</th>
               </tr>
             </thead>
             <tbody>{outOfFunnel.map((s) => renderRow(s, false, undefined, true))}</tbody>

@@ -15,7 +15,7 @@ const CLAVES: Record<string, string> = {
   crm_falta_contacto: 'Falta teléfono o email.',
   crm_responsable_inactivo: 'Ese responsable ya no está activo.',
   crm_canal_invalido: 'Ese canal ya no existe. Recargá la página.',
-  crm_etapa_invalida: 'Esa etapa ya no existe. Recargá la página.',
+  crm_etapa_invalida: 'Ese estado ya no existe. Recargá la página.',
   crm_lead_duplicado: 'Ese cliente ya tiene un lead: una inmobiliaria no se repite.',
   crm_sin_fila: SIN_PERMISO,
   // Las de crm_importar_lote.

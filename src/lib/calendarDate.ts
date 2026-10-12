@@ -62,6 +62,13 @@ export function startOfMonthIso(iso = localTodayIso()): string {
   return `${iso.slice(0, 7)}-01`
 }
 
+/** Monday of the week containing `iso` (weeks start on Monday). */
+export function startOfWeekIso(iso = localTodayIso()): string {
+  const [y, m, d] = iso.slice(0, 10).split('-').map(Number)
+  const diaDeLaSemana = new Date(y, m - 1, d, 12).getDay() // 0 = domingo
+  return shiftIsoDate(iso, -((diaDeLaSemana + 6) % 7))
+}
+
 /**
  * Local-midnight boundaries of a period, as instants, for querying `timestamptz`
  * columns. `end` is exclusive so a row stamped at 23:59:59 still counts.

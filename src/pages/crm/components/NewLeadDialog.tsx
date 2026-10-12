@@ -16,8 +16,7 @@ const SIN_CANAL = '__sin_canal__'
 /**
  * NUEVO: la versión chica de NewLeadWizard del producto. Un paso: empresa, contacto, teléfono,
  * email, canal y responsable. Contra `crm_create_lead_with_client`, que reutiliza el cliente si ya
- * existe (aunque sea de otra cartera) y crea la tarea «Asesorar cliente» con vencimiento HOY —el
- * hoy de quien carga, por eso la fecha sale de acá y no del servidor—.
+ * existe (aunque sea de otra cartera), y crea la tarea «Asesorar cliente» con vencimiento hoy.
  */
 export function NewLeadDialog({ open, onOpenChange, onCreado }: {
   open: boolean

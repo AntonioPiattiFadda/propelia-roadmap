@@ -1,11 +1,10 @@
 import { supabase } from '@/lib/supabase'
 import type { Json, TablesInsert, TablesUpdate } from '@/types/database.types'
-import type { ManagementAction } from '../lib/gestionStatus'
 import type { FilaDelLote } from '../lib/importarLote'
 import type { NivelAcceso } from '../lib/permisos'
 import type {
-  CrmChannel, CrmClient, CrmComment, CrmDataAccess, CrmLead, CrmLeadRow, CrmManagementEvent, CrmMeeting,
-  CrmPriority, CrmStage, CrmTask, LeadDetalle, Usuario,
+  CrmChannel, CrmClient, CrmComment, CrmDataAccess, CrmLead, CrmLeadRow, CrmMeeting, CrmStage, CrmTask,
+  LeadDetalle, Usuario,
 } from '../types'
 
 /* Todas las queries y mutaciones del CRM contra las `crm_*`. Nada de permisos acá: la RLS ya
@@ -37,16 +36,14 @@ export async function getLeads(): Promise<CrmLeadRow[]> {
 }
 
 /** Con las borradas: un lead en una etapa borrada tiene que poder leer su nombre (ver etapaDelLead). */
-export async function getCatalogos(): Promise<{ etapas: CrmStage[]; prioridades: CrmPriority[]; canales: CrmChannel[] }> {
-  const [etapas, prioridades, canales] = await Promise.all([
+export async function getCatalogos(): Promise<{ etapas: CrmStage[]; canales: CrmChannel[] }> {
+  const [etapas, canales] = await Promise.all([
     supabase.from('crm_funnel_stages').select('*').order('position'),
-    supabase.from('crm_priorities').select('*').order('position'),
     supabase.from('crm_channels').select('*').order('position'),
   ])
   if (etapas.error) throw etapas.error
-  if (prioridades.error) throw prioridades.error
   if (canales.error) throw canales.error
-  return { etapas: etapas.data, prioridades: prioridades.data, canales: canales.data }
+  return { etapas: etapas.data, canales: canales.data }
 }
 
 export async function getUsuarios(): Promise<Usuario[]> {
@@ -95,9 +92,10 @@ export async function getDetalleLead(leadId: string): Promise<LeadDetalle> {
 }
 
 // ---------- Lead y cliente ----------
-// `gestion_*` NO está: la escribe la base (crm_gestion_refresh). Tampoco los historiales.
+// `gestion_*` NO está: la escribe la base (crm_gestion_refresh) y el front ya no la muestra
+// (10/10/2026). Tampoco los historiales.
 export type LeadPatch = Pick<TablesUpdate<'crm_leads'>,
-  'funnel_stage_id' | 'channel_id' | 'discard_reason' | 'assigned_to' | 'last_important_event_at'>
+  'funnel_stage_id' | 'channel_id' | 'discard_reason' | 'recontact_at' | 'assigned_to' | 'last_important_event_at'>
 
 export async function updateLead(id: string, patch: LeadPatch): Promise<CrmLead> {
   const { data, error } = await supabase.from('crm_leads').update(patch).eq('id', id).select()
@@ -115,6 +113,8 @@ export type ClientePatch = Pick<TablesUpdate<'crm_clients'>,
   // Rol y notas de cada contacto: mismo caso, pendientes de migración.
   | 'contact_role' | 'contact_notes' | 'alternative_phone_1_role' | 'alternative_phone_1_notes'
   | 'alternative_phone_2_role' | 'alternative_phone_2_notes'
+  // Si cada contacto decide: mismo caso, pendiente de migración.
+  | 'contact_is_decision_maker' | 'alternative_phone_1_is_decision_maker' | 'alternative_phone_2_is_decision_maker'
   // Lo que trae la importación desde Excel (lote, motivo, origen de cada teléfono y los teléfonos
   // de Google Maps e Idealista): mismo caso, pendientes de migración.
   | 'import_batch' | 'batch_activated_on' | 'selection_reason' | 'phone_source'
@@ -142,12 +142,20 @@ export async function crearComentario(input: {
   return data
 }
 
-export async function crearEventoGestion(input: {
-  lead_id: string; action: ManagementAction; effective_at?: string; note?: string | null
-}): Promise<CrmManagementEvent> {
-  const { data, error } = await supabase.from('crm_management_events').insert(input).select().single()
+/** Borrar una actividad cargada por error es soft delete (`deleted_at`), como el resto del CRM:
+ *  la fila sigue en la base y «Deshacer» la devuelve con `borrado: false`. */
+export const marcarComentarioBorrado = (id: string, borrado: boolean) =>
+  comprobar(supabase.from('crm_comments').update({ deleted_at: borrado ? ahora() : null }).eq('id', id))
+
+/** La meta de las actividades que `autor` registró en [desde, hasta): de ahí sale el contador de
+ *  llamadas del día. Se filtra por la marca en la base para no traer todos los comentarios. */
+export async function metasDeActividad(autor: string, desde: string, hasta: string): Promise<(string | null)[]> {
+  const { data, error } = await supabase.from('crm_comments').select('long_description')
+    .eq('created_by', autor).eq('comment_type', 'MANUAL').is('deleted_at', null)
+    .gte('created_at', desde).lt('created_at', hasta)
+    .like('long_description', '<!--act-->%')
   if (error) throw error
-  return data
+  return (data ?? []).map(c => c.long_description)
 }
 
 // ---------- Tareas y reuniones ----------
@@ -246,11 +254,14 @@ export async function reasignarLead(leadId: string, nuevo: string, comentario: s
 // ---------- Catálogo (solo SUPERADMIN: la RLS lo exige) ----------
 // Borrar es soft delete: la FK de los leads es `on delete set null` y un borrado duro dejaría
 // a los leads de esa etapa sin etapa y sin rastro de dónde estaban.
+// Prioridad y tiempo de gestión de la etapa (`priority_id`, `management_tolerance_hours`) siguen
+// en la base pero el front no los escribe desde el 10/10/2026: una etapa nueva nace con los dos
+// en null.
 const ahora = () => new Date().toISOString()
 
 export type EtapaNueva = Pick<TablesInsert<'crm_funnel_stages'>,
-  'label' | 'value' | 'position' | 'priority_id' | 'management_tolerance_hours' | 'allow_delete' | 'allow_reorder' | 'allow_rename' | 'is_out_of_funnel'>
-export type EtapaPatch = Pick<TablesUpdate<'crm_funnel_stages'>, 'label' | 'priority_id' | 'management_tolerance_hours' | 'position'>
+  'label' | 'value' | 'position' | 'allow_delete' | 'allow_reorder' | 'allow_rename' | 'is_out_of_funnel'>
+export type EtapaPatch = Pick<TablesUpdate<'crm_funnel_stages'>, 'label' | 'position'>
 
 export async function crearEtapa(input: EtapaNueva): Promise<CrmStage> {
   const { data, error } = await supabase.from('crm_funnel_stages').insert(input).select().single()
@@ -266,19 +277,6 @@ export const borrarEtapa = (id: string) =>
   comprobar(supabase.from('crm_funnel_stages').update({ deleted_at: ahora() }).eq('id', id))
 export const reordenarEtapas = async (items: { id: string; position: number }[]) => {
   await Promise.all(items.map(i => comprobar(supabase.from('crm_funnel_stages').update({ position: i.position }).eq('id', i.id))))
-}
-
-export async function crearPrioridad(input: { name: string; color: string; position: number }): Promise<CrmPriority> {
-  const { data, error } = await supabase.from('crm_priorities').insert(input).select().single()
-  if (error) throw error
-  return data
-}
-export const actualizarPrioridad = (id: string, patch: { name?: string; color?: string }) =>
-  comprobar(supabase.from('crm_priorities').update(patch).eq('id', id))
-export const borrarPrioridad = (id: string) =>
-  comprobar(supabase.from('crm_priorities').update({ deleted_at: ahora() }).eq('id', id))
-export const reordenarPrioridades = async (items: { id: string; position: number }[]) => {
-  await Promise.all(items.map(i => comprobar(supabase.from('crm_priorities').update({ position: i.position }).eq('id', i.id))))
 }
 
 export async function crearCanal(input: { label: string; position: number }): Promise<CrmChannel> {

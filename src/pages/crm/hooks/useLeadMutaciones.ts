@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { localTodayIso } from '@/lib/calendarDate'
 import { mensajeDeError } from '../lib/errores'
-import { aplicarGestionOptimista, type ManagementAction } from '../lib/gestionStatus'
+import { recontactoDeMotivo, type MotivoDescarte } from '../lib/motivosDescarte'
 import { comentarioDescarte, comentarioReasignacion } from '../lib/systemComment'
 import type { FilaDelLote } from '../lib/importarLote'
 import {
-  crearComentario, crearEventoGestion, crearLeadConCliente, importarLote, reasignarLead, updateCliente, updateLead,
+  crearComentario, crearLeadConCliente, importarLote, reasignarLead, updateCliente, updateLead,
   type AltaLead, type ClientePatch, type LeadPatch,
 } from '../service/crm.service'
 import type { CrmLeadRow, LeadDetalle, Usuario } from '../types'
@@ -57,31 +58,23 @@ export function useActualizarCliente() {
   })
 }
 
-export function useMarcarGestion(leadId: string) {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (p: { action: ManagementAction; effective_at?: string; note?: string | null }) =>
-      crearEventoGestion({ lead_id: leadId, ...p }),
-    onMutate: p => optimistaSobreLeads(
-      qc,
-      l => aplicarGestionOptimista(l, { action: p.action, effective_at: p.effective_at ?? new Date().toISOString() }),
-      new Set([leadId]),
-    ),
-    onError: (error, _v, ctx) => { revertir(qc, ctx?.previo); toast.error(mensajeDeError(error, 'No se pudo registrar la gestión')) },
-    onSuccess: (_d, p) => toast.success(p.action === 'POSTPONED' ? 'Gestión pospuesta' : 'Gestión registrada'),
-    onSettled: () => refrescar(qc, leadId),
-  })
-}
+/** Lo que escribe un descarte: el código del motivo y, si «podría calificar», desde cuándo volver a
+ *  llamarlo. Una sola cuenta para el optimista y para la base. */
+export type VarsDescarte = { leadId: string; etapaId: string; motivo: MotivoDescarte }
+const patchDeDescarte = ({ etapaId, motivo }: VarsDescarte) =>
+  ({ funnel_stage_id: etapaId, discard_reason: motivo, recontact_at: recontactoDeMotivo(motivo, localTodayIso()) })
 
 export function useDescartar() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ leadId, etapaId, motivo }: { leadId: string; etapaId: string; motivo: string | null }) => {
-      await updateLead(leadId, { funnel_stage_id: etapaId, discard_reason: motivo })
-      await crearComentario({ lead_id: leadId, description: comentarioDescarte(motivo), comment_type: 'SYSTEM' })
+    mutationFn: async (vars: VarsDescarte) => {
+      const patch = patchDeDescarte(vars)
+      await updateLead(vars.leadId, patch)
+      await crearComentario({
+        lead_id: vars.leadId, description: comentarioDescarte(vars.motivo, patch.recontact_at), comment_type: 'SYSTEM',
+      })
     },
-    onMutate: ({ leadId, etapaId, motivo }) =>
-      optimistaSobreLeads(qc, l => ({ ...l, funnel_stage_id: etapaId, discard_reason: motivo }), new Set([leadId])),
+    onMutate: vars => optimistaSobreLeads(qc, l => ({ ...l, ...patchDeDescarte(vars) }), new Set([vars.leadId])),
     onError: (error, _v, ctx) => { revertir(qc, ctx?.previo); toast.error(mensajeDeError(error, 'No se pudo descartar el lead')) },
     onSuccess: () => toast.success('Lead descartado'),
     onSettled: (_d, _e, { leadId }) => refrescar(qc, leadId),
@@ -180,6 +173,7 @@ export function useMutacionDelDetalle<TVars, TData>(
       void qc.invalidateQueries({ queryKey: key })
       void qc.invalidateQueries({ queryKey: CRM_KEYS.tareasPendientes })
       void qc.invalidateQueries({ queryKey: ['crm', 'reuniones'] })
+      void qc.invalidateQueries({ queryKey: CRM_KEYS.llamadas })
     },
   })
 }

@@ -11,7 +11,7 @@ const TABLAS: Record<string, QueryKey[]> = {
   crm_leads: [CRM_KEYS.leads, CRM_KEYS.detalles],
   crm_clients: [CRM_KEYS.leads],
   crm_tasks: [CRM_KEYS.tareasPendientes, CRM_KEYS.detalles],
-  crm_comments: [CRM_KEYS.detalles],
+  crm_comments: [CRM_KEYS.detalles, CRM_KEYS.llamadas],
   crm_management_events: [CRM_KEYS.detalles],
   crm_meetings: [CRM_KEYS.detalles, ['crm', 'reuniones']],
   // Te dieron o te sacaron acceso: cambian las carteras Y lo que la RLS te deja leer.

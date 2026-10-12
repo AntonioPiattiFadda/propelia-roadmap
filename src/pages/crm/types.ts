@@ -8,7 +8,6 @@ export type CrmClient = Tables<'crm_clients'>
 /** El lead como lo trae la lista: con el cliente embebido (`client:crm_clients(*)`). */
 export type CrmLeadRow = CrmLead & { client: CrmClient | null }
 export type CrmStage = Tables<'crm_funnel_stages'>
-export type CrmPriority = Tables<'crm_priorities'>
 export type CrmChannel = Tables<'crm_channels'>
 export type CrmTask = Tables<'crm_tasks'>
 export type CrmComment = Tables<'crm_comments'>
@@ -22,8 +21,6 @@ export type CrmAccess = 'read' | 'write'
 export type CrmDataAccess = Omit<Tables<'crm_data_access'>, 'access'> & { access: CrmAccess }
 /** Lo que el CRM lee de `users`: la cartera es una persona. */
 export type Usuario = Pick<Tables<'users'>, 'id' | 'email' | 'nombre' | 'iniciales' | 'color' | 'rol' | 'activo'>
-/** La etapa con su prioridad ya resuelta: el color y el filtro de prioridad cuelgan de acá. */
-export type EtapaConPrioridad = CrmStage & { priority: CrmPriority | null }
 /** Todo lo que se pide al abrir el dialog de un lead (el `getLeadDetail` del producto). */
 export type LeadDetalle = {
   tasks: CrmTask[]

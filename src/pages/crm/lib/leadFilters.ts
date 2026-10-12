@@ -1,52 +1,55 @@
-import type { CrmLeadRow, EtapaConPrioridad } from '../types'
+import { toIsoDate } from '@/lib/calendarDate'
+import type { CrmLeadRow, CrmStage } from '../types'
 import { etapaDelLead } from './effectiveStage'
-import { claveDeGestion, gestionDeLead, type GestionKey, type GestionStatus } from './gestionStatus'
+import { paraRecontactar } from './motivosDescarte'
 
 /* Copiado de propelia-frontend (src/pages/leads/lib/leadFilters.ts) sin lo inmobiliario (pisos,
    presupuesto, zonas, cruces, compraventa) y sin `frozenIds`. Acá la lista entera ya está en el
-   cliente —la RLS recortó— así que no hay RPC con el que mantenerse en espejo. */
-
-export const PRIORITY_NONE = 'none'
+   cliente —la RLS recortó— así que no hay RPC con el que mantenerse en espejo. Tampoco filtra
+   por gestión ni por prioridad: se sacaron del front el 10/10/2026 para rediseñarlas. */
 
 export type LeadFilterState = {
   q: string
   stageFilter: Set<string>
-  /** En la URL y acá, la lista de claves EXCLUIDAS (igual que el producto). */
-  gestionExcluded: Set<GestionKey>
   overdueOnly: boolean
+  /** Solo los leads con alguna tarea pendiente; la lista además se ordena por la próxima. */
+  conTareas: boolean
+  /** Lo contrario de `conTareas`: solo los que no tienen ninguna tarea pendiente. Se excluyen
+   *  (los dos viven en `?tareas=`); lo elige la vista en columnas con «Sin tareas». */
+  sinTareas: boolean
   includeDiscarded: boolean
-  excludedPriorities: Set<string>
+  /** Solo los descartados que «podrían calificar» y ya llegaron a su fecha de volver a llamar. */
+  paraRecontactar: boolean
+  /** Con «Tareas»: ordenar por estado (lo más avanzado del funnel arriba) en vez de por la próxima tarea. */
+  ordenPorEstado: boolean
 }
 
 // Función y no constante: una constante con Sets adentro se compartiría y alguien la mutaría.
 export function filtrosVacios(): LeadFilterState {
   return {
-    q: '', stageFilter: new Set(), gestionExcluded: new Set(), overdueOnly: false,
-    includeDiscarded: false, excludedPriorities: new Set(),
+    q: '', stageFilter: new Set(), overdueOnly: false,
+    conTareas: false, sinTareas: false, includeDiscarded: false, paraRecontactar: false, ordenPorEstado: false,
   }
 }
 
 export type LeadFilterContext = {
   overdueLeadIds: ReadonlySet<string>
-  etapas: ReadonlyMap<string, EtapaConPrioridad>
+  leadIdsConTareas: ReadonlySet<string>
+  etapas: ReadonlyMap<string, CrmStage>
   /** Un solo «ahora» por pintada: si cada fila leyera su propio Date.now(), dos leads idénticos
-   *  podrían caer de lados distintos del vencimiento. */
+   *  podrían caer de lados distintos del día de recontactar. */
   now: number
 }
 
-export type FilterDimension = 'overdue' | 'gestion' | 'stage' | 'priority' | 'discarded'
+export type FilterDimension = 'overdue' | 'tareas' | 'stage' | 'discarded' | 'recontactar'
 
-export function estadoDeGestion(l: CrmLeadRow, ctx: LeadFilterContext): GestionStatus {
-  return gestionDeLead(l, etapaDelLead(l, ctx.etapas)?.management_tolerance_hours, ctx.now)
-}
-
-export function esDescartado(l: CrmLeadRow, etapas: ReadonlyMap<string, EtapaConPrioridad>): boolean {
+export function esDescartado(l: CrmLeadRow, etapas: ReadonlyMap<string, CrmStage>): boolean {
   return etapaDelLead(l, etapas)?.is_out_of_funnel === true
 }
 
-/** La prioridad es la de la etapa: `crm_leads` no tiene prioridad propia. */
-export function prioridadDelLead(l: CrmLeadRow, etapas: ReadonlyMap<string, EtapaConPrioridad>): string {
-  return etapaDelLead(l, etapas)?.priority?.id ?? PRIORITY_NONE
+/** Descartado y con `recontact_at` cumplido, en la zona de quien mira (el día sale de `ctx.now`). */
+export function esParaRecontactar(l: CrmLeadRow, ctx: Pick<LeadFilterContext, 'etapas' | 'now'>): boolean {
+  return paraRecontactar(l, esDescartado(l, ctx.etapas), toIsoDate(new Date(ctx.now)))
 }
 
 const soloDigitos = (s: string) => s.replace(/\D/g, '')
@@ -80,22 +83,24 @@ export function filterLeads(
 ): CrmLeadRow[] {
   const s = new Set(skip)
   /* Buscar es preguntar por UN lead: «¿dónde está éste?». Si la respuesta es «quedó descartado»,
-     esconderlo deja la duda de si existe. La búsqueda levanta el descarte y la prioridad excluida;
-     el resto de los filtros sigue acotando. */
+     esconderlo deja la duda de si existe. La búsqueda levanta el descarte; el resto de los
+     filtros sigue acotando. */
   const buscando = filters.q.trim().length > 0
+  const recontactar = filters.paraRecontactar && !s.has('recontactar')
   return leads.filter(l => {
     const etapaId = l.funnel_stage_id
     const etapaElegida = etapaId != null && filters.stageFilter.has(etapaId)
     return matchesSearch(l, filters.q)
       // Elegir a mano la etapa Descartado en el filtro de etapa es pedir verlos.
-      && (buscando || s.has('discarded') || filters.includeDiscarded || etapaElegida || !esDescartado(l, ctx.etapas))
-      && (buscando || s.has('priority') || filters.excludedPriorities.size === 0
-          || !filters.excludedPriorities.has(prioridadDelLead(l, ctx.etapas)))
+      // «Para recontactar» es pedir ver esos descartados: el filtro de abajo deja solo a ellos.
+      && (buscando || recontactar || s.has('discarded') || filters.includeDiscarded || etapaElegida || !esDescartado(l, ctx.etapas))
+      && (!recontactar || esParaRecontactar(l, ctx))
       && (s.has('stage') || filters.stageFilter.size === 0 || etapaElegida)
-      && (s.has('gestion') || filters.gestionExcluded.size === 0
-          || !filters.gestionExcluded.has(claveDeGestion(estadoDeGestion(l, ctx))))
       // Un descartado con tareas vencidas no es trabajo pendiente (mismo criterio que el producto).
       && (s.has('overdue') || !filters.overdueOnly || (ctx.overdueLeadIds.has(l.id) && !esDescartado(l, ctx.etapas)))
+      // Acá el descarte lo sigue decidiendo su propio filtro: «Tareas» no es pedir verlos.
+      && (s.has('tareas') || !filters.conTareas || ctx.leadIdsConTareas.has(l.id))
+      && (s.has('tareas') || !filters.sinTareas || !ctx.leadIdsConTareas.has(l.id))
   })
 }
 

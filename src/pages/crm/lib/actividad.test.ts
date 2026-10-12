@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import type { CrmMeeting, CrmTask, EtapaConPrioridad, LeadDetalle, Usuario } from '../types'
+import type { CrmMeeting, CrmTask, CrmStage, LeadDetalle, Usuario } from '../types'
 import {
-  agruparPorDia, armarMetaDeActividad, horaDe, leerMetaDeActividad, lineaDeTiempo, type ItemActividad,
+  agruparPorDia, armarMetaDeActividad, horaDe, leerMetaDeActividad, lineaDeTiempo, resumenDeLlamadas,
+  type ItemActividad, type MetaDeActividad,
 } from './actividad'
 
 const vacio: LeadDetalle = { tasks: [], comments: [], events: [], meetings: [], stageHistory: [], assignmentHistory: [] }
 const etapas = new Map([
-  ['n', { id: 'n', label: 'Nuevo' } as EtapaConPrioridad],
-  ['c', { id: 'c', label: 'Contactado' } as EtapaConPrioridad],
+  ['n', { id: 'n', label: 'Nuevo' } as CrmStage],
+  ['c', { id: 'c', label: 'Contactado' } as CrmStage],
 ])
 const usuarios = [{ id: 'a', nombre: 'Antonio' }, { id: 'l', nombre: 'Lorenzo' }] as Usuario[]
 
@@ -30,14 +31,16 @@ describe('lineaDeTiempo', () => {
   const items = lineaDeTiempo(detalle, etapas, usuarios)
 
   it('ordena de lo más viejo a lo más nuevo (el chat se lee de arriba abajo)', () => {
-    expect(items.map(i => i.id)).toEqual(['s1', 's2', 'c1', 'e1', 'c2', 'e2'])
+    expect(items.map(i => i.id)).toEqual(['s2', 'c1', 'e1', 'c2', 'e2'])
+  })
+  it('la etapa con la que nace el lead no es actividad: solo los cambios de estado', () => {
+    expect(items.find(i => i.id === 's1')).toBeUndefined()
   })
   it('las gestiones se fechan cuando se hicieron, no a dónde se pospusieron', () => {
     expect(items.find(i => i.id === 'e2')).toMatchObject({ tipo: 'pospuesto', fecha: '2026-09-30T13:00:00Z' })
   })
   it('una etapa que ya no está en el catálogo se nombra igual', () => {
-    expect(items.find(i => i.id === 's2')?.texto).toBe('Etapa: Nuevo → (etapa borrada)')
-    expect(items.find(i => i.id === 's1')?.texto).toBe('Entró en Nuevo')
+    expect(items.find(i => i.id === 's2')?.texto).toBe('Estado: Nuevo → (estado borrado)')
   })
   it('comentarios SYSTEM como sistema', () => {
     expect(items.find(i => i.id === 'c2')?.tipo).toBe('sistema')
@@ -91,6 +94,22 @@ describe('lineaDeTiempo · tareas', () => {
   })
 })
 
+describe('lineaDeTiempo · consejo para el SDR', () => {
+  const cliente = (sdr_advice: string | null) => ({ id: 'cli', sdr_advice, created_at: '2026-10-01T08:00:00Z' })
+  const llamada = { id: 'c1', lead_id: 'x', description: 'hola', long_description: null, comment_type: 'MANUAL' as const, created_by: 'a', created_at: '2026-10-02T10:00:00Z', deleted_at: null }
+
+  it('entra como actividad, fechado cuando llegó la inmobiliaria y sin autor', () => {
+    const items = lineaDeTiempo({ ...vacio, comments: [llamada] }, etapas, usuarios, cliente('  Preguntá por Inmovilla.  '))
+    expect(items.map(i => i.id)).toEqual(['consejo-cli', 'c1'])
+    expect(items[0]).toMatchObject({ tipo: 'consejo', fecha: '2026-10-01T08:00:00Z', texto: 'Preguntá por Inmovilla.', autorId: null })
+  })
+  it('sin consejo escrito, o sin cliente, no hay renglón', () => {
+    expect(lineaDeTiempo(vacio, etapas, usuarios, cliente('   '))).toEqual([])
+    expect(lineaDeTiempo(vacio, etapas, usuarios, cliente(null))).toEqual([])
+    expect(lineaDeTiempo(vacio, etapas, usuarios, null)).toEqual([])
+  })
+})
+
 describe('metaDeActividad', () => {
   it('ida y vuelta: tipo y con quién', () => {
     const guardado = armarMetaDeActividad({ tipo: 'llamada', con: ['Laura Gómez', 'Marc'] })
@@ -108,6 +127,33 @@ describe('metaDeActividad', () => {
     expect(leerMetaDeActividad('<!--act-->{roto')).toBeNull()
     expect(leerMetaDeActividad('<!--act-->{"tipo":"otra","con":[]}')).toBeNull()
     expect(leerMetaDeActividad('<!--act-->{"tipo":"nota","con":[3]}')).toBeNull()
+  })
+  it('ida y vuelta: el resultado de la llamada y si fue con un decisor', () => {
+    const atendida = { tipo: 'llamada' as const, con: ['Laura'], resultado: 'contestada' as const, decisor: true }
+    expect(leerMetaDeActividad(armarMetaDeActividad(atendida))).toEqual(atendida)
+    const nadie = { tipo: 'llamada' as const, con: [], resultado: 'no_respondida' as const }
+    expect(leerMetaDeActividad(armarMetaDeActividad(nadie))).toEqual(nadie)
+  })
+  it('un resultado o un decisor con otra forma no es meta', () => {
+    expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"resultado":"quizas"}')).toBeNull()
+    expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"decisor":"si"}')).toBeNull()
+  })
+})
+
+describe('resumenDeLlamadas', () => {
+  const llamada = (m: Partial<MetaDeActividad>) => armarMetaDeActividad({ tipo: 'llamada', con: [], ...m })
+  const resumen = resumenDeLlamadas([
+    llamada({ resultado: 'contestada', con: ['Laura'], decisor: true }),
+    llamada({ resultado: 'contestada', con: ['Marc'] }),
+    llamada({ resultado: 'contestada', decisor: false }),
+    llamada({ resultado: 'no_respondida' }),
+    llamada({ resultado: 'no_respondida' }),
+    llamada({}), // vieja, sin resultado: no se sabe qué pasó
+    armarMetaDeActividad({ tipo: 'nota', con: ['Laura'] }),
+    null,
+  ])
+  it('cuenta contestadas, con decisor (que también son contestadas) y no respondidas', () => {
+    expect(resumen).toEqual({ contestadas: 3, decisores: 1, noRespondidas: 2 })
   })
 })
 

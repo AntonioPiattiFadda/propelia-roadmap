@@ -4,6 +4,7 @@ import { PlusIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { AgentFilterButton } from './components/AgentFilterButton'
+import { ContadorDeLlamadas } from './components/ContadorDeLlamadas'
 import { CrmLeadList } from './components/CrmLeadList'
 import { FunnelConfigDialog } from './components/FunnelConfigDialog'
 import { ImportarLoteDialog } from './components/ImportarLoteDialog'
@@ -45,6 +46,9 @@ export function Crm() {
           <span className="md:hidden">Nuevo</span>
         </Button>
       </header>
+      <div className="px-4 pb-2 max-md:px-2">
+        <ContadorDeLlamadas />
+      </div>
       <div className="p-1 max-md:p-0">
         <CrmLeadList />
       </div>

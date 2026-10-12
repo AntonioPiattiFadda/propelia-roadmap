@@ -1,31 +1,27 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Check, ExternalLink, Pencil, Sparkles, TriangleAlert } from 'lucide-react'
+import { Check, ExternalLink, Pencil, TriangleAlert } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { PhoneInput } from '@/components/ui/phone-input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useActualizarCliente } from '../hooks/useLeadMutaciones'
-import {
-  enlaceDeWeb, fechaALaVista, MOTIVOS_DE_SELECCION, parsearAgentes, parsearFecha, valorDeOpcion, webALaVista,
-} from '../lib/inmobiliaria'
+import { enlaceDeWeb, parsearAgentes, webALaVista } from '../lib/inmobiliaria'
 import type { ClientePatch } from '../service/crm.service'
 import type { CrmLeadRow } from '../types'
 
 /* NUEVO. La pestaña con el nombre de la inmobiliaria, al lado de la actividad: lo que se sabe de
-   la empresa. En orden: lo que trajo la importación (lote, activación, motivo), los otros
-   contactos, los teléfonos de Google Maps e Idealista y, abajo de todo, los datos de la empresa
-   (web, Idealista, ciudad, tamaño, qué CRM usa hoy).
+   la empresa, en tres columnas para verlo todo sin scrollear (12/10/2026, por pedido): los otros
+   contactos, los datos de la empresa y su presencia online.
    Teléfono, email, origen y responsable no se repiten acá: ya están en el perfil de la
-   izquierda, y dos lugares para el mismo dato es uno que miente. */
+   izquierda, y dos lugares para el mismo dato es uno que miente.
+   Lo de la importación (lote, activación, motivo) se sacó de la pantalla el 12/10/2026, por
+   pedido: las columnas siguen en la base y la importación las sigue escribiendo. */
 
 /* Dos modos por sección, como el «Detalle propiedad» del producto: leyendo, una ficha compacta
-   —rótulo chico y gris, el dato al lado— que ocupa la mitad que una pila de campos; «Editar» la
-   vuelve campos. Lo que falta dice «sin cargar», subrayado punteado, y tocarlo abre la edición
-   justo en ese dato: es la forma más corta de completar lo que falta. */
+   —rótulo chico y gris, el dato al lado—; «Editar» la vuelve campos. Lo que falta dice «sin
+   cargar», subrayado punteado, y tocarlo abre la edición justo en ese dato. */
 const ROTULO = 'text-[10.5px] font-bold uppercase leading-none tracking-[0.08em] text-(--fg-muted)'
-const CAMPO = 'h-8 w-full px-2 text-[13px] md:text-[13px] placeholder:text-(--fg-faint)'
-const VALOR = 'min-w-0 truncate text-[13.5px] font-medium text-foreground'
+const CAMPO = 'h-7 w-full px-2 text-[13px] md:text-[13px] placeholder:text-(--fg-faint)'
+const VALOR = 'min-w-0 truncate text-[13px] font-medium text-foreground'
 
 // Los números: se escriben como texto y se interpretan recién al guardar (`parsearAgentes`, que
 // pide un entero no negativo — sirve igual para agentes, años y cantidad de inmuebles).
@@ -33,15 +29,17 @@ const NUMERICOS = ['agents_count', 'idealista_years', 'idealista_listings'] as c
 type Numerico = (typeof NUMERICOS)[number]
 const esNumerico = (c: Campo): c is Numerico => (NUMERICOS as readonly string[]).includes(c)
 
-/* Los dos teléfonos de la empresa que no son de ninguna persona: se editan con el mismo campo de
-   teléfono que los del perfil. */
+/* Los dos teléfonos que trae la importación. El de Google Maps entra solo como contacto (ver el
+   LeadDialog) y acá se edita solo si no entró —los tres casilleros ya estaban ocupados—: si no, el
+   número quedaría sin ninguna pantalla que lo muestre. El de Idealista NO es un contacto
+   (12/10/2026, por pedido): es un redirector, no una persona de la agencia, así que vive siempre
+   en «Datos de la inmobiliaria», con su aviso. */
 const TELEFONOS = ['google_maps_phone', 'idealista_phone'] as const
 type Telefono = (typeof TELEFONOS)[number]
 const esTelefono = (c: Campo): c is Telefono => (TELEFONOS as readonly string[]).includes(c)
 
 type Campo = 'company_name' | 'website' | 'idealista_url' | 'city' | 'neighborhood' | 'office_address'
-  | 'current_crm' | Numerico
-  | 'import_batch' | 'batch_activated_on' | Telefono
+  | 'current_crm' | Numerico | Telefono
 type Borrador = Record<Campo, string>
 const numeroATexto = (n: number | null | undefined) => (n != null ? String(n) : '')
 const borradorDe = (l: CrmLeadRow): Borrador => ({
@@ -52,41 +50,57 @@ const borradorDe = (l: CrmLeadRow): Borrador => ({
   idealista_years: numeroATexto(l.client?.idealista_years),
   idealista_listings: numeroATexto(l.client?.idealista_listings),
   current_crm: l.client?.current_crm ?? '',
-  import_batch: l.client?.import_batch ?? '', batch_activated_on: l.client?.batch_activated_on ?? '',
   google_maps_phone: l.client?.google_maps_phone ?? '', idealista_phone: l.client?.idealista_phone ?? '',
 })
 
 /* Cada sección se edita por su lado: «Editar» en una no vuelve campos a las otras. */
-type Bloque = 'datos' | 'importacion' | 'telefonos'
-const BLOQUE_DE: Partial<Record<Campo, Bloque>> = {
-  import_batch: 'importacion', batch_activated_on: 'importacion',
-  google_maps_phone: 'telefonos', idealista_phone: 'telefonos',
-}
-const bloqueDe = (c: Campo): Bloque => BLOQUE_DE[c] ?? 'datos'
-// Radix no deja un ítem con valor vacío: «Sin motivo» lleva esta marca y se guarda como null.
-const SIN_MOTIVO = '__sin_motivo__'
+type Bloque = 'empresa' | 'online' | 'telefonos'
+type Dato = { c: Campo; rotulo: string; placeholder: string; inputMode?: 'numeric' }
+
+const DATOS_EMPRESA: Dato[] = [
+  { c: 'company_name', rotulo: 'Nombre', placeholder: 'Nombre de la inmobiliaria' },
+  { c: 'city', rotulo: 'Ciudad', placeholder: 'Ciudad' },
+  { c: 'neighborhood', rotulo: 'Barrio', placeholder: 'Dónde opera' },
+  { c: 'office_address', rotulo: 'Dirección', placeholder: 'De la oficina' },
+  { c: 'agents_count', rotulo: 'Agentes', placeholder: 'Cuántos son', inputMode: 'numeric' },
+  { c: 'current_crm', rotulo: 'CRM actual', placeholder: 'Qué usan hoy' },
+  { c: 'idealista_phone', rotulo: 'Tel. Idealista', placeholder: '' },
+]
+const DATOS_ONLINE: Dato[] = [
+  { c: 'website', rotulo: 'Web', placeholder: 'inmobiliaria.com' },
+  { c: 'idealista_url', rotulo: 'Idealista', placeholder: 'Enlace al perfil' },
+  { c: 'idealista_years', rotulo: 'Años en Idealista', placeholder: 'Cuántos años', inputMode: 'numeric' },
+  { c: 'idealista_listings', rotulo: 'Inmuebles', placeholder: 'Cuántos publica', inputMode: 'numeric' },
+]
+const BLOQUE_DE = new Map<Campo, Bloque>([
+  ...DATOS_EMPRESA.map(d => [d.c, 'empresa'] as const),
+  ...DATOS_ONLINE.map(d => [d.c, 'online'] as const),
+  ['google_maps_phone', 'telefonos'],
+])
+
+const digitos = (t: string | null | undefined) => (t ?? '').replace(/\D/g, '')
 
 function Seccion({ titulo, accion, children }: { titulo: string; accion?: ReactNode; children: ReactNode }) {
   return (
-    <section>
-      <div className="mb-1.5 flex min-h-7 items-center justify-between gap-2 px-0.5">
+    <section className="min-w-0">
+      <div className="mb-1 flex min-h-6 items-center justify-between gap-2 px-0.5">
         <h3 className={ROTULO}>{titulo}</h3>
         {accion}
       </div>
-      <div className="rounded-lg bg-card px-3.5 py-2.5 shadow-xs [border:1px_solid_var(--line)]">{children}</div>
+      <div className="rounded-lg bg-card px-3 py-2 shadow-xs [border:1px_solid_var(--line)]">{children}</div>
     </section>
   )
 }
 
 /** La ficha: rótulo angosto a la izquierda y el dato pegado, sin separadores entre renglones. */
 function Ficha({ children }: { children: ReactNode }) {
-  return <dl className="grid grid-cols-[104px_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5">{children}</dl>
+  return <dl className="grid grid-cols-[88px_minmax(0,1fr)] items-center gap-x-2.5 gap-y-1">{children}</dl>
 }
 
 function Fila({ rotulo, children }: { rotulo: string; children: ReactNode }) {
   return (
     <>
-      <dt className="text-[12px] text-(--fg-faint)">{rotulo}</dt>
+      <dt className="truncate text-[11.5px] text-(--fg-faint)" title={rotulo}>{rotulo}</dt>
       <dd className="flex min-h-6 min-w-0 items-center">{children}</dd>
     </>
   )
@@ -95,60 +109,16 @@ function Fila({ rotulo, children }: { rotulo: string; children: ReactNode }) {
 function BotonEditar({ editando, onClick }: { editando: boolean; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick}
-      className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-full bg-card px-2.5 text-[12px] font-semibold text-foreground [border:1px_solid_var(--line)] hover:bg-(--surface-2)">
-      {editando ? <><Check size={13} />Listo</> : <><Pencil size={12} />Editar</>}
+      className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-full bg-card px-2 text-[11.5px] font-semibold text-foreground [border:1px_solid_var(--line)] hover:bg-(--surface-2)">
+      {editando ? <><Check size={12} />Listo</> : <><Pencil size={11} />Editar</>}
     </button>
-  )
-}
-
-/* El consejo para el SDR, arriba de todo: es lo que se lee antes de levantar el teléfono. Hoy se
-   escribe a mano; la idea es que lo genere Claude con los datos y la actividad del lead, y por eso
-   ya lleva su nombre y su columna (`sdr_advice`, pendiente de migración como las de la ficha).
-   Mismo trato que las notas del perfil: leyendo es texto, vacío es una línea, «Editar» lo abre. */
-function ConsejoSdr({ lead, puedeEscribir }: { lead: CrmLeadRow; puedeEscribir: boolean }) {
-  const actualizarCliente = useActualizarCliente()
-  const guardado = lead.client?.sdr_advice ?? ''
-  const [texto, setTexto] = useState(guardado)
-  const [abierto, setAbierto] = useState(false)
-  // Lo que llega por realtime se toma solo si no lo estoy escribiendo.
-  useEffect(() => { if (!abierto) setTexto(guardado) }, [guardado, abierto])
-
-  const guardar = () => {
-    setAbierto(false)
-    const client = lead.client
-    if (!client || texto.trim() === guardado.trim()) return
-    actualizarCliente.mutate({ clientId: client.id, patch: { sdr_advice: texto.trim() || null } })
-  }
-
-  return (
-    <Seccion titulo="Consejo de Claude para SDR"
-      accion={puedeEscribir && !abierto && (
-        <button type="button" onClick={() => setAbierto(true)}
-          className="cursor-pointer text-[12.5px] font-semibold text-(--brand-soft-fg) hover:underline">
-          Editar
-        </button>
-      )}>
-      <div className="flex gap-2.5">
-        <Sparkles size={15} aria-hidden className="mt-0.5 shrink-0 text-(--brand-soft-fg)" />
-        {abierto ? (
-          <Textarea autoFocus rows={4} aria-label="Consejo para el SDR" value={texto}
-            placeholder="Cómo encarar a esta inmobiliaria: qué le duele, qué decirle, qué evitar…"
-            onChange={e => setTexto(e.target.value)} onBlur={guardar}
-            className="min-h-20 flex-1 resize-y text-[13px] md:text-[13px]" />
-        ) : texto.trim() ? (
-          <p className="min-w-0 flex-1 whitespace-pre-wrap text-[13px] leading-snug text-foreground">{texto}</p>
-        ) : (
-          <p className="min-w-0 flex-1 text-[13px] text-(--fg-faint)">Todavía no hay consejo para esta inmobiliaria.</p>
-        )}
-      </div>
-    </Seccion>
   )
 }
 
 export function InmobiliariaDelLead({ lead, puedeEscribir, otrosContactos }: {
   lead: CrmLeadRow
   puedeEscribir: boolean
-  /** Los contactos sin fijar, ya dibujados por el perfil: el borrador de cada persona es uno solo y
+  /** Todos los contactos (los fijados también), ya dibujados por el perfil: el borrador de cada persona es uno solo y
    *  vive allá, así que se los recibe hechos en vez de editarlos con un segundo borrador acá. */
   otrosContactos?: ReactNode
 }) {
@@ -181,49 +151,36 @@ export function InmobiliariaDelLead({ lead, puedeEscribir, otrosContactos }: {
       actualizarCliente.mutate({ clientId: client.id, patch: { [campo]: r.valor } as ClientePatch })
       return
     }
-    if (campo === 'batch_activated_on') {
-      const r = parsearFecha(borrador[campo])
-      if (!r.ok) { setBorrador(b => ({ ...b, [campo]: borradorDe(lead)[campo] })); return }
-      if (r.valor === (client[campo] ?? null)) return
-      actualizarCliente.mutate({ clientId: client.id, patch: { [campo]: r.valor } })
-      return
-    }
     const valor = borrador[campo].trim()
     if (valor === (client[campo] ?? '').trim()) return
     actualizarCliente.mutate({ clientId: client.id, patch: { [campo]: valor || null } as ClientePatch })
   }
 
-  /* El motivo se elige de una lista y se guarda al elegir, solo, como todo lo de esta pestaña. */
-  const motivoGuardado = lead.client?.selection_reason ?? ''
-  const elegirMotivo = (elegido: string) => {
-    const client = lead.client
-    const valor = valorDeOpcion(MOTIVOS_DE_SELECCION, elegido === SIN_MOTIVO ? null : elegido)
-    if (!client || valor === (client.selection_reason ?? null)) return
-    actualizarCliente.mutate({ clientId: client.id, patch: { selection_reason: valor } })
-  }
-
-  const campoDe = (c: Campo, label: string, placeholder: string, inputMode?: 'numeric') => {
+  const campoDe = (d: Dato) => {
     /* PhoneInput no tiene onBlur ni autoFocus: se escucha el blur en el contenedor, como en el perfil. */
-    if (esTelefono(c)) return (
-      <div className="w-full [&_.h-9]:h-8" onBlur={() => guardar(c)}>
-        <PhoneInput value={borrador[c]} onChange={v => cambiar(c, v)} />
-      </div>
-    )
+    if (esTelefono(d.c)) {
+      const c = d.c
+      return (
+        <div className="w-full [&_.h-9]:h-7" onBlur={() => guardar(c)}>
+          <PhoneInput value={borrador[c]} onChange={v => cambiar(c, v)} />
+        </div>
+      )
+    }
     return (
-      <Input className={CAMPO} aria-label={label} placeholder={placeholder} value={borrador[c]}
-        type={c === 'batch_activated_on' ? 'date' : 'text'} inputMode={inputMode} autoFocus={foco === c}
-        onChange={e => cambiar(c, e.target.value)} onBlur={() => guardar(c)}
+      <Input className={CAMPO} aria-label={d.rotulo} placeholder={d.placeholder} value={borrador[d.c]}
+        inputMode={d.inputMode} autoFocus={foco === d.c}
+        onChange={e => cambiar(d.c, e.target.value)} onBlur={() => guardar(d.c)}
         onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur() }} />
     )
   }
 
   /* Lo que falta: con permiso es un botón que entra a editar ese dato; sin permiso, un texto. */
-  const sinCargar = (c?: Campo) => puedeEscribir && c
-    ? <button type="button" onClick={() => editar(bloqueDe(c), c)}
-        className="cursor-pointer text-[13.5px] font-medium text-(--fg-faint) underline decoration-dotted underline-offset-4 hover:text-(--fg-2)">
+  const sinCargar = (c: Campo) => puedeEscribir
+    ? <button type="button" onClick={() => editar(BLOQUE_DE.get(c) ?? 'empresa', c)}
+        className="cursor-pointer text-[13px] font-medium text-(--fg-faint) underline decoration-dotted underline-offset-4 hover:text-(--fg-2)">
         sin cargar
       </button>
-    : <span className="text-[13.5px] font-medium text-(--fg-faint)">sin cargar</span>
+    : <span className="text-[13px] font-medium text-(--fg-faint)">sin cargar</span>
 
   /** Leyendo: el dato, o «sin cargar». La web e Idealista, como enlace. */
   const leer = (c: Campo) => {
@@ -235,91 +192,53 @@ export function InmobiliariaDelLead({ lead, puedeEscribir, otrosContactos }: {
         <a href={href ?? undefined} target="_blank" rel="noopener noreferrer" title={href ?? undefined}
           className={cn(VALOR, 'inline-flex items-center gap-1 text-(--brand-soft-fg) hover:underline')}>
           <span className="min-w-0 truncate">{c === 'website' ? webALaVista(v) : 'Ver perfil'}</span>
-          <ExternalLink size={13} className="shrink-0" />
+          <ExternalLink size={12} className="shrink-0" />
         </a>
       )
     }
-    if (c === 'batch_activated_on') return <span className={cn(VALOR, 'tabular-nums')}>{fechaALaVista(v)}</span>
-    return <span className={cn(VALOR, (esNumerico(c) || esTelefono(c)) && 'tabular-nums')}>{v}</span>
+    return <span className={cn(VALOR, (esNumerico(c) || esTelefono(c)) && 'tabular-nums')} title={v}>{v}</span>
   }
 
-  const fila = (b: Bloque, d: { c: Campo; rotulo: string; placeholder: string; inputMode?: 'numeric' }) => (
-    <Fila key={d.c} rotulo={d.rotulo}>{enEdicion === b ? campoDe(d.c, d.rotulo, d.placeholder, d.inputMode) : leer(d.c)}</Fila>
+  const fila = (b: Bloque, d: Dato) => (
+    <Fila key={d.c} rotulo={d.rotulo}>{enEdicion === b ? campoDe(d) : leer(d.c)}</Fila>
   )
 
-  /* Dos columnas por tema: la empresa a la izquierda y su presencia online a la derecha. Si la
-     pestaña es angosta se apilan en ese mismo orden (container query, no el ancho de la pantalla:
-     lo que manda es el panel, que vive al lado de la actividad). */
-  const DATOS_EMPRESA: { c: Campo; rotulo: string; placeholder: string; inputMode?: 'numeric' }[] = [
-    { c: 'company_name', rotulo: 'Nombre', placeholder: 'Nombre de la inmobiliaria' },
-    { c: 'city', rotulo: 'Ciudad', placeholder: 'Ciudad' },
-    { c: 'neighborhood', rotulo: 'Barrio', placeholder: 'Dónde opera' },
-    { c: 'office_address', rotulo: 'Dirección', placeholder: 'De la oficina' },
-    { c: 'agents_count', rotulo: 'Nº de agentes', placeholder: 'Cuántos son', inputMode: 'numeric' },
-    { c: 'current_crm', rotulo: 'CRM actual', placeholder: 'Qué usan hoy' },
-  ]
-  const DATOS_ONLINE: { c: Campo; rotulo: string; placeholder: string; inputMode?: 'numeric' }[] = [
-    { c: 'website', rotulo: 'Web', placeholder: 'inmobiliaria.com' },
-    { c: 'idealista_url', rotulo: 'Idealista', placeholder: 'Enlace al perfil' },
-    { c: 'idealista_years', rotulo: 'Años en Idealista', placeholder: 'Cuántos años', inputMode: 'numeric' },
-    { c: 'idealista_listings', rotulo: 'Propiedades en Idealista', placeholder: 'Cuántas publica', inputMode: 'numeric' },
-  ]
+  // El de Google, si no entró como contacto (por dígitos: el formato cambia).
+  const client = lead.client
+  const deContactos = [client?.phone, client?.alternative_phone_1, client?.alternative_phone_2].map(digitos)
+  const googleSuelto = !!digitos(client?.google_maps_phone) && !deContactos.includes(digitos(client?.google_maps_phone))
 
+  /* Tres columnas cuando el panel da (container query, no el ancho de la pantalla: lo que manda es
+     el panel, que vive al lado de la actividad); más angosto se apilan en el mismo orden. */
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto bg-(--surface-2) p-3">
-      <ConsejoSdr lead={lead} puedeEscribir={puedeEscribir} />
+    <div className="@container flex min-h-0 flex-1 flex-col overflow-y-auto bg-(--surface-2) p-2.5">
+      <div className="grid items-start gap-2.5 @[760px]:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-2.5">
+          {otrosContactos && <Seccion titulo="Otros contactos">{otrosContactos}</Seccion>}
 
-      {otrosContactos && <Seccion titulo="Otros contactos">{otrosContactos}</Seccion>}
-
-      {/* Los teléfonos de la empresa que no son de ninguna persona. El de Idealista va último y con
-          el aviso escrito, no en un tooltip: es un redirector, y llamar por ahí a la agencia le entra
-          como un interesado en un piso. Nada en la pantalla lo ofrece como número por defecto. */}
-      <Seccion titulo="Otros teléfonos" accion={botonEditar('telefonos')}>
-        <Ficha>{fila('telefonos', { c: 'google_maps_phone', rotulo: 'Google Maps', placeholder: '' })}</Ficha>
-        <div className="mt-2.5 flex flex-col gap-1.5 pt-2.5 [border-top:1px_solid_var(--line-soft)]">
-          <span className="text-[12px] text-(--fg-faint)">Teléfono Idealista · último recurso</span>
-          <div className="flex min-h-6 min-w-0 items-center">
-            {enEdicion === 'telefonos' ? campoDe('idealista_phone', 'Teléfono Idealista', '') : leer('idealista_phone')}
-          </div>
-          <p className="flex items-start gap-1.5 rounded-md bg-warning-soft px-2.5 py-[7px] text-[11.5px] leading-snug text-warning">
-            <TriangleAlert size={13} aria-hidden className="mt-px shrink-0" />
-            Solo si no hay ningún otro teléfono. Es un redirector de Idealista: a la agencia le entra
-            como un cliente interesado en un piso.
-          </p>
+          {googleSuelto && (
+            <Seccion titulo="Otros teléfonos" accion={botonEditar('telefonos')}>
+              <Ficha>{fila('telefonos', { c: 'google_maps_phone', rotulo: 'Google Maps', placeholder: '' })}</Ficha>
+            </Seccion>
+          )}
         </div>
-      </Seccion>
 
-      {/* Abajo (6/10/2026, por pedido): es contexto que se consulta, no lo que se usa para llamar. */}
-      <Seccion titulo="Datos de la inmobiliaria" accion={botonEditar('datos')}>
-        <div className="@container">
-          <div className="grid gap-x-6 gap-y-1.5 @[540px]:grid-cols-2">
-            <Ficha>{DATOS_EMPRESA.map(d => fila('datos', d))}</Ficha>
-            <Ficha>{DATOS_ONLINE.map(d => fila('datos', d))}</Ficha>
-          </div>
-        </div>
-      </Seccion>
+        {/* El de Idealista con el aviso escrito, no en un tooltip: es un redirector, y llamar por
+            ahí a la agencia le entra como un interesado en un piso. */}
+        <Seccion titulo="Datos de la inmobiliaria" accion={botonEditar('empresa')}>
+          <Ficha>{DATOS_EMPRESA.map(d => fila('empresa', d))}</Ficha>
+          {!!borrador.idealista_phone.trim() && (
+            <p className="mt-1.5 flex items-start gap-1.5 rounded-md bg-warning-soft px-2 py-1.5 text-[11.5px] leading-snug text-warning">
+              <TriangleAlert size={13} aria-hidden className="mt-px shrink-0" />
+              El teléfono de Idealista es el último recurso: es un redirector. Solo si no hay otro.
+            </p>
+          )}
+        </Seccion>
 
-      {/* De qué lote de la importación salió, cuándo se le activó al SDR y por qué se la eligió. El
-          motivo es un select siempre, no solo en edición: es un toque, y leyendo dice el rótulo.
-          Último de todo (6/10/2026, por pedido): es de dónde vino el dato, no algo del día a día. */}
-      <Seccion titulo="Importación" accion={botonEditar('importacion')}>
-        <Ficha>
-          {fila('importacion', { c: 'import_batch', rotulo: 'Lote', placeholder: 'Ej.: BCN-S01' })}
-          {fila('importacion', { c: 'batch_activated_on', rotulo: 'Activada para el SDR', placeholder: '' })}
-          <Fila rotulo="Motivo">
-            <Select value={motivoGuardado} disabled={!puedeEscribir} onValueChange={elegirMotivo}>
-              <SelectTrigger size="sm" aria-label="Motivo de selección" title="Con qué ángulo abrir la llamada"
-                className="h-7 w-full max-w-[200px] px-2 text-[13px] font-medium">
-                <SelectValue placeholder="Sin cargar" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={SIN_MOTIVO} className="text-(--fg-muted)">Sin motivo</SelectItem>
-                {MOTIVOS_DE_SELECCION.map(o => <SelectItem key={o.valor} value={o.valor}>{o.rotulo}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </Fila>
-        </Ficha>
-      </Seccion>
+        <Seccion titulo="Presencia online" accion={botonEditar('online')}>
+          <Ficha>{DATOS_ONLINE.map(d => fila('online', d))}</Ficha>
+        </Seccion>
+      </div>
     </div>
   )
 }

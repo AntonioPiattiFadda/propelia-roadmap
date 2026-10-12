@@ -117,6 +117,9 @@ export type Database = {
           alternative_phone_2_source: string | null
           batch_activated_on: string | null
           company_name: string | null
+          alternative_phone_1_is_decision_maker: boolean | null
+          alternative_phone_2_is_decision_maker: boolean | null
+          contact_is_decision_maker: boolean | null
           contact_notes: string | null
           contact_role: string | null
           city: string | null
@@ -160,6 +163,9 @@ export type Database = {
           alternative_phone_2_source?: string | null
           batch_activated_on?: string | null
           company_name?: string | null
+          alternative_phone_1_is_decision_maker?: boolean | null
+          alternative_phone_2_is_decision_maker?: boolean | null
+          contact_is_decision_maker?: boolean | null
           contact_notes?: string | null
           contact_role?: string | null
           city?: string | null
@@ -203,6 +209,9 @@ export type Database = {
           alternative_phone_2_source?: string | null
           batch_activated_on?: string | null
           company_name?: string | null
+          alternative_phone_1_is_decision_maker?: boolean | null
+          alternative_phone_2_is_decision_maker?: boolean | null
+          contact_is_decision_maker?: boolean | null
           contact_notes?: string | null
           contact_role?: string | null
           city?: string | null
@@ -405,6 +414,7 @@ export type Database = {
           id: string
           last_important_event_at: string
           last_opened_at: string | null
+          recontact_at: string | null
           updated_at: string
         }
         Insert: {
@@ -423,6 +433,7 @@ export type Database = {
           id?: string
           last_important_event_at?: string
           last_opened_at?: string | null
+          recontact_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -441,6 +452,7 @@ export type Database = {
           id?: string
           last_important_event_at?: string
           last_opened_at?: string | null
+          recontact_at?: string | null
           updated_at?: string
         }
         Relationships: [

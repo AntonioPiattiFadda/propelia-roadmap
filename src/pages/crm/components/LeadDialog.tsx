@@ -1,5 +1,9 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ArrowLeft, Briefcase, Check, ChevronDown, ChevronUp, Mail, NotebookPen, Phone, Pin, User, UserPlus, X } from 'lucide-react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Briefcase, Check, ChevronDown, ChevronUp, Mail, NotebookPen, Pencil, Phone, Pin, TriangleAlert, User, UserPlus, X } from 'lucide-react'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
@@ -11,15 +15,20 @@ import { useCarteras } from '../hooks/useCarteras'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useLeadDetalle } from '../hooks/useLeadDetalle'
 import { useActualizarCliente, useActualizarLead } from '../hooks/useLeadMutaciones'
-import { inicialesDe, nombreDelLead, type ClientData } from '../lib/clientData'
+import {
+  casilleroParaTelefonoDeGoogle, esTelefonoDeIdealista, inicialesDe,
+ nombreDelLead, type CampoDecisor, type ClientData } from '../lib/clientData'
 import { etapaDelLead } from '../lib/effectiveStage'
 import { ORIGENES_DE_TELEFONO, valorDeOpcion } from '../lib/inmobiliaria'
+import { etiquetaDeMotivo, fmtFechaCompleta, grupoDeMotivo } from '../lib/motivosDescarte'
 import type { ClientePatch } from '../service/crm.service'
 import type { CrmLeadRow } from '../types'
 import { ActividadLead, PestanasDelLead, type PestanaDelLead } from './ActividadLead'
+import { DescartarLeadDialog } from './DescartarLeadDialog'
 import type { ClienteExtra } from './ClientFields'
 import { StageBadge } from './leadCells'
 import { LeadRowActions } from './LeadRowActions'
+import { BotonMensajes } from './MensajesPredeterminados'
 import { TareasDelLead } from './TareasDelLead'
 
 /* El rol (texto libre) y las notas de cada contacto. Columnas pendientes de migración: se guardan
@@ -78,7 +87,35 @@ function guardarFijados(clientId: string | undefined, fijados: Contacto[]) {
 type OrigenDeTelefonoCampo = 'phone_source' | (typeof OTRAS_PERSONAS)[number]['origen']
 const SIN_ORIGEN = '__sin_origen__'
 
+/* Las columnas de cada contacto, para dibujar la fila y la ventanita de edición con un solo mapa.
+   El email es solo del principal: los alternativos no tienen columna. */
+type CamposDeContacto = {
+  nombres: readonly { campo: keyof Borrador; label: string }[]
+  telefono: 'phone' | 'alternative_phone_1' | 'alternative_phone_2'
+  origen: OrigenDeTelefonoCampo
+  email?: 'email'
+  rol: 'contact_role' | `alternative_phone_${1 | 2}_role`
+  notas: 'contact_notes' | `alternative_phone_${1 | 2}_notes`
+  decisor: CampoDecisor
+}
+function camposDe(c: Contacto): CamposDeContacto {
+  if (c === 'principal') return {
+    nombres: [{ campo: 'first_name', label: 'Nombre' }, { campo: 'last_name', label: 'Apellido' }],
+    telefono: 'phone', origen: 'phone_source', email: 'email', rol: 'contact_role', notas: 'contact_notes',
+    decisor: 'contact_is_decision_maker',
+  }
+  const p = OTRAS_PERSONAS[c === 'alternative_phone_1' ? 0 : 1]
+  return {
+    nombres: [{ campo: p.nombre, label: 'Nombre' }], telefono: p.telefono, origen: p.origen, rol: p.rol, notas: p.notas,
+    decisor: `${p.telefono}_is_decision_maker`,
+  }
+}
+const columnasDe = (f: CamposDeContacto): (keyof Borrador)[] =>
+  [...f.nombres.map(n => n.campo), f.telefono, f.origen, ...(f.email ? [f.email] : []), f.rol, f.notas]
+
 const LISTA_CONTACTOS = 'flex flex-col divide-y divide-(--line-soft) rounded-md [border:1px_solid_var(--line-soft)]'
+
+const FLECHA = 'flex size-9 cursor-pointer items-center justify-center rounded-lg bg-card text-foreground transition-colors [border:1px_solid_var(--line-strong)] hover:bg-(--surface-2) disabled:cursor-default disabled:opacity-35'
 
 const ROTULO = 'text-[10.5px] font-bold uppercase leading-none tracking-[0.08em] text-(--fg-muted)'
 
@@ -104,21 +141,28 @@ const TELEFONO = cn(
 /* El contenido del dialog, montado por lead (key = id): cambiar de lead con las flechas arranca
    de cero el borrador, igual que cerrar y abrir. Va el encabezado también, porque sus flechas
    y el menú de acciones operan sobre este lead. */
-function CuerpoDelLead({ lead, indice, total, onPaso, onStartReassign }: {
+function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onCerrar, onStartReassign }: {
   lead: CrmLeadRow
   indice: number
   total: number
+  pestana: PestanaDelLead
+  setPestana: (p: PestanaDelLead) => void
   onPaso: (delta: -1 | 1) => void
+  onCerrar: () => void
   onStartReassign?: (leadId: string) => void
 }) {
-  const { etapasPorId, etapasActivas } = useCrmCatalogos()
+  const { etapasPorId, etapasActivas, descartada } = useCrmCatalogos()
   const { puedeEscribir } = useCarteras()
   const detalleQ = useLeadDetalle(lead.id)
-  /* Descartado no se elige acá: pide motivo (menú de acciones). Pero si el lead YA está en
-     Descartado, o en una etapa que se borró del funnel, esa opción tiene que estar: si no, el
-     select queda en blanco y parece que el lead no tiene etapa. */
+  /* Descartado se ofrece, pero elegirlo abre el diálogo del motivo en vez de mover el lead (cancelar
+     lo deja donde estaba: el select es controlado). Las otras fuera del funnel no se eligen; si el
+     lead YA está en una, o en una etapa que se borró, esa opción tiene que estar: si no, el select
+     queda en blanco y parece que el lead no tiene etapa. */
+  const [descartandoLead, setDescartandoLead] = useState(false)
   const actual = lead.funnel_stage_id ? etapasPorId.get(lead.funnel_stage_id) : undefined
-  const opcionesEtapa = etapasActivas.filter(e => !e.is_out_of_funnel || e.id === lead.funnel_stage_id)
+  const opcionesEtapa = etapasActivas.filter(e =>
+    !e.is_out_of_funnel || e.id === lead.funnel_stage_id || e.id === descartada?.id)
+  const grupoDescarte = grupoDeMotivo(lead.discard_reason)
   if (actual && !opcionesEtapa.some(e => e.id === actual.id)) opcionesEtapa.push(actual)
   const actualizarLead = useActualizarLead()
   const actualizarCliente = useActualizarCliente()
@@ -126,7 +170,6 @@ function CuerpoDelLead({ lead, indice, total, onPaso, onStartReassign }: {
 
   const [creandoTarea, setCreandoTarea] = useState(false)
   const [editandoNotas, setEditandoNotas] = useState(false)
-  const [pestana, setPestana] = useState<PestanaDelLead>('actividad')
   const hayAnterior = indice > 0
   const haySiguiente = indice !== -1 && indice < total - 1
 
@@ -136,8 +179,15 @@ function CuerpoDelLead({ lead, indice, total, onPaso, onStartReassign }: {
   const editando = useRef(false)
   useEffect(() => { if (!editando.current) setBorrador(borradorDe(lead)) }, [lead])
 
+  /* La cruz cierra sin guardar: mientras pregunta, el blur del campo que se estaba escribiendo no
+     manda nada. Si se cancela, el foco vuelve a ese campo y se guarda al salir, como siempre. */
+  const descartando = useRef(false)
+  const focoPrevio = useRef<HTMLElement | null>(null)
+  const [confirmandoCierre, setConfirmandoCierre] = useState(false)
+
   const cambiar = (patch: Partial<Borrador>) => { editando.current = true; setBorrador(b => ({ ...b, ...patch })) }
   const guardar = (campo: keyof Borrador) => {
+    if (descartando.current) return
     editando.current = false
     if (!lead.client) return
     const valor = borrador[campo].trim()
@@ -148,20 +198,23 @@ function CuerpoDelLead({ lead, indice, total, onPaso, onStartReassign }: {
     actualizarCliente.mutate({ clientId: lead.client.id, patch: { [campo]: valor || null } as ClientePatch })
   }
 
-  /* Una persona extra se dibuja si tiene algo cargado o si se la acaba de agregar: un casillero
-     vacío no se muestra, se ofrece «Agregar persona». */
-  const [agregadas, setAgregadas] = useState<number[]>([])
+  /* Un contacto —el principal incluido— se dibuja si tiene algo cargado o si se lo acaba de
+     agregar: un casillero vacío no se muestra, se ofrece «Agregar contacto». El principal vacío
+     estuvo dibujándose fijado en el perfil, una ficha en blanco arriba de todo; se sacó por pedido. */
+  const [agregadas, setAgregadas] = useState<Contacto[]>([])
+  const principalCargado = ([
+    'first_name', 'last_name', 'phone', 'email', 'contact_role', 'contact_notes', 'phone_source',
+  ] as const).some(c => borrador[c].trim())
   const cargada = (i: number) => {
     const p = OTRAS_PERSONAS[i]
     return [p.telefono, p.nombre, p.rol, p.notas, p.origen].some(c => borrador[c].trim())
   }
-  const visibles = OTRAS_PERSONAS.map((_, i) => i).filter(i => cargada(i) || agregadas.includes(i))
-  const libre = OTRAS_PERSONAS.findIndex((_, i) => !visibles.includes(i))
+  const visibles = OTRAS_PERSONAS.map((_, i) => i).filter(i => cargada(i) || agregadas.includes(OTRAS_PERSONAS[i].telefono))
   const quitarPersona = (i: number) => {
     const { telefono: tel, nombre, rol, notas, origen } = OTRAS_PERSONAS[i]
     editando.current = false
     setBorrador(b => ({ ...b, [tel]: '', [nombre]: '', [rol]: '', [notas]: '', [origen]: '' }))
-    setAgregadas(a => a.filter(x => x !== i))
+    setAgregadas(a => a.filter(x => x !== tel))
     if (fijados.includes(tel)) alternarFijado(tel)
     const client = lead.client
     if (!client) return
@@ -173,9 +226,12 @@ function CuerpoDelLead({ lead, indice, total, onPaso, onStartReassign }: {
     for (const c of [rol, notas, origen]) {
       if (client[c]) actualizarCliente.mutate({ clientId: client.id, patch: { [c]: null } as ClientePatch })
     }
+    // El decisor es un booleano: `false` también es algo guardado que hay que borrar.
+    const decisor = `${tel}_is_decision_maker` as const
+    if (client[decisor] != null) actualizarCliente.mutate({ clientId: client.id, patch: { [decisor]: null } })
   }
 
-  /* Los fijados se ven en el perfil; el resto, en la pestaña de la inmobiliaria. Fijar es una
+  /* Los fijados se ven también en el perfil; todos, en la pestaña de la inmobiliaria. Fijar es una
      preferencia de cada navegador, como el plegado del backlog: no toca la base. */
   const [fijados, setFijados] = useState<Contacto[]>(() => leerFijados(lead.client?.id))
   const alternarFijado = (c: Contacto) => {
@@ -183,9 +239,49 @@ function CuerpoDelLead({ lead, indice, total, onPaso, onStartReassign }: {
     setFijados(nuevos)
     guardarFijados(lead.client?.id, nuevos)
   }
-  const contactos: Contacto[] = ['principal', ...visibles.map(i => OTRAS_PERSONAS[i].telefono)]
+  const fijar = (c: Contacto) => { if (!fijados.includes(c)) alternarFijado(c) }
+  const contactos: Contacto[] = [
+    ...(principalCargado || agregadas.includes('principal') ? ['principal' as const] : []),
+    ...visibles.map(i => OTRAS_PERSONAS[i].telefono),
+  ]
   const arriba = contactos.filter(c => fijados.includes(c))
-  const resto = contactos.filter(c => !fijados.includes(c))
+  // El próximo que se agrega: el principal primero, después los alternativos en orden.
+  const libre = CONTACTOS.find(c => !contactos.includes(c))
+  /* El contacto abierto en la ventanita de edición. Agregar uno lo abre ahí: la fila no dibuja
+     campos vacíos, así que un contacto recién nacido no tendría dónde escribirse. */
+  const [contactoEnEditor, setContactoEnEditor] = useState<Contacto | null>(null)
+  const agregar = (c: Contacto, fijado: boolean) => {
+    setAgregadas(a => [...a, c])
+    if (fijado) fijar(c)
+    setContactoEnEditor(c)
+  }
+  /* Escape cierra con el foco todavía en un campo y el blur no llega a correr: se lo fuerza antes,
+     para que se guarde. Con la cruz el foco ya salió y esto no hace nada. */
+  const cerrarEditor = () => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+    setContactoEnEditor(null)
+  }
+  // Lo guardado y no el borrador: borrar un campo en la fila no lo esconde mientras se escribe.
+  const hay = (campo: keyof Borrador) => !!(lead.client?.[campo] ?? '').trim()
+
+  /* El teléfono de Google Maps entra solo como contacto, fijado en el perfil: es el número de la
+     agencia en su ficha de Google, y casi siempre es a quien se llama primero. Una vez por apertura
+     y solo con permiso de escritura; dónde va (y si va) lo decide `casilleroParaTelefonoDeGoogle`,
+     que nunca pisa a nadie. El de Idealista NO entra como contacto (12/10/2026, por pedido): vive
+     en «Datos de la inmobiliaria». Los que ya se habían copiado a un contacto quedan ahí. */
+  const telefonosCargados = useRef(false)
+  useEffect(() => {
+    const client = lead.client
+    if (telefonosCargados.current || !escribe || !client) return
+    telefonosCargados.current = true
+    const google = casilleroParaTelefonoDeGoogle(client)
+    if (google) {
+      const origen = google === 'phone' ? 'phone_source' : `${google}_source` as const
+      actualizarCliente.mutate({ clientId: client.id, patch: { [google]: client.google_maps_phone, [origen]: 'google_maps' } as ClientePatch })
+      fijar(google === 'phone' ? 'principal' : google)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- una vez por lead: el cuerpo va con key = lead
+  }, [lead.client, escribe])
 
   const campoPersona = (campo: keyof Borrador, label: string, placeholder: string, extra?: string, type = 'text') => (
     <Input className={cn(CAMPO, 'text-left', extra)} type={type} aria-label={label} placeholder={placeholder} value={borrador[campo]}
@@ -224,12 +320,45 @@ function CuerpoDelLead({ lead, indice, total, onPaso, onStartReassign }: {
 
   /* Rol y notas de un contacto, los dos de texto libre. Las notas crecen con lo escrito
      (`field-sizing-content` del Textarea) desde un renglón: vacías no ocupan más que un campo. */
-  const rolPersona = (campo: 'contact_role' | `alternative_phone_${1 | 2}_role`) => (
+  const rolPersona = (campo: 'contact_role' | `alternative_phone_${1 | 2}_role`, decisor: CampoDecisor) => (
     <div className="flex items-center gap-1">
       <Icon icon={Briefcase} size="sm" className="ml-1 text-(--fg-faint)" />
       {campoPersona(campo, 'Rol', 'Rol (ej.: dueño, gerente comercial)')}
+      {decisorPersona(decisor)}
     </div>
   )
+
+  /* Si el contacto decide en la inmobiliaria, al lado del rol. Se guarda al elegir, solo (columna
+     pendiente de migración). Lo completa también la llamada al contestar «Sí»; mientras esté vacío,
+     la llamada lo pregunta. Tocar la opción marcada la apaga: vuelve a «no se sabe». */
+  const decisorPersona = (campo: CampoDecisor) => {
+    const valor = lead.client?.[campo] ?? null
+    return (
+      <div role="radiogroup" aria-label="¿Es decisor?" className="flex shrink-0 items-center gap-1">
+        <span className="text-[11.5px] text-(--fg-muted)">Decisor</span>
+        {([[true, 'Sí'], [false, 'No']] as const).map(([v, label]) => {
+          const on = valor === v
+          return (
+            <button key={label} type="button" role="radio" aria-checked={on} disabled={!escribe}
+              onClick={() => elegirDecisor(campo, on ? null : v)}
+              className={cn(
+                'inline-flex h-6 cursor-pointer items-center rounded-full px-2 text-[11.5px] transition-colors disabled:cursor-default',
+                on ? 'font-semibold text-(--brand-soft-fg) bg-(--brand-soft) [border:1px_solid_var(--brand-100)]'
+                  : 'text-(--fg-2) bg-card [border:1px_solid_var(--line)] hover:bg-(--surface-2)',
+              )}>
+              {label}
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
+  const elegirDecisor = (campo: CampoDecisor, valor: boolean | null) => {
+    const client = lead.client
+    if (!client || valor === (client[campo] ?? null)) return
+    actualizarCliente.mutate({ clientId: client.id, patch: { [campo]: valor } })
+  }
+  const decisorDe = (campo: CampoDecisor) => lead.client?.[campo] ?? null
   const notasPersona = (campo: 'contact_notes' | `alternative_phone_${1 | 2}_notes`) => (
     <div className="flex items-start gap-1">
       <Icon icon={NotebookPen} size="sm" className="mt-2 ml-1 text-(--fg-faint)" />
@@ -251,72 +380,131 @@ function CuerpoDelLead({ lead, indice, total, onPaso, onStartReassign }: {
     )
   }
 
+  /* La fila dibuja solo lo que el contacto tiene cargado (se sigue editando en el lugar). Lo que
+     falta no se dibuja vacío: se completa desde el lápiz, que aparece mientras falte algo y abre
+     el contacto entero en una ventanita. */
   const filaContacto = (c: Contacto) => {
-    if (c === 'principal') return (
-      <li key={c} className="flex flex-col gap-0.5 p-1.5">
-        <div className="flex items-center gap-1">
-          <Icon icon={User} size="sm" className="ml-1 text-(--fg-faint)" />
-          <div className="grid min-w-0 flex-1 grid-cols-2">
-            {campoPersona('first_name', 'Nombre', 'Nombre', 'font-medium')}
-            {campoPersona('last_name', 'Apellido', 'Apellido', 'font-medium')}
-          </div>
-          <span className="shrink-0 rounded-full bg-(--surface-2) px-2 py-0.5 text-[10.5px] font-semibold text-(--fg-muted)">Principal</span>
-          {botonFijar(c)}
-        </div>
-        <div className="flex items-center gap-1">
-          <Icon icon={Phone} size="sm" className="ml-1 text-(--fg-faint)" />
-          {telefonoPersona('phone')}
-          {origenTelefono('phone_source')}
-        </div>
-        <div className="flex items-center gap-1">
-          <Icon icon={Mail} size="sm" className="ml-1 text-(--fg-faint)" />
-          {campoPersona('email', 'Email', 'email@inmobiliaria.com', undefined, 'email')}
-        </div>
-        {rolPersona('contact_role')}
-        {notasPersona('contact_notes')}
-      </li>
-    )
+    const f = camposDe(c)
     const i = OTRAS_PERSONAS.findIndex(p => p.telefono === c)
-    const { nombre, rol, notas, origen } = OTRAS_PERSONAS[i]
+    const nombres = f.nombres.filter(n => hay(n.campo))
+    const falta = columnasDe(f).some(campo => !hay(campo)) || decisorDe(f.decisor) === null
     return (
       <li key={c} className="flex flex-col gap-0.5 p-1.5">
         <div className="flex items-center gap-1">
           <Icon icon={User} size="sm" className="ml-1 text-(--fg-faint)" />
-          {campoPersona(nombre, 'Nombre', 'Nombre', 'font-medium')}
+          {nombres.length > 0
+            ? <div className={cn('grid min-w-0 flex-1', nombres.length > 1 && 'grid-cols-2')}>
+                {nombres.map(n => <Fragment key={n.campo}>{campoPersona(n.campo, n.label, n.label, 'font-medium')}</Fragment>)}
+              </div>
+            : <span className="min-w-0 flex-1 px-2 text-[13px] text-(--fg-faint)">Sin nombre</span>}
+          {c === 'principal' && (
+            <span className="shrink-0 rounded-full bg-(--surface-2) px-2 py-0.5 text-[10.5px] font-semibold text-(--fg-muted)">Principal</span>
+          )}
+          {escribe && falta && (
+            <button type="button" onClick={() => setContactoEnEditor(c)} aria-label="Completar contacto" title="Completar contacto"
+              className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-(--fg-faint) hover:bg-(--surface-2) hover:text-foreground">
+              <Pencil size={14} />
+            </button>
+          )}
           {botonFijar(c)}
-          {escribe && (
+          {escribe && c !== 'principal' && (
             <button type="button" onClick={() => quitarPersona(i)} aria-label="Quitar persona" title="Quitar persona"
               className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-(--fg-faint) hover:bg-(--surface-2) hover:text-foreground">
               <X size={14} />
             </button>
           )}
         </div>
-        <div className="flex items-center gap-1">
-          <Icon icon={Phone} size="sm" className="ml-1 text-(--fg-faint)" />
-          {telefonoPersona(c)}
-          {origenTelefono(origen)}
-        </div>
-        {rolPersona(rol)}
-        {notasPersona(notas)}
+        {hay(f.telefono) && (
+          <div className="flex items-center gap-1">
+            <Icon icon={Phone} size="sm" className="ml-1 text-(--fg-faint)" />
+            {telefonoPersona(f.telefono)}
+            {hay(f.origen) && origenTelefono(f.origen)}
+          </div>
+        )}
+        {/* Escrito y no en un tooltip: llamar por ahí a la agencia le entra como un interesado en un piso. */}
+        {esTelefonoDeIdealista(lead.client?.[f.telefono], lead.client) && (
+          <p className="mx-1 flex items-start gap-1.5 rounded-md bg-warning-soft px-2 py-1.5 text-[11.5px] leading-snug text-warning">
+            <TriangleAlert size={13} aria-hidden className="mt-px shrink-0" />
+            Último recurso: es un redirector de Idealista. Solo si no hay otro teléfono.
+          </p>
+        )}
+        {f.email && hay(f.email) && (
+          <div className="flex items-center gap-1">
+            <Icon icon={Mail} size="sm" className="ml-1 text-(--fg-faint)" />
+            {campoPersona(f.email, 'Email', 'email@inmobiliaria.com', undefined, 'email')}
+          </div>
+        )}
+        {(hay(f.rol) || decisorDe(f.decisor) !== null) && rolPersona(f.rol, f.decisor)}
+        {hay(f.notas) && notasPersona(f.notas)}
       </li>
     )
   }
 
+  /* La ventanita: el contacto entero, con todos sus campos y con marco, porque acá sí se viene a
+     escribir. Usa el mismo borrador y el mismo guardado al salir de cada campo que la fila. */
+  const campoEditor = (campo: keyof Borrador, label: string, placeholder: string, type = 'text') => (
+    <label className="flex flex-col gap-1">
+      <span className={ROTULO}>{label}</span>
+      <Input type={type} placeholder={placeholder} value={borrador[campo]} className="text-[13px] md:text-[13px]"
+        onChange={e => cambiar({ [campo]: e.target.value })} onBlur={() => guardar(campo)} />
+    </label>
+  )
+  const enEditor = contactoEnEditor && camposDe(contactoEnEditor)
+  const editorContacto = (
+    <Dialog open={contactoEnEditor != null} onOpenChange={abierto => { if (!abierto) cerrarEditor() }}>
+      <DialogContent className="ui-scale gap-3 sm:max-w-md">
+        <DialogTitle className="text-[15px]">{contactoEnEditor === 'principal' ? 'Contacto principal' : 'Contacto'}</DialogTitle>
+        <DialogDescription className="sr-only">Cada campo se guarda al salir de él.</DialogDescription>
+        {enEditor && (
+          <>
+            <div className={cn('grid gap-2', enEditor.nombres.length > 1 && 'grid-cols-2')}>
+              {enEditor.nombres.map(n => <Fragment key={n.campo}>{campoEditor(n.campo, n.label, n.label)}</Fragment>)}
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className={ROTULO}>Teléfono</span>
+              <div className="flex items-center gap-1">
+                <div className="min-w-0 flex-1" onBlur={() => guardar(enEditor.telefono)}>
+                  <PhoneInput value={borrador[enEditor.telefono]} onChange={v => cambiar({ [enEditor.telefono]: v })} />
+                </div>
+                {origenTelefono(enEditor.origen)}
+              </div>
+            </div>
+            {enEditor.email && campoEditor(enEditor.email, 'Email', 'email@inmobiliaria.com', 'email')}
+            <div className="flex items-end gap-2">
+              <div className="min-w-0 flex-1">{campoEditor(enEditor.rol, 'Rol', 'Ej.: dueño, gerente comercial')}</div>
+              <div className="pb-1.5">{decisorPersona(enEditor.decisor)}</div>
+            </div>
+            <label className="flex flex-col gap-1">
+              <span className={ROTULO}>Notas</span>
+              <Textarea rows={2} placeholder="Notas del contacto…" value={borrador[enEditor.notas]}
+                onChange={e => cambiar({ [enEditor.notas]: e.target.value })} onBlur={() => guardar(enEditor.notas)}
+                className="min-h-14 resize-none text-[13px] md:text-[13px]" />
+            </label>
+            <DialogClose asChild>
+              <button type="button"
+                className="inline-flex h-9 cursor-pointer items-center justify-center gap-1.5 justify-self-end rounded-lg bg-foreground px-3 text-[13px] font-semibold text-background transition-opacity hover:opacity-90">
+                <Check size={15} />Listo
+              </button>
+            </DialogClose>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+
   /* Se dibujan acá, con el borrador de acá, y se pasan hechos a la pestaña de la inmobiliaria: un
-     segundo borrador de las mismas columnas en la otra pestaña se pisarían entre sí. Fijar uno lo
-     sube al perfil; desfijarlo lo manda de vuelta. «Agregar persona» va con ellos: la nueva nace
-     sin fijar, así que aparece justo ahí. */
+     segundo borrador de las mismas columnas en la otra pestaña se pisarían entre sí. Acá van TODOS,
+     los fijados incluidos (12/10/2026, por pedido): fijar uno lo suma al perfil, no lo saca de acá.
+     «Agregar contacto» va con ellos: el nuevo nace sin fijar. */
   const otrosContactos = (
     <div className="flex min-w-0 flex-col">
-      {resto.length > 0
-        ? <ul className={LISTA_CONTACTOS}>{resto.map(filaContacto)}</ul>
-        : <p className="py-1 text-[12.5px] text-(--fg-muted)">
-            {contactos.length > 1 ? 'Todos los contactos están fijados en el perfil.' : 'Sin otros contactos.'}
-          </p>}
-      {escribe && libre !== -1 && (
-        <button type="button" onClick={() => setAgregadas(a => [...a, libre])}
+      {contactos.length > 0
+        ? <ul className={LISTA_CONTACTOS}>{contactos.map(filaContacto)}</ul>
+        : <p className="py-1 text-[12.5px] text-(--fg-muted)">Sin contactos.</p>}
+      {escribe && libre && (
+        <button type="button" onClick={() => agregar(libre, false)}
           className="mt-1.5 flex cursor-pointer items-center gap-1.5 self-start rounded-md px-2 py-1 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground">
-          <UserPlus size={14} />Agregar persona
+          <UserPlus size={14} />Agregar contacto
         </button>
       )}
     </div>
@@ -329,24 +517,20 @@ function CuerpoDelLead({ lead, indice, total, onPaso, onStartReassign }: {
           pestañas en el centro del dialog y no en el centro del hueco que sobre. */}
       <header className="ui-scale max-md:[zoom:1] flex shrink-0 items-center gap-x-3 bg-card px-4 py-2.5 [border-bottom:1px_solid_var(--line)] max-md:px-2">
         <div className="flex min-w-0 flex-1 basis-0 items-center gap-3">
-        <DialogClose asChild>
-          <button type="button" aria-label="Volver al panel" title="Volver al panel"
-            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg bg-card text-foreground transition-colors [border:1px_solid_var(--line)] hover:bg-(--surface-2)">
-            <ArrowLeft size={16} />
-          </button>
-        </DialogClose>
-          <div className="flex shrink-0 items-center gap-1">
+          {/* Con marco y del alto de los botones de la derecha: son la forma de recorrer la lista
+              sin cerrar el lead, y como flechitas sueltas de 15px no se encontraban. */}
+          <div className="flex shrink-0 items-center gap-1.5">
             <button type="button" onClick={() => onPaso(-1)} disabled={!hayAnterior} aria-label="Lead anterior"
-              title={hayAnterior ? 'Lead anterior' : 'Es el primero de la lista'}
-              className="flex size-7 cursor-pointer items-center justify-center rounded-md text-(--fg-2) hover:bg-(--surface-2) disabled:cursor-default disabled:opacity-35">
-              <ChevronUp size={15} />
+              title={hayAnterior ? 'Lead anterior (↑)' : 'Es el primero de la lista'}
+              className={FLECHA}>
+              <ChevronUp size={20} strokeWidth={2.25} />
             </button>
             <button type="button" onClick={() => onPaso(1)} disabled={!haySiguiente} aria-label="Lead siguiente"
-              title={haySiguiente ? 'Lead siguiente' : 'Es el último de la lista'}
-              className="flex size-7 cursor-pointer items-center justify-center rounded-md text-(--fg-2) hover:bg-(--surface-2) disabled:cursor-default disabled:opacity-35">
-              <ChevronDown size={15} />
+              title={haySiguiente ? 'Lead siguiente (↓)' : 'Es el último de la lista'}
+              className={FLECHA}>
+              <ChevronDown size={20} strokeWidth={2.25} />
             </button>
-            {indice !== -1 && <span className="ml-0.5 text-[11px] tabular-nums text-(--fg-muted) max-md:hidden">{indice + 1} de {total}</span>}
+            {indice !== -1 && <span className="ml-1 text-[12.5px] font-semibold tabular-nums text-(--fg-2) max-md:hidden">{indice + 1} de {total}</span>}
           </div>
         </div>
         <PestanasDelLead lead={lead} pestana={pestana} onCambiar={setPestana} />
@@ -362,8 +546,44 @@ function CuerpoDelLead({ lead, indice, total, onPaso, onStartReassign }: {
               <span className="max-md:hidden">Guardar y cerrar</span>
             </button>
           </DialogClose>
+          {/* La cruz es la salida sin guardar. El mousedown no le saca el foco al campo: si lo
+              hiciera, el blur guardaría justo lo que se quiere tirar. */}
+          <button type="button" aria-label="Cerrar sin guardar" title="Cerrar sin guardar"
+            onMouseDown={e => e.preventDefault()}
+            onClick={() => {
+              focoPrevio.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+              descartando.current = true
+              setConfirmandoCierre(true)
+            }}
+            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-(--fg-2) transition-colors hover:bg-(--surface-2) hover:text-foreground">
+            <X size={18} />
+          </button>
         </div>
       </header>
+
+      {editorContacto}
+
+      <AlertDialog open={confirmandoCierre} onOpenChange={abierto => { if (!abierto) setConfirmandoCierre(false) }}>
+        <AlertDialogContent
+          onCloseAutoFocus={e => {
+            if (!descartando.current) return
+            // Canceló: vuelve al campo que estaba escribiendo, para que se guarde al salir.
+            e.preventDefault()
+            descartando.current = false
+            focoPrevio.current?.focus()
+          }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Cerrar sin guardar?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Lo que estés escribiendo y todavía no se guardó se pierde. Para conservarlo, usá «Guardar y cerrar».
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
+            <AlertDialogAction onClick={onCerrar}>Cerrar sin guardar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Abajo de lg se apila: el perfil y debajo la actividad, con el compositor al pie de ella.
           Desde lg el perfil es una sola columna (inmobiliaria, tareas, notas) al lado de la actividad. */}
@@ -389,30 +609,51 @@ function CuerpoDelLead({ lead, indice, total, onPaso, onStartReassign }: {
                 <Select
                   value={lead.funnel_stage_id ?? ''}
                   disabled={!escribe}
-                  onValueChange={id => actualizarLead.mutate({ id: lead.id, patch: { funnel_stage_id: id, discard_reason: null } })}
+                  onValueChange={id => {
+                    if (id === descartada?.id) setDescartandoLead(true)
+                    else actualizarLead.mutate({ id: lead.id, patch: { funnel_stage_id: id, discard_reason: null, recontact_at: null } })
+                  }}
                 >
-                  <SelectTrigger aria-label="Etapa"
+                  <SelectTrigger aria-label="Estado"
                     className="h-9 w-[46%] shrink-0 justify-between gap-1 border-transparent bg-transparent px-1 shadow-none hover:border-input">
                     <StageBadge etapa={etapaDelLead(lead, etapasPorId)} className="gap-2 py-[5px] px-[12px] text-[12.5px]" />
                   </SelectTrigger>
                   <SelectContent align="end">
                     {opcionesEtapa.map(e => (
                       <SelectItem key={e.id} value={e.id}>
-                        <span aria-hidden className="size-[7px] rounded-full" style={{ background: e.priority?.color ?? 'var(--line-strong)' }} />
                         {e.deleted_at ? `${e.label} (borrada)` : e.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+              {descartandoLead && descartada && (
+                <DescartarLeadDialog leadId={lead.id} etapa={descartada} onClose={() => setDescartandoLead(false)} />
+              )}
               {lead.discard_reason && (
-                <p className="mt-1.5 rounded-md bg-(--surface-2) px-2.5 py-1.5 text-[12.5px] text-(--fg-2)">Motivo del descarte: {lead.discard_reason}</p>
+                <div className="mt-1.5 rounded-md bg-(--surface-2) px-2.5 py-1.5 text-[12.5px] text-(--fg-2)">
+                  <p>Motivo del descarte: {etiquetaDeMotivo(lead.discard_reason)}</p>
+                  {grupoDescarte && <p className="text-(--fg-muted)">{grupoDescarte.label}</p>}
+                  {lead.recontact_at && (
+                    <p className="font-medium text-foreground">Volver a llamar desde {fmtFechaCompleta(lead.recontact_at)}</p>
+                  )}
+                </div>
               )}
 
-              {/* Acá solo los fijados. El resto vive en la pestaña de la inmobiliaria (`otrosContactos`):
+              {/* Acá solo los fijados. Todos, fijados incluidos, viven en la pestaña de la inmobiliaria (`otrosContactos`):
                   fue un desplegable debajo de estos y se mudó por pedido, para que el perfil diga a
                   quién se llama y el detalle de la inmobiliaria tenga a todos. */}
               {arriba.length > 0 && <ul className={cn(LISTA_CONTACTOS, 'mt-1.5')}>{arriba.map(filaContacto)}</ul>}
+              {/* Sin nadie fijado, en vez de una ficha vacía, la puerta para cargar uno: nace fijado,
+                  que es lo que se vino a hacer acá. */}
+              {arriba.length === 0 && escribe && libre && (
+                <button type="button" onClick={() => agregar(libre, true)}
+                  className="mt-1.5 flex cursor-pointer items-center gap-1.5 self-start rounded-md px-2 py-1 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground">
+                  <UserPlus size={14} />Agregar contacto
+                </button>
+              )}
+              {/* Al pie de los contactos: los mensajes se les mandan a ellos. */}
+              <BotonMensajes client={lead.client} className="mt-2 self-start" />
             </div>
           </Seccion>
 
@@ -466,7 +707,8 @@ function CuerpoDelLead({ lead, indice, total, onPaso, onStartReassign }: {
 /**
  * El dialog del lead. Copia del patrón del producto (LeadList.tsx:1767): 94vw × 92vh, a pantalla
  * completa abajo de 768px, NO se cierra clickeando afuera (adentro se edita con guardado al blur
- * y un clic al pasar por el velo tiraba todo abajo) — se sale con Escape o la flecha de volver.
+ * y un clic al pasar por el velo tiraba todo abajo) — se sale con Escape, «Guardar y cerrar» o
+ * la cruz, que cierra sin guardar y pregunta antes.
  * Sin pestañas: a la izquierda el perfil (datos con la etapa arriba, tareas, notas) y a la
  * derecha la actividad, que es lo que se viene a leer y a escribir.
  */
@@ -481,32 +723,53 @@ export function LeadDialog({ lead, indice, total, onPaso, onCerrar, onStartReass
 }) {
   const hayAnterior = indice > 0
   const haySiguiente = indice !== -1 && indice < total - 1
+  /* La pestaña vive acá y no en el cuerpo: el cuerpo se remonta con cada lead (`key`), y pasar
+     al siguiente desde la pestaña de la inmobiliaria tiene que dejarte en la inmobiliaria. Al
+     cerrar el dialog vuelve a la actividad. */
+  const [pestana, setPestana] = useState<PestanaDelLead>('actividad')
+  const abierto = lead != null
+  useEffect(() => { if (!abierto) setPestana('actividad') }, [abierto])
+
+  /* ↑/↓ hacen lo mismo que los chevrones, con las excepciones del producto: no mientras se
+     escribe, no en controles que ya usan flechas, no si alguien más atendió la tecla, no desde
+     otro dialog encima (la confirmación de cierre, reasignar). Escucha el documento y no el
+     DialogContent: un clic en una zona sin foco (el fondo del perfil) deja el foco en el body,
+     y desde ahí la tecla nunca pasaba por el dialog. */
+  const contenido = useRef<HTMLDivElement>(null)
+  const paso = useRef({ hayAnterior, haySiguiente, onPaso })
+  paso.current = { hayAnterior, haySiguiente, onPaso }
+  useEffect(() => {
+    if (!abierto) return
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
+      const target = e.target as HTMLElement
+      const enElDialog = contenido.current?.contains(target) ?? false
+      if (!enElDialog && target !== document.body) return
+      if (target.isContentEditable || target.closest('input, textarea, select, [role="listbox"], [role="menu"], [role="combobox"], [role="radiogroup"], [role="slider"], [role="spinbutton"]')) return
+      if (document.querySelector('[role="alertdialog"]')) return
+      const { hayAnterior, haySiguiente, onPaso } = paso.current
+      const delta = e.key === 'ArrowUp' ? -1 : 1
+      if (delta < 0 ? !hayAnterior : !haySiguiente) return
+      e.preventDefault()
+      onPaso(delta)
+    }
+    document.addEventListener('keydown', alTeclear)
+    return () => document.removeEventListener('keydown', alTeclear)
+  }, [abierto])
 
   return (
     <Dialog open={lead != null} onOpenChange={open => { if (!open) onCerrar() }}>
       <DialogContent
+        ref={contenido}
         showCloseButton={false}
         onInteractOutside={e => e.preventDefault()}
-        /* ↑/↓ hacen lo mismo que los chevrones, con las excepciones del producto: no mientras se
-           escribe, no en controles que ya usan flechas, no si alguien más atendió la tecla, no
-           desde un portal (popover) que burbujea por el árbol de React. */
-        onKeyDown={e => {
-          if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
-          if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return
-          const target = e.target as HTMLElement
-          if (!e.currentTarget.contains(target)) return
-          if (target.isContentEditable || target.closest('input, textarea, select, [role="listbox"], [role="menu"], [role="combobox"], [role="radiogroup"], [role="slider"], [role="spinbutton"]')) return
-          const delta = e.key === 'ArrowUp' ? -1 : 1
-          if (delta < 0 ? !hayAnterior : !haySiguiente) return
-          e.preventDefault()
-          onPaso(delta)
-        }}
         className="dialog-fullscreen-mobile flex h-[92vh] max-h-none w-[94vw] max-w-none flex-col gap-0 overflow-hidden p-0"
       >
         <DialogTitle className="sr-only">{lead ? nombreDelLead(lead.client) : 'Lead'}</DialogTitle>
-        <DialogDescription className="sr-only">Etapa, datos, tareas, notas y actividad del lead.</DialogDescription>
+        <DialogDescription className="sr-only">Estado, datos, tareas, notas y actividad del lead.</DialogDescription>
         {lead && (
-          <CuerpoDelLead key={lead.id} lead={lead} indice={indice} total={total} onPaso={onPaso} onStartReassign={onStartReassign} />
+          <CuerpoDelLead key={lead.id} lead={lead} indice={indice} total={total} pestana={pestana} setPestana={setPestana} onPaso={onPaso} onCerrar={onCerrar} onStartReassign={onStartReassign} />
         )}
       </DialogContent>
     </Dialog>

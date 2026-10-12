@@ -292,6 +292,11 @@ alter table public.crm_clients add column if not exists alternative_phone_1_role
 alter table public.crm_clients add column if not exists alternative_phone_1_notes text;
 alter table public.crm_clients add column if not exists alternative_phone_2_role  text;
 alter table public.crm_clients add column if not exists alternative_phone_2_notes text;
+-- Si cada contacto decide en la inmobiliaria (null = no se sabe). Lo marca el perfil y se completa
+-- solo al contestar «sí» en una llamada, para no volver a preguntarlo.
+alter table public.crm_clients add column if not exists contact_is_decision_maker             boolean;
+alter table public.crm_clients add column if not exists alternative_phone_1_is_decision_maker boolean;
+alter table public.crm_clients add column if not exists alternative_phone_2_is_decision_maker boolean;
 -- Lo que trae la importación desde Excel. Sin `unique` a
 -- propósito: el Excel puede repetir datos y deduplicar es cosa de quien prepara la importación.
 -- El lote del que salió (ej.: `BCN-S01`) y el día en que se activó para el SDR.
@@ -342,6 +347,11 @@ create unique index if not exists crm_leads_client_active_uidx
   on public.crm_leads (client_id) where deleted_at is null;
 create index if not exists crm_leads_gestion_reference_at_idx
   on public.crm_leads (gestion_reference_at desc nulls last) where deleted_at is null;
+-- Desde cuándo volver a llamar a un descartado que «no califica, pero podría calificar» (descarte +
+-- 6 meses). La escribe el front al descartar y la borra al volver al funnel; la lista los vuelve a
+-- mostrar en «Para recontactar». `discard_reason` guarda el código del motivo (`MOTIVOS_DE_DESCARTE`
+-- del front); los descartes de antes guardan texto libre. Migración `20261010210000_crm_etapas_y_motivos_descarte`.
+alter table public.crm_leads add column if not exists recontact_at date;
 
 create table if not exists public.crm_meetings (
   id            uuid primary key default gen_random_uuid(),
@@ -1170,14 +1180,24 @@ select * from (values
 ) v(name, color, position, management_tolerance_hours)
 where not exists (select 1 from public.crm_priorities);
 
--- Arranca con dos: el resto lo arman ellos desde la configuración del funnel.
+-- Las etapas del SDR (10/10/2026, migración `20261010210000_crm_etapas_y_motivos_descarte`). La
+-- primera es la NEW de siempre, renombrada: el alta y el importador la buscan por `value`. Las del
+-- medio son CUSTOM, como las que se crean desde la configuración del funnel.
 insert into public.crm_funnel_stages
   (label, value, position, priority_id, management_tolerance_hours,
    is_out_of_funnel, allow_delete, allow_reorder, allow_rename)
 select * from (values
-  ('Nuevo',      'NEW',       1, (select id from public.crm_priorities where name = 'Verde'), 24,
+  ('Intentando contactar',                   'NEW',       1, (select id from public.crm_priorities where name = 'Verde'), 24,
    false, false, false, true),
-  ('Descartado', 'DISCARDED', 2, null::uuid, null::integer,
+  ('Intentando contactar decisor',           'CUSTOM',    2, (select id from public.crm_priorities where name = 'Verde'), 24,
+   false, true,  true,  true),
+  ('Contactado (decisor o influencer)',      'CUSTOM',    3, (select id from public.crm_priorities where name = 'Verde'), 24,
+   false, true,  true,  true),
+  ('Seguimiento (le interesa más adelante)', 'CUSTOM',    4, (select id from public.crm_priorities where name = 'Verde'), 24,
+   false, true,  true,  true),
+  ('Meeting booked',                         'CUSTOM',    5, (select id from public.crm_priorities where name = 'Verde'), 24,
+   false, true,  true,  true),
+  ('Descartado',                             'DISCARDED', 6, null::uuid, null::integer,
    true,  false, false, false)
 ) v(label, value, position, priority_id, management_tolerance_hours,
     is_out_of_funnel, allow_delete, allow_reorder, allow_rename)

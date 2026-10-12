@@ -6,8 +6,8 @@ import type { FilaEquipo } from '../lib/estadisticasPorCartera'
 const ROL: Record<string, string> = { SUPERADMIN: 'Superadmin', SDR: 'SDR' }
 
 /* Un renglón por cartera visible. Tocar el renglón lleva al CRM con esa cartera; tocar un número,
-   al CRM ya filtrado a eso. Los enlaces salen de `enlaceAlCrm` y NUNCA se escriben a mano: en la
-   URL `gestion` es la lista de EXCLUIDOS, y `?gestion=pendiente` mostraría justo lo contrario. */
+   al CRM ya filtrado a eso. Los enlaces salen de `enlaceAlCrm` y NUNCA se escriben a mano.
+   «Gestiones vencidas» se sacó el 10/10/2026 con la gestión del CRM: se va a rediseñar. */
 function Numero({ valor, to, alerta = false }: { valor: number; to?: string; alerta?: boolean }) {
   const clase = alerta && valor > 0 ? 'font-semibold text-danger' : 'text-foreground'
   if (!to || valor === 0) return <span className={`tabular-nums ${clase}`}>{valor}</span>
@@ -21,7 +21,8 @@ function Numero({ valor, to, alerta = false }: { valor: number; to?: string; ale
 function BarraEtapas({ fila }: { fila: FilaEquipo }) {
   if (fila.leadsActivos === 0) return <span className="text-[12px] text-(--fg-faint)">—</span>
   return (
-    <div className="flex h-2.5 w-40 overflow-hidden rounded-full bg-(--surface-3)"
+    // `gap-px`: sin el color de prioridad los tramos son del mismo gris, y el hueco es lo que los separa.
+    <div className="flex h-2.5 w-40 gap-px overflow-hidden rounded-full bg-(--surface-3)"
       title={fila.porEtapa.map(t => `${t.label}: ${t.cantidad}`).join(' · ')}>
       {fila.porEtapa.map(t => (
         <span key={t.etapaId ?? 'sin'} style={{ width: `${(t.cantidad / fila.leadsActivos) * 100}%`, background: t.color }} />
@@ -39,7 +40,7 @@ export function TablaEquipo({ filas }: { filas: FilaEquipo[] }) {
         <thead>
           <tr>
             <th className={th}>Cartera</th><th className={th}>Rol</th><th className={th}>Leads activos</th>
-            <th className={th}>Por etapa</th><th className={th}>Gestiones vencidas</th>
+            <th className={th}>Por estado</th>
             <th className={th}>Leads con tareas vencidas</th><th className={th}>Reuniones este mes</th>
           </tr>
         </thead>
@@ -59,7 +60,6 @@ export function TablaEquipo({ filas }: { filas: FilaEquipo[] }) {
                 <td className="px-4 py-3 text-[13px] text-(--fg-2)">{ROL[f.usuario.rol] ?? f.usuario.rol}</td>
                 <td className="px-4 py-3"><Numero valor={f.leadsActivos} to={enlaceAlCrm({ owners })} /></td>
                 <td className="px-4 py-3"><BarraEtapas fila={f} /></td>
-                <td className="px-4 py-3"><Numero valor={f.gestionesVencidas} alerta to={enlaceAlCrm({ owners, gestion: 'pendiente' })} /></td>
                 <td className="px-4 py-3"><Numero valor={f.leadsConTareasVencidas} alerta to={enlaceAlCrm({ owners, overdueOnly: true })} /></td>
                 {/* Sin enlace: la agenda de reuniones está fuera de alcance (spec §8). */}
                 <td className="px-4 py-3"><Numero valor={f.reunionesMes} /></td>

@@ -10,4 +10,8 @@ export const CRM_KEYS = {
   detalles: ['crm', 'lead'] as const,
   detalle: (leadId: string) => ['crm', 'lead', leadId] as const,
   reuniones: (desde: string) => ['crm', 'reuniones', desde] as const,
+  /** Prefijo del contador de llamadas del día. */
+  llamadas: ['crm', 'llamadas'] as const,
+  /** Las llamadas de `autor` desde el día `desde` (incluido) hasta `hasta` (excluido). */
+  llamadasEntre: (autor: string, desde: string, hasta: string) => ['crm', 'llamadas', autor, desde, hasta] as const,
 }

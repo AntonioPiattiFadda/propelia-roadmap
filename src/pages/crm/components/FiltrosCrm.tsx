@@ -1,13 +1,14 @@
-import { ChevronDown, Search, X } from 'lucide-react'
+import { ArrowDownWideNarrow, ChevronDown, Columns3, List, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
-  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
 import type { LeadListCounters } from '../lib/computeLeadListCounters'
-import { PRIORITY_NONE, type LeadFilterState } from '../lib/leadFilters'
-import type { CrmPriority, EtapaConPrioridad } from '../types'
+import type { VistaCrm } from '../lib/leadFilterParams'
+import type { LeadFilterState } from '../lib/leadFilters'
+import type { CrmStage } from '../types'
 
 const chip = (activo: boolean) => cn(
   'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[12.5px] transition-colors',
@@ -16,24 +17,49 @@ const chip = (activo: boolean) => cn(
     : 'text-(--fg-2) bg-card [border:1px_solid_var(--line)] hover:bg-(--surface-2)',
 )
 
+/** El buscador por nombre y teléfono. En el escritorio va en la cabecera de la tabla, en el
+ *  lugar de «Alta» y «Lead»; en el teléfono, que no tiene cabecera, arriba con los chips. */
+export function BuscadorLeads({ q, onCambiar, className }: {
+  q: string
+  onCambiar: (patch: Partial<LeadFilterState>) => void
+  className?: string
+}) {
+  return (
+    <span className={cn('relative block', className)}>
+      <Icon icon={Search} size="sm" className="pointer-events-none absolute left-[10px] top-1/2 -translate-y-1/2 text-(--fg-muted)" />
+      <input
+        type="text"
+        value={q}
+        onChange={e => onCambiar({ q: e.target.value })}
+        placeholder="Buscar por empresa, contacto, teléfono o email…"
+        aria-label="Buscar por empresa, contacto, teléfono o email"
+        // 16px en el teléfono: abajo de eso el navegador hace zoom al tocar el campo.
+        className="h-8 w-full rounded-lg bg-(--surface) pl-[32px] pr-3 text-[13px] font-normal normal-case tracking-normal text-foreground outline-none transition-colors [border:1px_solid_var(--line-strong)] placeholder:text-(--fg-muted) focus:[border-color:var(--brand)] max-md:h-9 max-md:text-[16px]"
+      />
+    </span>
+  )
+}
+
 /**
- * Buscador y chips. Todo vive en la URL (lo escribe `escribirFiltros`): la
+ * Chips (y el buscador, solo en el teléfono). Todo vive en la URL (lo escribe `escribirFiltros`): la
  * lista, un enlace de Equipo y el botón «atrás» dicen lo mismo. Cada número es «cuántos quedarían
- * si prendo esto», de `computeLeadListCounters`.
+ * si prendo esto», de `computeLeadListCounters`. Sin filtro de prioridad ni de gestión desde el
+ * 10/10/2026: se sacaron del front para rediseñarlos.
  */
-export function FiltrosCrm({ filtros, contadores, etapas, prioridades, onCambiar, onLimpiar }: {
+export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, onVista, onCambiar, onLimpiar }: {
   filtros: LeadFilterState
+  /** El buscador va acá solo cuando no hay cabecera de tabla donde ponerlo (teléfono, columnas). */
+  conBuscador: boolean
   contadores: LeadListCounters
-  etapas: EtapaConPrioridad[]
-  prioridades: CrmPriority[]
+  etapas: CrmStage[]
+  vista: VistaCrm
+  onVista: (vista: VistaCrm) => void
   onCambiar: (patch: Partial<LeadFilterState>) => void
   onLimpiar: () => void
 }) {
-  /* El filtro de gestión no tiene más control acá (las pestañas Todos / Pendientes / Al día /
-     Pospuestos se sacaron por pedido), pero sigue viviendo en la URL: un enlace de Equipo lo trae
-     puesto. Por eso cuenta para «Limpiar filtros», que es la única forma de sacarlo. */
-  const hayFiltros = filtros.q.trim() !== '' || filtros.stageFilter.size > 0 || filtros.gestionExcluded.size > 0
-    || filtros.overdueOnly || filtros.includeDiscarded || filtros.excludedPriorities.size > 0
+  const hayFiltros = filtros.q.trim() !== '' || filtros.stageFilter.size > 0 || filtros.sinTareas
+    || filtros.overdueOnly || filtros.conTareas || filtros.includeDiscarded || filtros.paraRecontactar || filtros.ordenPorEstado
+  const columnas = vista === 'columnas'
 
   const alternar = <T,>(set: Set<T>, v: T) => {
     const next = new Set(set)
@@ -43,25 +69,14 @@ export function FiltrosCrm({ filtros, contadores, etapas, prioridades, onCambiar
   }
 
   return (
-    // Un solo renglón: el buscador y a su derecha los filtros. Si no entran, bajan solos.
+    // Un solo renglón de filtros. Si no entran, bajan solos.
     <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2 max-md:px-2">
-        <span className="relative mr-0.5 block w-72 max-md:w-full">
-          <Icon icon={Search} size="sm" className="pointer-events-none absolute left-[10px] top-1/2 -translate-y-1/2 text-(--fg-muted)" />
-          <input
-            type="text"
-            value={filtros.q}
-            onChange={e => onCambiar({ q: e.target.value })}
-            placeholder="Buscar por empresa, contacto, teléfono o email…"
-            aria-label="Buscar por empresa, contacto, teléfono o email"
-            // 16px en el teléfono: abajo de eso el navegador hace zoom al tocar el campo.
-            className="h-9 w-full rounded-lg bg-(--surface) pl-[32px] pr-3 text-[13px] text-foreground outline-none transition-colors [border:1px_solid_var(--line-strong)] placeholder:text-(--fg-muted) focus:[border-color:var(--brand)] max-md:text-[16px]"
-          />
-        </span>
+        {conBuscador && <BuscadorLeads q={filtros.q} onCambiar={onCambiar} className="mr-0.5 w-full md:w-[340px]" />}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className={chip(filtros.stageFilter.size > 0)}>
-              Etapa{filtros.stageFilter.size > 0 && ` (${filtros.stageFilter.size})`}
+              Estado{filtros.stageFilter.size > 0 && ` (${filtros.stageFilter.size})`}
               <Icon icon={ChevronDown} size="xs" />
             </button>
           </DropdownMenuTrigger>
@@ -74,7 +89,6 @@ export function FiltrosCrm({ filtros, contadores, etapas, prioridades, onCambiar
                 onSelect={ev => ev.preventDefault()}
                 onCheckedChange={() => onCambiar({ stageFilter: alternar(filtros.stageFilter, e.id) })}
               >
-                <span className="size-[7px] rounded-full" style={{ background: e.priority?.color ?? 'var(--line-strong)' }} />
                 <span className="flex-1">{e.label}</span>
                 <span className="tabular-nums text-(--fg-muted)">{contadores.stageCount(e.id)}</span>
               </DropdownMenuCheckboxItem>
@@ -82,55 +96,90 @@ export function FiltrosCrm({ filtros, contadores, etapas, prioridades, onCambiar
           </DropdownMenuContent>
         </DropdownMenu>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className={chip(filtros.excludedPriorities.size > 0)}>
-              Prioridad{filtros.excludedPriorities.size > 0 && ' (filtrada)'}
-              <Icon icon={ChevronDown} size="xs" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-56">
-            {[...prioridades.map(p => ({ id: p.id, name: p.name, color: p.color })),
-              { id: PRIORITY_NONE, name: 'Sin prioridad', color: 'var(--line-strong)' }].map(p => (
-              <DropdownMenuCheckboxItem
-                key={p.id}
-                className="text-xs"
-                // Marcada = se ve. En la URL viaja la lista de EXCLUIDAS, como en el producto.
-                checked={!filtros.excludedPriorities.has(p.id)}
-                onSelect={ev => ev.preventDefault()}
-                onCheckedChange={() => onCambiar({ excludedPriorities: alternar(filtros.excludedPriorities, p.id) })}
-              >
-                <span className="size-[7px] rounded-full" style={{ background: p.color }} />
-                <span className="flex-1">{p.name}</span>
-                <span className="tabular-nums text-(--fg-muted)">{contadores.priorityCount(p.id)}</span>
-              </DropdownMenuCheckboxItem>
-            ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuCheckboxItem
-              className="text-xs"
-              checked={filtros.excludedPriorities.size === 0}
-              onCheckedChange={() => onCambiar({ excludedPriorities: new Set() })}
-            >
+        {/* En columnas, las tareas son tres opciones: todas, con pendientes o sin ninguna. Viven en
+            el mismo `?tareas=` que el chip de la lista, así que cambiar de vista no las pierde. */}
+        {columnas ? (
+          <div role="group" aria-label="Tareas" className="inline-flex gap-1">
+            <button type="button" aria-pressed={!filtros.conTareas && !filtros.sinTareas}
+              className={chip(!filtros.conTareas && !filtros.sinTareas)}
+              onClick={() => onCambiar({ conTareas: false, sinTareas: false, overdueOnly: false })}>
               Todas
-            </DropdownMenuCheckboxItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            </button>
+            <button type="button" aria-pressed={filtros.conTareas} className={chip(filtros.conTareas)}
+              onClick={() => onCambiar({ conTareas: true, sinTareas: false })}>
+              Con tareas <span className="tabular-nums">{contadores.conTareasCount}</span>
+            </button>
+            <button type="button" aria-pressed={filtros.sinTareas} className={chip(filtros.sinTareas)}
+              onClick={() => onCambiar({ sinTareas: true, conTareas: false, overdueOnly: false })}>
+              Sin tareas <span className="tabular-nums">{contadores.sinTareasCount}</span>
+            </button>
+          </div>
+        ) : (
+          <>
+            {/* Además de filtrar, ordena por la próxima tarea y cambia las columnas (ver CrmLeadList).
+                Apagarla apaga también su subfiltro, que si no quedaría prendido y escondido. */}
+            <button type="button" aria-pressed={filtros.conTareas} className={chip(filtros.conTareas)}
+              onClick={() => onCambiar(filtros.conTareas
+                ? { conTareas: false, overdueOnly: false, ordenPorEstado: false }
+                : { conTareas: true })}>
+              Tareas <span className="tabular-nums">{contadores.conTareasCount}</span>
+            </button>
+            {/* «Sin tareas» se elige en columnas; en la lista aparece solo si quedó puesto, para
+                que no filtre escondido y se pueda apagar. */}
+            {filtros.sinTareas && (
+              <button type="button" aria-pressed className={chip(true)}
+                onClick={() => onCambiar({ sinTareas: false })}>
+                Sin tareas <span className="tabular-nums">{contadores.sinTareasCount}</span>
+              </button>
+            )}
+          </>
+        )}
 
-        {/* Con alguna tarea vencida el chip se pone rojo: es el aviso que antes daba la agenda roja de
-            cada renglón, que se sacó de la lista. */}
-        <button type="button" aria-pressed={filtros.overdueOnly}
-          className={contadores.overdueLeadCount > 0
-            ? cn(chip(false), 'text-(--danger-fg) bg-(--danger-soft) [border:1px_solid_var(--danger)] hover:bg-(--danger-soft)',
-              filtros.overdueOnly && 'font-semibold [border-width:1.5px]')
-            : chip(filtros.overdueOnly)}
-          onClick={() => onCambiar({ overdueOnly: !filtros.overdueOnly })}>
-          Tareas vencidas <span className="tabular-nums">{contadores.overdueLeadCount}</span>
-        </button>
+        {/* «Vencidas» es subfiltro de «Tareas» (12/10/2026): aparece cuando está prendida, o si un
+            enlace viejo trae solo `overdue=1`, para que se pueda apagar. Con alguna tarea vencida el
+            chip se pone rojo: es el aviso que antes daba la agenda roja de cada renglón. */}
+        {(filtros.conTareas || filtros.overdueOnly) && (
+          <button type="button" aria-pressed={filtros.overdueOnly}
+            className={contadores.overdueLeadCount > 0
+              ? cn(chip(false), 'text-(--danger-fg) bg-(--danger-soft) [border:1px_solid_var(--danger)] hover:bg-(--danger-soft)',
+                filtros.overdueOnly && 'font-semibold [border-width:1.5px]')
+              : chip(filtros.overdueOnly)}
+            onClick={() => onCambiar({ overdueOnly: !filtros.overdueOnly })}>
+            Vencidas <span className="tabular-nums">{contadores.overdueLeadCount}</span>
+          </button>
+        )}
+
+        {/* Otro subchip de «Tareas»: no filtra, cambia el orden. Prendido, lo más avanzado del
+            funnel va arriba (ordenarPorEstado); apagado, la próxima tarea. Va acá y no en la
+            cabecera de la tabla porque el teléfono no tiene cabecera. */}
+        {/* En columnas no va: ahí el estado ya es la columna. */}
+        {!columnas && (filtros.conTareas || filtros.ordenPorEstado) && (
+          <button type="button" aria-pressed={filtros.ordenPorEstado} className={chip(filtros.ordenPorEstado)}
+            title="Lo más avanzado del funnel arriba; descartados al final"
+            onClick={() => onCambiar({ ordenPorEstado: !filtros.ordenPorEstado })}>
+            <Icon icon={ArrowDownWideNarrow} size="xs" />
+            Ordenar por estado
+          </button>
+        )}
 
         <button type="button" aria-pressed={filtros.includeDiscarded} className={chip(filtros.includeDiscarded)}
           onClick={() => onCambiar({ includeDiscarded: !filtros.includeDiscarded })}>
           Incluir descartados <span className="tabular-nums">{contadores.discardedCount}</span>
         </button>
+
+        {/* Los descartados que «podrían calificar» vuelven acá cuando llega su fecha (recontact_at).
+            Con alguno pendiente el chip se pone ámbar: es
+            trabajo que volvió, no una alarma. Sin ninguno, solo aparece si está prendido. */}
+        {(contadores.recontactarCount > 0 || filtros.paraRecontactar) && (
+          <button type="button" aria-pressed={filtros.paraRecontactar}
+            className={contadores.recontactarCount > 0
+              ? cn(chip(false), 'text-(--warning-fg) bg-(--warning-soft) [border:1px_solid_var(--warning)] hover:bg-(--warning-soft)',
+                filtros.paraRecontactar && 'font-semibold [border-width:1.5px]')
+              : chip(filtros.paraRecontactar)}
+            onClick={() => onCambiar({ paraRecontactar: !filtros.paraRecontactar })}>
+            Para recontactar <span className="tabular-nums">{contadores.recontactarCount}</span>
+          </button>
+        )}
 
         {hayFiltros && (
           <Button variant="ghost" size="sm" onClick={onLimpiar}>
@@ -138,6 +187,18 @@ export function FiltrosCrm({ filtros, contadores, etapas, prioridades, onCambiar
             Limpiar filtros
           </Button>
         )}
+
+        {/* La vista no es un filtro: «Limpiar filtros» no la toca. */}
+        <div role="group" aria-label="Vista" className="ml-auto inline-flex gap-1">
+          <button type="button" aria-pressed={!columnas} className={chip(!columnas)} onClick={() => onVista('lista')}>
+            <Icon icon={List} size="xs" />
+            Lista
+          </button>
+          <button type="button" aria-pressed={columnas} className={chip(columnas)} onClick={() => onVista('columnas')}>
+            <Icon icon={Columns3} size="xs" />
+            Columnas
+          </button>
+        </div>
     </div>
   )
 }
