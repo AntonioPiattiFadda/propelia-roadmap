@@ -25,6 +25,8 @@ export interface Gasto {
   recurrence: Recurrencia
   status: EstadoGasto
   notes: string | null
+  /** Quién pagó (id de `users`), que no tiene por qué ser quién lo cargó. Nulo solo en un PENDING. */
+  paid_by: string | null
   created_at: string
   deleted_at: string | null
 }
@@ -40,6 +42,15 @@ export interface Etiqueta {
   /** Instante (timestamptz): su mes local sale de `periodoDeInstante`, no de cortar el string. */
   created_at: string
   deleted_at: string | null
+}
+
+/** Una persona de `users` que puede pagar un gasto. */
+export interface Pagador {
+  id: string
+  nombre: string
+  iniciales: string
+  color: string
+  activo: boolean
 }
 
 export interface Rango {

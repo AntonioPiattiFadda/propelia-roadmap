@@ -10,7 +10,7 @@ const et = (o: Partial<Etiqueta> = {}): Etiqueta => ({
 })
 const gasto = (id: string, period: string, o: Partial<Gasto> = {}): Gasto => ({
   id, preset_id: 'e1', expense_name: 'Vercel Pro', expense_type: 'FIXED', amount: 20, date: `${period}-15`, period,
-  recurrence: 'MONTHLY', status: 'PAID', notes: null, created_at: '2026-08-10T12:00:00Z', deleted_at: null, ...o,
+  recurrence: 'MONTHLY', status: 'PAID', notes: null, paid_by: 'u1', created_at: '2026-08-10T12:00:00Z', deleted_at: null, ...o,
 })
 
 describe('mismoNombre / nombreRepetido', () => {

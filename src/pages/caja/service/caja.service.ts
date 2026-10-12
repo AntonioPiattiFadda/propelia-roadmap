@@ -3,7 +3,7 @@ import type { CalendarDay } from '@/lib/dates'
 import type { TablesInsert, TablesUpdate } from '@/types/database.types'
 import { aEtiqueta, aGasto } from '../lib/mapeo'
 import { periodOf } from '../lib/periodos'
-import type { Etiqueta, Gasto, Rango } from '../types'
+import type { Etiqueta, Gasto, Pagador, Rango } from '../types'
 
 /* Todas las queries y mutaciones de la Caja contra `expenses` / `expense_presets`. Errores con
    `throw`, sin try/catch: los traduce `mensajeDeError()` en los hooks. */
@@ -61,6 +61,13 @@ export async function getUsoDeEtiquetas(): Promise<Record<string, number>> {
   return uso
 }
 
+/** Quién puede haber pagado: la gente de `users`, también los inactivos (un gasto viejo dice quién lo pagó). */
+export async function getPagadores(): Promise<Pagador[]> {
+  const { data, error } = await supabase.from('users').select('id, nombre, iniciales, color, activo').order('nombre')
+  if (error) throw error
+  return data
+}
+
 // ---------- Gastos ----------
 
 export async function crearGasto(insert: TablesInsert<'expenses'>): Promise<Gasto> {
@@ -69,10 +76,21 @@ export async function crearGasto(insert: TablesInsert<'expenses'>): Promise<Gast
   return aGasto(unaFila(data))
 }
 
-/** Pagar un variable pendiente: queda PAID, con el monto real y el día de pago. */
-export async function confirmarPago(id: string, { amount, date }: { amount: number; date: CalendarDay }): Promise<Gasto> {
+/** Pagar un variable pendiente: queda PAID, con el monto real, el día de pago y quién lo pagó. */
+export async function confirmarPago(
+  id: string,
+  { amount, date, paid_by }: { amount: number; date: CalendarDay; paid_by: string },
+): Promise<Gasto> {
   const { data, error } = await supabase
-    .from('expenses').update({ status: 'PAID', amount, date, period: periodOf(date) }).eq('id', id).is('deleted_at', null).select()
+    .from('expenses').update({ status: 'PAID', amount, date, period: periodOf(date), paid_by }).eq('id', id).is('deleted_at', null).select()
+  if (error) throw error
+  return aGasto(unaFila(data))
+}
+
+/** «Pagó» desde la fila: solo un gasto pagado (un pendiente lo elige al confirmar el pago). */
+export async function cambiarPagador(id: string, paid_by: string): Promise<Gasto> {
+  const { data, error } = await supabase
+    .from('expenses').update({ paid_by }).eq('id', id).eq('status', 'PAID').is('deleted_at', null).select()
   if (error) throw error
   return aGasto(unaFila(data))
 }

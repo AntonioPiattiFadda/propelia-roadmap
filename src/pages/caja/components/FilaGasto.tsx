@@ -3,7 +3,8 @@ import { Icon } from '@/components/ui/icon'
 import { parseCalendarDay } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { eur } from '../lib/monto'
-import type { FilaCaja } from '../types'
+import type { FilaCaja, Pagador } from '../types'
+import { PagadorPicker } from './PagadorPicker'
 import { PillTipo } from './PillTipo'
 
 const FECHA_LARGA: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
@@ -16,9 +17,11 @@ const CHIP = {
 
 /* Una fila de la lista. En escritorio son cinco columnas; en el teléfono una tarjeta: la fecha a la
    izquierda ocupando los dos renglones, nombre y monto arriba, etiquetas y acciones abajo. */
-export function FilaGasto({ fila: f, onPagar, onBorrar }: {
+export function FilaGasto({ fila: f, pagadores, onPagar, onCambiarPagador, onBorrar }: {
   fila: FilaCaja
+  pagadores: Pagador[]
   onPagar: (fila: FilaCaja) => void
+  onCambiarPagador: (gastoId: string, pagadorId: string) => void
   onBorrar: (gastoId: string) => void
 }) {
   const d = parseCalendarDay(f.fecha)
@@ -53,7 +56,14 @@ export function FilaGasto({ fila: f, onPagar, onBorrar }: {
       >
         {eur(f.amount)}
       </div>
-      <div className="col-start-3 row-start-2 flex justify-end gap-1 md:col-auto md:row-auto">
+      <div className="col-start-3 row-start-2 flex items-center justify-end gap-1 md:col-auto md:row-auto">
+        {/* Solo un pagado tiene quién: un pendiente lo elige al confirmar el pago. */}
+        {f.gasto && f.status === 'PAID' && (
+          <PagadorPicker
+            variante="fila" pagadores={pagadores} valor={f.gasto.paid_by}
+            onChange={id => { if (id !== f.gasto!.paid_by) onCambiarPagador(f.gasto!.id, id) }}
+          />
+        )}
         {f.status !== 'PAID' && (
           <button
             type="button"

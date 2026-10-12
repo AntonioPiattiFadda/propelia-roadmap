@@ -4,7 +4,7 @@ import { aEtiqueta, aGasto } from './mapeo'
 
 const filaGasto = (o: Partial<Tables<'expenses'>> = {}): Tables<'expenses'> => ({
   id: 'g1', preset_id: 'e1', expense_name: 'Vercel', expense_type: 'FIXED', amount: 20, date: '2026-10-15',
-  period: '2026-10', recurrence: 'MONTHLY', status: 'PAID', notes: null, created_by: null,
+  period: '2026-10', recurrence: 'MONTHLY', status: 'PAID', notes: null, created_by: null, paid_by: 'u1',
   created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z', deleted_at: null, ...o,
 })
 const filaEtiqueta = (o: Partial<Tables<'expense_presets'>> = {}): Tables<'expense_presets'> => ({
@@ -18,6 +18,10 @@ describe('aGasto', () => {
     expect(g.expense_type).toBe('FIXED')
     expect(g).not.toHaveProperty('updated_at')
     expect(g).not.toHaveProperty('created_by')
+  })
+  it('trae quién lo pagó, separado de quién lo creó', () => {
+    expect(aGasto(filaGasto({ created_by: 'u2', paid_by: 'u1' })).paid_by).toBe('u1')
+    expect(aGasto(filaGasto({ paid_by: null })).paid_by).toBeNull()
   })
   it('convierte el monto a número', () => {
     expect(aGasto(filaGasto({ amount: '12.5' as unknown as number })).amount).toBe(12.5)

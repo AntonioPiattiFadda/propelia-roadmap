@@ -5,18 +5,20 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { eur } from '../lib/monto'
 import { periodOf, tituloDePeriodo } from '../lib/periodos'
 import { subtotalesPorMes } from '../lib/resumen'
-import type { FilaCaja } from '../types'
+import type { FilaCaja, Pagador } from '../types'
 import { FilaGasto } from './FilaGasto'
 
 const claveDe = (f: FilaCaja) => f.gasto?.id ?? `${f.etiqueta?.id}:${f.period}`
 
-export function ListaGastos({ filas, variosMeses, cargando, error, onPagar, onBorrar, onNuevo }: {
+export function ListaGastos({ filas, pagadores, variosMeses, cargando, error, onPagar, onCambiarPagador, onBorrar, onNuevo }: {
   filas: FilaCaja[]
+  pagadores: Pagador[]
   /** Separador por mes solo si el rango toca más de uno: en un mes solo, el título repetiría el selector. */
   variosMeses: boolean
   cargando: boolean
   error: boolean
   onPagar: (fila: FilaCaja) => void
+  onCambiarPagador: (gastoId: string, pagadorId: string) => void
   onBorrar: (gastoId: string) => void
   onNuevo: () => void
 }) {
@@ -54,7 +56,7 @@ export function ListaGastos({ filas, variosMeses, cargando, error, onPagar, onBo
                 <span className="tabular-nums">{eur(subtotales.get(p) ?? 0)}</span>
               </div>
             )}
-            <FilaGasto fila={f} onPagar={onPagar} onBorrar={onBorrar} />
+            <FilaGasto fila={f} pagadores={pagadores} onPagar={onPagar} onCambiarPagador={onCambiarPagador} onBorrar={onBorrar} />
           </div>
         )
       })}

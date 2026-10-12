@@ -4,4 +4,5 @@ export const CAJA_KEYS = {
   gastos: (from: string, to: string) => ['caja', 'gastos', from, to] as const,
   etiquetas: ['caja', 'etiquetas'] as const,
   uso: ['caja', 'uso'] as const,
+  pagadores: ['caja', 'pagadores'] as const,
 }

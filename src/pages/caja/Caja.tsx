@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { useUserSession } from '@/hooks/useUserSession'
 import { parseCalendarDay, todayLocal } from '@/lib/dates'
 import { ConfirmarPagoDialog } from './components/ConfirmarPagoDialog'
 import { EditarEtiquetaDialog } from './components/EditarEtiquetaDialog'
@@ -20,7 +21,7 @@ import { PropagarCambioDialog } from './components/PropagarCambioDialog'
 import { ResumenCaja } from './components/ResumenCaja'
 import { Segmentado } from './components/Segmentado'
 import { useCajaMutaciones } from './hooks/useCajaMutaciones'
-import { useEtiquetas, useUsoDeEtiquetas } from './hooks/useEtiquetas'
+import { useEtiquetas, usePagadores, useUsoDeEtiquetas } from './hooks/useEtiquetas'
 import { useGastos } from './hooks/useGastos'
 import { nuevaEtiqueta } from './lib/altas'
 import { escribirConPendientes, escribirTipo, leerConPendientes, leerTipo } from './lib/cajaParams'
@@ -55,6 +56,8 @@ export function Caja() {
   const gastosQ = useGastos(rango)
   const etiquetasQ = useEtiquetas()
   const usoQ = useUsoDeEtiquetas()
+  const pagadores = usePagadores().data ?? []
+  const yo = useUserSession().userSession?.user.id ?? null
   const m = useCajaMutaciones()
   // keepPreviousData: mientras se trae el rango nuevo `data` es la ventana ANTERIOR, y armar filas
   // con ella y el rango nuevo inventa «Pendientes» y totales falsos. Se trata como cargando.
@@ -162,10 +165,12 @@ export function Caja() {
         </div>
         <ListaGastos
           filas={filas}
+          pagadores={pagadores}
           variosMeses={periodOf(rango.from) !== periodOf(rango.to)}
           cargando={cargando}
           error={gastosQ.isError || etiquetasQ.isError}
           onPagar={pagar}
+          onCambiarPagador={(id, paid_by) => m.cambiarPagador.mutate({ id, paid_by })}
           onBorrar={id => m.borrarGasto.mutate(id)}
           onNuevo={sinEtiquetas ? () => {} : nuevo}
         />
@@ -176,6 +181,8 @@ export function Caja() {
           prefill={alta.prefill}
           etiquetas={etiquetas}
           gastos={gastos ?? []}
+          pagadores={pagadores}
+          yo={yo}
           guardando={m.crearGasto.isPending}
           guardandoEtiqueta={m.crearEtiqueta.isPending}
           onGuardar={async insert => { await m.crearGasto.mutateAsync(insert); setAlta(null) }}
@@ -187,6 +194,8 @@ export function Caja() {
       {pago?.gasto && (
         <ConfirmarPagoDialog
           gasto={pago.gasto}
+          pagadores={pagadores}
+          yo={yo}
           guardando={m.confirmarPago.isPending}
           onConfirmar={async p => { await m.confirmarPago.mutateAsync({ id: pago.gasto!.id, ...p }); setPago(null) }}
           onCerrar={() => setPago(null)}

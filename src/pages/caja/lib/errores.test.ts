@@ -29,4 +29,9 @@ describe('mensajeDeError', () => {
   it('un update que la RLS dejó en cero filas es falta de permiso', () => {
     expect(mensajeDeError(new Error('caja_sin_fila'), 'x')).toMatch(/permiso/)
   })
+  it('pagado sin quién lo pagó (la base o el builder)', () => {
+    const esperado = 'Elegí quién lo pagó.'
+    expect(mensajeDeError({ code: '23514', message: 'new row violates check constraint "expenses_paid_by_check"' })).toBe(esperado)
+    expect(mensajeDeError(new Error('caja_sin_pagador'))).toBe(esperado)
+  })
 })

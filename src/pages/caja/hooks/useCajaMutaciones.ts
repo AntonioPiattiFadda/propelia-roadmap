@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { mensajeDeError } from '../lib/errores'
 import {
-  borrarEtiqueta, borrarGasto, confirmarPago, crearEtiqueta, crearGasto, editarEtiqueta, propagarCambio,
+  borrarEtiqueta, borrarGasto, cambiarPagador, confirmarPago, crearEtiqueta, crearGasto, editarEtiqueta, propagarCambio,
   type AlcancePropagacion, type CambiosPropagables,
 } from '../service/caja.service'
 import { CAJA_KEYS } from './keys'
@@ -20,6 +20,10 @@ export function useCajaMutaciones() {
     confirmarPago: useMutation({
       mutationFn: (v: { id: string } & Parameters<typeof confirmarPago>[1]) => confirmarPago(v.id, v),
       ...opciones('No se pudo confirmar el pago.'),
+    }),
+    cambiarPagador: useMutation({
+      mutationFn: (v: { id: string; paid_by: string }) => cambiarPagador(v.id, v.paid_by),
+      ...opciones('No se pudo cambiar quién lo pagó.'),
     }),
     borrarGasto: useMutation({ mutationFn: borrarGasto, ...opciones('No se pudo borrar el gasto.') }),
     crearEtiqueta: useMutation({ mutationFn: crearEtiqueta, ...opciones('No se pudo crear la etiqueta.') }),

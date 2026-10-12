@@ -10,9 +10,10 @@ import { mismoNombre, etiquetasVivas } from '../lib/etiquetas'
 import { hayGastoDelMes, validarGasto, type prefillDePagarFijo } from '../lib/formularios'
 import { eur, montoAInput } from '../lib/monto'
 import { periodOf, tituloDePeriodo } from '../lib/periodos'
-import type { Etiqueta, EstadoGasto, Gasto, TipoGasto } from '../types'
+import type { Etiqueta, EstadoGasto, Gasto, Pagador, TipoGasto } from '../types'
 import { EtiquetaCombobox } from './EtiquetaCombobox'
 import { NuevaEtiquetaDialog } from './NuevaEtiquetaDialog'
+import { PagadorPicker } from './PagadorPicker'
 import { ETIQUETA_DE_TIPO, PillTipo } from './PillTipo'
 import { Segmentado } from './Segmentado'
 
@@ -31,11 +32,14 @@ const Campo = ({ htmlFor, label, children }: { htmlFor?: string; label: string; 
  * ES pagarlo: no tiene estado, siempre sale PAID con fecha de pago. Se monta solo mientras está
  * abierto. `prefill` viene de «Pagar» en un fijo pendiente: etiqueta, monto habitual y período.
  * `gastos` es lo que la pantalla ya trajo: avisa «ya está pagado» antes de que lo frene la base.
+ * «Pagó» arranca en `yo` (quien lo carga), que es lo más común, pero es otro dato que `created_by`.
  */
-export function NuevoGastoDialog({ prefill, etiquetas, gastos, guardando, guardandoEtiqueta, onGuardar, onCrearEtiqueta, onCerrar }: {
+export function NuevoGastoDialog({ prefill, etiquetas, gastos, pagadores, yo, guardando, guardandoEtiqueta, onGuardar, onCrearEtiqueta, onCerrar }: {
   prefill: Prefill | null
   etiquetas: Etiqueta[]
   gastos: Gasto[]
+  pagadores: Pagador[]
+  yo: string | null
   guardando: boolean
   guardandoEtiqueta: boolean
   onGuardar: (insert: TablesInsert<'expenses'>) => Promise<void>
@@ -54,6 +58,7 @@ export function NuevoGastoDialog({ prefill, etiquetas, gastos, guardando, guarda
   const [period, setPeriod] = useState(prefill?.period ?? periodOf(todayLocal()))
   const [estado, setEstado] = useState<EstadoGasto>('PAID')
   const [notas, setNotas] = useState('')
+  const [pagadoPor, setPagadoPor] = useState<string | null>(yo)
   const [error, setError] = useState('')
   const [cbAbierto, setCbAbierto] = useState(false)
   const [creando, setCreando] = useState<string | null>(null)
@@ -92,7 +97,7 @@ export function NuevoGastoDialog({ prefill, etiquetas, gastos, guardando, guarda
   const enviar = async (ev: FormEvent) => {
     ev.preventDefault()
     if (guardando) return
-    const r = validarGasto({ etiqueta, monto, fecha, period, estado: fijo ? 'PAID' : estado, notas, yaPagado })
+    const r = validarGasto({ etiqueta, monto, fecha, period, estado: fijo ? 'PAID' : estado, notas, pagadoPor, yaPagado })
     if ('error' in r) return setError(r.error)
     setError('')
     // Un solo canal de error: el toast de la mutación. Si falla, el dialog sigue abierto.
@@ -155,6 +160,11 @@ export function NuevoGastoDialog({ prefill, etiquetas, gastos, guardando, guarda
                 <Input id="gasto-fecha" type="date" value={fecha} onChange={ev => setFecha(ev.target.value)} />
               </Campo>
             </div>
+            {!pendiente && (
+              <Campo htmlFor="gasto-pagador" label="Pagó *">
+                <PagadorPicker id="gasto-pagador" pagadores={pagadores} valor={pagadoPor} onChange={setPagadoPor} />
+              </Campo>
+            )}
             {!fijo && (
               <Campo htmlFor="gasto-notas" label="Notas">
                 <Textarea id="gasto-notas" placeholder="Opcional" value={notas} onChange={ev => setNotas(ev.target.value)} />

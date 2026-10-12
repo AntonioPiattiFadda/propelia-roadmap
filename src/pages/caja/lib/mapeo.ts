@@ -23,7 +23,7 @@ export function aGasto(f: Tables<'expenses'>): Gasto {
     date: f.date, period: f.period,
     recurrence: uno(f.recurrence, RECURRENCIAS),
     status: uno(f.status, ESTADOS),
-    notes: f.notes, created_at: f.created_at, deleted_at: f.deleted_at,
+    notes: f.notes, paid_by: f.paid_by, created_at: f.created_at, deleted_at: f.deleted_at,
   }
 }
 

@@ -26,6 +26,8 @@ export interface EntradaGasto {
   period: string
   estado: EstadoGasto
   notas: string
+  /** Quién lo pagó (id de `users`). Un variable pendiente no lo necesita. */
+  pagadoPor: string | null
   /** Ya hay un gasto vivo de ESTA etiqueta en ESTE período (solo importa en los fijos). */
   yaPagado: boolean
 }
@@ -40,22 +42,29 @@ export function validarGasto(e: EntradaGasto): { error: string } | { insert: Tab
   // `type="month"` cae a texto libre en algunos navegadores: no confiar en lo que llegue.
   if (fijo && !PERIODO_VALIDO.test(e.period)) return { error: 'El período tiene que ser un mes válido (AAAA-MM).' }
   if (!e.fecha) return { error: 'Falta la fecha.' }
+  const pagado = fijo || e.estado === 'PAID'
+  if (pagado && !e.pagadoPor) return { error: 'Elegí quién lo pagó.' }
   // Una etiqueta fija tiene a lo sumo un gasto vivo por mes (índice único en la base).
   if (fijo && e.yaPagado) return { error: `${capitalizar(tituloDePeriodo(e.period))} ya está pagado para ${e.etiqueta.name}.` }
   const date: CalendarDay = e.fecha
   return {
     insert: fijo
-      ? nuevoGastoFijo(e.etiqueta, { amount, date, period: e.period })
-      : nuevoGastoVariable(e.etiqueta, { amount, date, status: e.estado, notes: e.notas }),
+      ? nuevoGastoFijo(e.etiqueta, { amount, date, period: e.period, paid_by: e.pagadoPor })
+      : nuevoGastoVariable(e.etiqueta, { amount, date, status: e.estado, notes: e.notas, paid_by: e.pagadoPor }),
   }
 }
 
 /** «Confirmar pago» de un variable pendiente. */
-export function validarPago(monto: string, fecha: string): { error: string } | { amount: number; date: CalendarDay } {
+export function validarPago(
+  monto: string,
+  fecha: string,
+  pagadoPor: string | null,
+): { error: string } | { amount: number; date: CalendarDay; paid_by: string } {
   const amount = parseMonto(monto)
   if (!(amount > 0)) return { error: 'El monto tiene que ser mayor que cero.' }
   if (!fecha) return { error: 'Falta la fecha de pago.' }
-  return { amount, date: fecha }
+  if (!pagadoPor) return { error: 'Elegí quién lo pagó.' }
+  return { amount, date: fecha, paid_by: pagadoPor }
 }
 
 export interface EntradaEtiqueta { name: string; tipo: TipoGasto; monto: string; dia: string }

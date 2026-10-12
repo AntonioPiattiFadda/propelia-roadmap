@@ -11,28 +11,37 @@ function montoValido(amount: number) {
   if (!Number.isFinite(amount) || amount <= 0) throw new Error('caja_monto_invalido')
 }
 
+/** Pagado ⇒ alguien lo pagó (`expenses_paid_by_check`). */
+function pagadorValido(paid_by: string | null): string {
+  if (!paid_by) throw new Error('caja_sin_pagador')
+  return paid_by
+}
+
 export function nuevoGastoFijo(
   etiqueta: Etiqueta,
-  { amount, date, period }: { amount: number; date: CalendarDay; period: string },
+  { amount, date, period, paid_by }: { amount: number; date: CalendarDay; period: string; paid_by: string | null },
 ): TablesInsert<'expenses'> {
   if (etiqueta.expense_type !== 'FIXED') throw new Error('caja_etiqueta_de_otro_tipo')
   montoValido(amount)
   // `period` lo manda quien llama: un fijo puede pagarse en un mes distinto al que se imputa.
   return {
     preset_id: etiqueta.id, expense_name: etiqueta.name, expense_type: 'FIXED', amount, date, period,
-    recurrence: 'MONTHLY', status: 'PAID',
+    recurrence: 'MONTHLY', status: 'PAID', paid_by: pagadorValido(paid_by),
   }
 }
 
 export function nuevoGastoVariable(
   etiqueta: Etiqueta,
-  { amount, date, status, notes }: { amount: number; date: CalendarDay; status: EstadoGasto; notes?: string },
+  { amount, date, status, notes, paid_by }:
+    { amount: number; date: CalendarDay; status: EstadoGasto; notes?: string; paid_by: string | null },
 ): TablesInsert<'expenses'> {
   if (etiqueta.expense_type !== 'VARIABLE') throw new Error('caja_etiqueta_de_otro_tipo')
   montoValido(amount)
   return {
     preset_id: etiqueta.id, expense_name: etiqueta.name, expense_type: 'VARIABLE', amount, date,
     period: periodOf(date), recurrence: 'ONE_TIME', status, notes: notes?.trim() || null,
+    // Un pendiente todavía no lo pagó nadie: se elige al confirmar el pago.
+    paid_by: status === 'PAID' ? pagadorValido(paid_by) : null,
   }
 }
 

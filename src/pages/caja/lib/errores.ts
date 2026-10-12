@@ -15,6 +15,7 @@ export function mensajeDeError(error: unknown, porDefecto = 'Algo salió mal. Pr
   if (message.includes('expenses_fixed_paid_check')) {
     return 'Un gasto fijo se carga siempre como pagado: lo pendiente es el mes que todavía no tiene su gasto.'
   }
+  if (message.includes('expenses_paid_by_check') || message === 'caja_sin_pagador') return 'Elegí quién lo pagó.'
   if (message === 'caja_sin_fila' || code === '42501' || /row-level security/i.test(message)) return SIN_PERMISO
   if (error instanceof TypeError || /Failed to fetch|NetworkError|fetch failed/i.test(message)) {
     return 'No hay conexión. Probá de nuevo.'

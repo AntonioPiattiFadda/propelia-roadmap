@@ -20,7 +20,7 @@ describe('moverIndice', () => {
 })
 
 describe('validarGasto', () => {
-  const base = { etiqueta: et(), monto: '25,50', fecha: '2026-10-02', period: '2026-10', estado: 'PAID' as const, notas: '', yaPagado: false }
+  const base = { etiqueta: et(), monto: '25,50', fecha: '2026-10-02', period: '2026-10', estado: 'PAID' as const, notas: '', pagadoPor: 'u1' as string | null, yaPagado: false }
   it('sin etiqueta pide elegirla o crearla', () => {
     expect(validarGasto({ ...base, etiqueta: null })).toEqual({ error: 'Elegí una etiqueta o creala.' })
   })
@@ -43,7 +43,15 @@ describe('validarGasto', () => {
   })
   it('un fijo arma su insert con el builder (siempre PAID)', () => {
     const r = validarGasto({ ...base, estado: 'PENDING' })
-    expect(r).toMatchObject({ insert: { expense_type: 'FIXED', status: 'PAID', amount: 25.5, period: '2026-10', date: '2026-10-02' } })
+    expect(r).toMatchObject({ insert: { expense_type: 'FIXED', status: 'PAID', amount: 25.5, period: '2026-10', date: '2026-10-02', paid_by: 'u1' } })
+  })
+  it('pagado sin quién lo pagó lo pide (fijo y variable)', () => {
+    expect(validarGasto({ ...base, pagadoPor: null })).toEqual({ error: 'Elegí quién lo pagó.' })
+    expect(validarGasto({ ...base, etiqueta: variable, pagadoPor: null })).toEqual({ error: 'Elegí quién lo pagó.' })
+  })
+  it('un variable pendiente no pide quién lo pagó', () => {
+    const r = validarGasto({ ...base, etiqueta: variable, estado: 'PENDING', pagadoPor: null })
+    expect(r).toMatchObject({ insert: { status: 'PENDING', paid_by: null } })
   })
   it('un variable toma estado y notas, y el período sale de la fecha', () => {
     const r = validarGasto({ ...base, etiqueta: variable, estado: 'PENDING', notas: ' hola ', period: '', yaPagado: true })
@@ -52,10 +60,11 @@ describe('validarGasto', () => {
 })
 
 describe('validarPago', () => {
-  it('valida monto y fecha', () => {
-    expect(validarPago('', '2026-10-01')).toEqual({ error: 'El monto tiene que ser mayor que cero.' })
-    expect(validarPago('10', '')).toEqual({ error: 'Falta la fecha de pago.' })
-    expect(validarPago('10,5', '2026-10-01')).toEqual({ amount: 10.5, date: '2026-10-01' })
+  it('valida monto, fecha y quién lo pagó', () => {
+    expect(validarPago('', '2026-10-01', 'u1')).toEqual({ error: 'El monto tiene que ser mayor que cero.' })
+    expect(validarPago('10', '', 'u1')).toEqual({ error: 'Falta la fecha de pago.' })
+    expect(validarPago('10', '2026-10-01', null)).toEqual({ error: 'Elegí quién lo pagó.' })
+    expect(validarPago('10,5', '2026-10-01', 'u1')).toEqual({ amount: 10.5, date: '2026-10-01', paid_by: 'u1' })
   })
 })
 
@@ -92,7 +101,7 @@ describe('prefillDePagarFijo', () => {
 describe('hayGastoDelMes', () => {
   const g = (o: Partial<Gasto> = {}): Gasto => ({
     id: 'g1', preset_id: 'e1', expense_name: 'Vercel Pro', expense_type: 'FIXED', amount: 20, date: '2026-10-02',
-    period: '2026-10', recurrence: 'MONTHLY', status: 'PAID', notes: null, created_at: '2026-10-02T10:00:00Z',
+    period: '2026-10', recurrence: 'MONTHLY', status: 'PAID', notes: null, paid_by: 'u1', created_at: '2026-10-02T10:00:00Z',
     deleted_at: null, ...o,
   })
   it('mira etiqueta + período entre los vivos', () => {

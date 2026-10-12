@@ -127,6 +127,8 @@ create table if not exists public.expenses (
   recurrence   text not null default 'MONTHLY' check (recurrence in ('MONTHLY', 'ONE_TIME')),
   status       text not null default 'PAID' check (status in ('PENDING', 'PAID')),
   notes        text,
+  -- Quién pagó, que no tiene por qué ser quién lo cargó (`created_by`).
+  paid_by      uuid references public.users(id) on delete restrict,
   created_by   uuid default auth.uid() references public.users(id) on delete restrict,
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
@@ -146,6 +148,10 @@ create unique index if not exists expenses_preset_period_key
 alter table public.expenses drop constraint if exists expenses_fixed_paid_check;
 alter table public.expenses add constraint expenses_fixed_paid_check
   check (expense_type <> 'FIXED' or status = 'PAID');
+-- Pagado ⇒ alguien lo pagó. Un variable PENDING lo elige al confirmar el pago.
+alter table public.expenses drop constraint if exists expenses_paid_by_check;
+alter table public.expenses add constraint expenses_paid_by_check
+  check (status <> 'PAID' or paid_by is not null);
 -- Una etiqueta no se repite (sin importar mayúsculas); las borradas no cuentan.
 create unique index if not exists expense_presets_name_key
   on public.expense_presets (lower(name))

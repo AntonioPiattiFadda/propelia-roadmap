@@ -832,6 +832,7 @@ export type Database = {
           expense_type: string
           id: string
           notes: string | null
+          paid_by: string | null
           period: string
           preset_id: string | null
           recurrence: string
@@ -848,6 +849,7 @@ export type Database = {
           expense_type: string
           id?: string
           notes?: string | null
+          paid_by?: string | null
           period: string
           preset_id?: string | null
           recurrence?: string
@@ -864,6 +866,7 @@ export type Database = {
           expense_type?: string
           id?: string
           notes?: string | null
+          paid_by?: string | null
           period?: string
           preset_id?: string | null
           recurrence?: string
@@ -871,6 +874,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "expenses_paid_by_fkey"
+            columns: ["paid_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "expenses_created_by_fkey"
             columns: ["created_by"]

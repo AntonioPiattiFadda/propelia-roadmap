@@ -12,7 +12,7 @@ const etiqueta = (o: Partial<Etiqueta> = {}): Etiqueta => ({
 })
 const gasto = (o: Partial<Gasto> = {}): Gasto => ({
   id: `g${++n}`, preset_id: null, expense_name: 'Freelance', expense_type: 'VARIABLE', amount: 100, date: '2026-10-09',
-  period: '2026-10', recurrence: 'ONE_TIME', status: 'PAID', notes: null, created_at: instante(2026, 10, 9), deleted_at: null, ...o,
+  period: '2026-10', recurrence: 'ONE_TIME', status: 'PAID', notes: null, paid_by: 'u1', created_at: instante(2026, 10, 9), deleted_at: null, ...o,
 })
 const OCT = { from: '2026-10-01', to: '2026-10-31' }
 
