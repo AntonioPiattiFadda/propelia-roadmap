@@ -1,6 +1,8 @@
 import { Link, useNavigate } from 'react-router-dom'
+import { UserMinus } from 'lucide-react'
 import { AvatarUsuario } from '@/components/AvatarUsuario'
 import { enlaceAlCrm } from '@/pages/crm/lib/leadFilterParams'
+import type { Usuario } from '@/pages/crm/types'
 import type { FilaEquipo } from '../lib/estadisticasPorCartera'
 
 const ROL: Record<string, string> = { SUPERADMIN: 'Superadmin', SDR: 'SDR' }
@@ -31,7 +33,13 @@ function BarraEtapas({ fila }: { fila: FilaEquipo }) {
   )
 }
 
-export function TablaEquipo({ filas }: { filas: FilaEquipo[] }) {
+/* `onDarDeBaja` solo llega para un SUPERADMIN; el botón no se ofrece sobre uno mismo (la RPC lo
+   rechaza) ni sobre quien ya está inactivo. */
+export function TablaEquipo({ filas, myId, onDarDeBaja }: {
+  filas: FilaEquipo[]
+  myId?: string | null
+  onDarDeBaja?: (usuario: Usuario) => void
+}) {
   const navigate = useNavigate()
   const th = 'whitespace-nowrap bg-(--surface-2) px-4 py-[7px] text-left text-[12px] font-bold uppercase tracking-[0.06em] text-(--fg-2) shadow-[inset_0_-1px_0_var(--line-strong)]'
   return (
@@ -39,9 +47,10 @@ export function TablaEquipo({ filas }: { filas: FilaEquipo[] }) {
       <table className="w-full border-collapse">
         <thead>
           <tr>
-            <th className={th}>Cartera</th><th className={th}>Rol</th><th className={th}>Leads activos</th>
+            <th className={th}>Cartera</th><th className={th}>Email</th><th className={th}>Rol</th><th className={th}>Leads activos</th>
             <th className={th}>Por estado</th>
             <th className={th}>Leads con tareas vencidas</th><th className={th}>Reuniones este mes</th>
+            {onDarDeBaja && <th className={th}><span className="sr-only">Acciones</span></th>}
           </tr>
         </thead>
         <tbody>
@@ -57,12 +66,24 @@ export function TablaEquipo({ filas }: { filas: FilaEquipo[] }) {
                     {!f.usuario.activo && <span className="text-[12px] text-(--fg-muted)">(inactivo)</span>}
                   </div>
                 </td>
+                <td className="px-4 py-3 text-[13px] text-(--fg-2)">{f.usuario.email}</td>
                 <td className="px-4 py-3 text-[13px] text-(--fg-2)">{ROL[f.usuario.rol] ?? f.usuario.rol}</td>
                 <td className="px-4 py-3"><Numero valor={f.leadsActivos} to={enlaceAlCrm({ owners })} /></td>
                 <td className="px-4 py-3"><BarraEtapas fila={f} /></td>
                 <td className="px-4 py-3"><Numero valor={f.leadsConTareasVencidas} alerta to={enlaceAlCrm({ owners, overdueOnly: true })} /></td>
                 {/* Sin enlace: la agenda de reuniones está fuera de alcance (spec §8). */}
                 <td className="px-4 py-3"><Numero valor={f.reunionesMes} /></td>
+                {onDarDeBaja && (
+                  <td className="px-4 py-3 text-right">
+                    {f.usuario.activo && f.usuario.id !== myId && (
+                      <button type="button" title="Dar de baja" aria-label={`Dar de baja a ${f.usuario.nombre}`}
+                        onClick={e => { e.stopPropagation(); onDarDeBaja(f.usuario) }}
+                        className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-(--fg-muted) hover:bg-destructive/10 hover:text-destructive">
+                        <UserMinus className="size-4" />
+                      </button>
+                    )}
+                  </td>
+                )}
               </tr>
             )
           })}

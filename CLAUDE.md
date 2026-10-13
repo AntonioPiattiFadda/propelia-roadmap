@@ -213,7 +213,12 @@ conversión de filas a personas es `personasDesdeUsuarios()`, en `equipo.js`, co
   (`supabase/functions/crear-miembro/`, tests con `deno test` ahí adentro): un SUPERADMIN activo
   crea la cuenta de auth y su fila. Iniciales y color salen solos y **`caja` nace en false**, que
   entrar al reparto mueve los saldos de todos. No hay trigger sobre `auth.users`: si la fila falla,
-  la función borra la cuenta. Cambios, bajas, `caja` y roles siguen por el MCP o el service role.
+  la función borra la cuenta. **La baja** (13/10/2026) es el ícono de cada fila de `/equipo`
+  (`BajaMiembroDialog`), que llama a la RPC `crm_dar_de_baja_miembro`: solo SUPERADMIN, nunca a
+  uno mismo. En una transacción pone `activo = false` y le pasa a un sucesor sus leads, sus tareas
+  del CRM sin completar, sus reuniones futuras y su lugar en `pend`/`resp` (y en los pasos) de las
+  tareas del roadmap sin terminar, y borra sus filas de `crm_data_access`. La caja no se toca.
+  Con `p_simular` solo cuenta: es el preview del dialog. Cambios, `caja` y roles siguen por el MCP.
 - **La baja es `activo = false`, nunca un `delete`.** Un inactivo no entra (`es_usuario()` lo
   corta y la RLS le devuelve la lista vacía), pero se sigue pintando: una tarea vieja dice
   quién la hizo y lo que pagó sigue en el saldo de la caja. Lo que no se hace es **ofrecerlo

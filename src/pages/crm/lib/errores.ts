@@ -21,6 +21,12 @@ const CLAVES: Record<string, string> = {
   // Las de crm_importar_lote.
   crm_lote_vacio: 'El archivo no tiene filas para importar.',
   crm_lote_grande: 'El archivo tiene demasiadas filas: partilo en lotes más chicos.',
+  // Las de crm_dar_de_baja_miembro.
+  crm_baja_solo_superadmin: 'Solo un superadmin puede dar de baja a alguien.',
+  crm_baja_propia: 'No podés darte de baja a vos mismo.',
+  crm_baja_ya_inactivo: 'Esa persona ya estaba dada de baja.',
+  crm_baja_sucesor_invalido: 'Elegí a otra persona para quedarse con lo suyo.',
+  crm_baja_falta_sucesor: 'Tiene cosas en curso: elegí quién se queda con ellas.',
 }
 
 export function mensajeDeError(error: unknown, porDefecto = 'Algo salió mal. Probá de nuevo.'): string {

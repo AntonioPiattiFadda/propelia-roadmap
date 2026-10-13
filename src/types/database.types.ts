@@ -1069,6 +1069,10 @@ export type Database = {
         }
         Returns: Json
       }
+      crm_dar_de_baja_miembro: {
+        Args: { p_simular?: boolean; p_sucesor?: string; p_user_id: string }
+        Returns: Json
+      }
       crm_es_superadmin: { Args: never; Returns: boolean }
       crm_gestion_refresh: { Args: { p_lead_id: string }; Returns: undefined }
       crm_importar_lote: {

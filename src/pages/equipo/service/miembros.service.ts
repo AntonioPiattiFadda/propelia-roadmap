@@ -19,3 +19,16 @@ export async function crearMiembro(payload: NuevoMiembro): Promise<{ id: string;
   if (!data) throw new Error('No se pudo crear el miembro')
   return data.user
 }
+
+/** Lo que la baja le pasa al sucesor (o le pasaría, con `simulado`). */
+export type ResultadoDeBaja = { leads: number; tareas: number; reuniones: number; roadmap: number; simulado: boolean }
+
+/* La baja es `activo = false` más el traspaso de lo que tenía en curso, todo en la RPC
+   `crm_dar_de_baja_miembro` (supabase/schema.sql). Con `simular` no escribe nada: es el preview. */
+export async function darDeBajaMiembro(userId: string, sucesor: string | null, simular: boolean): Promise<ResultadoDeBaja> {
+  const { data, error } = await supabase.rpc('crm_dar_de_baja_miembro', {
+    p_user_id: userId, p_sucesor: sucesor ?? undefined, p_simular: simular,
+  })
+  if (error) throw error
+  return data as unknown as ResultadoDeBaja
+}
