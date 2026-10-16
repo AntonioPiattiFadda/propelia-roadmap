@@ -36,6 +36,13 @@ describe('filtrosDesdeUrl / escribirFiltros', () => {
     expect(escribirFiltros(p, { paraRecontactar: false }).has('recontactar')).toBe(false)
     expect(deleteLeadFilterParams(params('/crm?recontactar=1&owners=u1')).toString()).toBe('owners=u1')
   })
+  it('con teléfono de Google Maps: ?telMaps=1, y apagado se borra; «Limpiar filtros» lo saca', () => {
+    const p = escribirFiltros(new URLSearchParams(), { conTelMaps: true })
+    expect(p.get('telMaps')).toBe('1')
+    expect(filtrosDesdeUrl(p).conTelMaps).toBe(true)
+    expect(escribirFiltros(p, { conTelMaps: false }).has('telMaps')).toBe(false)
+    expect(deleteLeadFilterParams(params('/crm?telMaps=1&owners=u1')).toString()).toBe('owners=u1')
+  })
   it('orden por estado: ?orden=estado, y apagado se borra; «Limpiar filtros» lo saca', () => {
     const p = escribirFiltros(new URLSearchParams(), { ordenPorEstado: true })
     expect(p.get('orden')).toBe('estado')

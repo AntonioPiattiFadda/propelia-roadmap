@@ -22,6 +22,8 @@ export type LeadFilterState = {
   paraRecontactar: boolean
   /** Con «Tareas»: ordenar por estado (lo más avanzado del funnel arriba) en vez de por la próxima tarea. */
   ordenPorEstado: boolean
+  /** Solo los que tienen cargado el teléfono de Google Maps de la inmobiliaria. */
+  conTelMaps: boolean
 }
 
 // Función y no constante: una constante con Sets adentro se compartiría y alguien la mutaría.
@@ -29,6 +31,7 @@ export function filtrosVacios(): LeadFilterState {
   return {
     q: '', stageFilter: new Set(), overdueOnly: false,
     conTareas: false, sinTareas: false, includeDiscarded: false, paraRecontactar: false, ordenPorEstado: false,
+    conTelMaps: false,
   }
 }
 
@@ -41,7 +44,12 @@ export type LeadFilterContext = {
   now: number
 }
 
-export type FilterDimension = 'overdue' | 'tareas' | 'stage' | 'discarded' | 'recontactar'
+export type FilterDimension = 'overdue' | 'tareas' | 'stage' | 'discarded' | 'recontactar' | 'telMaps'
+
+/** Un teléfono en blanco no es un teléfono cargado. */
+export function tieneTelMaps(l: CrmLeadRow): boolean {
+  return !!l.client?.google_maps_phone?.trim()
+}
 
 export function esDescartado(l: CrmLeadRow, etapas: ReadonlyMap<string, CrmStage>): boolean {
   return etapaDelLead(l, etapas)?.is_out_of_funnel === true
@@ -101,6 +109,7 @@ export function filterLeads(
       // Acá el descarte lo sigue decidiendo su propio filtro: «Tareas» no es pedir verlos.
       && (s.has('tareas') || !filters.conTareas || ctx.leadIdsConTareas.has(l.id))
       && (s.has('tareas') || !filters.sinTareas || !ctx.leadIdsConTareas.has(l.id))
+      && (s.has('telMaps') || !filters.conTelMaps || tieneTelMaps(l))
   })
 }
 

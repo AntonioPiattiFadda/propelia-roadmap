@@ -1,5 +1,5 @@
 import type { CrmLeadRow } from '../types'
-import { esDescartado, filterLeads, type LeadFilterContext, type LeadFilterState } from './leadFilters'
+import { esDescartado, filterLeads, tieneTelMaps, type LeadFilterContext, type LeadFilterState } from './leadFilters'
 
 /* Copiado de propelia-frontend (src/pages/leads/lib/computeLeadListCounters.ts) sin cruces,
    pisos ni compraventa, y sin gestión ni prioridades desde el 10/10/2026. Allá quedó como
@@ -18,6 +18,8 @@ export type LeadListCounters = {
   discardedCount: number
   /** Descartados con la fecha de volver a llamar cumplida, sin su propio filtro. */
   recontactarCount: number
+  /** Con teléfono de Google Maps cargado, sin su propio filtro. */
+  telMapsCount: number
   matchingCount: number
 }
 
@@ -48,6 +50,7 @@ export function computeLeadListCounters(
     stageCount,
     discardedCount,
     recontactarCount,
+    telMapsCount: filterLeads(leads, filters, ctx, ['telMaps']).filter(tieneTelMaps).length,
     matchingCount: filterLeads(leads, filters, ctx).length,
   }
 }

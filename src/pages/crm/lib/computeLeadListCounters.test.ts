@@ -58,3 +58,12 @@ describe('para recontactar', () => {
     expect(computeLeadListCounters(leads, { ...filtrosVacios(), paraRecontactar: true }, ctx).recontactarCount).toBe(1)
   })
 })
+
+describe('con teléfono de Google Maps', () => {
+  const conMaps = (id: string) => lead(id, { client: { google_maps_phone: '931000000' } as CrmLeadRow['client'] })
+  const leads = [conMaps('a'), conMaps('b'), lead('z')]
+  it('cuenta los que lo tienen cargado, prendido o no', () => {
+    expect(computeLeadListCounters(leads, filtrosVacios(), ctx).telMapsCount).toBe(2)
+    expect(computeLeadListCounters(leads, { ...filtrosVacios(), conTelMaps: true }, ctx).telMapsCount).toBe(2)
+  })
+})

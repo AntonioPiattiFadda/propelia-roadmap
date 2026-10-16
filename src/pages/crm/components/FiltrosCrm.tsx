@@ -59,6 +59,7 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
 }) {
   const hayFiltros = filtros.q.trim() !== '' || filtros.stageFilter.size > 0 || filtros.sinTareas
     || filtros.overdueOnly || filtros.conTareas || filtros.includeDiscarded || filtros.paraRecontactar || filtros.ordenPorEstado
+    || filtros.conTelMaps
   const columnas = vista === 'columnas'
 
   const alternar = <T,>(set: Set<T>, v: T) => {
@@ -180,6 +181,11 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
             Para recontactar <span className="tabular-nums">{contadores.recontactarCount}</span>
           </button>
         )}
+
+        <button type="button" aria-pressed={filtros.conTelMaps} className={chip(filtros.conTelMaps)}
+          onClick={() => onCambiar({ conTelMaps: !filtros.conTelMaps })}>
+          Con tel. de Google Maps <span className="tabular-nums">{contadores.telMapsCount}</span>
+        </button>
 
         {hayFiltros && (
           <Button variant="ghost" size="sm" onClick={onLimpiar}>

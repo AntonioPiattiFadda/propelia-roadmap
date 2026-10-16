@@ -90,6 +90,22 @@ describe('para recontactar', () => {
   })
 })
 
+describe('con teléfono de Google Maps', () => {
+  const conMaps = lead('m', { client: cliente({ google_maps_phone: '+34 931 000 000' }) })
+  const vacio = lead('v', { client: cliente({ google_maps_phone: '   ' }) })
+  const sinMaps = lead('s')
+  const sinCliente = lead('c', { client: null })
+  it('prendido deja solo los que tienen el teléfono cargado (en blanco no cuenta)', () => {
+    expect(filterLeads([conMaps, vacio, sinMaps, sinCliente], f({ conTelMaps: true }), ctx()).map(l => l.id)).toEqual(['m'])
+  })
+  it('apagado no filtra', () => {
+    expect(filterLeads([conMaps, sinMaps], f({}), ctx())).toHaveLength(2)
+  })
+  it('skip lo apaga (para el contador)', () => {
+    expect(filterLeads([conMaps, sinMaps], f({ conTelMaps: true }), ctx(), ['telMaps'])).toHaveLength(2)
+  })
+})
+
 describe('etapa y tareas', () => {
   const sinEtapa = lead('s', { funnel_stage_id: null })
   const verde = lead('v')

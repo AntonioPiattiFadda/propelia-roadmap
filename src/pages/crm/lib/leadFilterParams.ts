@@ -11,7 +11,7 @@ export const OWNERS_PARAM = 'owners'
 /** El lead abierto en el dialog: un enlace abre ese lead ya abierto. */
 export const LEAD_PARAM = 'lead'
 
-export const LEAD_FILTER_PARAMS = ['overdue', 'tareas', 'stages', 'includeDiscarded', 'recontactar', 'orden'] as const
+export const LEAD_FILTER_PARAMS = ['overdue', 'tareas', 'stages', 'includeDiscarded', 'recontactar', 'orden', 'telMaps'] as const
 export const LEAD_FILTER_PARAMS_WITH_QUERY = [...LEAD_FILTER_PARAMS, 'q'] as const
 
 /** `?tareas=sin`: los que no tienen ninguna tarea pendiente. `?tareas=1` sigue siendo «con». */
@@ -48,6 +48,7 @@ export function filtrosDesdeUrl(params: URLSearchParams): LeadFilterState {
     includeDiscarded: params.get('includeDiscarded') === '1',
     paraRecontactar: params.get('recontactar') === '1',
     ordenPorEstado: params.get('orden') === 'estado',
+    conTelMaps: params.get('telMaps') === '1',
   }
 }
 
@@ -74,6 +75,7 @@ export function escribirFiltros(params: URLSearchParams, patch: Partial<LeadFilt
   if (patch.includeDiscarded !== undefined) poner('includeDiscarded', patch.includeDiscarded ? '1' : '')
   if (patch.paraRecontactar !== undefined) poner('recontactar', patch.paraRecontactar ? '1' : '')
   if (patch.ordenPorEstado !== undefined) poner('orden', patch.ordenPorEstado ? 'estado' : '')
+  if (patch.conTelMaps !== undefined) poner('telMaps', patch.conTelMaps ? '1' : '')
   return next
 }
 
