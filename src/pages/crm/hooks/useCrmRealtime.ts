@@ -11,9 +11,11 @@ const TABLAS: Record<string, QueryKey[]> = {
   crm_leads: [CRM_KEYS.leads, CRM_KEYS.detalles],
   crm_clients: [CRM_KEYS.leads],
   crm_tasks: [CRM_KEYS.tareasPendientes, CRM_KEYS.detalles],
-  crm_comments: [CRM_KEYS.detalles, CRM_KEYS.llamadas],
+  // `leads`: la columna «Última actividad» sale del último comentario MANUAL.
+  crm_comments: [CRM_KEYS.leads, CRM_KEYS.detalles, CRM_KEYS.llamadas],
   crm_management_events: [CRM_KEYS.detalles],
-  crm_meetings: [CRM_KEYS.detalles, ['crm', 'reuniones']],
+  // `llamadas`: el contador de Objetivos cuenta también las demos agendadas.
+  crm_meetings: [CRM_KEYS.detalles, ['crm', 'reuniones'], CRM_KEYS.llamadas],
   // Te dieron o te sacaron acceso: cambian las carteras Y lo que la RLS te deja leer.
   crm_data_access: [CRM_KEYS.accesos, CRM_KEYS.leads, CRM_KEYS.tareasPendientes],
 }

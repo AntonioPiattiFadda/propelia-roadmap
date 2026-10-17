@@ -25,14 +25,24 @@ async function comprobar(p: PromiseLike<{ error: unknown }>): Promise<void> {
 }
 
 // ---------- Lectura ----------
+/* «Última actividad» es el último registro hecho a mano en la Actividad del lead (nota, llamada,
+   contacto fallido): el comentario MANUAL más nuevo sin borrar. No `last_important_event_at`, que
+   lo escribe también la reasignación. Se embebe uno solo por lead, ya recortado por la RLS. */
 export async function getLeads(): Promise<CrmLeadRow[]> {
   const { data, error } = await supabase
     .from('crm_leads')
-    .select('*, client:crm_clients(*)')
+    .select('*, client:crm_clients(*), registros:crm_comments(created_at)')
     .is('deleted_at', null)
+    .eq('registros.comment_type', 'MANUAL')
+    .is('registros.deleted_at', null)
+    .order('created_at', { referencedTable: 'registros', ascending: false })
+    .limit(1, { referencedTable: 'registros' })
     .order('created_at', { ascending: false })
   if (error) throw error
-  return data as CrmLeadRow[]
+  return data.map(({ registros, ...lead }) => ({
+    ...lead,
+    ultima_actividad_at: registros[0]?.created_at ?? null,
+  })) as CrmLeadRow[]
 }
 
 /** Con las borradas: un lead en una etapa borrada tiene que poder leer su nombre (ver etapaDelLead). */
@@ -147,15 +157,24 @@ export async function crearComentario(input: {
 export const marcarComentarioBorrado = (id: string, borrado: boolean) =>
   comprobar(supabase.from('crm_comments').update({ deleted_at: borrado ? ahora() : null }).eq('id', id))
 
-/** La meta de las actividades que `autor` registró en [desde, hasta): de ahí sale el contador de
- *  llamadas del día. Se filtra por la marca en la base para no traer todos los comentarios. */
-export async function metasDeActividad(autor: string, desde: string, hasta: string): Promise<(string | null)[]> {
-  const { data, error } = await supabase.from('crm_comments').select('long_description')
+/** La meta (y el lead) de las actividades que `autor` registró en [desde, hasta): de ahí sale el
+ *  contador de llamadas. Se filtra por la marca en la base para no traer todos los comentarios. */
+export async function metasDeActividad(autor: string, desde: string, hasta: string): Promise<{ lead_id: string | null; long_description: string | null }[]> {
+  const { data, error } = await supabase.from('crm_comments').select('lead_id, long_description')
     .eq('created_by', autor).eq('comment_type', 'MANUAL').is('deleted_at', null)
     .gte('created_at', desde).lt('created_at', hasta)
     .like('long_description', '<!--act-->%')
   if (error) throw error
-  return (data ?? []).map(c => c.long_description)
+  return data ?? []
+}
+
+/** Las demos que `autor` agendó en [desde, hasta): cuenta cuándo se agendaron, no para cuándo son. */
+export async function demosAgendadas(autor: string, desde: string, hasta: string): Promise<{ lead_id: string | null }[]> {
+  const { data, error } = await supabase.from('crm_meetings').select('lead_id')
+    .eq('created_by', autor).is('deleted_at', null)
+    .gte('created_at', desde).lt('created_at', hasta)
+  if (error) throw error
+  return data ?? []
 }
 
 // ---------- Tareas y reuniones ----------

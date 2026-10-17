@@ -39,11 +39,6 @@ describe('computeLeadListCounters', () => {
   })
   it('una etapa sola', () => expect(c.stageCount('n')).toBe(3))
   it('elegir la etapa Descartado cuenta a los descartados', () => expect(c.stageCount('d')).toBe(1))
-  // Con la etapa «n» elegida, prender «incluir descartados» no suma ninguno.
-  it('descartados que aparecerían al incluirlos', () => {
-    expect(c.discardedCount).toBe(0)
-    expect(computeLeadListCounters(leads, filtrosVacios(), ctx).discardedCount).toBe(1)
-  })
   it('lo que queda con todo puesto', () => expect(c.matchingCount).toBe(3))
 })
 

@@ -31,12 +31,15 @@ function dentroDePantalla(p: { x: number; y: number }, el: HTMLElement | null, a
  * Va con Radix directo y no con `DialogContent`, que dibuja siempre el velo y es copia del producto.
  * La posición vuelve a la de fábrica cada vez que se abre.
  */
-export function VentanaFlotante({ open, onOpenChange, titulo, descripcion, ancho = 400, children }: {
+export function VentanaFlotante({ open, onOpenChange, titulo, descripcion, ancho = 400, lateral, children }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   titulo: ReactNode
   descripcion: string
   ancho?: number
+  /** Lo que cuelga por fuera del borde izquierdo (la guía de la llamada). Va afuera de la caja
+   *  recortada (`overflow-hidden`) para poder salirse de ella; se posiciona solo con `absolute`. */
+  lateral?: ReactNode
   children: ReactNode
 }) {
   const [pos, setPos] = useState(() => posicionInicial(ancho))
@@ -66,8 +69,9 @@ export function VentanaFlotante({ open, onOpenChange, titulo, descripcion, ancho
           ref={ventana}
           onInteractOutside={e => e.preventDefault()}
           style={{ left: pos.x, top: pos.y, width: `min(${ancho}px, calc(100vw - ${MARGEN * 2}px))` }}
-          className="fixed z-50 flex max-h-[calc(100dvh-32px)] flex-col overflow-hidden rounded-xl bg-white shadow-[0_12px_40px_rgba(0,0,0,0.18)] [border:1px_solid_var(--line-strong)] data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+          className="fixed z-50 flex max-h-[calc(100dvh-32px)] flex-col data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
         >
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl bg-white shadow-[0_12px_40px_rgba(0,0,0,0.18)] [border:1px_solid_var(--line-strong)]">
           <div
             onPointerDown={empezarArrastre}
             onPointerMove={moverArrastre}
@@ -85,6 +89,8 @@ export function VentanaFlotante({ open, onOpenChange, titulo, descripcion, ancho
             </DialogPrimitive.Close>
           </div>
           <div className="min-h-0 overflow-y-auto">{children}</div>
+          </div>
+          {lateral}
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>

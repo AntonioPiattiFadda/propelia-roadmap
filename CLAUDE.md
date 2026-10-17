@@ -116,6 +116,26 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   lado del rol en el perfil. La llamada pregunta «¿Es decisor?» solo mientras el perfil no lo sepa
   (`decisorSabido`); contestar «Sí» con **un solo** contacto elegido lo marca (`campoDelNuevoDecisor`).
   «No» no se guarda solo, y con varios elegidos no se sabe cuál decide. Reglas en `lib/clientData.ts`.
+- **«Decisor contactado» en el perfil** (16/10/2026): aparte de la etapa, el perfil del lead dice
+  si ya se habló con quien decide, con quién y cuándo. **No es una columna**: sale de la primera
+  llamada contestada y no borrada con `decisor: true` (`decisorContactado()`, `lib/actividad.ts`).
+  Borrar esa llamada lo desmarca. Ese mismo día salió del perfil el bloque del motivo de descarte
+  (`discard_reason`/`recontact_at` siguen en la base y en el `DescartarLeadDialog`), y también la
+  cruz de «cerrar sin guardar» del encabezado: la salida es «Guardar y cerrar».
+- **El teléfono de Google Maps es «Teléfono oficina»** (16/10/2026): el contacto cuyo número
+  coincide en dígitos con `google_maps_phone` y no tiene nombre se rotula así, sin rol ni decisor
+  (`esTelefonoDeOficina`), y no cuenta como persona en «con quién» (`contactosConDecisor`). Con un
+  nombre escrito vuelve a ser alguien.
+- **La llamada pregunta a qué teléfono y con quién, por separado** (16/10/2026): no siempre
+  coinciden. «Llamaste a» sale de `telefonosDelCliente()` (cada contacto, la oficina y el de Google
+  si no está en ninguno) y lo piden la llamada y el contacto fallido, vacío y obligatorio mientras
+  haya teléfonos. Se guarda en la meta como `telefono: {numero, etiqueta}`; las viejas no lo traen.
+- **Con quién también se escribe a mano** (16/10/2026): si no está entre los contactos, se tipea
+  en el renglón de «Hablaste con» y al registrar se carga solo en el perfil, sin teléfono: el
+  principal si está vacío del todo, si no el primer alternativo libre (`patchDeContactosNuevos`).
+  Si es el único elegido y decide, entra como decisor. Sin casillero libre queda solo en la
+  actividad, con aviso. Ese mismo día la pastilla «Tarea» salió del registro de actividad (por
+  pedido): las tareas se crean desde su lista del perfil.
 - **Registrar una actividad obliga a elegir la etapa** (12/10/2026): «El lead queda en» arranca
   **vacío** y registrar sin elegir lo marca en rojo y no registra, para que avanzar al lead no
   dependa de acordarse. Hubo unas horas una etapa sugerida precargada (`etapaSugerida()`) y se sacó
@@ -123,10 +143,25 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   La etapa se escribe recién con la actividad guardada. Reemplazó al toast «¿Pasar a …?».
   El formulario es la misma ventana flotante y no modal que «Nueva tarea» (`VentanaFlotante`):
   mientras se registra se puede usar el resto de la pantalla.
+- **Guía de la llamada y datos de la demo** (16/10/2026): «Llamada» y «Agendar demo» muestran una
+  guía (qué no olvidarse) colgada del borde izquierdo de la ventana: plegada es una pestaña que
+  asoma y abierta sale de la ventana como panel al costado (`lateral` de `VentanaFlotante`). Nace
+  plegada cada vez. Es texto fijo de `lib/guiaDeLlamada.ts` y no guarda nada. La demo pide el mail de la invitación (precargado con el de la
+  inmobiliaria), quién asiste (las mismas pastillas de contacto) y notas opcionales. Como
+  `crm_meetings` no tiene columnas para eso, van a `description` (`descripcionDeDemo()`,
+  `lib/reuniones.ts`): **sin migración, a propósito**. El título queda siempre «Demo». Si la
+  inmobiliaria no tenía email, se le guarda el escrito; si falla, la demo queda igual.
+- **Playbook en la cabecera** (16/10/2026): botón «Playbook» (`PlaybookDialog`) para todos. Los dos
+  PDF de fábrica viven en `public/playbook/` y van con el deploy (**URL pública**, sin login); los
+  que se suben van al bucket `roadmap-adjuntos` bajo `playbook/`, firmados al listar. Sin
+  migración: el bucket y su RLS ya estaban. Subir, cualquiera; borrar, solo SUPERADMIN (solo el front).
 - **Lo registrado a mano se puede borrar** (12/10/2026): nota, llamada y contacto fallido llevan
   un tacho al pasar el mouse. Es soft delete de `crm_comments` (la RLS ya deja: write sobre el
   lead), sin confirmar y con «Deshacer» en el aviso. Lo del sistema (etapa, responsable, tareas,
   demos) no se borra desde la actividad. Borrar no deshace la etapa elegida al registrar.
+- **Los descartados se ven eligiendo «Descartado» en el filtro «Estado»** (16/10/2026): por
+  defecto no aparecen. Reemplazó al chip «Incluir descartados»; un `?includeDiscarded=` viejo se
+  ignora. La búsqueda, «Para recontactar» y los objetivos los siguen trayendo solos.
 - **El catálogo se borra con soft delete**: un lead en una etapa borrada la sigue leyendo por
   nombre (`catalogoDeEtapas` trae también las borradas); los menús ofrecen solo las vivas.
 - **Lo que trae la importación desde Excel vive en `crm_clients`** (6/10/2026): `import_batch`
@@ -143,7 +178,8 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
     como un cliente interesado en un piso, no como una llamada comercial. **No es un contacto**
     (12/10/2026, por pedido): vive en «Datos de la inmobiliaria» con el aviso escrito (no en un
     tooltip), y el perfil ya no lo copia a un alternativo como hace con el de Google Maps. Los que
-    se copiaron antes siguen en su contacto. **Nunca es el número por defecto**. Hoy
+    se copiaron antes se quitan solos al abrir el lead (16/10/2026, `copiasDelTelefonoDeIdealista`),
+    salvo que ese contacto ya tenga rol, notas o decisor cargado: ahí es alguien y se deja. **Nunca es el número por defecto**. Hoy
     ninguna pantalla elige un «teléfono principal» con respaldo (la lista muestra `phone` y nada
     más); si alguna vez lo hace, va en una función pura de `lib/` con tests y el de Idealista entra
     solo si `phone`, los alternativos y `google_maps_phone` están vacíos.

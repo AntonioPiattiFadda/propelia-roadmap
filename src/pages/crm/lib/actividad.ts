@@ -1,5 +1,5 @@
 import { fmtDayMonth, fmtDueLabel, shiftIsoDate, toIsoDate } from '@/lib/calendarDate'
-import type { CrmStage, LeadDetalle, Usuario } from '../types'
+import type { LeadDetalle, Usuario } from '../types'
 import { nombreDe } from './permisos'
 
 /* La actividad del lead en una sola lista: lo que se escribió (comentarios MANUAL), lo que dejó
@@ -8,7 +8,7 @@ import { nombreDe } from './permisos'
    con esto», y la respuesta es en orden. */
 export type ItemActividad = {
   id: string
-  tipo: 'comentario' | 'llamada' | 'sistema' | 'gestion' | 'pospuesto' | 'etapa' | 'asignacion' | 'reunion' | 'tarea' | 'consejo'
+  tipo: 'comentario' | 'llamada' | 'sistema' | 'gestion' | 'pospuesto' | 'asignacion' | 'reunion' | 'consejo'
   /** Cuándo pasó (no cuándo vence): lo que ordena la lista. */
   fecha: string
   texto: string
@@ -18,6 +18,8 @@ export type ItemActividad = {
   /** Solo llamadas: qué pasó y si fue con un decisor. */
   resultado?: ResultadoDeLlamada
   decisor?: boolean
+  /** Solo llamadas: a qué teléfono se llamó (ver `MetaDeActividad`). */
+  telefono?: { numero: string; etiqueta: string }
 }
 
 /* Qué fue una actividad escrita a mano —nota o llamada— y con quién, colgado del comentario en
@@ -36,6 +38,10 @@ export type MetaDeActividad = {
   resultado?: ResultadoDeLlamada
   /** Si quien atendió decide. Solo tiene sentido en una llamada contestada. */
   decisor?: boolean
+  /** Solo llamadas: a qué número se llamó y cómo se llamaba ese número en el perfil («Oficina»,
+   *  «Laura»). Va aparte de `con` porque el número marcado y quien atiende no siempre coinciden
+   *  (16/10/2026, por pedido). Las llamadas anteriores no lo dicen. */
+  telefono?: { numero: string; etiqueta: string }
 }
 
 /** Lo que va a `long_description`. Una nota sin nadie no guarda nada: es un comentario de siempre. */
@@ -44,20 +50,28 @@ export function armarMetaDeActividad(meta: MetaDeActividad): string | null {
   return MARCA_ACTIVIDAD + JSON.stringify(meta)
 }
 
+function esTelefonoGuardado(t: unknown): t is { numero: string; etiqueta: string } {
+  if (typeof t !== 'object' || t === null) return false
+  const { numero, etiqueta } = t as Record<string, unknown>
+  return typeof numero === 'string' && typeof etiqueta === 'string'
+}
+
 export function leerMetaDeActividad(guardado: string | null): MetaDeActividad | null {
   if (!guardado?.startsWith(MARCA_ACTIVIDAD)) return null
   try {
     const m: unknown = JSON.parse(guardado.slice(MARCA_ACTIVIDAD.length))
     if (typeof m !== 'object' || m === null) return null
-    const { tipo, con, resultado, decisor } = m as Record<string, unknown>
+    const { tipo, con, resultado, decisor, telefono } = m as Record<string, unknown>
     if (tipo !== 'nota' && tipo !== 'llamada') return null
     if (!Array.isArray(con) || !con.every(c => typeof c === 'string')) return null
     if (resultado !== undefined && resultado !== 'contestada' && resultado !== 'no_respondida') return null
     if (decisor !== undefined && typeof decisor !== 'boolean') return null
+    if (telefono !== undefined && !esTelefonoGuardado(telefono)) return null
     return {
       tipo, con,
       ...(resultado !== undefined && { resultado }),
       ...(decisor !== undefined && { decisor }),
+      ...(telefono !== undefined && { telefono: { numero: telefono.numero, etiqueta: telefono.etiqueta } }),
     }
   } catch { return null }
 }
@@ -69,26 +83,44 @@ export type ResumenDeLlamadas = { contestadas: number; decisores: number; noResp
  *  cuenta. Las de decisor son también contestadas: es un subconjunto, no una tercera bolsa. */
 export function resumenDeLlamadas(guardados: readonly (string | null)[]): ResumenDeLlamadas {
   const r: ResumenDeLlamadas = { contestadas: 0, decisores: 0, noRespondidas: 0 }
-  for (const g of guardados) {
-    const m = leerMetaDeActividad(g)
-    if (m?.tipo !== 'llamada') continue
-    if (m.resultado === 'no_respondida') r.noRespondidas++
-    else if (m.resultado === 'contestada') {
-      r.contestadas++
-      if (m.decisor) r.decisores++
-    }
-  }
+  for (const g of guardados) for (const k of bolsasDeLlamada(g)) r[k]++
   return r
+}
+
+/** En qué números del contador cae una actividad guardada: ninguno, uno o dos (con decisor
+ *  también es contestada). Una sola regla para contar y para filtrar (`objetivosDe`). */
+export function bolsasDeLlamada(guardado: string | null): (keyof ResumenDeLlamadas)[] {
+  const m = leerMetaDeActividad(guardado)
+  if (m?.tipo !== 'llamada') return []
+  if (m.resultado === 'no_respondida') return ['noRespondidas']
+  if (m.resultado === 'contestada') return m.decisor ? ['contestadas', 'decisores'] : ['contestadas']
+  return []
+}
+
+/** Si en esta inmobiliaria ya se habló con quien decide (16/10/2026, por pedido): la primera
+ *  llamada contestada con el decisor, sin importar en qué etapa esté el lead. Sale de las llamadas
+ *  registradas y no de una columna: el dato ya estaba en cada llamada y así no hace falta
+ *  migración. Borrar esa llamada (se cargó por error) lo desmarca, que es lo correcto. */
+export function decisorContactado(
+  comments: readonly Pick<LeadDetalle['comments'][number], 'created_at' | 'long_description' | 'deleted_at'>[],
+): { fecha: string; con: string[] } | null {
+  let primera: { fecha: string; con: string[] } | null = null
+  for (const c of comments) {
+    if (c.deleted_at) continue
+    const m = leerMetaDeActividad(c.long_description)
+    if (m?.tipo !== 'llamada' || m.resultado !== 'contestada' || !m.decisor) continue
+    if (!primera || c.created_at < primera.fecha) primera = { fecha: c.created_at, con: m.con }
+  }
+  return primera
 }
 
 /** Lo que hace falta de la inmobiliaria para dibujar su consejo en la actividad. */
 export type ClienteConConsejo = { id: string; sdr_advice: string | null; created_at: string }
 
 export function lineaDeTiempo(
-  detalle: LeadDetalle, etapas: ReadonlyMap<string, CrmStage>, usuarios: Usuario[],
+  detalle: LeadDetalle, usuarios: Usuario[],
   cliente?: ClienteConConsejo | null,
 ): ItemActividad[] {
-  const etapa = (id: string | null) => (id ? etapas.get(id)?.label ?? '(estado borrado)' : '')
   const consejo = cliente?.sdr_advice?.trim()
   const items: ItemActividad[] = [
     /* El consejo de Claude para el SDR se lee acá y en ningún otro lado (12/10/2026 salió del
@@ -104,7 +136,7 @@ export function lineaDeTiempo(
       return {
         id: c.id, tipo: meta?.tipo === 'llamada' ? 'llamada' as const : 'comentario' as const,
         fecha: c.created_at, texto: c.description, autorId: c.created_by, con: meta?.con ?? [],
-        resultado: meta?.resultado, decisor: meta?.decisor,
+        resultado: meta?.resultado, decisor: meta?.decisor, telefono: meta?.telefono,
       }
     }),
     ...detalle.events.map(e => ({
@@ -117,12 +149,9 @@ export function lineaDeTiempo(
         + (e.note ? ` · ${e.note}` : ''),
       autorId: e.created_by,
     })),
-    // La etapa con la que nace el lead no es algo que pasó: solo se cuentan los cambios.
-    ...detalle.stageHistory.filter(h => h.from_stage_id != null).map(h => ({
-      id: h.id, tipo: 'etapa' as const, fecha: h.changed_at,
-      texto: `Estado: ${etapa(h.from_stage_id)} → ${etapa(h.to_stage_id)}`,
-      autorId: h.changed_by,
-    })),
+    /* Ni los cambios de estado ni las tareas agendadas son actividad (16/10/2026, por pedido):
+       llenaban la lista de «Estado: A → B» y «Se agendó la tarea…». La base los sigue guardando
+       (`crm_stage_history`, `crm_tasks`); el estado se ve en el perfil y las tareas en su panel. */
     ...detalle.assignmentHistory.map(h => ({
       id: h.id, tipo: 'asignacion' as const, fecha: h.changed_at,
       texto: `Responsable: ${nombreDe(usuarios, h.from_user_id)} → ${nombreDe(usuarios, h.to_user_id)}`,
@@ -136,12 +165,6 @@ export function lineaDeTiempo(
       texto: `Se agendó una demo para el ${fmtDayMonth(toIsoDate(new Date(m.starts_at)))} a las ${horaDe(m.starts_at)}`
         + (m.title && m.title !== 'Demo' ? ` · ${m.title}` : ''),
       autorId: m.created_by,
-    })),
-    // La tarea igual: entra cuando se anotó; para cuándo vence va en el texto.
-    ...detalle.tasks.filter(t => t.deleted_at == null).map(t => ({
-      id: t.id, tipo: 'tarea' as const, fecha: t.created_at,
-      texto: `Se agendó la tarea «${t.title}»` + (t.due_date ? ` para el ${fmtDayMonth(t.due_date)}` : ', sin fecha'),
-      autorId: t.created_by,
     })),
   ]
   return items.sort((a, b) => Date.parse(a.fecha) - Date.parse(b.fecha))

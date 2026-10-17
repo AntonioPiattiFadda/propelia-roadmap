@@ -14,8 +14,6 @@ export type LeadListCounters = {
   sinTareasCount: number
   /** Cuántos quedarían eligiendo SOLO esta etapa. */
   stageCount: (stageId: string) => number
-  /** Cuántos descartados aparecerían al prender «incluir descartados». */
-  discardedCount: number
   /** Descartados con la fecha de volver a llamar cumplida, sin su propio filtro. */
   recontactarCount: number
   /** Con teléfono de Google Maps cargado, sin su propio filtro. */
@@ -37,9 +35,6 @@ export function computeLeadListCounters(
   const stageCount = (stageId: string) =>
     filterLeads(leads, { ...filters, stageFilter: new Set([stageId]) }, ctx).length
 
-  const discardedCount = filterLeads(leads, { ...filters, includeDiscarded: true }, ctx)
-    .filter(l => esDescartado(l, ctx.etapas)).length
-
   const recontactarCount = filterLeads(leads, { ...filters, paraRecontactar: true }, ctx).length
 
   return {
@@ -48,7 +43,6 @@ export function computeLeadListCounters(
     conTareasCount,
     sinTareasCount,
     stageCount,
-    discardedCount,
     recontactarCount,
     telMapsCount: filterLeads(leads, filters, ctx, ['telMaps']).filter(tieneTelMaps).length,
     matchingCount: filterLeads(leads, filters, ctx).length,

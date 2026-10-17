@@ -1,9 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Briefcase, Check, ChevronDown, ChevronUp, Mail, NotebookPen, Pencil, Phone, Pin, TriangleAlert, User, UserPlus, X } from 'lucide-react'
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { Briefcase, Building2, Check, ChevronDown, ChevronUp, Mail, NotebookPen, Pencil, Phone, Pin, TriangleAlert, User, UserCheck, UserPlus, X } from 'lucide-react'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
@@ -16,11 +12,13 @@ import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useLeadDetalle } from '../hooks/useLeadDetalle'
 import { useActualizarCliente, useActualizarLead } from '../hooks/useLeadMutaciones'
 import {
-  casilleroParaTelefonoDeGoogle, esTelefonoDeIdealista, inicialesDe,
+  casilleroParaTelefonoDeGoogle, copiasDelTelefonoDeIdealista, esTelefonoDeIdealista, esTelefonoDeOficina, inicialesDe,
  nombreDelLead, type CampoDecisor, type ClientData } from '../lib/clientData'
+import { toIsoDate } from '@/lib/calendarDate'
+import { decisorContactado } from '../lib/actividad'
 import { etapaDelLead } from '../lib/effectiveStage'
 import { ORIGENES_DE_TELEFONO, valorDeOpcion } from '../lib/inmobiliaria'
-import { etiquetaDeMotivo, fmtFechaCompleta, grupoDeMotivo } from '../lib/motivosDescarte'
+import { fmtFechaCompleta } from '../lib/motivosDescarte'
 import type { ClientePatch } from '../service/crm.service'
 import type { CrmLeadRow } from '../types'
 import { ActividadLead, PestanasDelLead, type PestanaDelLead } from './ActividadLead'
@@ -141,19 +139,19 @@ const TELEFONO = cn(
 /* El contenido del dialog, montado por lead (key = id): cambiar de lead con las flechas arranca
    de cero el borrador, igual que cerrar y abrir. Va el encabezado también, porque sus flechas
    y el menú de acciones operan sobre este lead. */
-function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onCerrar, onStartReassign }: {
+function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onStartReassign }: {
   lead: CrmLeadRow
   indice: number
   total: number
   pestana: PestanaDelLead
   setPestana: (p: PestanaDelLead) => void
   onPaso: (delta: -1 | 1) => void
-  onCerrar: () => void
   onStartReassign?: (leadId: string) => void
 }) {
   const { etapasPorId, etapasActivas, descartada } = useCrmCatalogos()
   const { puedeEscribir } = useCarteras()
   const detalleQ = useLeadDetalle(lead.id)
+  const decisor = detalleQ.data ? decisorContactado(detalleQ.data.comments) : null
   /* Descartado se ofrece, pero elegirlo abre el diálogo del motivo en vez de mover el lead (cancelar
      lo deja donde estaba: el select es controlado). Las otras fuera del funnel no se eligen; si el
      lead YA está en una, o en una etapa que se borró, esa opción tiene que estar: si no, el select
@@ -162,7 +160,6 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onCer
   const actual = lead.funnel_stage_id ? etapasPorId.get(lead.funnel_stage_id) : undefined
   const opcionesEtapa = etapasActivas.filter(e =>
     !e.is_out_of_funnel || e.id === lead.funnel_stage_id || e.id === descartada?.id)
-  const grupoDescarte = grupoDeMotivo(lead.discard_reason)
   if (actual && !opcionesEtapa.some(e => e.id === actual.id)) opcionesEtapa.push(actual)
   const actualizarLead = useActualizarLead()
   const actualizarCliente = useActualizarCliente()
@@ -179,15 +176,8 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onCer
   const editando = useRef(false)
   useEffect(() => { if (!editando.current) setBorrador(borradorDe(lead)) }, [lead])
 
-  /* La cruz cierra sin guardar: mientras pregunta, el blur del campo que se estaba escribiendo no
-     manda nada. Si se cancela, el foco vuelve a ese campo y se guarda al salir, como siempre. */
-  const descartando = useRef(false)
-  const focoPrevio = useRef<HTMLElement | null>(null)
-  const [confirmandoCierre, setConfirmandoCierre] = useState(false)
-
   const cambiar = (patch: Partial<Borrador>) => { editando.current = true; setBorrador(b => ({ ...b, ...patch })) }
   const guardar = (campo: keyof Borrador) => {
-    if (descartando.current) return
     editando.current = false
     if (!lead.client) return
     const valor = borrador[campo].trim()
@@ -268,7 +258,8 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onCer
      agencia en su ficha de Google, y casi siempre es a quien se llama primero. Una vez por apertura
      y solo con permiso de escritura; dónde va (y si va) lo decide `casilleroParaTelefonoDeGoogle`,
      que nunca pisa a nadie. El de Idealista NO entra como contacto (12/10/2026, por pedido): vive
-     en «Datos de la inmobiliaria». Los que ya se habían copiado a un contacto quedan ahí. */
+     en «Datos de la inmobiliaria». Los que ya se habían copiado a un alternativo se quitan al abrir
+     (`copiasDelTelefonoDeIdealista`), salvo que alguien ya le haya cargado rol, notas o decisor. */
   const telefonosCargados = useRef(false)
   useEffect(() => {
     const client = lead.client
@@ -280,6 +271,7 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onCer
       actualizarCliente.mutate({ clientId: client.id, patch: { [google]: client.google_maps_phone, [origen]: 'google_maps' } as ClientePatch })
       fijar(google === 'phone' ? 'principal' : google)
     }
+    for (const i of copiasDelTelefonoDeIdealista(client)) quitarPersona(i)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- una vez por lead: el cuerpo va con key = lead
   }, [lead.client, escribe])
 
@@ -387,12 +379,19 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onCer
     const f = camposDe(c)
     const i = OTRAS_PERSONAS.findIndex(p => p.telefono === c)
     const nombres = f.nombres.filter(n => hay(n.campo))
-    const falta = columnasDe(f).some(campo => !hay(campo)) || decisorDe(f.decisor) === null
+    /* El de Google Maps sin nombre es el teléfono de la oficina, no una persona (16/10/2026, por
+       pedido): se rotula así y no pide rol ni decisor. Con un nombre escrito vuelve a ser alguien. */
+    const oficina = nombres.length === 0 && esTelefonoDeOficina(lead.client?.[f.telefono], lead.client)
+    const falta = oficina
+      ? [f.telefono, f.origen, f.notas].some(campo => !hay(campo))
+      : columnasDe(f).some(campo => !hay(campo)) || decisorDe(f.decisor) === null
     return (
       <li key={c} className="flex flex-col gap-0.5 p-1.5">
         <div className="flex items-center gap-1">
-          <Icon icon={User} size="sm" className="ml-1 text-(--fg-faint)" />
-          {nombres.length > 0
+          <Icon icon={oficina ? Building2 : User} size="sm" className="ml-1 text-(--fg-faint)" />
+          {oficina
+            ? <span className="min-w-0 flex-1 px-2 text-[13px] font-medium text-foreground">Teléfono oficina</span>
+            : nombres.length > 0
             ? <div className={cn('grid min-w-0 flex-1', nombres.length > 1 && 'grid-cols-2')}>
                 {nombres.map(n => <Fragment key={n.campo}>{campoPersona(n.campo, n.label, n.label, 'font-medium')}</Fragment>)}
               </div>
@@ -434,7 +433,7 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onCer
             {campoPersona(f.email, 'Email', 'email@inmobiliaria.com', undefined, 'email')}
           </div>
         )}
-        {(hay(f.rol) || decisorDe(f.decisor) !== null) && rolPersona(f.rol, f.decisor)}
+        {!oficina && (hay(f.rol) || decisorDe(f.decisor) !== null) && rolPersona(f.rol, f.decisor)}
         {hay(f.notas) && notasPersona(f.notas)}
       </li>
     )
@@ -450,6 +449,8 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onCer
     </label>
   )
   const enEditor = contactoEnEditor && camposDe(contactoEnEditor)
+  const editorEsOficina = !!enEditor && !enEditor.nombres.some(n => hay(n.campo))
+    && esTelefonoDeOficina(lead.client?.[enEditor.telefono], lead.client)
   const editorContacto = (
     <Dialog open={contactoEnEditor != null} onOpenChange={abierto => { if (!abierto) cerrarEditor() }}>
       <DialogContent className="ui-scale gap-3 sm:max-w-md">
@@ -470,10 +471,12 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onCer
               </div>
             </div>
             {enEditor.email && campoEditor(enEditor.email, 'Email', 'email@inmobiliaria.com', 'email')}
-            <div className="flex items-end gap-2">
-              <div className="min-w-0 flex-1">{campoEditor(enEditor.rol, 'Rol', 'Ej.: dueño, gerente comercial')}</div>
-              <div className="pb-1.5">{decisorPersona(enEditor.decisor)}</div>
-            </div>
+            {!editorEsOficina && (
+              <div className="flex items-end gap-2">
+                <div className="min-w-0 flex-1">{campoEditor(enEditor.rol, 'Rol', 'Ej.: dueño, gerente comercial')}</div>
+                <div className="pb-1.5">{decisorPersona(enEditor.decisor)}</div>
+              </div>
+            )}
             <label className="flex flex-col gap-1">
               <span className={ROTULO}>Notas</span>
               <Textarea rows={2} placeholder="Notas del contacto…" value={borrador[enEditor.notas]}
@@ -546,44 +549,12 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onCer
               <span className="max-md:hidden">Guardar y cerrar</span>
             </button>
           </DialogClose>
-          {/* La cruz es la salida sin guardar. El mousedown no le saca el foco al campo: si lo
-              hiciera, el blur guardaría justo lo que se quiere tirar. */}
-          <button type="button" aria-label="Cerrar sin guardar" title="Cerrar sin guardar"
-            onMouseDown={e => e.preventDefault()}
-            onClick={() => {
-              focoPrevio.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-              descartando.current = true
-              setConfirmandoCierre(true)
-            }}
-            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-(--fg-2) transition-colors hover:bg-(--surface-2) hover:text-foreground">
-            <X size={18} />
-          </button>
+          {/* La cruz de «cerrar sin guardar» se sacó el 16/10/2026, por pedido: la única salida del
+              encabezado es «Guardar y cerrar». */}
         </div>
       </header>
 
       {editorContacto}
-
-      <AlertDialog open={confirmandoCierre} onOpenChange={abierto => { if (!abierto) setConfirmandoCierre(false) }}>
-        <AlertDialogContent
-          onCloseAutoFocus={e => {
-            if (!descartando.current) return
-            // Canceló: vuelve al campo que estaba escribiendo, para que se guarde al salir.
-            e.preventDefault()
-            descartando.current = false
-            focoPrevio.current?.focus()
-          }}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Cerrar sin guardar?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Lo que estés escribiendo y todavía no se guardó se pierde. Para conservarlo, usá «Guardar y cerrar».
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Seguir editando</AlertDialogCancel>
-            <AlertDialogAction onClick={onCerrar}>Cerrar sin guardar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Abajo de lg se apila: el perfil y debajo la actividad, con el compositor al pie de ella.
           Desde lg el perfil es una sola columna (inmobiliaria, tareas, notas) al lado de la actividad. */}
@@ -630,14 +601,15 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onCer
               {descartandoLead && descartada && (
                 <DescartarLeadDialog leadId={lead.id} etapa={descartada} onClose={() => setDescartandoLead(false)} />
               )}
-              {lead.discard_reason && (
-                <div className="mt-1.5 rounded-md bg-(--surface-2) px-2.5 py-1.5 text-[12.5px] text-(--fg-2)">
-                  <p>Motivo del descarte: {etiquetaDeMotivo(lead.discard_reason)}</p>
-                  {grupoDescarte && <p className="text-(--fg-muted)">{grupoDescarte.label}</p>}
-                  {lead.recontact_at && (
-                    <p className="font-medium text-foreground">Volver a llamar desde {fmtFechaCompleta(lead.recontact_at)}</p>
-                  )}
-                </div>
+              {/* Si ya se habló con quien decide, aparte de la etapa (16/10/2026, por pedido): sale de
+                  las llamadas registradas (`decisorContactado`), así que no se edita acá. */}
+              {decisor && (
+                <p className="mt-1.5 flex items-center gap-1.5 self-start rounded-md bg-(--success-soft) px-2.5 py-1 text-[12.5px] font-medium text-(--success)"
+                  title={`Primera llamada con el decisor: ${fmtFechaCompleta(toIsoDate(new Date(decisor.fecha)))}`}>
+                  <UserCheck size={14} aria-hidden />
+                  Decisor contactado{decisor.con.length > 0 && ` · ${decisor.con.join(', ')}`}
+                  <span className="font-normal opacity-80">· {fmtFechaCompleta(toIsoDate(new Date(decisor.fecha)))}</span>
+                </p>
               )}
 
               {/* Acá solo los fijados. Todos, fijados incluidos, viven en la pestaña de la inmobiliaria (`otrosContactos`):
@@ -769,7 +741,7 @@ export function LeadDialog({ lead, indice, total, onPaso, onCerrar, onStartReass
         <DialogTitle className="sr-only">{lead ? nombreDelLead(lead.client) : 'Lead'}</DialogTitle>
         <DialogDescription className="sr-only">Estado, datos, tareas, notas y actividad del lead.</DialogDescription>
         {lead && (
-          <CuerpoDelLead key={lead.id} lead={lead} indice={indice} total={total} pestana={pestana} setPestana={setPestana} onPaso={onPaso} onCerrar={onCerrar} onStartReassign={onStartReassign} />
+          <CuerpoDelLead key={lead.id} lead={lead} indice={indice} total={total} pestana={pestana} setPestana={setPestana} onPaso={onPaso} onStartReassign={onStartReassign} />
         )}
       </DialogContent>
     </Dialog>

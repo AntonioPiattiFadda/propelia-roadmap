@@ -45,6 +45,7 @@ export function inicialesDe(nombre: string): string {
 
 type ClienteConContactos = Pick<CrmClient, 'first_name' | 'last_name' | 'phone'
   | 'alternative_phone_1' | 'alternative_phone_1_note' | 'alternative_phone_2' | 'alternative_phone_2_note'>
+  & Partial<Pick<CrmClient, 'google_maps_phone'>>
 
 /**
  * Con quién se puede hablar en la inmobiliaria: la persona principal y las de los dos teléfonos
@@ -70,11 +71,13 @@ type ClienteConDecisor = ClienteConContactos & Partial<Pick<CrmClient, CampoDeci
 export function contactosConDecisor(client: ClienteConDecisor | null | undefined): ContactoConDecisor[] {
   if (!client) return []
   const persona = [client.first_name, client.last_name].filter(Boolean).join(' ').trim()
+  // El de la oficina sin nombre escrito es un teléfono, no alguien con quien se habla (16/10/2026).
+  const oficina = (tel: string | null) => esTelefonoDeOficina(tel, client)
   const casilleros = [
-    { nombre: persona || (client.phone?.trim() ? 'Contacto principal' : ''), campoDecisor: 'contact_is_decision_maker' as const },
+    { nombre: persona || (client.phone?.trim() && !oficina(client.phone) ? 'Contacto principal' : ''), campoDecisor: 'contact_is_decision_maker' as const },
     ...([['alternative_phone_1', 'alternative_phone_1_note'], ['alternative_phone_2', 'alternative_phone_2_note']] as const)
       .map(([tel, nota]) => ({
-        nombre: client[nota]?.trim() || client[tel]?.trim() || '',
+        nombre: client[nota]?.trim() || (oficina(client[tel]) ? '' : client[tel]?.trim()) || '',
         campoDecisor: `${tel}_is_decision_maker` as const,
       })),
   ]
@@ -101,6 +104,39 @@ export function decisorSabido(contactos: ContactoConDecisor[], elegidos: string[
 export function campoDelNuevoDecisor(contactos: ContactoConDecisor[], elegidos: string[], esDecisor: boolean): CampoDecisor | null {
   if (!esDecisor || elegidos.length !== 1) return null
   return contactos.find(c => c.nombre === elegidos[0])?.campoDecisor ?? null
+}
+
+type CasilleroDeNombre = 'first_name' | 'alternative_phone_1_note' | 'alternative_phone_2_note'
+const DECISOR_DEL_CASILLERO: Record<CasilleroDeNombre, CampoDecisor> = {
+  first_name: 'contact_is_decision_maker',
+  alternative_phone_1_note: 'alternative_phone_1_is_decision_maker',
+  alternative_phone_2_note: 'alternative_phone_2_is_decision_maker',
+}
+
+/**
+ * Las personas escritas a mano al registrar una actividad («Hablaste con») que todavía no son
+ * contactos se cargan solas en el perfil (16/10/2026, por pedido): el principal si está vacío del
+ * todo (sin nombre ni teléfono), si no el primer alternativo libre. Sin teléfono: el número al que
+ * se llamó puede ser de otro. Lo que no entra en los tres casilleros queda en `sinLugar` (la
+ * actividad lo guarda igual). `decisor` es el nuevo que quedó como decisor, si lo hay.
+ */
+export function patchDeContactosNuevos(
+  client: ClienteConAlternativos & Pick<CrmClient, 'first_name' | 'last_name'>,
+  nombres: string[], decisor: string | null,
+): { patch: Partial<Record<CasilleroDeNombre, string> & Record<CampoDecisor, boolean>>; sinLugar: string[] } {
+  const libres: CasilleroDeNombre[] = []
+  if (!client.first_name?.trim() && !client.last_name?.trim() && !client.phone?.trim()) libres.push('first_name')
+  if (!client.alternative_phone_1?.trim() && !client.alternative_phone_1_note?.trim()) libres.push('alternative_phone_1_note')
+  if (!client.alternative_phone_2?.trim() && !client.alternative_phone_2_note?.trim()) libres.push('alternative_phone_2_note')
+  const patch: ReturnType<typeof patchDeContactosNuevos>['patch'] = {}
+  const sinLugar: string[] = []
+  for (const nombre of nombres) {
+    const casillero = libres.shift()
+    if (!casillero) { sinLugar.push(nombre); continue }
+    patch[casillero] = nombre
+    if (nombre === decisor) patch[DECISOR_DEL_CASILLERO[casillero]] = true
+  }
+  return { patch, sinLugar }
 }
 
 type ClienteConGoogle = Pick<CrmClient, 'phone' | 'google_maps_phone'
@@ -133,10 +169,61 @@ function alternativoLibre(client: ClienteConAlternativos): CasilleroDeTelefono |
   return null
 }
 
+/** Si el número es el de Google Maps del cliente (por dígitos): es el teléfono de la oficina, que
+ *  se muestra así y no como una persona con rol (16/10/2026, por pedido). */
+export function esTelefonoDeOficina(telefono: string | null | undefined, client: Partial<Pick<CrmClient, 'google_maps_phone'>> | null | undefined): boolean {
+  const google = soloDigitos(client?.google_maps_phone)
+  return !!google && soloDigitos(telefono) === google
+}
+
+export const ETIQUETA_OFICINA = 'Oficina'
+export type TelefonoDelCliente = { numero: string; etiqueta: string }
+
+/**
+ * A qué teléfonos se puede llamar, para preguntar en la llamada a cuál se llamó: el número que se
+ * marca y la persona que atiende no siempre coinciden (16/10/2026, por pedido). Cada contacto con
+ * su número, la oficina como «Oficina» y el de Google Maps al final si no está en ningún contacto.
+ * Sin repetir por dígitos.
+ */
+export function telefonosDelCliente(client: ClienteConContactos | null | undefined): TelefonoDelCliente[] {
+  if (!client) return []
+  const persona = [client.first_name, client.last_name].filter(Boolean).join(' ').trim()
+  const casilleros = [
+    { numero: client.phone, nombre: persona || 'Contacto principal' },
+    { numero: client.alternative_phone_1, nombre: client.alternative_phone_1_note?.trim() },
+    { numero: client.alternative_phone_2, nombre: client.alternative_phone_2_note?.trim() },
+    { numero: client.google_maps_phone, nombre: ETIQUETA_OFICINA },
+  ]
+  const vistos = new Set<string>()
+  return casilleros.flatMap(({ numero, nombre }) => {
+    const n = numero?.trim()
+    if (!n || vistos.has(soloDigitos(n))) return []
+    vistos.add(soloDigitos(n))
+    return [{ numero: n, etiqueta: esTelefonoDeOficina(n, client) ? ETIQUETA_OFICINA : nombre || n }]
+  })
+}
+
 /** Si el número es el de Idealista del cliente (por dígitos): el contacto lleva el aviso escrito. */
 export function esTelefonoDeIdealista(telefono: string | null | undefined, client: Pick<CrmClient, 'idealista_phone'> | null | undefined): boolean {
   const idealista = soloDigitos(client?.idealista_phone)
   return !!idealista && soloDigitos(telefono) === idealista
+}
+
+type ClienteConCopias = Pick<CrmClient, 'idealista_phone' | 'alternative_phone_1' | 'alternative_phone_2'>
+  & Partial<Pick<CrmClient, `alternative_phone_${1 | 2}_${'role' | 'notes' | 'is_decision_maker'}`>>
+
+/**
+ * Los alternativos (0 o 1) que son una copia del teléfono de Idealista, de cuando el perfil lo
+ * cargaba como contacto: se quitan, que ese número vive en «Datos de la inmobiliaria». Uno con
+ * rol, notas o decisor ya lo trabajó alguien y se deja (lleva el aviso escrito).
+ */
+export function copiasDelTelefonoDeIdealista(client: ClienteConCopias | null | undefined): (0 | 1)[] {
+  if (!client) return []
+  return ([1, 2] as const).flatMap(n => {
+    const trabajado = client[`alternative_phone_${n}_role`]?.trim() || client[`alternative_phone_${n}_notes`]?.trim()
+      || client[`alternative_phone_${n}_is_decision_maker`] != null
+    return esTelefonoDeIdealista(client[`alternative_phone_${n}`], client) && !trabajado ? [(n - 1) as 0 | 1] : []
+  })
 }
 
 /**

@@ -10,7 +10,7 @@ describe('filtrosDesdeUrl / escribirFiltros', () => {
   it('ida y vuelta', () => {
     const p = escribirFiltros(new URLSearchParams(), {
       q: 'inmo', stageFilter: new Set(['b', 'a']),
-      overdueOnly: true, conTareas: true, includeDiscarded: true,
+      overdueOnly: true, conTareas: true,
     })
     const f = filtrosDesdeUrl(p)
     expect(p.get('tareas')).toBe('1')
@@ -18,7 +18,6 @@ describe('filtrosDesdeUrl / escribirFiltros', () => {
     expect([...f.stageFilter]).toEqual(['a', 'b'])
     expect(f.overdueOnly).toBe(true)
     expect(f.conTareas).toBe(true)
-    expect(f.includeDiscarded).toBe(true)
   })
   it('apagar un filtro borra el parámetro en vez de dejarlo vacío', () => {
     const p = escribirFiltros(params('/crm?overdue=1&stages=a&tareas=1'), { overdueOnly: false, stageFilter: new Set(), conTareas: false })
@@ -49,6 +48,12 @@ describe('filtrosDesdeUrl / escribirFiltros', () => {
     expect(filtrosDesdeUrl(p).ordenPorEstado).toBe(true)
     expect(escribirFiltros(p, { ordenPorEstado: false }).has('orden')).toBe(false)
     expect(deleteLeadFilterParams(params('/crm?orden=estado&owners=u1')).toString()).toBe('owners=u1')
+  })
+  it('prender «Tareas» vuelve al orden por vencimiento: saca el orden por estado', () => {
+    expect(escribirFiltros(params('/crm?orden=estado'), { conTareas: true }).has('orden')).toBe(false)
+    // Prendido después, con «Tareas» ya puesto, el orden por estado se respeta.
+    expect(escribirFiltros(params('/crm?tareas=1'), { ordenPorEstado: true }).get('orden')).toBe('estado')
+    expect(escribirFiltros(params('/crm?orden=estado'), { conTareas: false }).get('orden')).toBe('estado')
   })
   it('un enlace viejo con ?gestion= o ?excluded= (prioridades) se ignora sin romper nada', () => {
     const f = filtrosDesdeUrl(params('/crm?gestion=gestionado,pospuesto&excluded=x&overdue=1'))
@@ -143,5 +148,18 @@ describe('deleteLeadFilterParams y formatFilterList (copiados)', () => {
   it('lista en castellano', () => {
     expect(formatFilterList(['Etapa'])).toBe('Etapa')
     expect(formatFilterList(['Búsqueda', 'Etapa', 'Tareas'])).toBe('Búsqueda, Etapa y Tareas')
+  })
+})
+
+describe('?objetivo=', () => {
+  it('ida y vuelta, y apagarlo borra el parámetro', () => {
+    const p = escribirFiltros(new URLSearchParams(), { objetivo: 'decisores' })
+    expect(p.get('objetivo')).toBe('decisores')
+    expect(filtrosDesdeUrl(p).objetivo).toBe('decisores')
+    expect(escribirFiltros(p, { objetivo: null }).has('objetivo')).toBe(false)
+  })
+
+  it('un valor desconocido es sin filtro', () => {
+    expect(filtrosDesdeUrl(new URLSearchParams('objetivo=cualquiera')).objetivo).toBeNull()
   })
 })

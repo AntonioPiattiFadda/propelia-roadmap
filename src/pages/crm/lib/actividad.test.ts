@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { CrmMeeting, CrmTask, CrmStage, LeadDetalle, Usuario } from '../types'
+import type { CrmMeeting, CrmTask, LeadDetalle, Usuario } from '../types'
 import {
-  agruparPorDia, armarMetaDeActividad, horaDe, leerMetaDeActividad, lineaDeTiempo, resumenDeLlamadas,
+  agruparPorDia, armarMetaDeActividad, decisorContactado, horaDe, leerMetaDeActividad, lineaDeTiempo, resumenDeLlamadas,
   type ItemActividad, type MetaDeActividad,
 } from './actividad'
 
 const vacio: LeadDetalle = { tasks: [], comments: [], events: [], meetings: [], stageHistory: [], assignmentHistory: [] }
-const etapas = new Map([
-  ['n', { id: 'n', label: 'Nuevo' } as CrmStage],
-  ['c', { id: 'c', label: 'Contactado' } as CrmStage],
-])
 const usuarios = [{ id: 'a', nombre: 'Antonio' }, { id: 'l', nombre: 'Lorenzo' }] as Usuario[]
 
 describe('lineaDeTiempo', () => {
@@ -25,22 +21,20 @@ describe('lineaDeTiempo', () => {
     ],
     stageHistory: [
       { id: 's1', lead_id: 'x', from_stage_id: null, to_stage_id: 'n', changed_by: null, changed_at: '2026-09-30T09:00:00Z' },
-      { id: 's2', lead_id: 'x', from_stage_id: 'n', to_stage_id: 'borrada', changed_by: 'a', changed_at: '2026-09-30T09:30:00Z' },
+      // Vino con la nota c1: mismo autor, segundos después.
+      { id: 's2', lead_id: 'x', from_stage_id: 'n', to_stage_id: 'borrada', changed_by: 'a', changed_at: '2026-09-30T10:00:20Z' },
     ],
   }
-  const items = lineaDeTiempo(detalle, etapas, usuarios)
+  const items = lineaDeTiempo(detalle, usuarios)
 
   it('ordena de lo más viejo a lo más nuevo (el chat se lee de arriba abajo)', () => {
-    expect(items.map(i => i.id)).toEqual(['s2', 'c1', 'e1', 'c2', 'e2'])
+    expect(items.map(i => i.id)).toEqual(['c1', 'e1', 'c2', 'e2'])
   })
-  it('la etapa con la que nace el lead no es actividad: solo los cambios de estado', () => {
-    expect(items.find(i => i.id === 's1')).toBeUndefined()
+  it('los cambios de estado no son actividad, ni siquiera los que vinieron con una nota', () => {
+    expect(items.some(i => i.id === 's1' || i.id === 's2')).toBe(false)
   })
   it('las gestiones se fechan cuando se hicieron, no a dónde se pospusieron', () => {
     expect(items.find(i => i.id === 'e2')).toMatchObject({ tipo: 'pospuesto', fecha: '2026-09-30T13:00:00Z' })
-  })
-  it('una etapa que ya no está en el catálogo se nombra igual', () => {
-    expect(items.find(i => i.id === 's2')?.texto).toBe('Estado: Nuevo → (estado borrado)')
   })
   it('comentarios SYSTEM como sistema', () => {
     expect(items.find(i => i.id === 'c2')?.tipo).toBe('sistema')
@@ -59,7 +53,7 @@ describe('lineaDeTiempo · reuniones', () => {
   })
   const items = lineaDeTiempo({ ...vacio, meetings: [
     reunion('m1'), reunion('m2', { title: null }), reunion('m3', { deleted_at: '2026-10-02T00:00:00Z' }), reunion('m4', { title: 'Con el dueño' }),
-  ] }, etapas, usuarios)
+  ] }, usuarios)
 
   it('se fechan cuando se agendaron, no cuando son', () => {
     expect(items.find(i => i.id === 'm1')).toMatchObject({ tipo: 'reunion', fecha: '2026-10-01T10:00:00Z', autorId: 'a' })
@@ -80,17 +74,8 @@ describe('lineaDeTiempo · tareas', () => {
     planned_for: null, recurrence: null, created_by: 'a', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-01T10:00:00Z',
     deleted_at: null, ...extra,
   })
-  const items = lineaDeTiempo({ ...vacio, tasks: [tarea('t1'), tarea('t2', { due_date: null }), tarea('t3', { deleted_at: '2026-10-02T00:00:00Z' })] }, etapas, usuarios)
-
-  it('se fechan cuando se agendaron, no cuando vencen', () => {
-    expect(items.find(i => i.id === 't1')).toMatchObject({ tipo: 'tarea', fecha: '2026-10-01T10:00:00Z', autorId: 'a' })
-  })
-  it('explican que se agendó una tarea, cuál y para cuándo', () => {
-    expect(items.find(i => i.id === 't1')?.texto).toBe('Se agendó la tarea «Llamar al dueño» para el 07/10')
-    expect(items.find(i => i.id === 't2')?.texto).toBe('Se agendó la tarea «Llamar al dueño», sin fecha')
-  })
-  it('las borradas no aparecen', () => {
-    expect(items.some(i => i.id === 't3')).toBe(false)
+  it('agendar una tarea no es actividad: viven en el panel de tareas', () => {
+    expect(lineaDeTiempo({ ...vacio, tasks: [tarea('t1'), tarea('t2', { due_date: null })] }, usuarios)).toEqual([])
   })
 })
 
@@ -99,14 +84,14 @@ describe('lineaDeTiempo · consejo para el SDR', () => {
   const llamada = { id: 'c1', lead_id: 'x', description: 'hola', long_description: null, comment_type: 'MANUAL' as const, created_by: 'a', created_at: '2026-10-02T10:00:00Z', deleted_at: null }
 
   it('entra como actividad, fechado cuando llegó la inmobiliaria y sin autor', () => {
-    const items = lineaDeTiempo({ ...vacio, comments: [llamada] }, etapas, usuarios, cliente('  Preguntá por Inmovilla.  '))
+    const items = lineaDeTiempo({ ...vacio, comments: [llamada] }, usuarios, cliente('  Preguntá por Inmovilla.  '))
     expect(items.map(i => i.id)).toEqual(['consejo-cli', 'c1'])
     expect(items[0]).toMatchObject({ tipo: 'consejo', fecha: '2026-10-01T08:00:00Z', texto: 'Preguntá por Inmovilla.', autorId: null })
   })
   it('sin consejo escrito, o sin cliente, no hay renglón', () => {
-    expect(lineaDeTiempo(vacio, etapas, usuarios, cliente('   '))).toEqual([])
-    expect(lineaDeTiempo(vacio, etapas, usuarios, cliente(null))).toEqual([])
-    expect(lineaDeTiempo(vacio, etapas, usuarios, null)).toEqual([])
+    expect(lineaDeTiempo(vacio, usuarios, cliente('   '))).toEqual([])
+    expect(lineaDeTiempo(vacio, usuarios, cliente(null))).toEqual([])
+    expect(lineaDeTiempo(vacio, usuarios, null)).toEqual([])
   })
 })
 
@@ -134,6 +119,15 @@ describe('metaDeActividad', () => {
     const nadie = { tipo: 'llamada' as const, con: [], resultado: 'no_respondida' as const }
     expect(leerMetaDeActividad(armarMetaDeActividad(nadie))).toEqual(nadie)
   })
+  it('ida y vuelta: a qué teléfono se llamó, aparte de con quién se habló', () => {
+    const llamada = { tipo: 'llamada' as const, con: ['Laura'], resultado: 'contestada' as const, decisor: true,
+      telefono: { numero: '+34 936 17 35 48', etiqueta: 'Oficina' } }
+    expect(leerMetaDeActividad(armarMetaDeActividad(llamada))).toEqual(llamada)
+  })
+  it('un teléfono con otra forma no es meta', () => {
+    expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"telefono":"+34 600"}')).toBeNull()
+    expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"telefono":{"numero":3,"etiqueta":"x"}}')).toBeNull()
+  })
   it('un resultado o un decisor con otra forma no es meta', () => {
     expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"resultado":"quizas"}')).toBeNull()
     expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"decisor":"si"}')).toBeNull()
@@ -157,6 +151,31 @@ describe('resumenDeLlamadas', () => {
   })
 })
 
+describe('decisorContactado', () => {
+  const comentario = (id: string, created_at: string, long_description: string | null, deleted_at: string | null = null) => ({
+    id, lead_id: 'x', description: '', long_description, comment_type: 'MANUAL' as const,
+    created_by: 'a', created_at, deleted_at,
+  })
+  const conDecisor = (con: string[]) => armarMetaDeActividad({ tipo: 'llamada', con, resultado: 'contestada', decisor: true })
+
+  it('la primera llamada contestada con el decisor: cuándo y con quién', () => {
+    expect(decisorContactado([
+      comentario('k2', '2026-10-05T10:00:00Z', conDecisor(['Marc'])),
+      comentario('k1', '2026-10-02T10:00:00Z', conDecisor(['Laura'])),
+    ])).toEqual({ fecha: '2026-10-02T10:00:00Z', con: ['Laura'] })
+  })
+  it('sin llamadas con el decisor no está contactado', () => {
+    expect(decisorContactado([
+      comentario('k1', '2026-10-02T10:00:00Z', armarMetaDeActividad({ tipo: 'llamada', con: ['Laura'], resultado: 'contestada', decisor: false })),
+      comentario('k2', '2026-10-02T11:00:00Z', armarMetaDeActividad({ tipo: 'llamada', con: [], resultado: 'no_respondida' })),
+      comentario('k3', '2026-10-02T12:00:00Z', null),
+    ])).toBeNull()
+  })
+  it('una llamada borrada no cuenta', () => {
+    expect(decisorContactado([comentario('k1', '2026-10-02T10:00:00Z', conDecisor(['Laura']), '2026-10-03T10:00:00Z')])).toBeNull()
+  })
+})
+
 describe('lineaDeTiempo · llamadas y con quién', () => {
   const comentario = (id: string, long_description: string | null) => ({
     id, lead_id: 'x', description: 'no contestó', long_description, comment_type: 'MANUAL' as const,
@@ -166,7 +185,7 @@ describe('lineaDeTiempo · llamadas y con quién', () => {
     comentario('k1', armarMetaDeActividad({ tipo: 'llamada', con: ['Laura'] })),
     comentario('k2', armarMetaDeActividad({ tipo: 'nota', con: ['Marc'] })),
     comentario('k3', null),
-  ] }, etapas, usuarios)
+  ] }, usuarios)
 
   it('una llamada se lee como llamada, con su gente', () => {
     expect(items.find(i => i.id === 'k1')).toMatchObject({ tipo: 'llamada', texto: 'no contestó', con: ['Laura'] })

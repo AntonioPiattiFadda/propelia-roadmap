@@ -5,8 +5,9 @@ import type { Tables } from '@/types/database.types'
    sin él. */
 export type CrmLead = Tables<'crm_leads'>
 export type CrmClient = Tables<'crm_clients'>
-/** El lead como lo trae la lista: con el cliente embebido (`client:crm_clients(*)`). */
-export type CrmLeadRow = CrmLead & { client: CrmClient | null }
+/** El lead como lo trae la lista: con el cliente embebido (`client:crm_clients(*)`) y la fecha del
+ *  último registro a mano de su Actividad (ver `getLeads`). Opcional: un optimista no la conoce. */
+export type CrmLeadRow = CrmLead & { client: CrmClient | null; ultima_actividad_at?: string | null }
 export type CrmStage = Tables<'crm_funnel_stages'>
 export type CrmChannel = Tables<'crm_channels'>
 export type CrmTask = Tables<'crm_tasks'>
