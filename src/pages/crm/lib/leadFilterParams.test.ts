@@ -3,6 +3,7 @@ import {
   deleteLeadFilterParams, enlaceAlCrm, escribirFiltros, escribirLeadAbierto, escribirVista, filtrosDesdeUrl, formatFilterList,
   LEAD_FILTER_PARAMS_WITH_QUERY, OWNERS_PARAM, vistaDesdeUrl,
 } from './leadFilterParams'
+import { filtrosVacios } from './leadFilters'
 
 const params = (url: string) => new URL(url, 'http://x').searchParams
 
@@ -35,12 +36,8 @@ describe('filtrosDesdeUrl / escribirFiltros', () => {
     expect(escribirFiltros(p, { paraRecontactar: false }).has('recontactar')).toBe(false)
     expect(deleteLeadFilterParams(params('/crm?recontactar=1&owners=u1')).toString()).toBe('owners=u1')
   })
-  it('con teléfono de Google Maps: ?telMaps=1, y apagado se borra; «Limpiar filtros» lo saca', () => {
-    const p = escribirFiltros(new URLSearchParams(), { conTelMaps: true })
-    expect(p.get('telMaps')).toBe('1')
-    expect(filtrosDesdeUrl(p).conTelMaps).toBe(true)
-    expect(escribirFiltros(p, { conTelMaps: false }).has('telMaps')).toBe(false)
-    expect(deleteLeadFilterParams(params('/crm?telMaps=1&owners=u1')).toString()).toBe('owners=u1')
+  it('un ?telMaps=1 viejo se ignora: ese filtro ya no existe', () => {
+    expect(filtrosDesdeUrl(params('/crm?telMaps=1'))).toEqual(filtrosVacios())
   })
   it('orden por estado: ?orden=estado, y apagado se borra; «Limpiar filtros» lo saca', () => {
     const p = escribirFiltros(new URLSearchParams(), { ordenPorEstado: true })
@@ -137,6 +134,9 @@ describe('enlaceAlCrm', () => {
   })
   it('sin nada es /crm pelado', () => {
     expect(enlaceAlCrm({})).toBe('/crm')
+  })
+  it('con un lead lo abre (la alarma de una tarea)', () => {
+    expect(params(enlaceAlCrm({ lead: 'l9' })).get('lead')).toBe('l9')
   })
 })
 

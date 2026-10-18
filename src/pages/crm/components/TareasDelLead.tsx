@@ -3,10 +3,13 @@ import { CalendarPlus, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TaskDueDatePicker } from '@/components/tasks/TaskDueDatePicker'
 import { fmtDueLabel, localTodayIso } from '@/lib/calendarDate'
 import { cn } from '@/lib/utils'
+import { pedirPermisoDeAvisos } from '../hooks/useAlarmasDeTareas'
 import { useMutacionDelDetalle } from '../hooks/useLeadMutaciones'
+import { horaCorta, horaEnVenezuela, opcionesConLaEscrita, rotuloConHora, textoVenezuela } from '../lib/alarmas'
 import { opcionesDeVencimiento } from '../lib/vencimientos'
 import { actualizarTarea, crearTarea } from '../service/crm.service'
 import type { CrmTask, LeadDetalle } from '../types'
@@ -18,17 +21,22 @@ import { VentanaFlotante } from './VentanaFlotante'
    vencimiento, que deja lo vencido arriba y lo que no tiene fecha al final. La fecha en rojo
    dice cuál ya pasó. */
 
-/** Cuándo vence: la fecha es la mitad de por qué la tarea importa. */
+/** Cuándo vence: la fecha es la mitad de por qué la tarea importa. Con hora, «Hoy 10:30». */
 function rotuloVencimiento(t: CrmTask, today: string) {
   if (t.due_date == null) return 'Sin fecha'
-  if (t.due_date < today) return `Vencía ${fmtDueLabel(t.due_date, today)}`
-  return fmtDueLabel(t.due_date, today)
+  const dia = rotuloConHora(fmtDueLabel(t.due_date, today), t.due_date, t.due_time)
+  return t.due_date < today ? `Vencía ${dia}` : dia
 }
 
 /* Sin fecha al final: no tienen con qué ordenarse contra las que sí la tienen, y ponerlas
-   primero las haría parecer más urgentes que una de mañana. */
+   primero las haría parecer más urgentes que una de mañana. Dentro del mismo día, las que tienen
+   hora en orden de hora y las de todo el día después. */
 const porVencimiento = (a: CrmTask, b: CrmTask) =>
-  (a.due_date ?? '9999-12-31').localeCompare(b.due_date ?? '9999-12-31')
+  `${a.due_date ?? '9999-12-31'} ${horaCorta(a.due_time) ?? '99'}`
+    .localeCompare(`${b.due_date ?? '9999-12-31'} ${horaCorta(b.due_time) ?? '99'}`)
+
+/* El Select de Radix no acepta un valor vacío: «Sin hora» necesita uno propio. */
+const SIN_HORA = 'sin-hora'
 
 const CHIP = 'inline-flex shrink-0 cursor-pointer items-center rounded-full transition-colors'
 const CHIP_ON = 'font-semibold text-(--brand-soft-fg) bg-(--brand-soft) [border:1px_solid_var(--brand-100)]'
@@ -71,20 +79,33 @@ export function ChipsDeVencimiento({ value, onChange, compacto = false }: {
 function NewTaskSheet({ open, onOpenChange, onCreate, isPending }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCreate: (title: string, dueDate: string | null) => void
+  onCreate: (title: string, dueDate: string | null, dueTime: string | null) => void
   isPending: boolean
 }) {
   const today = localTodayIso()
   const [title, setTitle] = useState('')
   const [dueDate, setDueDate] = useState<string | null>(today)
-  const reset = () => { setTitle(''); setDueDate(today) }
+  // La hora es opcional (17/10/2026, por pedido): vacía es la tarea de todo el día de siempre.
+  // Con hora, suena una alarma 5 minutos antes (`useAlarmasDeTareas`).
+  const [dueTime, setDueTime] = useState('')
+  const reset = () => { setTitle(''); setDueDate(today); setDueTime('') }
   const cerrar = (next: boolean) => { onOpenChange(next); if (!next) reset() }
   const listo = title.trim() !== '' && !isPending
+  // Sin día la hora no significa nada: el campo se apaga y lo escrito no se manda.
+  const hora = dueDate != null && dueTime !== '' ? dueTime : null
+  const veDeLaElegida = hora ? horaEnVenezuela(dueDate, hora) : null
 
   return (
     <VentanaFlotante open={open} onOpenChange={cerrar} titulo="Nueva tarea" descripcion="Qué hay que hacer y para cuándo.">
       <form className="flex flex-col gap-4 p-4"
-        onSubmit={e => { e.preventDefault(); if (!listo) return; onCreate(title.trim(), dueDate); cerrar(false) }}>
+        onSubmit={e => {
+          e.preventDefault()
+          if (!listo) return
+          // Es el gesto del usuario: fuera de un clic el navegador no deja pedir el permiso.
+          if (hora) pedirPermisoDeAvisos()
+          onCreate(title.trim(), dueDate, hora)
+          cerrar(false)
+        }}>
         <Input autoFocus aria-label="Qué hay que hacer" placeholder="Qué hay que hacer…" value={title}
           onChange={e => setTitle(e.target.value)} className="h-10 text-[14px] md:text-[14px]" />
         <div className="flex flex-col gap-2">
@@ -92,6 +113,39 @@ function NewTaskSheet({ open, onOpenChange, onCreate, isPending }: {
           <div className="flex flex-wrap gap-1.5">
             <ChipsDeVencimiento value={dueDate} onChange={setDueDate} compacto />
           </div>
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-[12px] font-medium text-(--fg-2)">
+            Hora de España <span className="font-normal text-(--fg-muted)">(opcional, te avisa 5 minutos antes)</span>
+          </span>
+          {/* Un desplegable de 15 en 15 como el de Google Calendar (17/10/2026, por pedido), con la
+              hora de Venezuela al lado de cada opción. La hora que se guarda es la de España. */}
+          {/* También a mano (17/10/2026, por pedido): una hora que no esté en la lista, como 10:10. La
+              escrita entra al desplegable como una opción más, así se ve elegida ahí también. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={dueDate == null || dueTime === '' ? SIN_HORA : dueTime} disabled={dueDate == null}
+              onValueChange={v => setDueTime(v === SIN_HORA ? '' : v)}>
+              <SelectTrigger aria-label="Hora de España" className="h-9 w-64 text-base md:text-[13.5px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                <SelectItem value={SIN_HORA}>Sin hora</SelectItem>
+                {dueDate != null && opcionesConLaEscrita(dueDate, dueTime).map(o => (
+                  <SelectItem key={o.value} value={o.value}>
+                    <span className="tabular-nums">{o.value}</span>
+                    <span className="tabular-nums text-(--fg-muted)">· {textoVenezuela({ hora: o.venezuela, dias: o.dias })}</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {/* 16px en el teléfono: abajo de eso el navegador hace zoom solo al tocar el campo. */}
+            <Input type="time" aria-label="Escribir la hora de España a mano" title="Escribir la hora a mano"
+              value={dueDate == null ? '' : dueTime} disabled={dueDate == null}
+              onChange={e => setDueTime(e.target.value)} className="h-9 w-32 text-base md:text-[13.5px]" />
+          </div>
+          {veDeLaElegida && (
+            <span className="text-[12px] text-(--fg-muted)">En Venezuela: {textoVenezuela(veDeLaElegida)}</span>
+          )}
         </div>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => cerrar(false)}>Cancelar</Button>
@@ -151,8 +205,9 @@ export function TareasDelLead({ leadId, responsableId, puedeEscribir, tareas, ca
 }) {
   const today = localTodayIso()
 
-  const agregar = useMutacionDelDetalle(leadId, (v: { title: string; dueDate: string | null }) =>
-    crearTarea({ lead_id: leadId, title: v.title, due_date: v.dueDate, assigned_to: responsableId }), { exito: 'Tarea creada' })
+  const agregar = useMutacionDelDetalle(leadId, (v: { title: string; dueDate: string | null; dueTime: string | null }) =>
+    crearTarea({ lead_id: leadId, title: v.title, due_date: v.dueDate, due_time: v.dueTime, assigned_to: responsableId }),
+  { exito: 'Tarea creada' })
   const alternar = useMutacionDelDetalle(leadId,
     (t: CrmTask) => actualizarTarea(t.id, { completed: !t.completed, completed_at: t.completed ? null : new Date().toISOString() }),
     { optimista: (d: LeadDetalle, t: CrmTask) => ({ ...d, tasks: d.tasks.map(x => x.id === t.id ? { ...x, completed: !t.completed } : x) }) },
@@ -199,7 +254,7 @@ export function TareasDelLead({ leadId, responsableId, puedeEscribir, tareas, ca
       )}
 
       <NewTaskSheet open={creando} onOpenChange={onCreando} isPending={agregar.isPending}
-        onCreate={(title, dueDate) => agregar.mutate({ title, dueDate })} />
+        onCreate={(title, dueDate, dueTime) => agregar.mutate({ title, dueDate, dueTime })} />
     </div>
   )
 }

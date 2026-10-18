@@ -286,6 +286,11 @@ create table if not exists public.crm_funnel_stages (
   updated_at                 timestamptz not null default now(),
   deleted_at                 timestamptz
 );
+-- Cómo se gestiona la etapa: `sin_contactar` o `por_tarea` (null = sin clasificar). Lo elige un
+-- SUPERADMIN en la configuración del funnel; los valores son los de `GESTIONES_DE_ETAPA` del front.
+-- Migración `20261017181741_crm_funnel_stages_management_type`.
+alter table public.crm_funnel_stages add column if not exists management_type text
+  check (management_type is null or management_type in ('sin_contactar', 'por_tarea'));
 
 create table if not exists public.crm_channels (
   id           uuid primary key default gen_random_uuid(),
@@ -355,6 +360,9 @@ alter table public.crm_clients add column if not exists alternative_phone_2_note
 alter table public.crm_clients add column if not exists contact_is_decision_maker             boolean;
 alter table public.crm_clients add column if not exists alternative_phone_1_is_decision_maker boolean;
 alter table public.crm_clients add column if not exists alternative_phone_2_is_decision_maker boolean;
+-- El email de cada contacto alternativo (el principal usa `email`).
+alter table public.crm_clients add column if not exists alternative_phone_1_email text;
+alter table public.crm_clients add column if not exists alternative_phone_2_email text;
 -- Lo que trae la importación desde Excel. Sin `unique` a
 -- propósito: el Excel puede repetir datos y deduplicar es cosa de quien prepara la importación.
 -- El lote del que salió (ej.: `BCN-S01`) y el día en que se activó para el SDR.
@@ -450,6 +458,12 @@ create table if not exists public.crm_tasks (
 );
 create index if not exists crm_tasks_assigned_pending_idx on public.crm_tasks (assigned_to, completed, due_date);
 create index if not exists crm_tasks_lead_idx on public.crm_tasks (lead_id) where deleted_at is null;
+-- La hora de la tarea, opcional: hora de reloj local de quien la agendó, sin zona, como `due_date`
+-- es un día sin zona. Null = sin hora (todo el día). Solo significa algo con `due_date`; con hora,
+-- el front avisa 5 minutos antes mientras el CRM esté abierto. `add column` y no en el `create
+-- table` para que alcance con correr esto sobre una base que ya tiene la tabla. Migración
+-- `20261017130259_crm_tasks_due_time`.
+alter table public.crm_tasks add column if not exists due_time time;
 
 create table if not exists public.crm_comments (
   id               uuid primary key default gen_random_uuid(),

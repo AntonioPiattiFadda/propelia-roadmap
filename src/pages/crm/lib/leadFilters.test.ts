@@ -5,7 +5,7 @@ import { filterLeads, filtrosVacios, leadsDeCarteras, type LeadFilterContext, ty
 const NOW = new Date(2026, 8, 30, 12).getTime()
 const etapa = (id: string, over: Partial<CrmStage> = {}): CrmStage => ({
   id, label: id, value: id.toUpperCase(), position: 1, priority_id: null, is_out_of_funnel: false,
-  allow_delete: true, allow_reorder: true, allow_rename: true, management_tolerance_hours: 24,
+  allow_delete: true, allow_reorder: true, allow_rename: true, management_tolerance_hours: 24, management_type: null,
   created_at: '', updated_at: '', deleted_at: null, ...over,
 })
 const ETAPAS = new Map<string, CrmStage>([
@@ -21,6 +21,7 @@ const cliente = (over: Partial<CrmClient> = {}): CrmClient => ({
   website: null, idealista_url: null, city: null, neighborhood: null, office_address: null, agents_count: null, current_crm: null, current_crm_id: null, google_maps_url: null, sdr_advice: null, idealista_years: null, idealista_listings: null,
   contact_role: null, contact_notes: null, alternative_phone_1_role: null, alternative_phone_1_notes: null,
   alternative_phone_2_role: null, alternative_phone_2_notes: null,
+  alternative_phone_1_email: null, alternative_phone_2_email: null,
   contact_is_decision_maker: null, alternative_phone_1_is_decision_maker: null, alternative_phone_2_is_decision_maker: null,
   import_batch: null, batch_activated_on: null, selection_reason: null, phone_source: null,
   alternative_phone_1_source: null, alternative_phone_2_source: null, google_maps_phone: null, idealista_phone: null,
@@ -91,22 +92,6 @@ describe('para recontactar', () => {
   })
 })
 
-describe('con teléfono de Google Maps', () => {
-  const conMaps = lead('m', { client: cliente({ google_maps_phone: '+34 931 000 000' }) })
-  const vacio = lead('v', { client: cliente({ google_maps_phone: '   ' }) })
-  const sinMaps = lead('s')
-  const sinCliente = lead('c', { client: null })
-  it('prendido deja solo los que tienen el teléfono cargado (en blanco no cuenta)', () => {
-    expect(filterLeads([conMaps, vacio, sinMaps, sinCliente], f({ conTelMaps: true }), ctx()).map(l => l.id)).toEqual(['m'])
-  })
-  it('apagado no filtra', () => {
-    expect(filterLeads([conMaps, sinMaps], f({}), ctx())).toHaveLength(2)
-  })
-  it('skip lo apaga (para el contador)', () => {
-    expect(filterLeads([conMaps, sinMaps], f({ conTelMaps: true }), ctx(), ['telMaps'])).toHaveLength(2)
-  })
-})
-
 describe('etapa y tareas', () => {
   const sinEtapa = lead('s', { funnel_stage_id: null })
   const verde = lead('v')
@@ -144,7 +129,7 @@ describe('leadsDeCarteras', () => {
   })
 })
 
-describe('objetivo (los números de «Objetivos hoy»)', () => {
+describe('objetivo (los números de «Objetivos semanales»)', () => {
   const leads = [lead('a'), lead('b'), lead('d', { funnel_stage_id: 'descartado' })]
 
   it('deja solo los leads del objetivo, descartados incluidos', () => {

@@ -6,7 +6,7 @@ const HOY = '2026-09-30'
 const u = (id: string): Usuario => ({ id, email: '', nombre: id, iniciales: 'XX', color: '#000', rol: 'SDR', activo: true })
 const etapa = (id: string, position: number, over: Partial<CrmStage> = {}): CrmStage => ({
   id, label: id, value: id, position, priority_id: null, is_out_of_funnel: false, allow_delete: true, allow_reorder: true,
-  allow_rename: true, management_tolerance_hours: 24, created_at: '', updated_at: '', deleted_at: null, ...over,
+  allow_rename: true, management_tolerance_hours: 24, management_type: null, created_at: '', updated_at: '', deleted_at: null, ...over,
 })
 const ETAPAS = new Map([
   ['nuevo', etapa('nuevo', 1)],
@@ -20,7 +20,7 @@ const lead = (id: string, assigned: string, over: Partial<CrmLeadRow> = {}): Crm
   created_by: null, created_at: '', updated_at: '', deleted_at: null, client: null, ...over,
 })
 const tarea = (id: string, assigned: string, due: string, leadId: string | null = null): CrmTask => ({
-  id, lead_id: leadId, title: '', due_date: due, planned_for: null, assigned_to: assigned, completed: false,
+  id, lead_id: leadId, title: '', due_date: due, due_time: null, planned_for: null, assigned_to: assigned, completed: false,
   completed_at: null, recurrence: null, created_by: null, created_at: '', updated_at: '', deleted_at: null,
 })
 const reunion = (id: string, assigned: string, status: CrmMeeting['status']): CrmMeeting => ({

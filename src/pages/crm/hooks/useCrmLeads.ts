@@ -9,9 +9,17 @@ export function useCrmLeads() {
   return useQuery({ queryKey: CRM_KEYS.leads, queryFn: getLeads })
 }
 
-/** Las pendientes de todas las carteras que veo: marcan «tareas vencidas» en la lista y en Equipo. */
-export function useTareasPendientes() {
-  return useQuery({ queryKey: CRM_KEYS.tareasPendientes, queryFn: getTareasPendientes })
+/** Las pendientes de todas las carteras que veo: marcan «tareas vencidas» en la lista y en Equipo.
+ *  Las alarmas (`useAlarmasDeTareas`) la leen además con `refetchInterval`: fuera del CRM no hay
+ *  realtime abierto que la invalide. */
+export function useTareasPendientes(opciones: { enabled?: boolean; refetchInterval?: number } = {}) {
+  return useQuery({
+    queryKey: CRM_KEYS.tareasPendientes, queryFn: getTareasPendientes,
+    enabled: opciones.enabled,
+    refetchInterval: opciones.refetchInterval,
+    // Con la pestaña de fondo también: es justo cuando la alarma tiene que sonar.
+    refetchIntervalInBackground: opciones.refetchInterval != null,
+  })
 }
 
 /** Las del mes calendario local en curso (Equipo › «reuniones este mes»). */

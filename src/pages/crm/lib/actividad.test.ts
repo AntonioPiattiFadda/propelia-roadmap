@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmMeeting, CrmTask, LeadDetalle, Usuario } from '../types'
 import {
-  agruparPorDia, armarMetaDeActividad, decisorContactado, horaDe, leerMetaDeActividad, lineaDeTiempo, resumenDeLlamadas,
+  agruparPorDia, armarMetaDeActividad, decisorContactado, horaDe, leerMetaDeActividad, lineaDeTiempo, primeroLosUltimos, resumenDeLlamadas, ultimoContacto,
   type ItemActividad, type MetaDeActividad,
 } from './actividad'
 
@@ -70,28 +70,12 @@ describe('lineaDeTiempo · reuniones', () => {
 
 describe('lineaDeTiempo · tareas', () => {
   const tarea = (id: string, extra: Partial<CrmTask> = {}): CrmTask => ({
-    id, lead_id: 'x', title: 'Llamar al dueño', due_date: '2026-10-07', assigned_to: 'l', completed: false, completed_at: null,
+    id, lead_id: 'x', title: 'Llamar al dueño', due_date: '2026-10-07', due_time: null, assigned_to: 'l', completed: false, completed_at: null,
     planned_for: null, recurrence: null, created_by: 'a', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-01T10:00:00Z',
     deleted_at: null, ...extra,
   })
   it('agendar una tarea no es actividad: viven en el panel de tareas', () => {
     expect(lineaDeTiempo({ ...vacio, tasks: [tarea('t1'), tarea('t2', { due_date: null })] }, usuarios)).toEqual([])
-  })
-})
-
-describe('lineaDeTiempo · consejo para el SDR', () => {
-  const cliente = (sdr_advice: string | null) => ({ id: 'cli', sdr_advice, created_at: '2026-10-01T08:00:00Z' })
-  const llamada = { id: 'c1', lead_id: 'x', description: 'hola', long_description: null, comment_type: 'MANUAL' as const, created_by: 'a', created_at: '2026-10-02T10:00:00Z', deleted_at: null }
-
-  it('entra como actividad, fechado cuando llegó la inmobiliaria y sin autor', () => {
-    const items = lineaDeTiempo({ ...vacio, comments: [llamada] }, usuarios, cliente('  Preguntá por Inmovilla.  '))
-    expect(items.map(i => i.id)).toEqual(['consejo-cli', 'c1'])
-    expect(items[0]).toMatchObject({ tipo: 'consejo', fecha: '2026-10-01T08:00:00Z', texto: 'Preguntá por Inmovilla.', autorId: null })
-  })
-  it('sin consejo escrito, o sin cliente, no hay renglón', () => {
-    expect(lineaDeTiempo(vacio, usuarios, cliente('   '))).toEqual([])
-    expect(lineaDeTiempo(vacio, usuarios, cliente(null))).toEqual([])
-    expect(lineaDeTiempo(vacio, usuarios, null)).toEqual([])
   })
 })
 
@@ -173,6 +157,68 @@ describe('decisorContactado', () => {
   })
   it('una llamada borrada no cuenta', () => {
     expect(decisorContactado([comentario('k1', '2026-10-02T10:00:00Z', conDecisor(['Laura']), '2026-10-03T10:00:00Z')])).toBeNull()
+  })
+})
+
+describe('lineaDeTiempo · intentos de contacto fallido', () => {
+  const comentario = (id: string, created_at: string, long_description: string | null) => ({
+    id, lead_id: 'x', description: '', long_description, comment_type: 'MANUAL' as const,
+    created_by: 'a', created_at, deleted_at: null,
+  })
+  const fallido = armarMetaDeActividad({ tipo: 'llamada', con: [], resultado: 'no_respondida' })
+  const contestada = armarMetaDeActividad({ tipo: 'llamada', con: ['Laura'], resultado: 'contestada' })
+  const intentos = (comments: LeadDetalle['comments']) =>
+    lineaDeTiempo({ ...vacio, comments }, usuarios).map(i => [i.id, i.intento])
+
+  it('los fallidos seguidos se cuentan, en orden de cuándo pasaron', () => {
+    expect(intentos([
+      comentario('f2', '2026-10-02T10:00:00Z', fallido),
+      comentario('f1', '2026-10-01T10:00:00Z', fallido),
+      comentario('f3', '2026-10-03T10:00:00Z', fallido),
+    ])).toEqual([['f1', 1], ['f2', 2], ['f3', 3]])
+  })
+  it('una llamada contestada corta la racha; una nota no', () => {
+    expect(intentos([
+      comentario('f1', '2026-10-01T10:00:00Z', fallido),
+      comentario('n', '2026-10-01T11:00:00Z', null),
+      comentario('f2', '2026-10-02T10:00:00Z', fallido),
+      comentario('c', '2026-10-03T10:00:00Z', contestada),
+      comentario('f3', '2026-10-04T10:00:00Z', fallido),
+    ])).toEqual([['f1', 1], ['n', undefined], ['f2', 2], ['c', undefined], ['f3', 1]])
+  })
+})
+
+describe('ultimoContacto', () => {
+  const comentario = (id: string, created_at: string, long_description: string | null, deleted_at: string | null = null) => ({
+    id, lead_id: 'x', description: '', long_description, comment_type: 'MANUAL' as const,
+    created_by: 'a', created_at, deleted_at,
+  })
+  const oficina = { numero: '+34 900 1', etiqueta: 'Oficina' }
+  const marc = { numero: '+34 600 2', etiqueta: 'Marc' }
+
+  it('el último número marcado y la última gente con quien se habló, cada uno por su lado', () => {
+    expect(ultimoContacto([
+      comentario('k1', '2026-10-02T10:00:00Z', armarMetaDeActividad({ tipo: 'llamada', con: ['Laura'], resultado: 'contestada', telefono: oficina })),
+      comentario('k3', '2026-10-04T10:00:00Z', armarMetaDeActividad({ tipo: 'llamada', con: [], resultado: 'no_respondida', telefono: marc })),
+      comentario('k2', '2026-10-03T10:00:00Z', armarMetaDeActividad({ tipo: 'llamada', con: ['Marc', 'Laura'], resultado: 'contestada', telefono: oficina })),
+    ])).toEqual({ telefono: '+34 600 2', con: ['Marc', 'Laura'] })
+  })
+  it('lo borrado y los comentarios sin meta no cuentan', () => {
+    expect(ultimoContacto([
+      comentario('k1', '2026-10-02T10:00:00Z', armarMetaDeActividad({ tipo: 'llamada', con: ['Laura'], telefono: oficina })),
+      comentario('k2', '2026-10-03T10:00:00Z', armarMetaDeActividad({ tipo: 'llamada', con: ['Marc'], telefono: marc }), '2026-10-03T11:00:00Z'),
+      comentario('k3', '2026-10-04T10:00:00Z', null),
+    ])).toEqual({ telefono: '+34 900 1', con: ['Laura'] })
+  })
+  it('sin nada registrado no hay último', () => {
+    expect(ultimoContacto([])).toEqual({ telefono: null, con: [] })
+  })
+})
+
+describe('primeroLosUltimos', () => {
+  it('pone adelante lo último usado y deja el resto en su orden', () => {
+    expect(primeroLosUltimos(['Laura', 'Marc', 'Oficina', 'Pau'], x => x === 'Oficina' || x === 'Pau'))
+      .toEqual(['Oficina', 'Pau', 'Laura', 'Marc'])
   })
 })
 

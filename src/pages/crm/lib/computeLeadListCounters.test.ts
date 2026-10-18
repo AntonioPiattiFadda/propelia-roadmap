@@ -6,7 +6,7 @@ import { filtrosVacios, type LeadFilterContext } from './leadFilters'
 const NOW = new Date(2026, 8, 30, 12).getTime()
 const etapa = (id: string, over: Partial<CrmStage> = {}): CrmStage => ({
   id, label: id, value: id, position: 1, priority_id: null, is_out_of_funnel: false, allow_delete: true,
-  allow_reorder: true, allow_rename: true, management_tolerance_hours: 24, created_at: '', updated_at: '',
+  allow_reorder: true, allow_rename: true, management_tolerance_hours: 24, management_type: null, created_at: '', updated_at: '',
   deleted_at: null, ...over,
 })
 const ctx: LeadFilterContext = {
@@ -51,14 +51,5 @@ describe('para recontactar', () => {
   it('cuenta los descartados con la fecha cumplida, prendido o no', () => {
     expect(computeLeadListCounters(leads, filtrosVacios(), ctx).recontactarCount).toBe(1)
     expect(computeLeadListCounters(leads, { ...filtrosVacios(), paraRecontactar: true }, ctx).recontactarCount).toBe(1)
-  })
-})
-
-describe('con teléfono de Google Maps', () => {
-  const conMaps = (id: string) => lead(id, { client: { google_maps_phone: '931000000' } as CrmLeadRow['client'] })
-  const leads = [conMaps('a'), conMaps('b'), lead('z')]
-  it('cuenta los que lo tienen cargado, prendido o no', () => {
-    expect(computeLeadListCounters(leads, filtrosVacios(), ctx).telMapsCount).toBe(2)
-    expect(computeLeadListCounters(leads, { ...filtrosVacios(), conTelMaps: true }, ctx).telMapsCount).toBe(2)
   })
 })

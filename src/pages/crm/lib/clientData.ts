@@ -106,7 +106,25 @@ export function campoDelNuevoDecisor(contactos: ContactoConDecisor[], elegidos: 
   return contactos.find(c => c.nombre === elegidos[0])?.campoDecisor ?? null
 }
 
-type CasilleroDeNombre = 'first_name' | 'alternative_phone_1_note' | 'alternative_phone_2_note'
+/**
+ * Los contactos que quedan como decisores después de una llamada con el decisor, para fijarlos en
+ * el perfil (17/10/2026, por pedido: reemplazó al cartel «Decisor contactado»). Con un solo elegido
+ * es ese; con varios, los que el perfil ya da por decisores; y los escritos a mano que `patchNuevos`
+ * cargó como decisor.
+ */
+export function decisoresDeLaLlamada(
+  contactos: ContactoConDecisor[], elegidos: string[], esDecisor: boolean,
+  patchNuevos: ReturnType<typeof patchDeContactosNuevos>['patch'],
+): CampoDecisor[] {
+  if (!esDecisor) return []
+  const de = contactos.filter(c => elegidos.includes(c.nombre))
+  const existentes = elegidos.length === 1 ? de : de.filter(c => c.decisor === true)
+  const nuevos = (Object.keys(DECISOR_DEL_CASILLERO) as CasilleroDeNombre[])
+    .map(k => DECISOR_DEL_CASILLERO[k]).filter(campo => patchNuevos[campo] === true)
+  return [...new Set([...existentes.map(c => c.campoDecisor), ...nuevos])]
+}
+
+type CasilleroDeNombre ='first_name' | 'alternative_phone_1_note' | 'alternative_phone_2_note'
 const DECISOR_DEL_CASILLERO: Record<CasilleroDeNombre, CampoDecisor> = {
   first_name: 'contact_is_decision_maker',
   alternative_phone_1_note: 'alternative_phone_1_is_decision_maker',
@@ -139,6 +157,29 @@ export function patchDeContactosNuevos(
   return { patch, sinLugar }
 }
 
+/** Si el perfil ya tiene a alguien marcado como decisor. Una marca en un casillero sin nadie no cuenta. */
+export function tieneDecisor(client: ClienteConDecisor | null | undefined): boolean {
+  return contactosConDecisor(client).some(c => c.decisor === true)
+}
+
+/**
+ * El decisor apuntado al registrar una actividad (17/10/2026, por pedido): el doorkeeper dio su
+ * nombre y queda en el perfil aunque no se haya hablado con él. Se suma al `patch` de los nuevos de
+ * esa misma actividad: si ya es un contacto se marca ese, si es uno de los nuevos se marca su
+ * casillero, y si no se carga en el primer casillero libre que queda. Sin lugar, `sinLugar`.
+ */
+export function conDecisorApuntado(
+  client: ClienteConDecisor, patch: ReturnType<typeof patchDeContactosNuevos>['patch'], nombre: string,
+): { patch: ReturnType<typeof patchDeContactosNuevos>['patch']; sinLugar: boolean } {
+  const igual = (a: string) => a.toLocaleLowerCase('es') === nombre.toLocaleLowerCase('es')
+  const existente = contactosConDecisor(client).find(c => igual(c.nombre))
+  if (existente) return { patch: { ...patch, [existente.campoDecisor]: true }, sinLugar: false }
+  const casillero = (Object.keys(DECISOR_DEL_CASILLERO) as CasilleroDeNombre[]).find(k => patch[k] && igual(patch[k]))
+  if (casillero) return { patch: { ...patch, [DECISOR_DEL_CASILLERO[casillero]]: true }, sinLugar: false }
+  const nuevo = patchDeContactosNuevos({ ...client, ...patch }, [nombre], nombre)
+  return { patch: { ...patch, ...nuevo.patch }, sinLugar: nuevo.sinLugar.length > 0 }
+}
+
 type ClienteConGoogle = Pick<CrmClient, 'phone' | 'google_maps_phone'
   | 'alternative_phone_1' | 'alternative_phone_1_note' | 'alternative_phone_2' | 'alternative_phone_2_note'>
 export type CasilleroDeTelefono = 'phone' | 'alternative_phone_1' | 'alternative_phone_2'
@@ -167,6 +208,32 @@ function alternativoLibre(client: ClienteConAlternativos): CasilleroDeTelefono |
   if (!client.alternative_phone_1?.trim() && !client.alternative_phone_1_note?.trim()) return 'alternative_phone_1'
   if (!client.alternative_phone_2?.trim() && !client.alternative_phone_2_note?.trim()) return 'alternative_phone_2'
   return null
+}
+
+const TELEFONO_DEL_DECISOR: Record<CampoDecisor, CasilleroDeTelefono> = {
+  contact_is_decision_maker: 'phone',
+  alternative_phone_1_is_decision_maker: 'alternative_phone_1',
+  alternative_phone_2_is_decision_maker: 'alternative_phone_2',
+}
+
+/**
+ * Dónde se carga el número escrito a mano en «Teléfono contacto» (17/10/2026, por pedido): en el contacto
+ * con quien se habló (`persona`, por su columna de decisor) si todavía no tiene número; si no, el
+ * principal vacío del todo o el primer alternativo libre. `null` si no queda lugar: nunca se pisa.
+ */
+export function casilleroDelTelefonoNuevo(
+  client: ClienteConAlternativos & Pick<CrmClient, 'first_name' | 'last_name'>, persona: CampoDecisor | null,
+): CasilleroDeTelefono | null {
+  const suyo = persona && TELEFONO_DEL_DECISOR[persona]
+  if (suyo && !client[suyo]?.trim()) return suyo
+  if (!client.first_name?.trim() && !client.last_name?.trim() && !client.phone?.trim()) return 'phone'
+  return alternativoLibre(client)
+}
+
+/** La columna de decisor del casillero donde `patchDeContactosNuevos` cargó a `nombre`, si lo cargó. */
+export function decisorDelContactoNuevo(patch: ReturnType<typeof patchDeContactosNuevos>['patch'], nombre: string): CampoDecisor | null {
+  const casillero = (Object.keys(DECISOR_DEL_CASILLERO) as CasilleroDeNombre[]).find(k => patch[k] === nombre)
+  return casillero ? DECISOR_DEL_CASILLERO[casillero] : null
 }
 
 /** Si el número es el de Google Maps del cliente (por dígitos): es el teléfono de la oficina, que

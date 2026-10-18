@@ -123,6 +123,8 @@ export type ClientePatch = Pick<TablesUpdate<'crm_clients'>,
   // Rol y notas de cada contacto: mismo caso, pendientes de migración.
   | 'contact_role' | 'contact_notes' | 'alternative_phone_1_role' | 'alternative_phone_1_notes'
   | 'alternative_phone_2_role' | 'alternative_phone_2_notes'
+  // El email de cada alternativo: mismo caso, pendiente de migración (17/10/2026).
+  | 'alternative_phone_1_email' | 'alternative_phone_2_email'
   // Si cada contacto decide: mismo caso, pendiente de migración.
   | 'contact_is_decision_maker' | 'alternative_phone_1_is_decision_maker' | 'alternative_phone_2_is_decision_maker'
   // Lo que trae la importación desde Excel (lote, motivo, origen de cada teléfono y los teléfonos
@@ -178,8 +180,16 @@ export async function demosAgendadas(autor: string, desde: string, hasta: string
 }
 
 // ---------- Tareas y reuniones ----------
-export async function crearTarea(input: { lead_id: string | null; title: string; due_date: string | null; assigned_to: string }): Promise<CrmTask> {
-  const { data, error } = await supabase.from('crm_tasks').insert(input).select().single()
+/* `due_time` (la hora, 17/10/2026) va SOLO si hay hora: sin la migración `crm_tasks_due_time` corrida,
+   mandar la columna aunque sea en null haría fallar el insert entero. Así la tarea sin hora anda igual
+   que antes, y la que tiene hora contesta FALTA_MIGRACION (PGRST204, ver errores.ts). Las lecturas
+   van con `*`: una columna que todavía no existe no las rompe, simplemente no viene. */
+export async function crearTarea(input: {
+  lead_id: string | null; title: string; due_date: string | null; due_time?: string | null; assigned_to: string
+}): Promise<CrmTask> {
+  const { due_time, ...resto } = input
+  const fila = due_time ? { ...resto, due_time } : resto
+  const { data, error } = await supabase.from('crm_tasks').insert(fila).select().single()
   if (error) throw error
   return data
 }
@@ -280,7 +290,7 @@ const ahora = () => new Date().toISOString()
 
 export type EtapaNueva = Pick<TablesInsert<'crm_funnel_stages'>,
   'label' | 'value' | 'position' | 'allow_delete' | 'allow_reorder' | 'allow_rename' | 'is_out_of_funnel'>
-export type EtapaPatch = Pick<TablesUpdate<'crm_funnel_stages'>, 'label' | 'position'>
+export type EtapaPatch = Pick<TablesUpdate<'crm_funnel_stages'>, 'label' | 'position' | 'management_type'>
 
 export async function crearEtapa(input: EtapaNueva): Promise<CrmStage> {
   const { data, error } = await supabase.from('crm_funnel_stages').insert(input).select().single()

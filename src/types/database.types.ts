@@ -106,11 +106,13 @@ export type Database = {
         Row: {
           agents_count: number | null
           alternative_phone_1: string | null
+          alternative_phone_1_email: string | null
           alternative_phone_1_note: string | null
           alternative_phone_1_notes: string | null
           alternative_phone_1_role: string | null
           alternative_phone_1_source: string | null
           alternative_phone_2: string | null
+          alternative_phone_2_email: string | null
           alternative_phone_2_note: string | null
           alternative_phone_2_notes: string | null
           alternative_phone_2_role: string | null
@@ -152,11 +154,13 @@ export type Database = {
         Insert: {
           agents_count?: number | null
           alternative_phone_1?: string | null
+          alternative_phone_1_email?: string | null
           alternative_phone_1_note?: string | null
           alternative_phone_1_notes?: string | null
           alternative_phone_1_role?: string | null
           alternative_phone_1_source?: string | null
           alternative_phone_2?: string | null
+          alternative_phone_2_email?: string | null
           alternative_phone_2_note?: string | null
           alternative_phone_2_notes?: string | null
           alternative_phone_2_role?: string | null
@@ -198,11 +202,13 @@ export type Database = {
         Update: {
           agents_count?: number | null
           alternative_phone_1?: string | null
+          alternative_phone_1_email?: string | null
           alternative_phone_1_note?: string | null
           alternative_phone_1_notes?: string | null
           alternative_phone_1_role?: string | null
           alternative_phone_1_source?: string | null
           alternative_phone_2?: string | null
+          alternative_phone_2_email?: string | null
           alternative_phone_2_note?: string | null
           alternative_phone_2_notes?: string | null
           alternative_phone_2_role?: string | null
@@ -352,6 +358,7 @@ export type Database = {
           is_out_of_funnel: boolean
           label: string
           management_tolerance_hours: number | null
+          management_type: string | null
           position: number
           priority_id: string | null
           updated_at: string
@@ -367,6 +374,7 @@ export type Database = {
           is_out_of_funnel?: boolean
           label?: string
           management_tolerance_hours?: number | null
+          management_type?: string | null
           position?: number
           priority_id?: string | null
           updated_at?: string
@@ -382,6 +390,7 @@ export type Database = {
           is_out_of_funnel?: boolean
           label?: string
           management_tolerance_hours?: number | null
+          management_type?: string | null
           position?: number
           priority_id?: string | null
           updated_at?: string
@@ -736,6 +745,7 @@ export type Database = {
           created_by: string | null
           deleted_at: string | null
           due_date: string | null
+          due_time: string | null
           id: string
           lead_id: string | null
           planned_for: string | null
@@ -751,6 +761,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           due_date?: string | null
+          due_time?: string | null
           id?: string
           lead_id?: string | null
           planned_for?: string | null
@@ -766,6 +777,7 @@ export type Database = {
           created_by?: string | null
           deleted_at?: string | null
           due_date?: string | null
+          due_time?: string | null
           id?: string
           lead_id?: string | null
           planned_for?: string | null
