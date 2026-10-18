@@ -10,6 +10,7 @@ import { FunnelConfigDialog } from './components/FunnelConfigDialog'
 import { ImportarLoteDialog } from './components/ImportarLoteDialog'
 import { ManageChannelsDialog } from './components/ManageChannelsDialog'
 import { NewLeadDialog } from './components/NewLeadDialog'
+import { TestEmailDialog } from './components/TestEmailDialog'
 import { useCarteras } from './hooks/useCarteras'
 import { useCrmRealtime } from './hooks/useCrmRealtime'
 import { escribirLeadAbierto } from './lib/leadFilterParams'
@@ -36,6 +37,8 @@ export function Crm() {
           <div className="hidden md:contents">
             {/* Importar lotes también es de escritorio y de SUPERADMIN: la RPC lo exige igual. */}
             <ImportarLoteDialog />
+            {/* Para probar el envío de emails (info@propelia.es); la edge function lo exige igual. */}
+            <TestEmailDialog />
             <FunnelConfigDialog />
             <ManageChannelsDialog />
           </div>

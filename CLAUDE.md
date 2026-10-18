@@ -159,6 +159,14 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
     con «POSIBLE REPETIDA» arriba del consejo. Sin historial: el SDR edita esos bloques.
   - `sdr_research` va a `sdr_advice`; `phone` y los alternativos no se cargan (ya están en el
     research); `current_crm` es una etiqueta de `crm_software` (`current_crm_id`).
+- **Envío de emails** (16/10/2026, copiado de `send-email` de `propelia-frontend`, ver su
+  `docs/emailSystem.md`): Resend, con la API key como secret `RESEND_API_KEY` de las edge
+  functions. `supabase/functions/_shared/email.ts` es el único código que habla con Resend y el
+  remitente es **siempre `info@propelia.es`**, fijo en el servidor (nunca lo elige quien llama).
+  La edge function `send-email` es la puerta desde el front y exige SUPERADMIN activo (en el
+  producto alcanzaba con sesión). Hoy la usa solo «Email de prueba» de la cabecera del CRM
+  (`TestEmailDialog`). Los envíos automáticos del CRM van a llamar a `_shared/email.ts`
+  desde el servidor, no a `send-email`. Tests: `deno test` en `_shared/` y `send-email/`.
 - **Qué se copió del producto** (podado de lo inmobiliario):
   De `propelia-frontend/src/pages/leads/lib/`: `discardStage`,
   `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De
