@@ -35,10 +35,10 @@ export type CamposEmail = {
 
 export type CampoEmail = keyof CamposEmail
 
-/* El vídeo vive en el bucket público `publico` de Supabase. Una versión nueva va con otro nombre
-   (v9…): con el mismo, los clientes de correo y el CDN siguen sirviendo la vieja un tiempo.
-   Sin agenda, el botón no se dibuja. */
-export const URL_VIDEO = 'https://itqwxnmuxuiiydsueazb.supabase.co/storage/v1/object/public/publico/videos/propelia-presentacion-v8.mp4'
+/* La portada lleva a la página pública del vídeo en el producto (`propelia-frontend`,
+   `src/pages/presentacion/`), que reproduce el mp4 del bucket público `publico` de este proyecto.
+   Un vídeo nuevo se cambia allá, no acá. Sin agenda, el botón no se dibuja. */
+export const URL_VIDEO = 'https://crm.propelia.es/presentacion'
 export const URL_AGENDA = ''
 
 /* Quién firma: sale de la fila de `users` de quien manda (columnas `firma_*`), nunca de lo que

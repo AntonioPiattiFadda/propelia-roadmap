@@ -254,9 +254,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   cargo. No hay pantalla para editarlos: se cargan por SQL. Las imágenes (`mail-header.png`,
   `mail-video.png`, `lockup_h.png`; versión blanca desde el 18/10/2026) del mail que sale están en `propelia-landing/assets/` →
   `propelia.es/assets/`; la vista previa usa las copias de `public/email/`.
-  `URL_VIDEO` es el mp4 en el bucket **público** `publico` (migración `20261018210226_bucket_publico`,
-  sin policies: escribe solo la service role, con `supabase storage cp --linked`); una versión nueva
-  va con otro nombre. `URL_AGENDA` vacío: el botón de agenda no se dibuja. El envío no queda en la actividad del lead.
+  `URL_VIDEO` es `crm.propelia.es/presentacion`, una página pública de `propelia-frontend` que
+  reproduce el mp4 del bucket **público** `publico` de este proyecto (migración
+  `20261018210226_bucket_publico`, sin policies: escribe solo la service role). Un vídeo nuevo va
+  con otro nombre y se cambia en esa página. `URL_AGENDA` vacío: el botón de agenda no se dibuja. El envío no queda en la actividad del lead.
 - **Qué se copió del producto** (podado de lo inmobiliario):
   De `propelia-frontend/src/pages/leads/lib/`: `discardStage`,
   `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De
