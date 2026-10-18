@@ -11,7 +11,6 @@ import { ImportarLoteDialog } from './components/ImportarLoteDialog'
 import { ManageChannelsDialog } from './components/ManageChannelsDialog'
 import { NewLeadDialog } from './components/NewLeadDialog'
 import { TestEmailDialog } from './components/TestEmailDialog'
-import { SubirVideoTemporal } from './components/SubirVideoTemporal'
 import { PlanningDiarioDialog } from './components/PlanningDiarioDialog'
 import { PlaybookDialog } from './components/PlaybookDialog'
 import { useCarteras } from './hooks/useCarteras'
@@ -45,8 +44,6 @@ export function Crm() {
             <ImportarLoteDialog />
             {/* Para probar el envío de emails (info@propelia.es); la edge function lo exige igual. */}
             <TestEmailDialog />
-            {/* TEMPORAL: subir el vídeo de los mails al bucket público. Se saca cuando esté arriba. */}
-            <SubirVideoTemporal />
             <FunnelConfigDialog />
             <ManageChannelsDialog />
           </div>
