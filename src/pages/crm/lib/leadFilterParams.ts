@@ -5,14 +5,15 @@ import { esObjetivo, type Objetivo } from './objetivos'
    (era para el RPC de listado, que acá no hay) y con el parser/escritor que allá vive suelto en
    LeadList.tsx. Acá lo necesita también Equipo: sus enlaces al CRM ya filtrado se arman con
    `enlaceAlCrm` y NUNCA a mano. Sin `gestion` ni `excluded` (prioridades) desde el 10/10/2026:
-   se sacaron del front para rediseñarlas, y un enlace viejo que los traiga simplemente se ignora. */
+   se sacaron del front para rediseñarlas, y un enlace viejo que los traiga simplemente se ignora.
+   Lo mismo `telMaps` («Con tel. de Google Maps») desde el 17/10/2026: se sacó por pedido. */
 
 /** Carteras mirando, separadas por coma. Ausente = la propia. */
 export const OWNERS_PARAM = 'owners'
 /** El lead abierto en el dialog: un enlace abre ese lead ya abierto. */
 export const LEAD_PARAM = 'lead'
 
-export const LEAD_FILTER_PARAMS = ['overdue', 'tareas', 'stages', 'recontactar', 'orden', 'telMaps', 'objetivo'] as const
+export const LEAD_FILTER_PARAMS = ['overdue', 'tareas', 'stages', 'recontactar', 'orden', 'objetivo'] as const
 export const LEAD_FILTER_PARAMS_WITH_QUERY = [...LEAD_FILTER_PARAMS, 'q'] as const
 
 /** `?tareas=sin`: los que no tienen ninguna tarea pendiente. `?tareas=1` sigue siendo «con». */
@@ -50,7 +51,6 @@ export function filtrosDesdeUrl(params: URLSearchParams): LeadFilterState {
     sinTareas: params.get('tareas') === TAREAS_SIN,
     paraRecontactar: params.get('recontactar') === '1',
     ordenPorEstado: params.get('orden') === 'estado',
-    conTelMaps: params.get('telMaps') === '1',
     objetivo: objetivoDesdeUrl(params.get('objetivo')),
   }
 }
@@ -80,7 +80,6 @@ export function escribirFiltros(params: URLSearchParams, patch: Partial<LeadFilt
   // Prender «Tareas» arranca por vencimiento (lo vencido arriba): un orden por estado que quedó
   // puesto de antes le ganaría. Prendido después, con «Tareas» ya puesto, se respeta.
   else if (patch.conTareas) next.delete('orden')
-  if (patch.conTelMaps !== undefined) poner('telMaps', patch.conTelMaps ? '1' : '')
   if (patch.objetivo !== undefined) poner('objetivo', patch.objetivo ?? '')
   return next
 }
@@ -107,11 +106,13 @@ export function formatFilterList(labels: string[]): string {
   return `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}`
 }
 
-export function enlaceAlCrm(opts: { owners?: string[]; overdueOnly?: boolean }): string {
+export function enlaceAlCrm(opts: { owners?: string[]; overdueOnly?: boolean; lead?: string }): string {
   let p = new URLSearchParams()
   if (opts.owners?.length) p.set(OWNERS_PARAM, [...opts.owners].sort().join(','))
   // «Tareas vencidas» es un subfiltro de «Tareas»: sin ella prendida, el chip no se ve.
   if (opts.overdueOnly) p = escribirFiltros(p, { conTareas: true, overdueOnly: true })
+  // El lead abierto (la alarma de una tarea, 17/10/2026): se abre aunque los filtros lo escondan.
+  if (opts.lead) p = escribirLeadAbierto(p, opts.lead)
   const qs = p.toString()
   return qs ? `/crm?${qs}` : '/crm'
 }

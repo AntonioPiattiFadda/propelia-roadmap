@@ -1,4 +1,5 @@
 import type { CrmStage } from '../types'
+import { findDiscardedStage } from './discardStage'
 
 /* En el producto (src/pages/leads/lib/effectiveStage.ts) la etapa «efectiva» se elige entre la
    del cliente y las de los cruces con propiedades. Acá un lead tiene una sola columna de etapa,
@@ -23,7 +24,12 @@ export function etapaDelLead(
 }
 
 export function etapasVivas(etapas: Iterable<CrmStage>): CrmStage[] {
-  return [...etapas].filter(e => e.deleted_at == null).sort((a, b) => a.position - b.position)
+  const vivas = [...etapas].filter(e => e.deleted_at == null)
+  /* Descartado va siempre última (17/10/2026, por pedido): las etapas que se crean después le
+     quedaban debajo en los menús, porque la posición es la del catálogo y no se reacomoda sola. */
+  const descartada = findDiscardedStage(vivas)
+  const ultima = (e: CrmStage) => (e === descartada ? 1 : 0)
+  return vivas.sort((a, b) => ultima(a) - ultima(b) || a.position - b.position)
 }
 
 /**

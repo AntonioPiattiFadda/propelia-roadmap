@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Briefcase, Building2, Check, ChevronDown, ChevronUp, Mail, NotebookPen, Pencil, Phone, Pin, TriangleAlert, User, UserCheck, UserPlus, X } from 'lucide-react'
+import { toast } from 'sonner'
+import { Building2, Check, ChevronDown, ChevronUp, Copy, Mail, NotebookPen, Pencil, Phone, Pin, TriangleAlert, User, UserPlus, X } from 'lucide-react'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
@@ -12,8 +13,8 @@ import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useLeadDetalle } from '../hooks/useLeadDetalle'
 import { useActualizarCliente, useActualizarLead } from '../hooks/useLeadMutaciones'
 import {
-  casilleroParaTelefonoDeGoogle, copiasDelTelefonoDeIdealista, esTelefonoDeIdealista, esTelefonoDeOficina, inicialesDe,
- nombreDelLead, type CampoDecisor, type ClientData } from '../lib/clientData'
+  contactosConDecisor, copiasDelTelefonoDeIdealista, esTelefonoDeIdealista, esTelefonoDeOficina, ETIQUETA_OFICINA, inicialesDe,
+ nombreDelLead, telefonosDelCliente, type CampoDecisor, type ClientData } from '../lib/clientData'
 import { toIsoDate } from '@/lib/calendarDate'
 import { decisorContactado } from '../lib/actividad'
 import { etapaDelLead } from '../lib/effectiveStage'
@@ -37,6 +38,8 @@ type DatosDeContacto = {
   alternative_phone_2_role: string; alternative_phone_2_notes: string
   // De dónde salió cada teléfono (lo trae la importación). '' es «no se sabe».
   phone_source: string; alternative_phone_1_source: string; alternative_phone_2_source: string
+  // El email de cada alternativo (el principal usa `email`). Columnas pendientes de migración.
+  alternative_phone_1_email: string; alternative_phone_2_email: string
 }
 type Borrador = ClientData & ClienteExtra & DatosDeContacto
 const borradorDe = (l: CrmLeadRow): Borrador => ({
@@ -51,14 +54,16 @@ const borradorDe = (l: CrmLeadRow): Borrador => ({
   phone_source: l.client?.phone_source ?? '',
   alternative_phone_1_source: l.client?.alternative_phone_1_source ?? '',
   alternative_phone_2_source: l.client?.alternative_phone_2_source ?? '',
+  alternative_phone_1_email: l.client?.alternative_phone_1_email ?? '',
+  alternative_phone_2_email: l.client?.alternative_phone_2_email ?? '',
 })
 
 /* Las otras personas de la inmobiliaria son los dos teléfonos alternativos. No hay tabla de
    contactos; dos casilleros fijos del cliente. `nombre` es la vieja «nota» del teléfono, que antes
    decía nombre y rol juntos: las filas viejas siguen ahí con los dos hasta que alguien las separe. */
 const OTRAS_PERSONAS = [
-  { telefono: 'alternative_phone_1', nombre: 'alternative_phone_1_note', rol: 'alternative_phone_1_role', notas: 'alternative_phone_1_notes', origen: 'alternative_phone_1_source' },
-  { telefono: 'alternative_phone_2', nombre: 'alternative_phone_2_note', rol: 'alternative_phone_2_role', notas: 'alternative_phone_2_notes', origen: 'alternative_phone_2_source' },
+  { telefono: 'alternative_phone_1', nombre: 'alternative_phone_1_note', rol: 'alternative_phone_1_role', notas: 'alternative_phone_1_notes', origen: 'alternative_phone_1_source', email: 'alternative_phone_1_email' },
+  { telefono: 'alternative_phone_2', nombre: 'alternative_phone_2_note', rol: 'alternative_phone_2_role', notas: 'alternative_phone_2_notes', origen: 'alternative_phone_2_source', email: 'alternative_phone_2_email' },
 ] as const
 
 /* Un contacto es el principal o uno de los dos casilleros alternativos, por su columna de teléfono. */
@@ -82,16 +87,51 @@ function guardarFijados(clientId: string | undefined, fijados: Contacto[]) {
   try { localStorage.setItem(claveFijados(clientId), JSON.stringify(fijados)) } catch { /* queda en memoria */ }
 }
 
-type OrigenDeTelefonoCampo = 'phone_source' | (typeof OTRAS_PERSONAS)[number]['origen']
+/* Los teléfonos y emails sueltos de la pestaña de la inmobiliaria también se fijan (17/10/2026, por
+   pedido): fijado, se ve en el perfil. Misma regla que los contactos: preferencia del navegador.
+   La clave es `tel:<dígitos>` o `mail:<email>`, para que un cambio de formato no lo desfije. */
+type DatoSuelto = { clave: string; valor: string; google?: boolean }
+const claveDatosFijados = (clientId: string) => `crm-datos-fijados:${clientId}`
+/** `null` si este navegador nunca fijó nada para el cliente: quien llama pone el de fábrica. */
+function leerDatosFijados(clientId: string | undefined): string[] | null {
+  if (!clientId) return null
+  try {
+    const guardado: unknown = JSON.parse(localStorage.getItem(claveDatosFijados(clientId)) ?? 'null')
+    return Array.isArray(guardado) ? guardado.filter((c): c is string => typeof c === 'string') : null
+  } catch { return null }
+}
+function guardarDatosFijados(clientId: string | undefined, fijados: string[]) {
+  if (!clientId) return
+  try { localStorage.setItem(claveDatosFijados(clientId), JSON.stringify(fijados)) } catch { /* queda en memoria */ }
+}
+
+/* Copia el número con un clic, para pegarlo en el marcador (17/10/2026, por pedido). */
+function BotonCopiar({ texto }: { texto: string }) {
+  const copiar = async () => {
+    try {
+      await navigator.clipboard.writeText(texto)
+      toast.success('Teléfono copiado')
+    } catch { toast.error('No se pudo copiar') }
+  }
+  return (
+    <button type="button" onClick={copiar} aria-label={`Copiar ${texto}`} title="Copiar"
+      className="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-(--fg-faint) hover:bg-(--surface-2) hover:text-foreground">
+      <Copy size={13} />
+    </button>
+  )
+}
+
+type OrigenDeTelefonoCampo ='phone_source' | (typeof OTRAS_PERSONAS)[number]['origen']
 const SIN_ORIGEN = '__sin_origen__'
 
 /* Las columnas de cada contacto, para dibujar la fila y la ventanita de edición con un solo mapa.
-   El email es solo del principal: los alternativos no tienen columna. */
+   Cada uno tiene su email: el principal en `email`, los alternativos en `alternative_phone_N_email`
+   (17/10/2026, por pedido). */
 type CamposDeContacto = {
   nombres: readonly { campo: keyof Borrador; label: string }[]
   telefono: 'phone' | 'alternative_phone_1' | 'alternative_phone_2'
   origen: OrigenDeTelefonoCampo
-  email?: 'email'
+  email: 'email' | (typeof OTRAS_PERSONAS)[number]['email']
   rol: 'contact_role' | `alternative_phone_${1 | 2}_role`
   notas: 'contact_notes' | `alternative_phone_${1 | 2}_notes`
   decisor: CampoDecisor
@@ -104,12 +144,12 @@ function camposDe(c: Contacto): CamposDeContacto {
   }
   const p = OTRAS_PERSONAS[c === 'alternative_phone_1' ? 0 : 1]
   return {
-    nombres: [{ campo: p.nombre, label: 'Nombre' }], telefono: p.telefono, origen: p.origen, rol: p.rol, notas: p.notas,
+    nombres: [{ campo: p.nombre, label: 'Nombre' }], telefono: p.telefono, origen: p.origen, email: p.email, rol: p.rol, notas: p.notas,
     decisor: `${p.telefono}_is_decision_maker`,
   }
 }
 const columnasDe = (f: CamposDeContacto): (keyof Borrador)[] =>
-  [...f.nombres.map(n => n.campo), f.telefono, f.origen, ...(f.email ? [f.email] : []), f.rol, f.notas]
+  [...f.nombres.map(n => n.campo), f.telefono, f.origen, f.email, f.rol, f.notas]
 
 const LISTA_CONTACTOS = 'flex flex-col divide-y divide-(--line-soft) rounded-md [border:1px_solid_var(--line-soft)]'
 
@@ -139,10 +179,12 @@ const TELEFONO = cn(
 /* El contenido del dialog, montado por lead (key = id): cambiar de lead con las flechas arranca
    de cero el borrador, igual que cerrar y abrir. Va el encabezado también, porque sus flechas
    y el menú de acciones operan sobre este lead. */
-function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onStartReassign }: {
+function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana, setPestana, onPaso, onStartReassign }: {
   lead: CrmLeadRow
   indice: number
   total: number
+  hayAnterior: boolean
+  haySiguiente: boolean
   pestana: PestanaDelLead
   setPestana: (p: PestanaDelLead) => void
   onPaso: (delta: -1 | 1) => void
@@ -167,8 +209,6 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
 
   const [creandoTarea, setCreandoTarea] = useState(false)
   const [editandoNotas, setEditandoNotas] = useState(false)
-  const hayAnterior = indice > 0
-  const haySiguiente = indice !== -1 && indice < total - 1
 
   // Borrador local: se escribe acá y se guarda campo por campo al salir. Si llega un cambio de
   // otro por realtime mientras no estoy escribiendo, se toma.
@@ -197,28 +237,33 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
   ] as const).some(c => borrador[c].trim())
   const cargada = (i: number) => {
     const p = OTRAS_PERSONAS[i]
-    return [p.telefono, p.nombre, p.rol, p.notas, p.origen].some(c => borrador[c].trim())
+    return [p.telefono, p.nombre, p.rol, p.notas, p.origen, p.email].some(c => borrador[c].trim())
   }
   const visibles = OTRAS_PERSONAS.map((_, i) => i).filter(i => cargada(i) || agregadas.includes(OTRAS_PERSONAS[i].telefono))
-  const quitarPersona = (i: number) => {
-    const { telefono: tel, nombre, rol, notas, origen } = OTRAS_PERSONAS[i]
+  /* El principal también se quita (17/10/2026, por pedido): «Agregar contacto» llena primero ese
+     casillero, y sin esto el contacto recién creado no tenía cómo borrarse. Su `email` se queda:
+     es el de la inmobiliaria (la demo y «Emails» lo leen), y con solo el email ya no se dibuja
+     como persona (`esSoloEmail`). */
+  const quitarPersona = (c: Contacto) => {
+    const f = camposDe(c)
+    const viejas = [...f.nombres.map(n => n.campo), f.telefono]
+    const nuevas = [f.rol, f.notas, f.origen, ...(c === 'principal' ? [] : [f.email])]
     editando.current = false
-    setBorrador(b => ({ ...b, [tel]: '', [nombre]: '', [rol]: '', [notas]: '', [origen]: '' }))
-    setAgregadas(a => a.filter(x => x !== tel))
-    if (fijados.includes(tel)) alternarFijado(tel)
+    setBorrador(b => ({ ...b, ...Object.fromEntries([...viejas, ...nuevas].map(col => [col, ''])) }))
+    setAgregadas(a => a.filter(x => x !== c))
+    if (fijados.includes(c)) alternarFijado(c)
     const client = lead.client
     if (!client) return
-    if (client[tel] || client[nombre]) {
-      actualizarCliente.mutate({ clientId: client.id, patch: { [tel]: null, [nombre]: null } as ClientePatch })
+    if (viejas.some(col => client[col])) {
+      actualizarCliente.mutate({ clientId: client.id, patch: Object.fromEntries(viejas.map(col => [col, null])) as ClientePatch })
     }
     // Las columnas nuevas, aparte y solo si tienen algo: sin la migración, mandarlas haría fallar
     // también el borrado del teléfono.
-    for (const c of [rol, notas, origen]) {
-      if (client[c]) actualizarCliente.mutate({ clientId: client.id, patch: { [c]: null } as ClientePatch })
+    for (const col of nuevas) {
+      if (client[col]) actualizarCliente.mutate({ clientId: client.id, patch: { [col]: null } as ClientePatch })
     }
     // El decisor es un booleano: `false` también es algo guardado que hay que borrar.
-    const decisor = `${tel}_is_decision_maker` as const
-    if (client[decisor] != null) actualizarCliente.mutate({ clientId: client.id, patch: { [decisor]: null } })
+    if (client[f.decisor] != null) actualizarCliente.mutate({ clientId: client.id, patch: { [f.decisor]: null } })
   }
 
   /* Los fijados se ven también en el perfil; todos, en la pestaña de la inmobiliaria. Fijar es una
@@ -229,12 +274,63 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
     setFijados(nuevos)
     guardarFijados(lead.client?.id, nuevos)
   }
-  const fijar = (c: Contacto) => { if (!fijados.includes(c)) alternarFijado(c) }
+  // Funcional: la llamada fija al decisor desde el onSuccess de una mutación, con un `fijados` viejo.
+  const fijar = (...cs: Contacto[]) => setFijados(prev => {
+    const faltan = cs.filter(c => !prev.includes(c))
+    if (faltan.length === 0) return prev
+    const nuevos = [...prev, ...faltan]
+    guardarFijados(lead.client?.id, nuevos)
+    return nuevos
+  })
+  /* Una llamada con el decisor lo fija en el perfil (17/10/2026, por pedido): reemplazó al cartel
+     «Decisor contactado», que decía lo mismo que la etiqueta «Decisor» del contacto. */
+  const fijarDecisores = (campos: CampoDecisor[]) =>
+    fijar(...CONTACTOS.filter(c => campos.includes(camposDe(c).decisor)))
   const contactos: Contacto[] = [
     ...(principalCargado || agregadas.includes('principal') ? ['principal' as const] : []),
     ...visibles.map(i => OTRAS_PERSONAS[i].telefono),
   ]
-  const arriba = contactos.filter(c => fijados.includes(c))
+  /* El de Google Maps sin nombre es la oficina, no una persona: no se dibuja como contacto. Sigue
+     contando en `contactos` para que «Agregar contacto» no elija su casillero. */
+  const esOficina = (c: Contacto) => {
+    const f = camposDe(c)
+    return !f.nombres.some(n => (lead.client?.[n.campo] ?? '').trim())
+      && esTelefonoDeOficina(lead.client?.[f.telefono], lead.client)
+  }
+  /* Un contacto con solo el email cargado no es una persona (17/10/2026, por pedido): se ve en
+     «Emails» y nada más. Con un nombre, teléfono, rol, notas o decisor vuelve a ser alguien. */
+  const esSoloEmail = (c: Contacto) => {
+    const f = camposDe(c)
+    const cargado = (campo: keyof Borrador) => !!(lead.client?.[campo] ?? '').trim()
+    return cargado(f.email) && (lead.client?.[f.decisor] ?? null) === null
+      && ![...f.nombres.map(n => n.campo), f.telefono, f.rol, f.notas].some(cargado)
+  }
+  const personas = contactos.filter(c => !esOficina(c) && !esSoloEmail(c))
+  const arriba = personas.filter(c => fijados.includes(c))
+
+  /* Teléfonos y emails sueltos (pestaña de la inmobiliaria). Sin nada guardado, el de Google Maps
+     nace fijado: es el número de la agencia y casi siempre a quien se llama primero. */
+  const digitosDe = (t: string) => t.replace(/\D/g, '')
+  const telefonosSueltos: DatoSuelto[] = telefonosDelCliente(lead.client).map(t => ({
+    clave: `tel:${digitosDe(t.numero)}`, valor: t.numero, google: t.etiqueta === ETIQUETA_OFICINA,
+  }))
+  // Los de todas las personas, sin repetir.
+  const emailsSueltos: DatoSuelto[] = [...new Set(
+    [lead.client?.email, lead.client?.alternative_phone_1_email, lead.client?.alternative_phone_2_email]
+      .map(e => e?.trim() ?? '').filter(Boolean),
+  )].map(e => ({ clave: `mail:${e.toLowerCase()}`, valor: e }))
+  const [datosFijados, setDatosFijados] = useState<string[]>(() => {
+    const guardados = leerDatosFijados(lead.client?.id)
+    if (guardados) return guardados
+    const google = lead.client?.google_maps_phone?.trim()
+    return google ? [`tel:${digitosDe(google)}`] : []
+  })
+  const alternarDato = (clave: string) => {
+    const nuevos = datosFijados.includes(clave) ? datosFijados.filter(x => x !== clave) : [...datosFijados, clave]
+    setDatosFijados(nuevos)
+    guardarDatosFijados(lead.client?.id, nuevos)
+  }
+  const datosArriba = [...telefonosSueltos, ...emailsSueltos].filter(d => datosFijados.includes(d.clave))
   // El próximo que se agrega: el principal primero, después los alternativos en orden.
   const libre = CONTACTOS.find(c => !contactos.includes(c))
   /* El contacto abierto en la ventanita de edición. Agregar uno lo abre ahí: la fila no dibuja
@@ -260,18 +356,16 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
      que nunca pisa a nadie. El de Idealista NO entra como contacto (12/10/2026, por pedido): vive
      en «Datos de la inmobiliaria». Los que ya se habían copiado a un alternativo se quitan al abrir
      (`copiasDelTelefonoDeIdealista`), salvo que alguien ya le haya cargado rol, notas o decisor. */
+  /* Desde el 17/10/2026 (por pedido) el de Google Maps ya NO se copia a un contacto: la oficina no
+     es una persona. Vive en «Teléfonos» de la pestaña de la inmobiliaria y nace fijado ahí (ver
+     `datosFijados`). Los que ya se habían copiado siguen en su casillero pero no se dibujan como
+     contacto (`esOficina`). */
   const telefonosCargados = useRef(false)
   useEffect(() => {
     const client = lead.client
     if (telefonosCargados.current || !escribe || !client) return
     telefonosCargados.current = true
-    const google = casilleroParaTelefonoDeGoogle(client)
-    if (google) {
-      const origen = google === 'phone' ? 'phone_source' : `${google}_source` as const
-      actualizarCliente.mutate({ clientId: client.id, patch: { [google]: client.google_maps_phone, [origen]: 'google_maps' } as ClientePatch })
-      fijar(google === 'phone' ? 'principal' : google)
-    }
-    for (const i of copiasDelTelefonoDeIdealista(client)) quitarPersona(i)
+    for (const i of copiasDelTelefonoDeIdealista(client)) quitarPersona(OTRAS_PERSONAS[i].telefono)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- una vez por lead: el cuerpo va con key = lead
   }, [lead.client, escribe])
 
@@ -310,16 +404,8 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
     </Select>
   )
 
-  /* Rol y notas de un contacto, los dos de texto libre. Las notas crecen con lo escrito
-     (`field-sizing-content` del Textarea) desde un renglón: vacías no ocupan más que un campo. */
-  const rolPersona = (campo: 'contact_role' | `alternative_phone_${1 | 2}_role`, decisor: CampoDecisor) => (
-    <div className="flex items-center gap-1">
-      <Icon icon={Briefcase} size="sm" className="ml-1 text-(--fg-faint)" />
-      {campoPersona(campo, 'Rol', 'Rol (ej.: dueño, gerente comercial)')}
-      {decisorPersona(decisor)}
-    </div>
-  )
-
+  /* Las notas de un contacto crecen con lo escrito (`field-sizing-content` del Textarea) desde un
+     renglón: vacías no ocupan más que un campo. */
   /* Si el contacto decide en la inmobiliaria, al lado del rol. Se guarda al elegir, solo (columna
      pendiente de migración). Lo completa también la llamada al contestar «Sí»; mientras esté vacío,
      la llamada lo pregunta. Tocar la opción marcada la apaga: vuelve a «no se sabe». */
@@ -360,10 +446,10 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
     </div>
   )
 
-  const botonFijar = (c: Contacto) => {
-    const fijo = fijados.includes(c)
+  const botonFijar = (c: Contacto) => botonPin(fijados.includes(c), () => alternarFijado(c))
+  const botonPin = (fijo: boolean, onClick: () => void) => {
     return (
-      <button type="button" onClick={() => alternarFijado(c)} aria-pressed={fijo}
+      <button type="button" onClick={onClick} aria-pressed={fijo}
         aria-label={fijo ? 'Desfijar contacto' : 'Fijar arriba'} title={fijo ? 'Desfijar' : 'Fijar arriba'}
         className={cn('flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md hover:bg-(--surface-2)',
           fijo ? 'text-foreground' : 'text-(--fg-faint) hover:text-foreground')}>
@@ -372,12 +458,93 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
     )
   }
 
+  /* El contacto fijado en el perfil, de solo lectura y en dos renglones (17/10/2026, por pedido):
+     «Pedro / Director» con una etiqueta «Decisor» o «No decisor» (no los botones Sí/No, que se leían
+     como un campo para elegir), y abajo el teléfono y el email. Se edita desde el lápiz; el detalle
+     completo vive en «Personas», en la pestaña de la inmobiliaria. */
+  const filaCompacta = (c: Contacto, f: CamposDeContacto) => {
+    const valor = (campo: keyof Borrador) => (lead.client?.[campo] ?? '').trim()
+    const nombre = f.nombres.map(n => valor(n.campo)).filter(Boolean).join(' ')
+    const rol = valor(f.rol)
+    const decide = decisorDe(f.decisor)
+    const telefono = valor(f.telefono)
+    const email = valor(f.email)
+    /* «Contactado» (17/10/2026, por pedido): esta persona estuvo en la llamada con el decisor que da
+       por contactado al lead. La llamada guarda con quién por nombre, el mismo que arma
+       `contactosConDecisor`, así que se lo busca por ahí y no por el nombre que se ve acá. */
+    const comoSeLlama = contactosConDecisor(lead.client).find(p => p.campoDecisor === f.decisor)?.nombre
+    const contactado = !!decisor && !!comoSeLlama && decisor.con.includes(comoSeLlama)
+    return (
+      <li key={c} className="flex items-center gap-1 p-1.5">
+        <Icon icon={User} size="sm" className="ml-1 shrink-0 text-(--fg-faint)" />
+        <div className="min-w-0 flex-1 px-1.5">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 truncate text-[13px] font-medium text-foreground">
+              {nombre || <span className="text-(--fg-faint)">Sin nombre</span>}
+              {rol && <span className="font-normal text-(--fg-muted)"> / {rol}</span>}
+            </span>
+            {decide !== null && (
+              <span className={cn('shrink-0 rounded-full px-1.5 py-px text-[10.5px] font-semibold',
+                decide ? 'bg-(--brand-soft) text-(--brand-soft-fg)' : 'bg-(--surface-2) text-(--fg-muted)')}>
+                {decide ? 'Decisor' : 'No decisor'}
+              </span>
+            )}
+            {contactado && (
+              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--success-soft) px-1.5 py-px text-[10.5px] font-semibold text-(--success)"
+                title={`Contactado el ${fmtFechaCompleta(toIsoDate(new Date(decisor.fecha)))}`}>
+                <Check size={10} strokeWidth={3} aria-hidden />Contactado
+              </span>
+            )}
+          </div>
+          {/* El teléfono y el email del contacto, los que tenga cargados (17/10/2026, por pedido: el
+              email se había sacado ese mismo día y volvió). Cada uno con su botón de copiar. */}
+          {(telefono || email) && (
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[12px] text-(--fg-2)">
+              {telefono && (
+                <span className="inline-flex shrink-0 items-center gap-1">
+                  <Phone size={11} aria-hidden className="text-(--fg-faint)" />
+                  <span className="tabular-nums">{telefono}</span><BotonCopiar texto={telefono} />
+                </span>
+              )}
+              {email && (
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  <Mail size={11} aria-hidden className="shrink-0 text-(--fg-faint)" />
+                  <span className="min-w-0 truncate">{email}</span><BotonCopiar texto={email} />
+                </span>
+              )}
+            </div>
+          )}
+          {esTelefonoDeIdealista(lead.client?.[f.telefono], lead.client) && (
+            <p className="flex items-center gap-1 text-[11px] text-warning">
+              <TriangleAlert size={11} aria-hidden className="shrink-0" />Redirector de Idealista: último recurso
+            </p>
+          )}
+        </div>
+        {escribe && (
+          <button type="button" onClick={() => setContactoEnEditor(c)} aria-label="Editar contacto" title="Editar contacto"
+            className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-(--fg-faint) hover:bg-(--surface-2) hover:text-foreground">
+            <Pencil size={14} />
+          </button>
+        )}
+        {botonFijar(c)}
+        {escribe && (
+          <button type="button" onClick={() => quitarPersona(c)} aria-label="Quitar persona" title="Quitar persona"
+            className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-(--fg-faint) hover:bg-(--surface-2) hover:text-foreground">
+            <X size={14} />
+          </button>
+        )}
+      </li>
+    )
+  }
+
   /* La fila dibuja solo lo que el contacto tiene cargado (se sigue editando en el lugar). Lo que
      falta no se dibuja vacío: se completa desde el lápiz, que aparece mientras falte algo y abre
      el contacto entero en una ventanita. */
+  /* Las personas se ven compactas en los dos lados, perfil e inmobiliaria (17/10/2026, por pedido):
+     solo lo cargado, como el contacto fijado; lo vacío se completa desde el lápiz. La fila larga
+     queda para el teléfono de la oficina. */
   const filaContacto = (c: Contacto) => {
     const f = camposDe(c)
-    const i = OTRAS_PERSONAS.findIndex(p => p.telefono === c)
     const nombres = f.nombres.filter(n => hay(n.campo))
     /* El de Google Maps sin nombre es el teléfono de la oficina, no una persona (16/10/2026, por
        pedido): se rotula así y no pide rol ni decisor. Con un nombre escrito vuelve a ser alguien. */
@@ -385,6 +552,7 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
     const falta = oficina
       ? [f.telefono, f.origen, f.notas].some(campo => !hay(campo))
       : columnasDe(f).some(campo => !hay(campo)) || decisorDe(f.decisor) === null
+    if (!oficina) return filaCompacta(c, f)
     return (
       <li key={c} className="flex flex-col gap-0.5 p-1.5">
         <div className="flex items-center gap-1">
@@ -406,8 +574,8 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
             </button>
           )}
           {botonFijar(c)}
-          {escribe && c !== 'principal' && (
-            <button type="button" onClick={() => quitarPersona(i)} aria-label="Quitar persona" title="Quitar persona"
+          {escribe && (
+            <button type="button" onClick={() => quitarPersona(c)} aria-label="Quitar persona" title="Quitar persona"
               className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-(--fg-faint) hover:bg-(--surface-2) hover:text-foreground">
               <X size={14} />
             </button>
@@ -427,13 +595,6 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
             Último recurso: es un redirector de Idealista. Solo si no hay otro teléfono.
           </p>
         )}
-        {f.email && hay(f.email) && (
-          <div className="flex items-center gap-1">
-            <Icon icon={Mail} size="sm" className="ml-1 text-(--fg-faint)" />
-            {campoPersona(f.email, 'Email', 'email@inmobiliaria.com', undefined, 'email')}
-          </div>
-        )}
-        {!oficina && (hay(f.rol) || decisorDe(f.decisor) !== null) && rolPersona(f.rol, f.decisor)}
         {hay(f.notas) && notasPersona(f.notas)}
       </li>
     )
@@ -470,7 +631,7 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
                 {origenTelefono(enEditor.origen)}
               </div>
             </div>
-            {enEditor.email && campoEditor(enEditor.email, 'Email', 'email@inmobiliaria.com', 'email')}
+            {campoEditor(enEditor.email, 'Email', 'email@inmobiliaria.com', 'email')}
             {!editorEsOficina && (
               <div className="flex items-end gap-2">
                 <div className="min-w-0 flex-1">{campoEditor(enEditor.rol, 'Rol', 'Ej.: dueño, gerente comercial')}</div>
@@ -501,8 +662,8 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
      «Agregar contacto» va con ellos: el nuevo nace sin fijar. */
   const otrosContactos = (
     <div className="flex min-w-0 flex-col">
-      {contactos.length > 0
-        ? <ul className={LISTA_CONTACTOS}>{contactos.map(filaContacto)}</ul>
+      {personas.length > 0
+        ? <ul className={LISTA_CONTACTOS}>{personas.map(c => filaContacto(c))}</ul>
         : <p className="py-1 text-[12.5px] text-(--fg-muted)">Sin contactos.</p>}
       {escribe && libre && (
         <button type="button" onClick={() => agregar(libre, false)}
@@ -512,6 +673,23 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
       )}
     </div>
   )
+
+  /* Un teléfono o un email suelto: pelado, con el pin al final. El de Google Maps lleva su rótulo. */
+  const filaDato = (d: DatoSuelto, icono: typeof Phone) => (
+    <li key={d.clave} className="flex min-w-0 items-center gap-1.5 py-0.5 pl-1">
+      <Icon icon={icono} size="sm" className="shrink-0 text-(--fg-faint)" />
+      <span className="min-w-0 truncate text-[13px] font-medium tabular-nums text-foreground" title={d.valor}>{d.valor}</span>
+      {d.clave.startsWith('tel:') && <BotonCopiar texto={d.valor} />}
+      {d.google && <span className="shrink-0 text-[11px] text-(--fg-faint)">Google Maps</span>}
+      <span className="flex-1" />
+      {botonPin(datosFijados.includes(d.clave), () => alternarDato(d.clave))}
+    </li>
+  )
+  const listaDatos = (datos: DatoSuelto[], icono: typeof Phone, vacio: string) => datos.length > 0
+    ? <ul className="flex min-w-0 flex-col">{datos.map(d => filaDato(d, icono))}</ul>
+    : <p className="py-1 text-[12.5px] text-(--fg-faint)">{vacio}</p>
+  const telefonosNodo = listaDatos(telefonosSueltos, Phone, 'Sin teléfonos')
+  const emailsNodo = listaDatos(emailsSueltos, Mail, 'Sin emails')
 
   return (
     <>
@@ -558,7 +736,7 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
 
       {/* Abajo de lg se apila: el perfil y debajo la actividad, con el compositor al pie de ella.
           Desde lg el perfil es una sola columna (inmobiliaria, tareas, notas) al lado de la actividad. */}
-      <div className="ui-scale grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(320px,1fr)_minmax(360px,2.1fr)] lg:overflow-hidden">
+      <div className="ui-scale grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(380px,1.4fr)_minmax(360px,2.1fr)] lg:overflow-hidden">
         <aside className="flex min-w-0 flex-col gap-2.5 bg-(--surface-2) p-3 lg:min-h-0 lg:overflow-y-auto lg:[border-right:1px_solid_var(--line)]">
           {/* Empresa y personas en un solo bloque: la inmobiliaria arriba y debajo quién atiende,
               cada uno con su rol y cómo se lo contacta. */}
@@ -585,9 +763,12 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
                     else actualizarLead.mutate({ id: lead.id, patch: { funnel_stage_id: id, discard_reason: null, recontact_at: null } })
                   }}
                 >
+                  {/* El estado ocupa todo el botón y va en el color de marca (17/10/2026, por pedido): como
+                      chapita chica se perdía al lado del nombre. */}
                   <SelectTrigger aria-label="Estado"
-                    className="h-9 w-[46%] shrink-0 justify-between gap-1 border-transparent bg-transparent px-1 shadow-none hover:border-input">
-                    <StageBadge etapa={etapaDelLead(lead, etapasPorId)} className="gap-2 py-[5px] px-[12px] text-[12.5px]" />
+                    className="h-10! w-[46%] shrink-0 justify-between gap-1 rounded-lg border-transparent bg-(--brand-soft) px-1 shadow-none [border:1px_solid_var(--brand-100)] hover:brightness-95">
+                    <StageBadge etapa={etapaDelLead(lead, etapasPorId)}
+                      className="min-w-0 flex-1 justify-center truncate [border:0] bg-transparent py-1.5 px-2 text-[14px] font-bold text-(--brand-soft-fg)" />
                   </SelectTrigger>
                   <SelectContent align="end">
                     {opcionesEtapa.map(e => (
@@ -601,21 +782,17 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
               {descartandoLead && descartada && (
                 <DescartarLeadDialog leadId={lead.id} etapa={descartada} onClose={() => setDescartandoLead(false)} />
               )}
-              {/* Si ya se habló con quien decide, aparte de la etapa (16/10/2026, por pedido): sale de
-                  las llamadas registradas (`decisorContactado`), así que no se edita acá. */}
-              {decisor && (
-                <p className="mt-1.5 flex items-center gap-1.5 self-start rounded-md bg-(--success-soft) px-2.5 py-1 text-[12.5px] font-medium text-(--success)"
-                  title={`Primera llamada con el decisor: ${fmtFechaCompleta(toIsoDate(new Date(decisor.fecha)))}`}>
-                  <UserCheck size={14} aria-hidden />
-                  Decisor contactado{decisor.con.length > 0 && ` · ${decisor.con.join(', ')}`}
-                  <span className="font-normal opacity-80">· {fmtFechaCompleta(toIsoDate(new Date(decisor.fecha)))}</span>
-                </p>
-              )}
 
               {/* Acá solo los fijados. Todos, fijados incluidos, viven en la pestaña de la inmobiliaria (`otrosContactos`):
                   fue un desplegable debajo de estos y se mudó por pedido, para que el perfil diga a
                   quién se llama y el detalle de la inmobiliaria tenga a todos. */}
-              {arriba.length > 0 && <ul className={cn(LISTA_CONTACTOS, 'mt-1.5')}>{arriba.map(filaContacto)}</ul>}
+              {arriba.length > 0 && <ul className={cn(LISTA_CONTACTOS, 'mt-1.5')}>{arriba.map(c => filaContacto(c))}</ul>}
+              {/* Los teléfonos y emails sueltos que se fijaron en la pestaña de la inmobiliaria. */}
+              {datosArriba.length > 0 && (
+                <ul className={cn(LISTA_CONTACTOS, 'mt-1.5 px-1')}>
+                  {datosArriba.map(d => filaDato(d, d.clave.startsWith('mail:') ? Mail : Phone))}
+                </ul>
+              )}
               {/* Sin nadie fijado, en vez de una ficha vacía, la puerta para cargar uno: nace fijado,
                   que es lo que se vino a hacer acá. */}
               {arriba.length === 0 && escribe && libre && (
@@ -669,7 +846,7 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
 
         <div className="flex min-h-[75vh] min-w-0 flex-col lg:min-h-0">
           <ActividadLead lead={lead} detalle={detalleQ.data} cargando={detalleQ.isLoading} puedeEscribir={escribe}
-            pestana={pestana} otrosContactos={otrosContactos} />
+            pestana={pestana} onDecisorContactado={fijarDecisores} otrosContactos={otrosContactos} telefonosSueltos={telefonosNodo} emailsSueltos={emailsNodo} />
         </div>
       </div>
     </>
@@ -684,17 +861,18 @@ function CuerpoDelLead({ lead, indice, total, pestana, setPestana, onPaso, onSta
  * Sin pestañas: a la izquierda el perfil (datos con la etapa arriba, tareas, notas) y a la
  * derecha la actividad, que es lo que se viene a leer y a escribir.
  */
-export function LeadDialog({ lead, indice, total, onPaso, onCerrar, onStartReassign }: {
+export function LeadDialog({ lead, indice, total, hayAnterior, haySiguiente, onPaso, onCerrar, onStartReassign }: {
   lead: CrmLeadRow | null
-  /** Posición en la lista filtrada; −1 si el lead abierto no está en ella (llegó por enlace). */
+  /** Posición en la lista filtrada; −1 si el lead abierto no está en ella (llegó por enlace o se descartó). */
   indice: number
   total: number
+  /** Los decide la lista (`vecinosEnRecorrido`): un lead que se fue de ella sigue teniendo vecinos. */
+  hayAnterior: boolean
+  haySiguiente: boolean
   onPaso: (delta: -1 | 1) => void
   onCerrar: () => void
   onStartReassign?: (leadId: string) => void
 }) {
-  const hayAnterior = indice > 0
-  const haySiguiente = indice !== -1 && indice < total - 1
   /* La pestaña vive acá y no en el cuerpo: el cuerpo se remonta con cada lead (`key`), y pasar
      al siguiente desde la pestaña de la inmobiliaria tiene que dejarte en la inmobiliaria. Al
      cerrar el dialog vuelve a la actividad. */
@@ -741,7 +919,7 @@ export function LeadDialog({ lead, indice, total, onPaso, onCerrar, onStartReass
         <DialogTitle className="sr-only">{lead ? nombreDelLead(lead.client) : 'Lead'}</DialogTitle>
         <DialogDescription className="sr-only">Estado, datos, tareas, notas y actividad del lead.</DialogDescription>
         {lead && (
-          <CuerpoDelLead key={lead.id} lead={lead} indice={indice} total={total} pestana={pestana} setPestana={setPestana} onPaso={onPaso} onStartReassign={onStartReassign} />
+          <CuerpoDelLead key={lead.id} lead={lead} indice={indice} total={total} hayAnterior={hayAnterior} haySiguiente={haySiguiente} pestana={pestana} setPestana={setPestana} onPaso={onPaso} onStartReassign={onStartReassign} />
         )}
       </DialogContent>
     </Dialog>

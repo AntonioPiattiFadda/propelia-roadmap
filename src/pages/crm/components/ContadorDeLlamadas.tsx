@@ -7,10 +7,11 @@ import { useObjetivos } from '../hooks/useObjetivos'
 import { escribirFiltros, filtrosDesdeUrl } from '../lib/leadFilterParams'
 import type { Objetivo } from '../lib/objetivos'
 
+// «No respondidas» va primera, a la izquierda (17/10/2026, por pedido), en el contador y en el diálogo.
 const COLUMNAS: { k: Objetivo; label: string; title: string }[] = [
+  { k: 'noRespondidas', label: 'No respondidas', title: 'Llamadas que nadie atendió' },
   { k: 'contestadas', label: 'Contestadas', title: 'Llamadas en las que hablaste con alguien de la inmobiliaria' },
   { k: 'decisores', label: 'Con decisor', title: 'De las contestadas, en cuántas hablaste con alguien que decide' },
-  { k: 'noRespondidas', label: 'No respondidas', title: 'Llamadas que nadie atendió' },
   { k: 'demos', label: 'Demos agendadas', title: 'Demos que agendaste (cuenta el día en que se agendaron, no para cuándo son)' },
 ]
 
@@ -18,15 +19,16 @@ const numero = (n: number | undefined) => (
   <span className={cn('tabular-nums', n === undefined && 'text-(--fg-faint)')}>{n ?? '–'}</span>
 )
 
-/* Lo que registré HOY, en cuatro números: cuántas llamadas atendió alguien, cuántas de esas con un
-   decisor, cuántas no respondieron y cuántas demos agendé. Cada número es un botón: filtra la lista a
-   esos leads (`?objetivo=`) y otro clic lo saca. El rótulo «Objetivos hoy» abre los mismos números
-   de hoy, de la semana (desde el lunes) y del mes corriente. */
+/* Lo que registré ESTA SEMANA, en cuatro números: cuántas llamadas atendió alguien, cuántas de esas
+   con un decisor, cuántas no respondieron y cuántas demos agendé. Fue «Objetivos hoy» y desde el
+   17/10/2026 (por pedido) cuenta desde el lunes: vuelve a cero cuando termina el domingo. Cada
+   número es un botón: filtra la lista a esos leads (`?objetivo=`, también de la semana) y otro clic
+   lo saca. El rótulo abre los mismos números de hoy, de la semana y del mes corriente. */
 export function ContadorDeLlamadas() {
   const [abierto, setAbierto] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const elegido = filtrosDesdeUrl(searchParams).objetivo
-  const { data, isError } = useObjetivos(localTodayIso())
+  const { data, isError } = useObjetivos(startOfWeekIso(localTodayIso()))
   if (isError) return null
 
   const alternar = (k: Objetivo) =>
@@ -34,11 +36,11 @@ export function ContadorDeLlamadas() {
 
   return (
     <>
-      <div role="group" aria-label="Objetivos de hoy"
+      <div role="group" aria-label="Objetivos de la semana"
         className="flex flex-wrap items-stretch overflow-hidden rounded-lg bg-card [border:1px_solid_var(--line)]">
         <button type="button" onClick={() => setAbierto(true)} title="Ver hoy, la semana y el mes"
           className="flex cursor-pointer items-center px-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-(--fg-muted) hover:bg-(--surface-2) hover:text-foreground">
-          Objetivos hoy
+          Objetivos semanales
         </button>
         {COLUMNAS.map(c => (
           <button key={c.k} type="button" aria-pressed={elegido === c.k}
@@ -60,7 +62,7 @@ export function ContadorDeLlamadas() {
 
 function ObjetivosDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const hoy = localTodayIso()
-  // Las tres se piden recién al abrir: la de hoy es la misma consulta que el contador y sale de la caché.
+  // Las tres se piden recién al abrir: la de la semana es la misma consulta que el contador y sale de la caché.
   const periodos = [
     { label: 'Hoy', q: useObjetivos(hoy, open) },
     { label: 'Esta semana', q: useObjetivos(startOfWeekIso(hoy), open) },

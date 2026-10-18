@@ -5,6 +5,7 @@ import { PhoneInput } from '@/components/ui/phone-input'
 import { cn } from '@/lib/utils'
 import { useActualizarCliente } from '../hooks/useLeadMutaciones'
 import { enlaceDeWeb, parsearAgentes, webALaVista } from '../lib/inmobiliaria'
+import { investigacionDeClaude } from '../lib/investigacion'
 import type { ClientePatch } from '../service/crm.service'
 import type { CrmLeadRow } from '../types'
 
@@ -78,7 +79,6 @@ const BLOQUE_DE = new Map<Campo, Bloque>([
   ['google_maps_phone', 'telefonos'],
 ])
 
-const digitos = (t: string | null | undefined) => (t ?? '').replace(/\D/g, '')
 
 function Seccion({ titulo, accion, children }: { titulo: string; accion?: ReactNode; children: ReactNode }) {
   return (
@@ -115,14 +115,18 @@ function BotonEditar({ editando, onClick }: { editando: boolean; onClick: () => 
   )
 }
 
-export function InmobiliariaDelLead({ lead, puedeEscribir, otrosContactos }: {
+export function InmobiliariaDelLead({ lead, puedeEscribir, otrosContactos, telefonos, emails }: {
   lead: CrmLeadRow
   puedeEscribir: boolean
   /** Todos los contactos (los fijados también), ya dibujados por el perfil: el borrador de cada persona es uno solo y
    *  vive allá, así que se los recibe hechos en vez de editarlos con un segundo borrador acá. */
   otrosContactos?: ReactNode
+  /** Los teléfonos y emails sueltos, también hechos por el perfil: el fijado de cada uno vive allá. */
+  telefonos?: ReactNode
+  emails?: ReactNode
 }) {
   const actualizarCliente = useActualizarCliente()
+  const investigacion = investigacionDeClaude(lead.client?.sdr_advice)
 
   // Mismo patrón que el perfil: borrador local, se guarda campo por campo al salir y lo que llega
   // por realtime se toma solo si no estoy escribiendo.
@@ -203,41 +207,45 @@ export function InmobiliariaDelLead({ lead, puedeEscribir, otrosContactos }: {
     <Fila key={d.c} rotulo={d.rotulo}>{enEdicion === b ? campoDe(d) : leer(d.c)}</Fila>
   )
 
-  // El de Google, si no entró como contacto (por dígitos: el formato cambia).
-  const client = lead.client
-  const deContactos = [client?.phone, client?.alternative_phone_1, client?.alternative_phone_2].map(digitos)
-  const googleSuelto = !!digitos(client?.google_maps_phone) && !deContactos.includes(digitos(client?.google_maps_phone))
-
-  /* Tres columnas cuando el panel da (container query, no el ancho de la pantalla: lo que manda es
+  /* Dos columnas cuando el panel da (container query, no el ancho de la pantalla: lo que manda es
      el panel, que vive al lado de la actividad); más angosto se apilan en el mismo orden. */
   return (
     <div className="@container flex min-h-0 flex-1 flex-col overflow-y-auto bg-(--surface-2) p-2.5">
-      <div className="grid items-start gap-2.5 @[760px]:grid-cols-3">
+      <div className="grid items-start gap-2.5 @[560px]:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-2.5">
-          {otrosContactos && <Seccion titulo="Otros contactos">{otrosContactos}</Seccion>}
+          {/* Teléfonos y emails sueltos, cada uno en su sección (17/10/2026, por pedido): pelados y
+              fijables. Los arma el perfil, que es donde viven los fijados. */}
+          {telefonos && <Seccion titulo="Teléfonos">{telefonos}</Seccion>}
+          {emails && <Seccion titulo="Emails">{emails}</Seccion>}
 
-          {googleSuelto && (
-            <Seccion titulo="Otros teléfonos" accion={botonEditar('telefonos')}>
-              <Ficha>{fila('telefonos', { c: 'google_maps_phone', rotulo: 'Google Maps', placeholder: '' })}</Ficha>
+          {otrosContactos && <Seccion titulo="Personas">{otrosContactos}</Seccion>}
+
+          {/* Solo lectura: es lo que trajo la importación, no un dato del perfil. */}
+          {investigacion && (
+            <Seccion titulo="Investigación de Claude">
+              <p className="whitespace-pre-wrap py-1 text-[13px] leading-snug text-foreground">{investigacion}</p>
             </Seccion>
           )}
         </div>
 
         {/* El de Idealista con el aviso escrito, no en un tooltip: es un redirector, y llamar por
             ahí a la agencia le entra como un interesado en un piso. */}
-        <Seccion titulo="Datos de la inmobiliaria" accion={botonEditar('empresa')}>
-          <Ficha>{DATOS_EMPRESA.map(d => fila('empresa', d))}</Ficha>
-          {!!borrador.idealista_phone.trim() && (
-            <p className="mt-1.5 flex items-start gap-1.5 rounded-md bg-warning-soft px-2 py-1.5 text-[11.5px] leading-snug text-warning">
-              <TriangleAlert size={13} aria-hidden className="mt-px shrink-0" />
-              El teléfono de Idealista es el último recurso: es un redirector. Solo si no hay otro.
-            </p>
-          )}
-        </Seccion>
+        {/* Presencia online va debajo de los datos, en la misma columna (17/10/2026, por pedido). */}
+        <div className="flex min-w-0 flex-col gap-2.5">
+          <Seccion titulo="Datos de la inmobiliaria" accion={botonEditar('empresa')}>
+            <Ficha>{DATOS_EMPRESA.map(d => fila('empresa', d))}</Ficha>
+            {!!borrador.idealista_phone.trim() && (
+              <p className="mt-1.5 flex items-start gap-1.5 rounded-md bg-warning-soft px-2 py-1.5 text-[11.5px] leading-snug text-warning">
+                <TriangleAlert size={13} aria-hidden className="mt-px shrink-0" />
+                El teléfono de Idealista es el último recurso: es un redirector. Solo si no hay otro.
+              </p>
+            )}
+          </Seccion>
 
-        <Seccion titulo="Presencia online" accion={botonEditar('online')}>
-          <Ficha>{DATOS_ONLINE.map(d => fila('online', d))}</Ficha>
-        </Seccion>
+          <Seccion titulo="Presencia online" accion={botonEditar('online')}>
+            <Ficha>{DATOS_ONLINE.map(d => fila('online', d))}</Ficha>
+          </Seccion>
+        </div>
       </div>
     </div>
   )

@@ -6,7 +6,7 @@ import {
 } from './tareas'
 
 const tarea = (over: Partial<CrmTask>): CrmTask => ({
-  id: 't', lead_id: 'l1', title: 'x', due_date: '2026-09-30', planned_for: null, assigned_to: 'u',
+  id: 't', lead_id: 'l1', title: 'x', due_date: '2026-09-30', due_time: null, planned_for: null, assigned_to: 'u',
   completed: false, completed_at: null, recurrence: null, created_by: null, created_at: '',
   updated_at: '', deleted_at: null, ...over,
 })

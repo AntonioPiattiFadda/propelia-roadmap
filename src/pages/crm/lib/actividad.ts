@@ -8,7 +8,7 @@ import { nombreDe } from './permisos'
    con esto», y la respuesta es en orden. */
 export type ItemActividad = {
   id: string
-  tipo: 'comentario' | 'llamada' | 'sistema' | 'gestion' | 'pospuesto' | 'asignacion' | 'reunion' | 'consejo'
+  tipo: 'comentario' | 'llamada' | 'sistema' | 'gestion' | 'pospuesto' | 'asignacion' | 'reunion'
   /** Cuándo pasó (no cuándo vence): lo que ordena la lista. */
   fecha: string
   texto: string
@@ -20,7 +20,13 @@ export type ItemActividad = {
   decisor?: boolean
   /** Solo llamadas: a qué teléfono se llamó (ver `MetaDeActividad`). */
   telefono?: { numero: string; etiqueta: string }
+  /** Solo contactos fallidos: qué intento seguido es (ver `INTENTOS_DE_CONTACTO`). */
+  intento?: number
 }
+
+/** Los contactos fallidos seguidos se cuentan sobre este número: «2/10» (17/10/2026, por pedido).
+ *  No frena nada: el once dice «11/10». */
+export const INTENTOS_DE_CONTACTO = 10
 
 /* Qué fue una actividad escrita a mano —nota o llamada— y con quién, colgado del comentario en
    `long_description`: la columna existe y ninguna pantalla la usaba, y `comment_type` solo admite
@@ -114,22 +120,34 @@ export function decisorContactado(
   return primera
 }
 
-/** Lo que hace falta de la inmobiliaria para dibujar su consejo en la actividad. */
-export type ClienteConConsejo = { id: string; sdr_advice: string | null; created_at: string }
+/** El último número marcado y la última gente con quien se habló, cada uno por su lado (17/10/2026,
+ *  por pedido): «Hablaste con» y «Teléfono contacto» los ofrecen primero. Solo ordenan, no eligen: los dos
+ *  campos siguen arrancando vacíos, para que no se confirmen sin mirarlos. El número sale también
+ *  de un contacto fallido (se marcó igual); la gente, de cualquier actividad que diga con quién. */
+export function ultimoContacto(
+  comments: readonly Pick<LeadDetalle['comments'][number], 'created_at' | 'long_description' | 'deleted_at'>[],
+): { telefono: string | null; con: string[] } {
+  let telefono: { fecha: string; numero: string } | null = null
+  let con: { fecha: string; nombres: string[] } | null = null
+  for (const c of comments) {
+    if (c.deleted_at) continue
+    const m = leerMetaDeActividad(c.long_description)
+    if (!m) continue
+    if (m.telefono && (!telefono || c.created_at > telefono.fecha)) telefono = { fecha: c.created_at, numero: m.telefono.numero }
+    if (m.con.length > 0 && (!con || c.created_at > con.fecha)) con = { fecha: c.created_at, nombres: m.con }
+  }
+  return { telefono: telefono?.numero ?? null, con: con?.nombres ?? [] }
+}
 
-export function lineaDeTiempo(
-  detalle: LeadDetalle, usuarios: Usuario[],
-  cliente?: ClienteConConsejo | null,
-): ItemActividad[] {
-  const consejo = cliente?.sdr_advice?.trim()
+/** Lo último usado adelante y el resto en el orden que traía. */
+export function primeroLosUltimos<T>(xs: readonly T[], esUltimo: (x: T) => boolean): T[] {
+  return [...xs.filter(esUltimo), ...xs.filter(x => !esUltimo(x))]
+}
+
+/* El consejo de Claude ya no es actividad (17/10/2026, por pedido): lo que se muestra de él —
+   personas y teléfonos— vive en la pestaña de la inmobiliaria (`investigacionDeClaude`). */
+export function lineaDeTiempo(detalle: LeadDetalle, usuarios: Usuario[]): ItemActividad[] {
   const items: ItemActividad[] = [
-    /* El consejo de Claude para el SDR se lee acá y en ningún otro lado (12/10/2026 salió del
-       perfil del lead): es lo que tiene abierto el SDR mientras llama. No es un comentario
-       guardado: sale de `crm_clients.sdr_advice` en cada pintado. Se fecha cuando llegó la
-       inmobiliaria: es lo primero. */
-    ...(cliente && consejo
-      ? [{ id: `consejo-${cliente.id}`, tipo: 'consejo' as const, fecha: cliente.created_at, texto: consejo, autorId: null }]
-      : []),
     ...detalle.comments.map(c => {
       if (c.comment_type === 'SYSTEM') return { id: c.id, tipo: 'sistema' as const, fecha: c.created_at, texto: c.description, autorId: c.created_by }
       const meta = leerMetaDeActividad(c.long_description)
@@ -167,7 +185,16 @@ export function lineaDeTiempo(
       autorId: m.created_by,
     })),
   ]
-  return items.sort((a, b) => Date.parse(a.fecha) - Date.parse(b.fecha))
+  items.sort((a, b) => Date.parse(a.fecha) - Date.parse(b.fecha))
+  /* Cada contacto fallido dice qué intento seguido es. La racha la corta una llamada contestada y
+     nada más: una nota o una demo en el medio no significa que alguien haya atendido. */
+  let racha = 0
+  for (const i of items) {
+    if (i.tipo !== 'llamada') continue
+    if (i.resultado === 'no_respondida') i.intento = ++racha
+    else if (i.resultado === 'contestada') racha = 0
+  }
+  return items
 }
 
 /** HH:mm del instante en la zona de quien mira. */

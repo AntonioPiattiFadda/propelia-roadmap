@@ -104,6 +104,8 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   funciones puras en `lib/`. Todo filtro vive en la URL (`leadFilterParams.ts`): los enlaces se
   arman con `enlaceAlCrm()`, nunca a mano. `?owners=` son las carteras mirando y `?lead=` el lead
   abierto en el dialog. El front nunca escribe `gestion_*` ni los historiales.
+  Si el lead abierto se va de la lista (se descartó), las flechas ↑/↓ siguen desde donde estaba
+  (`vecinosEnRecorrido`, `lib/recorrido.ts`, 17/10/2026): antes se apagaban.
 - **Sin prioridades ni gestión en el front desde el 10/10/2026** (se sacaron para rediseñarlas de
   cero): ni el color de prioridad de la etapa, ni el catálogo `crm_priorities`, ni las columnas de
   prioridad y tiempo de gestión del funnel, ni Pendiente/Gestionado/Pospuesto, ni «Posponer», ni
@@ -116,10 +118,16 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   lado del rol en el perfil. La llamada pregunta «¿Es decisor?» solo mientras el perfil no lo sepa
   (`decisorSabido`); contestar «Sí» con **un solo** contacto elegido lo marca (`campoDelNuevoDecisor`).
   «No» no se guarda solo, y con varios elegidos no se sabe cuál decide. Reglas en `lib/clientData.ts`.
-- **«Decisor contactado» en el perfil** (16/10/2026): aparte de la etapa, el perfil del lead dice
-  si ya se habló con quien decide, con quién y cuándo. **No es una columna**: sale de la primera
-  llamada contestada y no borrada con `decisor: true` (`decisorContactado()`, `lib/actividad.ts`).
-  Borrar esa llamada lo desmarca. Ese mismo día salió del perfil el bloque del motivo de descarte
+  **El decisor también se apunta** (17/10/2026, por pedido): debajo del texto del registro (salvo en el
+  contacto fallido) hay un campo opcional «Decisor» para el nombre que dio el doorkeeper. Al registrar
+  queda en el perfil marcado como decisor (`conDecisorApuntado`: si ya es contacto lo marca, si no lo
+  carga en el primer casillero libre) y no se fija como contactado. El campo desaparece en cuanto el
+  perfil tiene a alguien marcado como decisor (`tieneDecisor`).
+- **La llamada con el decisor lo fija en el perfil** (17/10/2026): reemplazó al cartel «Decisor
+  contactado» (16/10). El contacto queda marcado como decisor (y se crea si se escribió a mano) y
+  se fija (`decisoresDeLaLlamada()`, `lib/clientData.ts`; el fijado es de cada navegador). Con varios
+  elegidos solo se fijan los que el perfil ya da por decisores. La etiqueta «Contactado» del
+  contacto sigue saliendo de `decisorContactado()` (`lib/actividad.ts`). El 16/10/2026 salió del perfil el bloque del motivo de descarte
   (`discard_reason`/`recontact_at` siguen en la base y en el `DescartarLeadDialog`), y también la
   cruz de «cerrar sin guardar» del encabezado: la salida es «Guardar y cerrar».
 - **El teléfono de Google Maps es «Teléfono oficina»** (16/10/2026): el contacto cuyo número
@@ -127,9 +135,20 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   (`esTelefonoDeOficina`), y no cuenta como persona en «con quién» (`contactosConDecisor`). Con un
   nombre escrito vuelve a ser alguien.
 - **La llamada pregunta a qué teléfono y con quién, por separado** (16/10/2026): no siempre
-  coinciden. «Llamaste a» sale de `telefonosDelCliente()` (cada contacto, la oficina y el de Google
-  si no está en ninguno) y lo piden la llamada y el contacto fallido, vacío y obligatorio mientras
-  haya teléfonos. Se guarda en la meta como `telefono: {numero, etiqueta}`; las viejas no lo traen.
+  coinciden. «Teléfono contacto» (fue «Llamaste a»; desde el 17/10/2026 va debajo de «Hablaste
+  con») sale de `telefonosDelCliente()` (cada contacto, la oficina y el de Google si no está en
+  ninguno) y lo piden la llamada y el contacto fallido, vacío y obligatorio **siempre**, aunque el
+  perfil no tenga teléfonos (se escribe con el «+»). Lo escrito a mano —número o persona— es una
+  pastilla que se elige como las demás y se saca con su ✕: llevaba un «+» y tocarla la borraba,
+  y se la apretaba creyendo que agregaba. Se guarda en la meta como `telefono: {numero, etiqueta}`; las viejas no lo traen.
+  Desde el 17/10/2026 el número también se escribe a mano (uno, haya o no cargados) y al registrar
+  se carga en el perfil: en el contacto con quien se habló si no tiene número, si no en el primer
+  casillero libre (`casilleroDelTelefonoNuevo`). Sin lugar, queda solo en la actividad.
+  Desde el 17/10/2026 las dos filas ofrecen **primero** el último número marcado y la última gente
+  con quien se habló (`ultimoContacto`, `primeroLosUltimos` en `lib/actividad.ts`): solo ordenan,
+  no eligen — siguen arrancando vacías. Y cada contacto fallido dice qué intento seguido es
+  («Contacto fallido 2/10», `intento` en `lineaDeTiempo`, `INTENTOS_DE_CONTACTO`): la racha la
+  corta solo una llamada contestada, y pasado el diez sigue contando («11/10»), no frena nada.
 - **Con quién también se escribe a mano** (16/10/2026): si no está entre los contactos, se tipea
   en el renglón de «Hablaste con» y al registrar se carga solo en el perfil, sin teléfono: el
   principal si está vacío del todo, si no el primer alternativo libre (`patchDeContactosNuevos`).
@@ -159,11 +178,31 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   un tacho al pasar el mouse. Es soft delete de `crm_comments` (la RLS ya deja: write sobre el
   lead), sin confirmar y con «Deshacer» en el aviso. Lo del sistema (etapa, responsable, tareas,
   demos) no se borra desde la actividad. Borrar no deshace la etapa elegida al registrar.
+- **Una tarea puede tener hora y suena 5 minutos antes** (17/10/2026, por pedido): `crm_tasks.due_time`
+  (`time` sin zona; null = todo el día; **desde el 17/10/2026 es hora de España**, `Europe/Madrid`:
+  se elige en un desplegable de 15 en 15 de 07:00 a 23:00 que muestra al lado la hora de Venezuela,
+  o se escribe a mano al lado (la escrita entra al desplegable, `opcionesConLaEscrita`), y la alarma convierte esa hora a la zona de cada navegador — `opcionesDeHora`, `horaEnVenezuela`
+  y `momentoDeLaTarea` en `lib/alarmas.ts`), migración
+  `20261017130259_crm_tasks_due_time`. Se elige en «Nueva tarea», opcional, y se ve al lado del día
+  («Hoy 10:30», `rotuloConHora`). La alarma es `useAlarmasDeTareas`, montada en `AppLayout` para
+  quien puede entrar a `/crm`: mira el reloj cada 20 s y avisa con `Notification` (si hay permiso;
+  se pide al guardar una tarea con hora) y siempre con un toast que abre el lead. Solo las tuyas
+  (`assigned_to`). **Suena solo con la app abierta en alguna pestaña**, aunque esté de fondo: sin
+  push, sin service worker y sin cron, a propósito. Lo que ya sonó se guarda por navegador
+  (`crm-alarmas-avisadas`, con día y hora en la clave: reagendar vuelve a armarla) y pasada una
+  hora de la tarea ya no suena (`MINUTOS_DE_VIGENCIA`): abrir el CRM a la tarde no dispara las de
+  la mañana. Las reglas son puras, en `lib/alarmas.ts`. Sin la migración corrida, la tarea sin hora
+  se crea igual (no manda la columna) y la que tiene hora contesta `FALTA_MIGRACION`.
 - **Los descartados se ven eligiendo «Descartado» en el filtro «Estado»** (16/10/2026): por
   defecto no aparecen. Reemplazó al chip «Incluir descartados»; un `?includeDiscarded=` viejo se
   ignora. La búsqueda, «Para recontactar» y los objetivos los siguen trayendo solos.
+- **«Objetivos semanales»** (17/10/2026; fue «Objetivos hoy»): el contador de la cabecera y su filtro
+  `?objetivo=` cuentan desde el lunes (`startOfWeekIso`) y vuelven a cero al terminar el domingo.
+  El diálogo sigue mostrando hoy, semana y mes. «No respondidas» es la primera columna.
 - **El catálogo se borra con soft delete**: un lead en una etapa borrada la sigue leyendo por
   nombre (`catalogoDeEtapas` trae también las borradas); los menús ofrecen solo las vivas.
+  Las vivas van por `position`, salvo Descartado, que va siempre última (`etapasVivas`, 17/10/2026):
+  las etapas creadas después le quedaban debajo en los menús y en el filtro «Estado».
 - **Lo que trae la importación desde Excel vive en `crm_clients`** (6/10/2026): `import_batch`
   (el lote, ej. `BCN-S01`), `batch_activated_on` («Activada para el SDR»), `selection_reason`
   (`inmovilla`/`new`/`small`: con qué ángulo abre la llamada el SDR), el origen de cada teléfono

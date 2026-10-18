@@ -6,12 +6,14 @@ import { GripVertical, LockIcon, PlusIcon } from 'lucide-react'
 import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
 import { LockedLabel } from '@/components/ui/locked-label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { GESTIONES_DE_ETAPA, gestionDeEtapa, type GestionDeEtapa } from '../lib/gestionDeEtapa'
 
 type DropTarget = { id: string; position: 'before' | 'after' } | null
 
 type Props = {
   stages: CrmStage[]
-  onUpdate: (id: string, payload: { label?: string }) => void
+  onUpdate: (id: string, payload: { label?: string; management_type?: GestionDeEtapa }) => void
   onCreate: () => void
   onDelete: (id: string) => void
   onReorder: (items: { id: string; position: number }[]) => void
@@ -134,6 +136,23 @@ export function StagesTable({
           }
         </td>
         {!compact && (
+          /* Cómo se gestiona la etapa. Arranca sin clasificar (null) y se elige una de las dos;
+             no se vuelve a «sin clasificar» desde acá. */
+          <td className="px-2 py-1">
+            <Select
+              value={gestionDeEtapa(stage.management_type) ?? undefined}
+              onValueChange={(v) => onUpdate(stage.id, { management_type: v as GestionDeEtapa })}
+            >
+              <SelectTrigger aria-label={`Gestión de «${stage.label}»`} className="h-[26px] w-full bg-card text-[12px]">
+                <SelectValue placeholder="Sin clasificar" />
+              </SelectTrigger>
+              <SelectContent>
+                {GESTIONES_DE_ETAPA.map(g => <SelectItem key={g.value} value={g.value}>{g.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </td>
+        )}
+        {!compact && (
           <td className="px-2 py-1 text-right">
             {stage.allow_delete
               ? <InlineDeleteButton
@@ -156,6 +175,7 @@ export function StagesTable({
     <colgroup>
       <col className="w-12" />
       <col />
+      <col className="w-[200px]" />
       <col className="w-11" />
     </colgroup>
   )
@@ -204,6 +224,7 @@ export function StagesTable({
             <tr className="bg-(--surface-2)">
               <th className="text-[10.5px] text-(--fg-2) font-bold uppercase tracking-[0.07em] px-1.5 py-1 border-b border-(--line-strong) text-right">#</th>
               <th className={headCell}>Estado</th>
+              <th className={headCell}>Gestión</th>
               <th className="border-b border-(--line-strong)" />
             </tr>
           </thead>

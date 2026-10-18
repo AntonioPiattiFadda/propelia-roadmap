@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { esTelefonoDeOficina, telefonosDelCliente } from './clientData'
 import {
-  campoDelNuevoDecisor, casilleroParaTelefonoDeGoogle, contactoDelCliente, contactosConDecisor, contactosDelCliente, decisorSabido, EMPTY_CLIENT, esTelefonoDeIdealista, copiasDelTelefonoDeIdealista,
-  inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, patchDeContactosNuevos, validateClientData,
+  campoDelNuevoDecisor, casilleroDelTelefonoNuevo, casilleroParaTelefonoDeGoogle, contactoDelCliente, contactosConDecisor, contactosDelCliente, decisorDelContactoNuevo, decisorSabido, decisoresDeLaLlamada, EMPTY_CLIENT, esTelefonoDeIdealista, copiasDelTelefonoDeIdealista,
+  conDecisorApuntado, inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, patchDeContactosNuevos, tieneDecisor, validateClientData,
 } from './clientData'
 
 describe('validateClientData', () => {
@@ -131,6 +131,54 @@ describe('campoDelNuevoDecisor', () => {
   })
 })
 
+describe('decisoresDeLaLlamada', () => {
+  const laura = { nombre: 'Laura', campoDecisor: 'contact_is_decision_maker', decisor: null } as const
+  const marc = { nombre: 'Marc', campoDecisor: 'alternative_phone_1_is_decision_maker', decisor: true } as const
+  it('con un solo contacto elegido que decide: ese, sepa o no el perfil', () => {
+    expect(decisoresDeLaLlamada([laura, marc], ['Laura'], true, {})).toEqual(['contact_is_decision_maker'])
+    expect(decisoresDeLaLlamada([laura, marc], ['Marc'], true, {})).toEqual(['alternative_phone_1_is_decision_maker'])
+  })
+  it('con varios elegidos: solo los que el perfil ya da por decisores', () => {
+    expect(decisoresDeLaLlamada([laura, marc], ['Laura', 'Marc'], true, {})).toEqual(['alternative_phone_1_is_decision_maker'])
+  })
+  it('el escrito a mano que se cargó como decisor', () => {
+    expect(decisoresDeLaLlamada([], ['Pedro'], true, { alternative_phone_2_note: 'Pedro', alternative_phone_2_is_decision_maker: true }))
+      .toEqual(['alternative_phone_2_is_decision_maker'])
+  })
+  it('sin decisor en la llamada: ninguno', () => {
+    expect(decisoresDeLaLlamada([laura, marc], ['Marc'], false, {})).toEqual([])
+  })
+})
+
+describe('casilleroDelTelefonoNuevo', () => {
+  const vacio = {
+    first_name: null, last_name: null, phone: null,
+    alternative_phone_1: null, alternative_phone_1_note: null, alternative_phone_2: null, alternative_phone_2_note: null,
+  }
+  it('va al contacto con quien se habló, si no tiene número', () => {
+    expect(casilleroDelTelefonoNuevo({ ...vacio, phone: '+34 600', alternative_phone_1_note: 'Ana' }, 'alternative_phone_1_is_decision_maker'))
+      .toBe('alternative_phone_1')
+    expect(casilleroDelTelefonoNuevo({ ...vacio, first_name: 'Pedro' }, 'contact_is_decision_maker')).toBe('phone')
+  })
+  it('si ese contacto ya tiene número, o no se sabe con quién, va al primer casillero libre', () => {
+    expect(casilleroDelTelefonoNuevo({ ...vacio, first_name: 'Pedro', phone: '+34 600' }, 'contact_is_decision_maker'))
+      .toBe('alternative_phone_1')
+    expect(casilleroDelTelefonoNuevo(vacio, null)).toBe('phone')
+    expect(casilleroDelTelefonoNuevo({ ...vacio, first_name: 'Pedro' }, null)).toBe('alternative_phone_1')
+  })
+  it('la persona escrita a mano en la misma llamada se encuentra por su casillero nuevo', () => {
+    const { patch } = patchDeContactosNuevos({ ...vacio, phone: '1' }, ['Ana'], null)
+    expect(decisorDelContactoNuevo(patch, 'Ana')).toBe('alternative_phone_1_is_decision_maker')
+    expect(decisorDelContactoNuevo(patch, 'Marc')).toBeNull()
+    expect(casilleroDelTelefonoNuevo({ ...vacio, phone: '1', ...patch }, 'alternative_phone_1_is_decision_maker')).toBe('alternative_phone_1')
+  })
+  it('sin casillero libre no se pisa a nadie', () => {
+    expect(casilleroDelTelefonoNuevo({
+      ...vacio, phone: '1', alternative_phone_1: '2', alternative_phone_2_note: 'Ana', alternative_phone_2: '3',
+    }, 'alternative_phone_2_is_decision_maker')).toBeNull()
+  })
+})
+
 describe('patchDeContactosNuevos', () => {
   const vacio = {
     first_name: null, last_name: null, phone: null,
@@ -158,6 +206,47 @@ describe('patchDeContactosNuevos', () => {
     expect(patchDeContactosNuevos({ ...vacio, phone: '+34 600 0' }, ['Pedro'], 'Pedro').patch)
       .toEqual({ alternative_phone_1_note: 'Pedro', alternative_phone_1_is_decision_maker: true })
     expect(patchDeContactosNuevos(vacio, ['Pedro'], null).patch).toEqual({ first_name: 'Pedro' })
+  })
+})
+
+describe('tieneDecisor', () => {
+  const vacio = {
+    first_name: null, last_name: null, phone: null,
+    alternative_phone_1: null, alternative_phone_1_note: null, alternative_phone_2: null, alternative_phone_2_note: null,
+  }
+  it('alguien marcado como decisor: sí', () => {
+    expect(tieneDecisor({ ...vacio, alternative_phone_1_note: 'Marc', alternative_phone_1_is_decision_maker: true })).toBe(true)
+  })
+  it('nadie marcado, o marcados como no decisores: no', () => {
+    expect(tieneDecisor({ ...vacio, first_name: 'Laura', contact_is_decision_maker: false })).toBe(false)
+    expect(tieneDecisor(vacio)).toBe(false)
+    expect(tieneDecisor(null)).toBe(false)
+  })
+  it('una marca en un casillero sin nadie no cuenta', () => {
+    expect(tieneDecisor({ ...vacio, alternative_phone_2_is_decision_maker: true })).toBe(false)
+  })
+})
+
+describe('conDecisorApuntado', () => {
+  const vacio = {
+    first_name: null, last_name: null, phone: null,
+    alternative_phone_1: null, alternative_phone_1_note: null, alternative_phone_2: null, alternative_phone_2_note: null,
+  }
+  it('si ya es un contacto (sin importar mayúsculas), lo marca y no lo duplica', () => {
+    expect(conDecisorApuntado({ ...vacio, first_name: 'Laura', alternative_phone_1_note: 'Marc' }, {}, 'marc'))
+      .toEqual({ patch: { alternative_phone_1_is_decision_maker: true }, sinLugar: false })
+  })
+  it('si es uno de los nuevos de esta misma actividad, marca ese casillero', () => {
+    expect(conDecisorApuntado(vacio, { first_name: 'Pedro' }, 'Pedro'))
+      .toEqual({ patch: { first_name: 'Pedro', contact_is_decision_maker: true }, sinLugar: false })
+  })
+  it('si no está, se carga en el primer casillero libre después de los nuevos, como decisor', () => {
+    expect(conDecisorApuntado({ ...vacio, phone: '+34 600 0' }, { alternative_phone_1_note: 'Pedro' }, 'Marta'))
+      .toEqual({ patch: { alternative_phone_1_note: 'Pedro', alternative_phone_2_note: 'Marta', alternative_phone_2_is_decision_maker: true }, sinLugar: false })
+  })
+  it('sin casillero libre no se carga y se avisa', () => {
+    const lleno = { ...vacio, first_name: 'Laura', alternative_phone_1_note: 'Marc', alternative_phone_2_note: 'Ana' }
+    expect(conDecisorApuntado(lleno, {}, 'Marta')).toEqual({ patch: {}, sinLugar: true })
   })
 })
 

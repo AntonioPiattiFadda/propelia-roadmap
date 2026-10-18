@@ -1,7 +1,8 @@
 import { ArrowDownWideNarrow, ChevronDown, Columns3, List, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
-  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuRadioGroup,
+  DropdownMenuRadioItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
@@ -75,7 +76,7 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
 }) {
   const hayFiltros = filtros.q.trim() !== '' || filtros.stageFilter.size > 0 || filtros.sinTareas
     || filtros.overdueOnly || filtros.conTareas || filtros.paraRecontactar || filtros.ordenPorEstado
-    || filtros.conTelMaps || filtros.objetivo !== null
+    || filtros.objetivo !== null
   const columnas = vista === 'columnas'
 
   const alternar = <T,>(set: Set<T>, v: T) => {
@@ -148,29 +149,54 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
 
         {/* «Vencidas» es subfiltro de «Tareas» (12/10/2026): aparece cuando está prendida, o si un
             enlace viejo trae solo `overdue=1`, para que se pueda apagar. Con alguna tarea vencida el
-            chip se pone rojo: es el aviso que antes daba la agenda roja de cada renglón. */}
+            chip se pone rojo: es el aviso que antes daba la agenda roja de cada renglón. Apagado es
+            solo el contorno rojo; el relleno es «prendido» (17/10/2026: relleno siempre, parecía
+            apretado aunque no filtrara). */}
         {(filtros.conTareas || filtros.overdueOnly) && (
           <button type="button" aria-pressed={filtros.overdueOnly}
             className={contadores.overdueLeadCount > 0
-              ? cn(chip(false), 'text-(--danger-fg) bg-(--danger-soft) [border:1px_solid_var(--danger)] hover:bg-(--danger-soft)',
-                filtros.overdueOnly && 'font-semibold [border-width:1.5px]')
+              ? cn(chip(false), 'text-(--danger-fg) [border:1px_solid_var(--danger)] hover:text-(--danger-fg) hover:[border-color:var(--danger)]',
+                filtros.overdueOnly && 'font-semibold bg-(--danger-soft) hover:bg-(--danger-soft) shadow-none [border-width:1.5px]')
               : chip(filtros.overdueOnly)}
             onClick={() => onCambiar({ overdueOnly: !filtros.overdueOnly })}>
             Vencidas <span className="tabular-nums">{contadores.overdueLeadCount}</span>
           </button>
         )}
 
-        {/* Otro subchip de «Tareas»: no filtra, cambia el orden. Prendido, lo más avanzado del
-            funnel va arriba (ordenarPorEstado); apagado, la próxima tarea. Va acá y no en la
-            cabecera de la tabla porque el teléfono no tiene cabecera. */}
-        {/* En columnas no va: ahí el estado ya es la columna. */}
+        {/* Otro subchip de «Tareas»: no filtra, elige el orden (17/10/2026: era el toggle «Ordenar
+            por estado»). Vencimiento = la próxima tarea primero (ordenarPorProximaTarea), el de
+            fábrica; Estado = lo más avanzado del funnel arriba (ordenarPorEstado). Es el mismo
+            `ordenPorEstado` de siempre. Va acá y no en la cabecera de la tabla porque el teléfono
+            no tiene cabecera. En columnas no va: ahí el estado ya es la columna. */}
         {!columnas && (filtros.conTareas || filtros.ordenPorEstado) && (
-          <button type="button" aria-pressed={filtros.ordenPorEstado} className={chip(filtros.ordenPorEstado)}
-            title="Lo más avanzado del funnel arriba; descartados al final"
-            onClick={() => onCambiar({ ordenPorEstado: !filtros.ordenPorEstado })}>
-            <Icon icon={ArrowDownWideNarrow} size="xs" />
-            Ordenar por estado
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className={chip(filtros.ordenPorEstado)}>
+                <Icon icon={ArrowDownWideNarrow} size="xs" />
+                Ordenar: {filtros.ordenPorEstado ? 'estado' : 'vencimiento'}
+                <Icon icon={ChevronDown} size="xs" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64">
+              <DropdownMenuRadioGroup
+                value={filtros.ordenPorEstado ? 'estado' : 'vencimiento'}
+                onValueChange={v => onCambiar({ ordenPorEstado: v === 'estado' })}
+              >
+                <DropdownMenuRadioItem value="vencimiento" className="text-xs">
+                  <span className="flex flex-col">
+                    Por vencimiento
+                    <span className="text-(--fg-muted)">La próxima tarea a vencer arriba</span>
+                  </span>
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="estado" className="text-xs">
+                  <span className="flex flex-col">
+                    Por estado
+                    <span className="text-(--fg-muted)">Lo más avanzado del funnel arriba</span>
+                  </span>
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         )}
 
         {/* Los descartados que «podrían calificar» vuelven acá cuando llega su fecha (recontact_at).
@@ -186,11 +212,6 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
             Para recontactar <span className="tabular-nums">{contadores.recontactarCount}</span>
           </button>
         )}
-
-        <button type="button" aria-pressed={filtros.conTelMaps} className={chip(filtros.conTelMaps)}
-          onClick={() => onCambiar({ conTelMaps: !filtros.conTelMaps })}>
-          Con tel. de Google Maps <span className="tabular-nums">{contadores.telMapsCount}</span>
-        </button>
 
         {hayFiltros && (
           <Button variant="ghost" size="sm" onClick={onLimpiar}>

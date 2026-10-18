@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ArrowDownWideNarrow, ListTodo, RotateCw } from 'lucide-react'
 import { AvatarUsuario } from '@/components/AvatarUsuario'
@@ -6,13 +6,15 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Icon } from '@/components/ui/icon'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { fmtDueLabel, localTodayIso } from '@/lib/calendarDate'
+import { fmtDueLabel, localTodayIso, startOfWeekIso } from '@/lib/calendarDate'
 import { cn } from '@/lib/utils'
+import { rotuloConHora } from '../lib/alarmas'
 import { nombreDelLead } from '../lib/clientData'
 import { computeLeadListCounters } from '../lib/computeLeadListCounters'
 import { etapaDelLead } from '../lib/effectiveStage'
 import { estadoDeLista } from '../lib/estadoDeLista'
 import { vecinoMarcable } from '../lib/seleccionConFlechas'
+import { vecinosEnRecorrido, type UltimaPosicion } from '../lib/recorrido'
 import { fmtUltimaActividad } from '../lib/ultimaActividad'
 import { fmtIngresoDate, fmtShortDate } from '../lib/leadCellFormat'
 import {
@@ -82,7 +84,8 @@ function VenceTarea({ proxima, hoy }: { proxima: ProximaTarea | undefined; hoy: 
   return (
     <span className={cn('whitespace-nowrap text-[12.5px] tabular-nums',
       vencida ? 'font-medium [color:var(--danger-strong)]' : 'text-(--fg-muted)')}>
-      {t.due_date == null ? 'Sin fecha' : vencida ? `Vencía ${fmtDueLabel(t.due_date, hoy)}` : fmtDueLabel(t.due_date, hoy)}
+      {t.due_date == null ? 'Sin fecha'
+        : `${vencida ? 'Vencía ' : ''}${rotuloConHora(fmtDueLabel(t.due_date, hoy), t.due_date, t.due_time)}`}
     </span>
   )
 }
@@ -254,8 +257,8 @@ export function CrmLeadList() {
   // propósito: cada vez que llegan datos nuevos (realtime, mutación) se toma un «ahora» nuevo, así
   // un descartado que llega a su fecha de recontactar con la pantalla abierta aparece en el
   // próximo refresco.
-  // Los de «Objetivos hoy»: la misma consulta que el contador de arriba, sale de la caché.
-  const objetivosQ = useObjetivos(hoy, filtros.objetivo !== null)
+  // Los de «Objetivos semanales»: la misma consulta que el contador de arriba, sale de la caché.
+  const objetivosQ = useObjetivos(startOfWeekIso(hoy), filtros.objetivo !== null)
   const leadsDelObjetivo = filtros.objetivo ? objetivosQ.data?.leads[filtros.objetivo] : undefined
   const ctx = useMemo<LeadFilterContext>(
     () => ({ overdueLeadIds, leadIdsConTareas, etapas: cat.etapasPorId, now: Date.now(), leadsDelObjetivo }),
@@ -331,10 +334,14 @@ export function CrmLeadList() {
   // abrirlo aunque los filtros lo escondan. Las flechas recorren la lista tal como se ve.
   const leadAbiertoId = searchParams.get(LEAD_PARAM)
   const leadAbierto = leadAbiertoId ? (leadsQ.data ?? []).find(l => l.id === leadAbiertoId) ?? null : null
-  const indiceAbierto = leadAbierto ? recorrido.findIndex(l => l.id === leadAbierto.id) : -1
+  // Dónde estaba el abierto: si se descarta y se va de la lista, las flechas siguen desde ahí.
+  const ultimaPosicion = useRef<UltimaPosicion | null>(null)
+  const vecinos = vecinosEnRecorrido(recorrido.map(l => l.id), leadAbierto?.id ?? null, ultimaPosicion.current)
+  if (leadAbierto && vecinos.indice !== -1) ultimaPosicion.current = { id: leadAbierto.id, indice: vecinos.indice }
+  const indiceAbierto = vecinos.indice
   const pasoLead = (delta: -1 | 1) => {
-    const siguiente = recorrido[indiceAbierto + delta]
-    if (siguiente) abrirLead(siguiente.id)
+    const destino = delta < 0 ? vecinos.anterior : vecinos.siguiente
+    if (destino) abrirLead(destino)
   }
 
   // ↓ / ↑ en modo selección marcan el lead de abajo / de arriba del último tocado, para marcar de
@@ -487,6 +494,8 @@ export function CrmLeadList() {
         lead={leadAbierto}
         indice={indiceAbierto}
         total={recorrido.length}
+        hayAnterior={vecinos.anterior !== null}
+        haySiguiente={vecinos.siguiente !== null}
         onPaso={pasoLead}
         onCerrar={() => abrirLead(null)}
         onStartReassign={leadId => setAReasignar([leadId])}

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  CalendarDays, ChevronDown, CircleCheck, Clock, Info, MessageSquare, Phone, PhoneMissed, Plus, Sparkles, Trash2, UserRound,
+  CalendarDays, ChevronDown, CircleCheck, Clock, Info, MessageSquare, Phone, PhoneMissed, Plus, Trash2, UserRound, X,
   type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,11 +13,12 @@ import { useCarteras } from '../hooks/useCarteras'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useActualizarCliente, useActualizarLead, useMutacionDelDetalle } from '../hooks/useLeadMutaciones'
 import {
-  agruparPorDia, armarMetaDeActividad, horaDe, lineaDeTiempo, type ItemActividad, type MetaDeActividad,
-  type ResultadoDeLlamada,
+  agruparPorDia, armarMetaDeActividad, horaDe, INTENTOS_DE_CONTACTO, lineaDeTiempo, primeroLosUltimos, ultimoContacto, type ItemActividad,
+  type MetaDeActividad, type ResultadoDeLlamada,
 } from '../lib/actividad'
 import {
-  campoDelNuevoDecisor, contactosConDecisor, decisorSabido, nombreDelLead, patchDeContactosNuevos, telefonosDelCliente,
+  campoDelNuevoDecisor, casilleroDelTelefonoNuevo, conDecisorApuntado, contactosConDecisor, tieneDecisor, decisorDelContactoNuevo, decisorSabido,
+  decisoresDeLaLlamada, nombreDelLead, patchDeContactosNuevos, telefonosDelCliente, type CampoDecisor,
 } from '../lib/clientData'
 import { GUIA_DE_DEMO, GUIA_DE_LLAMADA, type SeccionDeGuia } from '../lib/guiaDeLlamada'
 import { armarReunion, descripcionDeDemo, esEmailValido } from '../lib/reuniones'
@@ -42,7 +43,8 @@ type Tipo = 'nota' | 'llamada' | 'fallido' | 'reunion'
 const TIPOS: { id: Tipo; label: string; icono: LucideIcon }[] = [
   { id: 'llamada', label: 'Llamada', icono: Phone },
   { id: 'fallido', label: 'Contacto fallido', icono: PhoneMissed },
-  { id: 'nota', label: 'Actividad', icono: MessageSquare },
+  // «Notas» y no «Actividad» (17/10/2026, por pedido): actividad es todo lo que se registra.
+  { id: 'nota', label: 'Notas', icono: MessageSquare },
   { id: 'reunion', label: 'Agendar demo', icono: CalendarDays },
 ]
 
@@ -103,13 +105,13 @@ function GuiaDelCompositor({ titulo, secciones }: { titulo: string; secciones: r
 
 const ICONO: Record<ItemActividad['tipo'], LucideIcon> = {
   comentario: MessageSquare, llamada: Phone, sistema: Info, gestion: CircleCheck, pospuesto: Clock,
-  asignacion: UserRound, reunion: CalendarDays, consejo: Sparkles,
+  asignacion: UserRound, reunion: CalendarDays,
 }
 
 /* Lo que se registra desde el compositor se titula por qué es —Nota, Tarea, Demo— y lo que pasó va
    abajo, en su recuadro. El resto (gestiones, etapas, responsable) es una línea sola: ya se explica. */
 const TITULO: Partial<Record<ItemActividad['tipo'], string>> = {
-  comentario: 'Nota', llamada: 'Llamada', reunion: 'Demo', consejo: 'Consejo de Claude para SDR',
+  comentario: 'Nota', llamada: 'Llamada', reunion: 'Demo',
 }
 
 /** «Laura, Marc y Ana»: la gente se lee como en una frase, no como una lista con comas. */
@@ -120,7 +122,10 @@ const enFrase = (nombres: string[]) =>
 function tituloDe(i: ItemActividad): string | undefined {
   const base = TITULO[i.tipo]
   if (!base) return undefined
-  if (i.tipo === 'llamada' && i.resultado === 'no_respondida') return i.telefono ? `Contacto fallido · ${i.telefono.etiqueta}` : 'Contacto fallido'
+  if (i.tipo === 'llamada' && i.resultado === 'no_respondida') {
+    const fallido = i.intento ? `Contacto fallido ${i.intento}/${INTENTOS_DE_CONTACTO}` : 'Contacto fallido'
+    return i.telefono ? `${fallido} · ${i.telefono.etiqueta}` : fallido
+  }
   // «Llamada a Oficina con Laura»: el número marcado y quien atendió, que no siempre coinciden.
   const a = i.tipo === 'llamada' && i.telefono && i.telefono.etiqueta !== i.con?.[0] ? `${base} a ${i.telefono.etiqueta}` : base
   const conQuien = i.con?.length ? `${a} con ${enFrase(i.con)}` : a
@@ -135,6 +140,9 @@ const pastilla = (on: boolean) => cn(
   on ? 'font-semibold text-(--brand-soft-fg) bg-(--brand-soft) [border:1px_solid_var(--brand-100)]'
     : 'text-(--fg-2) bg-card [border:1px_solid_var(--line)] hover:bg-(--surface-2)',
 )
+// El «+» que abre el campo para escribir a mano: sin fondo ni marco hasta el hover, para que no
+// compita con las pastillas.
+const botonEscribir = 'inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-(--fg-faint) transition-colors hover:bg-(--surface-2) hover:text-(--fg-2)'
 
 /* La columna tiene dos pestañas: la actividad y la inmobiliaria. El selector vive en la cabecera
    del dialog, centrado, y el estado en `CuerpoDelLead`: al cambiar de lead se vuelve a la
@@ -168,52 +176,87 @@ export function PestanasDelLead({ lead, pestana, onCambiar }: {
   )
 }
 
-export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana, otrosContactos }: {
+export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana, otrosContactos, telefonosSueltos, emailsSueltos, onDecisorContactado }: {
   lead: CrmLeadRow
+  /** Una llamada con el decisor fija a ese contacto en el perfil (17/10/2026, por pedido). */
+  onDecisorContactado?: (campos: CampoDecisor[]) => void
   detalle: LeadDetalle | undefined
   cargando: boolean
   puedeEscribir: boolean
   pestana: PestanaDelLead
-  /** Lo pasa de largo a la pestaña de la inmobiliaria: ver `InmobiliariaDelLead`. */
+  /** Los tres los pasa de largo a la pestaña de la inmobiliaria: ver `InmobiliariaDelLead`. */
   otrosContactos?: ReactNode
+  telefonosSueltos?: ReactNode
+  emailsSueltos?: ReactNode
 }) {
   const { etapasPorId, etapasActivas, descartada } = useCrmCatalogos()
   const { usuarios } = useCarteras()
   const [abierto, setAbierto] = useState(false)
-  // El consejo de Claude nace plegado: se lee una vez antes de llamar y después estorba.
-  const [consejoAbierto, setConsejoAbierto] = useState(false)
   const [texto, setTexto] = useState('')
   const [tipo, setTipo] = useState<Tipo>('llamada')
   const [con, setCon] = useState<string[]>([])
   // `null` es «todavía no contestó la pregunta»: una llamada no se registra sin decirlo.
   const [decisor, setDecisor] = useState<boolean | null>(null)
   const conDecisor = contactosConDecisor(lead.client)
-  const contactos = conDecisor.map(c => c.nombre)
+  // Lo último marcado y con quién se habló va primero en cada fila (17/10/2026, por pedido): ordena, no elige.
+  const ultimo = ultimoContacto(detalle?.comments ?? [])
+  const mismoNombre = (a: string, b: string) => a.toLocaleLowerCase('es') === b.toLocaleLowerCase('es')
+  const contactos = primeroLosUltimos(conDecisor.map(c => c.nombre), n => ultimo.con.some(u => mismoNombre(u, n)))
   /* Con quién también se escribe a mano (16/10/2026, por pedido): si el que atendió no está entre
      los contactos, se tipea, entra como una pastilla más y al registrar se carga solo en el perfil
      (`patchDeContactosNuevos`). Escribir uno que ya está lo elige, no lo duplica. */
   const [nuevos, setNuevos] = useState<string[]>([])
   const [escrito, setEscrito] = useState('')
+  /* El campo para escribir a mano (con quién y a qué número) no está siempre a la vista
+     (17/10/2026, por pedido): es un «+» discreto y el campo aparece al tocarlo. Lo de todos los
+     días es elegir una pastilla; el campo abierto se leía como algo que había que llenar. */
+  const [escribiendoCon, setEscribiendoCon] = useState(false)
   const elegibles = [...contactos, ...nuevos]
   const agregarEscrito = () => {
+    setEscribiendoCon(false)
     const nombre = escrito.trim().replace(/\s+/g, ' ')
+    setEscrito('')
     if (!nombre) return
     const existente = elegibles.find(c => c.toLocaleLowerCase('es') === nombre.toLocaleLowerCase('es'))
     if (!existente) setNuevos(xs => [...xs, nombre])
     const elegido = existente ?? nombre
     setCon(xs => xs.includes(elegido) ? xs : [...xs, elegido])
-    setEscrito('')
   }
-  const limpiarConQuien = () => { setCon([]); setNuevos([]); setEscrito('') }
+  // Corre al registrar con éxito: también apaga el rojo de lo que faltaba.
+  const limpiarConQuien = () => { setCon([]); setNuevos([]); setEscrito(''); setEscribiendoCon(false); setIntento(false); setDecisorApuntado('') }
   /* A qué teléfono se llamó va aparte de con quién se habló (16/10/2026, por pedido): se marca la
      oficina y atiende Laura, o el celular de Marc y atiende su socio. Lo piden la llamada y el
      contacto fallido, primero que nada; arranca vacío, como la etapa, para que no se confirme sin
-     mirarlo. Sin teléfonos cargados no hay qué elegir y no frena. */
+     mirarlo. Se pide aunque el perfil no tenga teléfonos: se escribe con el «+». */
   const [telefono, setTelefono] = useState<string | null>(null)
-  const telefonos = telefonosDelCliente(lead.client)
+  /* El número también se escribe a mano (17/10/2026, por pedido), haya o no teléfonos cargados:
+     se marcó uno que el perfil no tiene. Entra como una pastilla más, elegida, y al registrar se
+     carga en el perfil (`casilleroDelTelefonoNuevo`). Uno solo: se llamó a un número. */
+  const [telefonoNuevo, setTelefonoNuevo] = useState<string | null>(null)
+  const [telefonoEscrito, setTelefonoEscrito] = useState('')
+  const digitos = (t: string) => t.replace(/\D/g, '')
+  const cargados = primeroLosUltimos(telefonosDelCliente(lead.client),
+    t => ultimo.telefono !== null && digitos(t.numero) === digitos(ultimo.telefono))
+  const telefonos = telefonoNuevo ? [...cargados, { numero: telefonoNuevo, etiqueta: telefonoNuevo }] : cargados
+  const [escribiendoTelefono, setEscribiendoTelefono] = useState(false)
+  const agregarTelefono = () => {
+    setEscribiendoTelefono(false)
+    const numero = telefonoEscrito.trim().replace(/\s+/g, ' ')
+    setTelefonoEscrito('')
+    if (digitos(numero).length < 6) return
+    const existente = cargados.find(t => digitos(t.numero) === digitos(numero))
+    if (!existente) setTelefonoNuevo(numero)
+    setTelefono(existente?.numero ?? numero)
+  }
+  const sacarTelefonoNuevo = () => {
+    if (telefono === telefonoNuevo) setTelefono(null)
+    setTelefonoNuevo(null)
+  }
   const pideTelefono = tipo === 'llamada' || tipo === 'fallido'
   const telefonoElegido = telefonos.find(t => t.numero === telefono)
-  const eligioTelefono = telefonos.length === 0 || !!telefonoElegido
+  /* Obligatorio siempre, también sin teléfonos cargados (17/10/2026, por pedido): el número se
+     escribe con el «+». Antes, sin teléfonos en el perfil, el contacto fallido no lo pedía. */
+  const eligioTelefono = !!telefonoElegido
   // Con quién solo tiene sentido en lo que pasó con alguien: una nota o una llamada (que siempre es
   // contestada: la que nadie atendió es «Contacto fallido»). En la demo es quién asiste.
   const pideConQuien = tipo === 'nota' || tipo === 'llamada' || tipo === 'reunion'
@@ -227,6 +270,11 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   // Si el perfil ya dice si los elegidos deciden, no se pregunta: se toma de ahí.
   const sabido = decisorSabido(conDecisor, con)
   const pideDecisor = tipo === 'llamada' && eligioConQuien && sabido === null
+  /* Apuntar al decisor (17/10/2026, por pedido): habló el doorkeeper u otro y dio el nombre de
+     quien decide. Opcional, y deja de estar en cuanto el perfil tiene a alguien marcado como
+     decisor. El contacto fallido no lo ofrece: ahí no habló nadie. */
+  const [decisorApuntado, setDecisorApuntado] = useState('')
+  const pideDecisorApuntado = tipo !== 'fallido' && !tieneDecisor(lead.client)
   /* Toda actividad registrada pide elegir en qué etapa queda el lead, para que avanzarlo no
      dependa de acordarse (12/10/2026, por pedido). Arranca VACÍA y es obligatoria: precargarla
      (con la actual o con una sugerida) hacía que se confirmara sin leerla. Registrar sin elegir
@@ -281,7 +329,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       { onSuccess: () => toast.success(`Lead en «${destino.label}»`) })
   }
 
-  const items = detalle ? lineaDeTiempo(detalle, usuarios, lead.client) : []
+  const items = detalle ? lineaDeTiempo(detalle, usuarios) : []
   const dias = agruparPorDia(items, localTodayIso())
   const usuariosPorId = new Map(usuarios.map(u => [u.id, u]))
 
@@ -301,25 +349,69 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     : tipo === 'fallido' ? eligioTelefono
     : !!limpio
 
+  /* «Registrar» ya no se apaga: tocarlo con algo sin completar pinta en rojo cada dato que falta
+     (17/10/2026, por pedido), como ya hacía la etapa. Un botón gris no dice qué le falta. */
+  const [intento, setIntento] = useState(false)
+  const falta = {
+    telefono: pideTelefono && !eligioTelefono,
+    con: (tipo === 'llamada' || tipo === 'reunion') && !eligioConQuien,
+    decisor: pideDecisor && decisor === null,
+    texto: tipo === 'nota' && !limpio,
+    fecha: tipo === 'reunion' && !reunion.fecha,
+    mail: tipo === 'reunion' && !mailValido,
+  }
+  const enRojo = (k: keyof typeof falta) => intento && falta[k]
+  const filaEnRojo = (k: keyof typeof falta) => enRojo(k) && 'rounded-md bg-(--danger-soft) px-2 py-1 [outline:1px_solid_var(--danger)]'
+  const rotuloEnRojo = (k: keyof typeof falta) => enRojo(k) ? 'font-semibold text-(--danger)' : 'text-(--fg-muted)'
+
   // Los escritos a mano que siguen elegidos se cargan como contactos; `decisor` es el que quedó
   // como decisor, si es uno de ellos. Lo que no entra en el perfil queda solo en la actividad.
   const nuevosElegidos = nuevos.filter(c => con.includes(c))
-  const cargarContactosNuevos = (decisor: string | null) => {
-    if (!lead.client || nuevosElegidos.length === 0) return
-    const { patch, sinLugar } = patchDeContactosNuevos(lead.client, nuevosElegidos, decisor)
-    if (Object.keys(patch).length > 0) actualizarCliente.mutate({ clientId: lead.client.id, patch })
+  /* Lo escrito a mano va al perfil en un solo guardado: las personas y el número marcado. El número
+     va al contacto con quien se habló, si se habló con uno solo; `elegidos` vacío (el contacto
+     fallido) no carga personas. */
+  const cargarAlPerfil = (decisor: string | null, elegidos: string[]) => {
+    const client = lead.client
+    if (!client) return {}
+    const { patch, sinLugar } = elegidos.length > 0 && nuevosElegidos.length > 0
+      ? patchDeContactosNuevos(client, nuevosElegidos, decisor) : { patch: {}, sinLugar: [] }
+    const numero = pideTelefono && telefonoNuevo && telefono === telefonoNuevo ? telefonoNuevo : null
+    const patchTelefono: Partial<Record<'phone' | 'alternative_phone_1' | 'alternative_phone_2', string>> = {}
+    if (numero) {
+      const persona = elegidos.length === 1
+        ? conDecisor.find(c => c.nombre === elegidos[0])?.campoDecisor ?? decisorDelContactoNuevo(patch, elegidos[0])
+        : null
+      const casillero = casilleroDelTelefonoNuevo({ ...client, ...patch }, persona)
+      if (casillero) patchTelefono[casillero] = numero
+      else toast(`El perfil no tiene más lugar para teléfonos: ${numero} quedó solo en la actividad`)
+    }
+    // El decisor apuntado va último: el número marcado es de quien atendió, no del decisor.
+    const apuntado = pideDecisorApuntado ? decisorApuntado.trim().replace(/\s+/g, ' ') : ''
+    const conApuntado = apuntado ? conDecisorApuntado({ ...client, ...patchTelefono }, patch, apuntado) : { patch, sinLugar: false }
+    if (conApuntado.sinLugar) toast(`El perfil no tiene más lugar para contactos: el decisor ${apuntado} no se cargó`)
+    const todo = { ...conApuntado.patch, ...patchTelefono }
+    if (Object.keys(todo).length > 0) actualizarCliente.mutate({ clientId: client.id, patch: todo })
     if (sinLugar.length > 0) toast(`El perfil no tiene más lugar para contactos: ${sinLugar.join(', ')} quedó solo en la actividad`)
+    // Sin el apuntado: no es alguien con quien se habló, así que no se fija como decisor contactado.
+    return patch
   }
+  const cargarContactosNuevos = (decisor: string | null) => cargarAlPerfil(decisor, nuevosElegidos)
 
   const enviar = () => {
-    if (!listo || enviando) return
-    if (pideEtapa && !etapaFinal) { setFaltaEtapa(true); return }
+    if (enviando) return
+    if (!listo || (pideEtapa && !etapaFinal)) {
+      setIntento(true)
+      if (pideEtapa && !etapaFinal) setFaltaEtapa(true)
+      return
+    }
     if (tipo === 'llamada' || tipo === 'fallido') {
       const resultado: ResultadoDeLlamada = tipo === 'llamada' ? 'contestada' : 'no_respondida'
       // Se guardan solo los que siguen siendo contactos: alguien pudo borrar un teléfono mientras tanto.
       const elegidos = con.filter(c => elegibles.includes(c))
       const esDecisor = sabido ?? decisor === true
-      const marcado = telefonoElegido && { telefono: telefonoElegido }
+      // El escrito a mano se rotula con quien atendió, si fue uno solo: es lo que el perfil va a decir.
+      const marcado = telefonoElegido && { telefono: telefonoElegido.numero === telefonoNuevo && tipo === 'llamada' && elegidos.length === 1
+        ? { ...telefonoElegido, etiqueta: elegidos[0] } : telefonoElegido }
       const meta: MetaDeActividad = tipo === 'llamada'
         ? { tipo: 'llamada', con: elegidos, resultado, decisor: esDecisor, ...marcado }
         : { tipo: 'llamada', con: [], resultado, ...marcado }
@@ -329,8 +421,13 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       const decisorNuevo = tipo === 'llamada' && esDecisor && elegidos.length === 1 && nuevos.includes(elegidos[0]) ? elegidos[0] : null
       comentar.mutate({ description: limpio || TEXTO_DE_LLAMADA[resultado], meta },
         { onSuccess: () => {
-          if (tipo === 'llamada') cargarContactosNuevos(decisorNuevo)
-          setTexto(''); limpiarConQuien(); setDecisor(null); setTelefono(null); setAbierto(false)
+          if (tipo === 'llamada') {
+            const patch = cargarAlPerfil(decisorNuevo, elegidos)
+            const decisores = decisoresDeLaLlamada(conDecisor, elegidos, esDecisor, patch)
+            if (decisores.length > 0) onDecisorContactado?.(decisores)
+          } else cargarAlPerfil(null, [])
+          setTexto(''); limpiarConQuien(); setDecisor(null); setTelefono(null); setTelefonoNuevo(null); setTelefonoEscrito(''); setEscribiendoTelefono(false)
+          setAbierto(false)
           if (nuevoDecisor && lead.client) {
             actualizarCliente.mutate({ clientId: lead.client.id, patch: { [nuevoDecisor]: true } })
           }
@@ -367,7 +464,8 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     <div className="flex h-full min-h-0 flex-col bg-card">
       {!enActividad && (
         <div role="tabpanel" id="panel-inmobiliaria" aria-labelledby="pestana-inmobiliaria" className="flex min-h-0 flex-1 flex-col">
-          <InmobiliariaDelLead lead={lead} puedeEscribir={puedeEscribir} otrosContactos={otrosContactos} />
+          <InmobiliariaDelLead lead={lead} puedeEscribir={puedeEscribir} otrosContactos={otrosContactos}
+            telefonos={telefonosSueltos} emails={emailsSueltos} />
         </div>
       )}
 
@@ -381,12 +479,9 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
             <ol className="flex flex-col">
               {d.items.map(i => {
                 const autor = i.autorId ? usuariosPorId.get(i.autorId) : undefined
-                // El consejo no lleva firma: el título ya dice que es de Claude.
-                const quien = autor ? `Registrado por ${autor.nombre}`
-                  : i.tipo === 'sistema' ? 'Sistema' : i.tipo === 'consejo' ? null : 'Automático'
+                const quien = autor ? `Registrado por ${autor.nombre}` : i.tipo === 'sistema' ? 'Sistema' : 'Automático'
                 const titulo = tituloDe(i)
-                const plegable = i.tipo === 'consejo'
-                const verTexto = titulo && (!plegable || consejoAbierto)
+                const verTexto = !!titulo
                 const borrable = puedeEscribir && (i.tipo === 'comentario' || i.tipo === 'llamada')
                 return (
                   <li key={i.id} className="group flex gap-3 py-2.5 not-first:[border-top:1px_solid_var(--line-soft)]">
@@ -399,15 +494,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                       {/* Sin texto al lado (un cambio de estado), el registro se lleva el ancho entero. */}
                       <div className={cn('min-w-0 max-md:w-full', verTexto ? 'w-[200px] shrink-0' : 'flex-1')}>
                         <div className="flex items-baseline gap-3">
-                          {plegable ? (
-                            <button type="button" aria-expanded={consejoAbierto} onClick={() => setConsejoAbierto(a => !a)}
-                              className="inline-flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left text-[13px] font-semibold leading-snug text-foreground">
-                              <span className="truncate">{titulo}</span>
-                              <ChevronDown size={14} aria-hidden className={cn('shrink-0 transition-transform', consejoAbierto && 'rotate-180')} />
-                            </button>
-                          ) : (
-                            <p className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-foreground">{titulo ?? i.texto}</p>
-                          )}
+                          <p className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-foreground">{titulo ?? i.texto}</p>
                           <span className="shrink-0 text-[11px] tabular-nums text-(--fg-muted)">{horaDe(i.fecha)}</span>
                         </div>
                         {quien && <p className="text-[12px] leading-snug text-(--fg-2)">{quien}</p>}
@@ -434,7 +521,8 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       </div>
 
       {puedeEscribir && (
-        <div hidden={!enActividad} className="shrink-0 px-5 pb-4 pt-3 [border-top:1px_solid_var(--line)] max-md:px-3 max-md:pb-3">
+        // En las dos pestañas (17/10/2026, por pedido): se registra también mirando la inmobiliaria.
+        <div className="shrink-0 px-5 pb-4 pt-3 [border-top:1px_solid_var(--line)] max-md:px-3 max-md:pb-3">
           <Button className="w-full" onClick={() => setAbierto(true)}>
             <Icon icon={Plus} size="sm" />
             Registrar actividad
@@ -459,7 +547,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
               {TIPOS.map(t => {
                 const on = tipo === t.id
                 return (
-                  <button key={t.id} type="button" aria-pressed={on} onClick={() => setTipo(t.id)}
+                  <button key={t.id} type="button" aria-pressed={on} onClick={() => { setTipo(t.id); setIntento(false) }}
                     className={cn(
                       'inline-flex h-7 cursor-pointer items-center gap-1 rounded-full px-2.5 text-[12px] transition-colors',
                       on ? 'font-semibold text-(--brand-soft-fg) bg-(--brand-soft) [border:1px_solid_var(--brand-100)]'
@@ -474,23 +562,9 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
             {/* Con quién va en su renglón, debajo de las pastillas, igual que los campos de la demo:
                 cada tipo pide lo suyo en el mismo lugar. Una pastilla por contacto, que se prenden
                 varias: con dos o tres contactos, un menú era un clic de más para elegir. */}
-            {pideTelefono && telefonos.length > 0 && (
-              <div role="radiogroup" aria-label="Teléfono al que llamaste" className="flex flex-wrap items-center gap-1.5">
-                <span className="mr-0.5 text-[11.5px] text-(--fg-muted)">Llamaste a</span>
-                {telefonos.map(t => {
-                  const on = telefono === t.numero
-                  return (
-                    <button key={t.numero} type="button" role="radio" aria-checked={on} title={t.numero}
-                      onClick={() => setTelefono(on ? null : t.numero)} className={pastilla(on)}>
-                      <span className="truncate">{t.etiqueta === t.numero ? t.numero : `${t.etiqueta} · ${t.numero}`}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            )}
             {pideConQuien && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="mr-0.5 text-[11.5px] text-(--fg-muted)">{tipo === 'llamada' ? 'Hablaste con' : tipo === 'reunion' ? 'Quién asiste' : 'Con'}</span>
+              <div className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo('con'))}>
+                <span className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo('con'))}>{tipo === 'llamada' ? 'Hablaste con' : tipo === 'reunion' ? 'Quién asiste' : 'Con'}</span>
                 {contactos.map(c => {
                   const on = con.includes(c)
                   return (
@@ -501,20 +575,88 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                     </button>
                   )
                 })}
-                {/* Los escritos a mano: tocarlos los saca, que no son contactos todavía. */}
-                {nuevos.map(c => (
-                  <button key={`nuevo-${c}`} type="button" aria-pressed title="Se carga como contacto al registrar. Tocá para sacarlo"
-                    onClick={() => { setNuevos(xs => xs.filter(x => x !== c)); setCon(xs => xs.filter(x => x !== c)) }}
-                    className={pastilla(true)}>
+                {/* Los escritos a mano se eligen como cualquier otro y se sacan con su ✕ (ver el
+                    teléfono escrito: el «+» que llevaban se apretaba creyendo que agregaba). */}
+                {nuevos.map(c => {
+                  const on = con.includes(c)
+                  return (
+                    <span key={`nuevo-${c}`} className={cn(pastilla(on), 'pr-1')}>
+                      <button type="button" aria-pressed={on} title="Se carga como contacto al registrar"
+                        onClick={() => setCon(xs => on ? xs.filter(x => x !== c) : [...xs, c])}
+                        className="min-w-0 cursor-pointer truncate">
+                        {c}
+                      </button>
+                      <button type="button" aria-label={`Sacar a ${c}`} title="Sacar"
+                        onClick={() => { setNuevos(xs => xs.filter(x => x !== c)); setCon(xs => xs.filter(x => x !== c)) }}
+                        className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-(--surface-2)">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  )
+                })}
+                {escribiendoCon ? (
+                  <input autoFocus value={escrito} onChange={e => setEscrito(e.target.value)} onBlur={agregarEscrito}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { e.preventDefault(); agregarEscrito() }
+                      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setEscrito(''); setEscribiendoCon(false) }
+                    }}
+                    aria-label="Escribir con quién, si no está entre los contactos"
+                    placeholder="Escribí el nombre…"
+                    className="h-7 min-w-[150px] flex-1 rounded-md bg-card px-2.5 text-[12.5px] text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]" />
+                ) : (
+                  <button type="button" onClick={() => setEscribiendoCon(true)} className={botonEscribir}
+                    title="Escribir otro nombre" aria-label="Escribir otro nombre">
                     <Icon icon={Plus} size="xs" />
-                    <span className="truncate">{c}</span>
+                  </button>
+                )}
+              </div>
+            )}
+            {pideTelefono && (
+              <div className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo('telefono'))}>
+                <span className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo('telefono'))}>Teléfono contacto</span>
+                <div role="radiogroup" aria-label="Teléfono del contacto" className="contents">
+                  {cargados.map(t => {
+                    const on = telefono === t.numero
+                    return (
+                      <button key={t.numero} type="button" role="radio" aria-checked={on} title={t.numero}
+                        onClick={() => setTelefono(on ? null : t.numero)} className={pastilla(on)}>
+                        <span className="truncate">{t.etiqueta === t.numero ? t.numero : `${t.etiqueta} · ${t.numero}`}</span>
+                      </button>
+                    )
+                  })}
+                  {/* El escrito a mano se elige como cualquier otro y se saca con su ✕. Llevó un «+»
+                      y tocarlo entero lo sacaba: nacía donde estaba el «+» de escribir, y apretarlo
+                      para agregar otro lo borraba (17/10/2026). */}
+                  {telefonoNuevo && (
+                    <span className={cn(pastilla(telefono === telefonoNuevo), 'pr-1')}>
+                      <button type="button" role="radio" aria-checked={telefono === telefonoNuevo}
+                        title="Se carga en el perfil al registrar"
+                        onClick={() => setTelefono(telefono === telefonoNuevo ? null : telefonoNuevo)}
+                        className="min-w-0 cursor-pointer truncate tabular-nums">
+                        {telefonoNuevo}
+                      </button>
+                      <button type="button" onClick={sacarTelefonoNuevo} aria-label={`Sacar ${telefonoNuevo}`} title="Sacar"
+                        className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-(--surface-2)">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  )}
+                </div>
+                {!telefonoNuevo && (escribiendoTelefono ? (
+                  <input autoFocus value={telefonoEscrito} onChange={e => setTelefonoEscrito(e.target.value)} onBlur={agregarTelefono}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { e.preventDefault(); agregarTelefono() }
+                      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setTelefonoEscrito(''); setEscribiendoTelefono(false) }
+                    }}
+                    type="tel" inputMode="tel" aria-label="Escribir el número, si no está entre los cargados"
+                    placeholder="Escribí el número…"
+                    className="h-7 min-w-[150px] flex-1 rounded-md bg-card px-2.5 text-[12.5px] text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]" />
+                ) : (
+                  <button type="button" onClick={() => setEscribiendoTelefono(true)} className={botonEscribir}
+                    title="Escribir otro número" aria-label="Escribir otro número">
+                    <Icon icon={Plus} size="xs" />
                   </button>
                 ))}
-                <input value={escrito} onChange={e => setEscrito(e.target.value)} onBlur={agregarEscrito}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); agregarEscrito() } }}
-                  aria-label="Escribir con quién, si no está entre los contactos"
-                  placeholder={elegibles.length === 0 ? 'Escribí el nombre…' : 'Otro: escribí el nombre…'}
-                  className="h-7 min-w-[150px] flex-1 rounded-md bg-card px-2.5 text-[12.5px] text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]" />
               </div>
             )}
             {/* Si es decisor queda en la llamada y, desde el 12/10/2026, también en el contacto (al
@@ -522,8 +664,8 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 debajo de con quién, recién cuando se eligió, y hay que contestarla: sin respuesta
                 no se registra. Contestar «Sí» con un solo contacto elegido lo marca en el perfil. */}
             {pideDecisor && (
-              <div role="radiogroup" aria-label="¿Es decisor?" className="flex flex-wrap items-center gap-1.5">
-                <span className="mr-0.5 text-[11.5px] text-(--fg-muted)">¿Es decisor?</span>
+              <div role="radiogroup" aria-label="¿Es decisor?" className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo('decisor'))}>
+                <span className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo('decisor'))}>¿Es decisor?</span>
                 {([[true, 'Sí'], [false, 'No']] as const).map(([valor, label]) => (
                   <button key={label} type="button" role="radio" aria-checked={decisor === valor}
                     onClick={() => setDecisor(valor)} title="Quien atendió decide en la inmobiliaria"
@@ -539,8 +681,8 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
               </p>
             )}
             {tipo === 'reunion' && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <label htmlFor="mail-demo" className="mr-0.5 text-[11.5px] text-(--fg-muted)">Mail para la invitación</label>
+              <div className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo('mail'))}>
+                <label htmlFor="mail-demo" className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo('mail'))}>Mail para la invitación</label>
                 <input id="mail-demo" type="email" required value={mailDemo} onChange={e => setMailDemo(e.target.value)}
                   placeholder="email@inmobiliaria.com" aria-invalid={!!mailDemo.trim() && !mailValido}
                   className={cn('h-7 min-w-[220px] flex-1 rounded-md bg-card px-2.5 text-[12.5px] text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]',
@@ -548,7 +690,11 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 {!!mailDemo.trim() && !mailValido && <span role="alert" className="text-[11.5px] font-semibold text-(--danger)">No es un mail válido</span>}
               </div>
             )}
-            {tipo === 'reunion' && <CamposDeReunion value={reunion} onChange={setReunion} />}
+            {tipo === 'reunion' && (
+              <div className={cn(filaEnRojo('fecha'))}>
+                <CamposDeReunion value={reunion} onChange={setReunion} />
+              </div>
+            )}
             <textarea
               value={texto}
               onChange={e => setTexto(e.target.value)}
@@ -559,8 +705,19 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 : tipo === 'fallido' ? 'Detalle (opcional): no atendió, buzón, número equivocado…'
                 : tipo === 'nota' ? 'Escribí qué pasó o qué querés registrar…'
                 : 'Qué quiere ver en la demo, dudas… (opcional)'}
-              className="block max-h-[50vh] min-h-9 w-full resize-y rounded-md bg-card px-3 py-2 text-[13.5px] leading-5 text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]"
+              aria-invalid={enRojo('texto')}
+              className={cn('block max-h-[50vh] min-h-9 w-full resize-y rounded-md bg-card px-3 py-2 text-[13.5px] leading-5 text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]',
+                enRojo('texto') && '[border-color:var(--danger)] bg-(--danger-soft)')}
             />
+            {pideDecisorApuntado && (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <label htmlFor="decisor-apuntado" className="mr-0.5 text-[11.5px] text-(--fg-muted)">Decisor</label>
+                <input id="decisor-apuntado" value={decisorApuntado} onChange={e => setDecisorApuntado(e.target.value)}
+                  placeholder="Nombre de quien decide, si te lo dijeron (opcional)"
+                  title="Se carga en el perfil como decisor al registrar"
+                  className="h-7 min-w-[220px] flex-1 rounded-md bg-card px-2.5 text-[12.5px] text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]" />
+              </div>
+            )}
             {pideEtapa && (
               <div className={cn('flex flex-wrap items-center gap-2 rounded-md px-3 py-2',
                 faltaEtapa ? 'bg-(--danger-soft) [border:1px_solid_var(--danger)]' : 'bg-(--surface-2) [border:1px_solid_var(--line-soft)]')}>
@@ -583,7 +740,10 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
             )}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setAbierto(false)}>Cancelar</Button>
-              <Button onClick={enviar} disabled={!listo || enviando}>
+              {intento && Object.values(falta).some(Boolean) && (
+                <span role="alert" className="self-center text-[11.5px] font-semibold text-(--danger)">Completá lo marcado en rojo</span>
+              )}
+              <Button onClick={enviar} disabled={enviando}>
                 {enviando ? 'Registrando…' : 'Registrar'}
               </Button>
             </div>
