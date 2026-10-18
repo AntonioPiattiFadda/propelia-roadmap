@@ -108,7 +108,7 @@ export const PLANTILLAS_EMAIL: PlantillaEmail[] = [
   {
     id: 'puntual',
     nombre: 'Mail puntual',
-    descripcion: 'Texto libre con la marca de Propelia: titular, párrafos y un botón opcional.',
+    descripcion: 'Texto libre con la marca de Propelia: titular, párrafos y el botón «Contáctame» a tu WhatsApp.',
     editables: ['asunto', 'preencabezado', 'nombre', 'titular', 'cuerpo', 'textoBoton', 'urlBoton'],
     predeterminados: {
       ...VACIOS,
@@ -116,13 +116,30 @@ export const PLANTILLAS_EMAIL: PlantillaEmail[] = [
       preencabezado: 'Te escribo por lo que hablamos.',
       titular: 'Gracias por tu tiempo',
       cuerpo: 'Te escribo por lo que hablamos por teléfono.\n\nSi te encaja, buscamos un rato esta semana y te lo enseño en directo sobre tus propios anuncios. Puedes contestar a este correo directamente.',
-      textoBoton: 'Reservar 20 minutos',
-      urlBoton: URL_AGENDA,
+      textoBoton: 'Contáctame',
+      // Lo pone `predeterminadosPara`: el WhatsApp de quien manda.
+      urlBoton: '',
     },
   },
 ]
 
 export const plantillaEmail = (id: string): PlantillaEmail | undefined => PLANTILLAS_EMAIL.find(p => p.id === id)
+
+/** El enlace de WhatsApp al teléfono de firma, con un mensaje ya escrito para quien lo recibe.
+    Vacío si no tiene teléfono. wa.me pide el número en dígitos, con el código de país. */
+export function whatsappDe(r: Remitente): string {
+  const digitos = r.telefono.replace(/\D/g, '')
+  if (!digitos) return ''
+  const texto = `Hola ${r.nombre.split(' ')[0]}, te escribo por tu correo de Propelia.`
+  return `https://wa.me/${digitos}?text=${encodeURIComponent(texto)}`
+}
+
+/** Lo que arranca cargado en el diálogo. El «Contáctame» del mail puntual va al WhatsApp de quien
+    manda; sin teléfono de firma queda vacío y el botón no se dibuja. */
+export function predeterminadosPara(id: PlantillaEmailId, r: Remitente): CamposEmail {
+  const base = plantillaEmail(id)!.predeterminados
+  return id === 'puntual' ? { ...base, urlBoton: whatsappDe(r) } : { ...base }
+}
 
 export const ROTULOS_CAMPOS: Record<CampoEmail, string> = {
   asunto: 'Asunto',

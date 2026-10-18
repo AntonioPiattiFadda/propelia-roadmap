@@ -8,8 +8,8 @@ import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { cn } from '@/lib/utils'
 import {
-  PLANTILLAS_EMAIL, problemaDeCampos, remitenteDe, renderEmail, ROTULOS_CAMPOS,
-  type CampoEmail, type CamposEmail, type PlantillaEmailId,
+  PLANTILLAS_EMAIL, predeterminadosPara, problemaDeCampos, remitenteDe, renderEmail, ROTULOS_CAMPOS,
+  type CampoEmail, type CamposEmail, type PlantillaEmailId, type Remitente,
 } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 import { sendEmail } from '../service/email.service'
 import type { CrmClient } from '../types'
@@ -39,8 +39,8 @@ function emailsDe(client: CrmClient | null): string[] {
     .map(e => e?.trim() ?? '').filter(Boolean))]
 }
 
-const camposIniciales = (id: PlantillaEmailId, client: CrmClient | null): CamposEmail => ({
-  ...PLANTILLAS_EMAIL.find(p => p.id === id)!.predeterminados,
+const camposIniciales = (id: PlantillaEmailId, client: CrmClient | null, remitente: Remitente): CamposEmail => ({
+  ...predeterminadosPara(id, remitente),
   nombre: client?.first_name?.trim() ?? '',
 })
 
@@ -68,11 +68,11 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
   const plantilla = PLANTILLAS_EMAIL.find(p => p.id === id)!
   const conocidos = useMemo(() => emailsDe(client), [client])
   const [para, setPara] = useState(conocidos[0] ?? '')
-  const [campos, setCampos] = useState<CamposEmail>(() => camposIniciales(id, client))
-
+  // La fila de `users` ya la trajo el guard de acceso: al montar está en caché.
   const { userSession } = useUserSession()
   const yo = useYo(userSession?.user.id).data
   const remitente = useMemo(() => remitenteDe(yo), [yo])
+  const [campos, setCampos] = useState<CamposEmail>(() => camposIniciales(id, client, remitente))
   const html = useMemo(() => renderEmail(id, campos, remitente, { assets: `${window.location.origin}/email` }).html, [id, campos, remitente])
 
   /* El iframe recarga el documento entero con cada `srcDoc` nuevo y queda en blanco hasta el `load`
@@ -107,7 +107,7 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
       <div className="flex min-w-0 flex-col gap-3 p-4 xl:min-h-0 xl:overflow-y-auto">
         <div className="flex items-center justify-between gap-2">
           <h3 className="truncate text-[14px] font-semibold">{plantilla.nombre}</h3>
-          <button type="button" onClick={() => setCampos(camposIniciales(id, client))} title="Volver al texto de la plantilla"
+          <button type="button" onClick={() => setCampos(camposIniciales(id, client, remitente))} title="Volver al texto de la plantilla"
             className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground">
             <RotateCcw size={13} />Restablecer
           </button>

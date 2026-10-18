@@ -257,7 +257,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   `URL_VIDEO` es `crm.propelia.es/presentacion`, una página pública de `propelia-frontend` que
   reproduce el mp4 del bucket **público** `publico` de este proyecto (migración
   `20261018210226_bucket_publico`, sin policies: escribe solo la service role). Un vídeo nuevo va
-  con otro nombre y se cambia en esa página. `URL_AGENDA` vacío: el botón de agenda no se dibuja. El envío no queda en la actividad del lead.
+  con otro nombre y se cambia en esa página.
+  El botón del «Mail puntual» es «Contáctame» y arranca con el WhatsApp de quien manda
+  (`whatsappDe`, `wa.me` al `firma_telefono` con un mensaje escrito); sin teléfono queda vacío
+  y el botón no se dibuja (`predeterminadosPara`). `URL_AGENDA` vacío: el botón de agenda no se dibuja. El envío no queda en la actividad del lead.
 - **Qué se copió del producto** (podado de lo inmobiliario):
   De `propelia-frontend/src/pages/leads/lib/`: `discardStage`,
   `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De

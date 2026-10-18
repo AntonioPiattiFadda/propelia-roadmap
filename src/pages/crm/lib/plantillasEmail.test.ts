@@ -88,3 +88,19 @@ describe('plantillasEmail', () => {
     expect(html).not.toContain('propelia.es/assets')
   })
 })
+
+describe('Contáctame por WhatsApp', () => {
+  it('el mail puntual arranca con «Contáctame» al WhatsApp de quien manda', async () => {
+    const { predeterminadosPara, whatsappDe } = await import('../../../../supabase/functions/_shared/plantillasEmail.ts')
+    const r = remitenteDe({ nombre: 'Lorenzo', firma_nombre: 'Lorenzo Piatti', firma_telefono: '+34 600 11 22 33' })
+    expect(whatsappDe(r)).toBe(`https://wa.me/34600112233?text=${encodeURIComponent('Hola Lorenzo, te escribo por tu correo de Propelia.')}`)
+    const c = predeterminadosPara('puntual', r)
+    expect(c.textoBoton).toBe('Contáctame')
+    expect(c.urlBoton).toBe(whatsappDe(r))
+    expect(problemaDeCampos('puntual', c)).toBeNull()
+    // Sin teléfono el enlace queda vacío y el botón no se dibuja.
+    expect(predeterminadosPara('puntual', remitenteDe({ nombre: 'Ana' })).urlBoton).toBe('')
+    // El del vídeo no cambia.
+    expect(predeterminadosPara('presentacion-video', r).urlBoton).toBe('')
+  })
+})
