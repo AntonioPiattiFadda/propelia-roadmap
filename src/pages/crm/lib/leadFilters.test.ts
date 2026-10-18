@@ -63,8 +63,9 @@ describe('descartados', () => {
   it('se esconden por defecto', () => {
     expect(filterLeads([vivo, descartado], f({}), ctx()).map(l => l.id)).toEqual(['v'])
   })
-  it('«incluir descartados» los muestra', () => {
-    expect(filterLeads([vivo, descartado], f({ includeDiscarded: true }), ctx())).toHaveLength(2)
+  it('Descartado junto a otra etapa muestra las dos', () => {
+    const elegidas = new Set(['descartado', vivo.funnel_stage_id!])
+    expect(filterLeads([vivo, descartado], f({ stageFilter: elegidas }), ctx())).toHaveLength(2)
   })
   it('la búsqueda los encuentra igual', () => {
     expect(filterLeads([vivo, descartado], f({ q: 'muerta' }), ctx()).map(l => l.id)).toEqual(['d'])
@@ -87,6 +88,22 @@ describe('para recontactar', () => {
   })
   it('skip lo apaga (para el contador)', () => {
     expect(filterLeads([vivo, vencido], f({ paraRecontactar: true }), ctx(), ['recontactar']).map(l => l.id)).toEqual(['v'])
+  })
+})
+
+describe('con teléfono de Google Maps', () => {
+  const conMaps = lead('m', { client: cliente({ google_maps_phone: '+34 931 000 000' }) })
+  const vacio = lead('v', { client: cliente({ google_maps_phone: '   ' }) })
+  const sinMaps = lead('s')
+  const sinCliente = lead('c', { client: null })
+  it('prendido deja solo los que tienen el teléfono cargado (en blanco no cuenta)', () => {
+    expect(filterLeads([conMaps, vacio, sinMaps, sinCliente], f({ conTelMaps: true }), ctx()).map(l => l.id)).toEqual(['m'])
+  })
+  it('apagado no filtra', () => {
+    expect(filterLeads([conMaps, sinMaps], f({}), ctx())).toHaveLength(2)
+  })
+  it('skip lo apaga (para el contador)', () => {
+    expect(filterLeads([conMaps, sinMaps], f({ conTelMaps: true }), ctx(), ['telMaps'])).toHaveLength(2)
   })
 })
 
@@ -124,5 +141,18 @@ describe('etapa y tareas', () => {
 describe('leadsDeCarteras', () => {
   it('se queda con los de las carteras elegidas', () => {
     expect(leadsDeCarteras([lead('a'), lead('b', { assigned_to: 'otro' })], ['otro']).map(l => l.id)).toEqual(['b'])
+  })
+})
+
+describe('objetivo (los números de «Objetivos hoy»)', () => {
+  const leads = [lead('a'), lead('b'), lead('d', { funnel_stage_id: 'descartado' })]
+
+  it('deja solo los leads del objetivo, descartados incluidos', () => {
+    const r = filterLeads(leads, f({ objetivo: 'contestadas' }), ctx({ leadsDelObjetivo: new Set(['a', 'd']) }))
+    expect(r.map(l => l.id)).toEqual(['a', 'd'])
+  })
+
+  it('mientras no llegaron los datos no pasa ninguno', () => {
+    expect(filterLeads(leads, f({ objetivo: 'demos' }), ctx())).toEqual([])
   })
 })

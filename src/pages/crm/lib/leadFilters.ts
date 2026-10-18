@@ -1,5 +1,6 @@
 import { toIsoDate } from '@/lib/calendarDate'
 import type { CrmLeadRow, CrmStage } from '../types'
+import type { Objetivo } from './objetivos'
 import { etapaDelLead } from './effectiveStage'
 import { paraRecontactar } from './motivosDescarte'
 
@@ -17,18 +18,22 @@ export type LeadFilterState = {
   /** Lo contrario de `conTareas`: solo los que no tienen ninguna tarea pendiente. Se excluyen
    *  (los dos viven en `?tareas=`); lo elige la vista en columnas con «Sin tareas». */
   sinTareas: boolean
-  includeDiscarded: boolean
   /** Solo los descartados que «podrían calificar» y ya llegaron a su fecha de volver a llamar. */
   paraRecontactar: boolean
   /** Con «Tareas»: ordenar por estado (lo más avanzado del funnel arriba) en vez de por la próxima tarea. */
   ordenPorEstado: boolean
+  /** Solo los que tienen cargado el teléfono de Google Maps de la inmobiliaria. */
+  conTelMaps: boolean
+  /** Uno de los números de «Objetivos hoy»: solo los leads que entran en él (`ctx.leadsDelObjetivo`). */
+  objetivo: Objetivo | null
 }
 
 // Función y no constante: una constante con Sets adentro se compartiría y alguien la mutaría.
 export function filtrosVacios(): LeadFilterState {
   return {
     q: '', stageFilter: new Set(), overdueOnly: false,
-    conTareas: false, sinTareas: false, includeDiscarded: false, paraRecontactar: false, ordenPorEstado: false,
+    conTareas: false, sinTareas: false, paraRecontactar: false, ordenPorEstado: false,
+    conTelMaps: false, objetivo: null,
   }
 }
 
@@ -39,9 +44,17 @@ export type LeadFilterContext = {
   /** Un solo «ahora» por pintada: si cada fila leyera su propio Date.now(), dos leads idénticos
    *  podrían caer de lados distintos del día de recontactar. */
   now: number
+  /** Los leads del objetivo elegido. Sin llegar todavía (undefined) no pasa ninguno: mostrar
+   *  todos mientras carga sería decir que esos son los de hoy. */
+  leadsDelObjetivo?: ReadonlySet<string>
 }
 
-export type FilterDimension = 'overdue' | 'tareas' | 'stage' | 'discarded' | 'recontactar'
+export type FilterDimension = 'overdue' | 'tareas' | 'stage' | 'recontactar' | 'telMaps' | 'objetivo'
+
+/** Un teléfono en blanco no es un teléfono cargado. */
+export function tieneTelMaps(l: CrmLeadRow): boolean {
+  return !!l.client?.google_maps_phone?.trim()
+}
 
 export function esDescartado(l: CrmLeadRow, etapas: ReadonlyMap<string, CrmStage>): boolean {
   return etapaDelLead(l, etapas)?.is_out_of_funnel === true
@@ -87,13 +100,16 @@ export function filterLeads(
      filtros sigue acotando. */
   const buscando = filters.q.trim().length > 0
   const recontactar = filters.paraRecontactar && !s.has('recontactar')
+  // Un objetivo es preguntar «¿a quiénes llamé hoy?»: el que descarté en esa llamada también va.
+  const objetivo = filters.objetivo && !s.has('objetivo') ? filters.objetivo : null
   return leads.filter(l => {
     const etapaId = l.funnel_stage_id
     const etapaElegida = etapaId != null && filters.stageFilter.has(etapaId)
     return matchesSearch(l, filters.q)
-      // Elegir a mano la etapa Descartado en el filtro de etapa es pedir verlos.
+      // Elegir la etapa Descartado en «Estado» es pedir verlos: es la única forma, no hay chip aparte.
       // «Para recontactar» es pedir ver esos descartados: el filtro de abajo deja solo a ellos.
-      && (buscando || recontactar || s.has('discarded') || filters.includeDiscarded || etapaElegida || !esDescartado(l, ctx.etapas))
+      && (buscando || recontactar || !!objetivo || etapaElegida || !esDescartado(l, ctx.etapas))
+      && (!objetivo || !!ctx.leadsDelObjetivo?.has(l.id))
       && (!recontactar || esParaRecontactar(l, ctx))
       && (s.has('stage') || filters.stageFilter.size === 0 || etapaElegida)
       // Un descartado con tareas vencidas no es trabajo pendiente (mismo criterio que el producto).
@@ -101,6 +117,7 @@ export function filterLeads(
       // Acá el descarte lo sigue decidiendo su propio filtro: «Tareas» no es pedir verlos.
       && (s.has('tareas') || !filters.conTareas || ctx.leadIdsConTareas.has(l.id))
       && (s.has('tareas') || !filters.sinTareas || !ctx.leadIdsConTareas.has(l.id))
+      && (s.has('telMaps') || !filters.conTelMaps || tieneTelMaps(l))
   })
 }
 

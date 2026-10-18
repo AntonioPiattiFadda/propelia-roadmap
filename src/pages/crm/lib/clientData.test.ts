@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { esTelefonoDeOficina, telefonosDelCliente } from './clientData'
 import {
-  campoDelNuevoDecisor, casilleroParaTelefonoDeGoogle, contactoDelCliente, contactosConDecisor, contactosDelCliente, decisorSabido, EMPTY_CLIENT, esTelefonoDeIdealista,
-  inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, validateClientData,
+  campoDelNuevoDecisor, casilleroParaTelefonoDeGoogle, contactoDelCliente, contactosConDecisor, contactosDelCliente, decisorSabido, EMPTY_CLIENT, esTelefonoDeIdealista, copiasDelTelefonoDeIdealista,
+  inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, patchDeContactosNuevos, validateClientData,
 } from './clientData'
 
 describe('validateClientData', () => {
@@ -130,6 +131,36 @@ describe('campoDelNuevoDecisor', () => {
   })
 })
 
+describe('patchDeContactosNuevos', () => {
+  const vacio = {
+    first_name: null, last_name: null, phone: null,
+    alternative_phone_1: null, alternative_phone_1_note: null, alternative_phone_2: null, alternative_phone_2_note: null,
+  }
+  it('el principal vacío del todo se lleva el primero; después los alternativos libres', () => {
+    expect(patchDeContactosNuevos(vacio, ['Pedro', 'Ana'], null))
+      .toEqual({ patch: { first_name: 'Pedro', alternative_phone_1_note: 'Ana' }, sinLugar: [] })
+  })
+  it('un principal con teléfono o nombre no se pisa', () => {
+    expect(patchDeContactosNuevos({ ...vacio, phone: '+34 600 0' }, ['Pedro'], null).patch)
+      .toEqual({ alternative_phone_1_note: 'Pedro' })
+  })
+  it('un alternativo con número o nombre ya es alguien: se salta', () => {
+    expect(patchDeContactosNuevos({ ...vacio, first_name: 'Laura', alternative_phone_1: '+34 600 1' }, ['Pedro'], null).patch)
+      .toEqual({ alternative_phone_2_note: 'Pedro' })
+  })
+  it('sin casilleros libres no se carga y se avisa quién quedó afuera', () => {
+    const lleno = { ...vacio, first_name: 'Laura', alternative_phone_1_note: 'Marc', alternative_phone_2_note: 'Ana' }
+    expect(patchDeContactosNuevos(lleno, ['Pedro'], null)).toEqual({ patch: {}, sinLugar: ['Pedro'] })
+  })
+  it('el decisor se marca solo si el nuevo es el único con quien se habló y es decisor', () => {
+    expect(patchDeContactosNuevos(vacio, ['Pedro'], 'Pedro').patch)
+      .toEqual({ first_name: 'Pedro', contact_is_decision_maker: true })
+    expect(patchDeContactosNuevos({ ...vacio, phone: '+34 600 0' }, ['Pedro'], 'Pedro').patch)
+      .toEqual({ alternative_phone_1_note: 'Pedro', alternative_phone_1_is_decision_maker: true })
+    expect(patchDeContactosNuevos(vacio, ['Pedro'], null).patch).toEqual({ first_name: 'Pedro' })
+  })
+})
+
 describe('casilleroParaTelefonoDeGoogle', () => {
   const vacio = {
     phone: null, google_maps_phone: '+34 931 23 45 67',
@@ -164,5 +195,51 @@ describe('esTelefonoDeIdealista', () => {
     expect(esTelefonoDeIdealista('+34 936-17-35-48', { idealista_phone: '+34936173548' })).toBe(true)
     expect(esTelefonoDeIdealista('+34 600', { idealista_phone: '+34936173548' })).toBe(false)
     expect(esTelefonoDeIdealista('', { idealista_phone: null })).toBe(false)
+  })
+})
+
+describe('copiasDelTelefonoDeIdealista', () => {
+  const sinAlternativos = {
+    idealista_phone: '+34936173548',
+    alternative_phone_1: null, alternative_phone_1_role: null, alternative_phone_1_notes: null, alternative_phone_1_is_decision_maker: null,
+    alternative_phone_2: null, alternative_phone_2_role: null, alternative_phone_2_notes: null, alternative_phone_2_is_decision_maker: null,
+  }
+  it('el alternativo con el número de Idealista, aunque esté escrito distinto, es una copia', () => {
+    expect(copiasDelTelefonoDeIdealista({ ...sinAlternativos, alternative_phone_2: '+34 936-17-35-48' })).toEqual([1])
+  })
+  it('sin teléfono de Idealista no hay copias', () => {
+    expect(copiasDelTelefonoDeIdealista({ ...sinAlternativos, idealista_phone: null, alternative_phone_1: '' })).toEqual([])
+  })
+  it('uno con rol, notas o decisor ya es alguien: no se toca', () => {
+    expect(copiasDelTelefonoDeIdealista({ ...sinAlternativos, alternative_phone_1: '+34936173548', alternative_phone_1_role: 'Dueño' })).toEqual([])
+    expect(copiasDelTelefonoDeIdealista({ ...sinAlternativos, alternative_phone_1: '+34936173548', alternative_phone_1_notes: 'Llamar tarde' })).toEqual([])
+    expect(copiasDelTelefonoDeIdealista({ ...sinAlternativos, alternative_phone_1: '+34936173548', alternative_phone_1_is_decision_maker: false })).toEqual([])
+  })
+})
+
+describe('teléfono de oficina (el de Google Maps)', () => {
+  const base = {
+    first_name: null, last_name: null, phone: null, google_maps_phone: '+34 936 17 35 48',
+    alternative_phone_1: null, alternative_phone_1_note: null, alternative_phone_2: null, alternative_phone_2_note: null,
+  }
+  it('es oficina el número que coincide en dígitos con el de Google Maps', () => {
+    expect(esTelefonoDeOficina('+34936173548', base)).toBe(true)
+    expect(esTelefonoDeOficina('+34 600', base)).toBe(false)
+    expect(esTelefonoDeOficina('', { google_maps_phone: null })).toBe(false)
+  })
+  it('la oficina sin nombre no es una persona con la que se habla', () => {
+    expect(contactosDelCliente({ ...base, phone: '+34 600 1', alternative_phone_1: '+34936173548' })).toEqual(['Contacto principal'])
+    expect(contactosDelCliente({ ...base, phone: '+34936173548', alternative_phone_1: '+34 600 2', alternative_phone_1_note: 'Marc' })).toEqual(['Marc'])
+  })
+  it('con nombre escrito sí es una persona, aunque atienda en el de la oficina', () => {
+    expect(contactosDelCliente({ ...base, phone: '+34936173548', first_name: 'Laura' })).toEqual(['Laura'])
+  })
+  it('a qué teléfono se puede llamar: la oficina y el de cada contacto, sin repetir', () => {
+    expect(telefonosDelCliente({ ...base, phone: '+34 600 1', first_name: 'Laura', alternative_phone_1: '+34 936-17-35-48' }))
+      .toEqual([{ numero: '+34 600 1', etiqueta: 'Laura' }, { numero: '+34 936-17-35-48', etiqueta: 'Oficina' }])
+  })
+  it('el de Google Maps entra como oficina aunque no esté en ningún contacto', () => {
+    expect(telefonosDelCliente({ ...base, alternative_phone_2: '+34 600 2' }))
+      .toEqual([{ numero: '+34 600 2', etiqueta: '+34 600 2' }, { numero: '+34 936 17 35 48', etiqueta: 'Oficina' }])
   })
 })

@@ -10,11 +10,27 @@ import type { VistaCrm } from '../lib/leadFilterParams'
 import type { LeadFilterState } from '../lib/leadFilters'
 import type { CrmStage } from '../types'
 
+/* El número adentro del chip (`.tabular-nums`) es una chapita teñida con el color del propio
+   texto, así se lee bien también sobre el rojo de «Vencidas» y el ámbar de «Para recontactar». */
 const chip = (activo: boolean) => cn(
-  'inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-3 text-[12.5px] transition-colors',
+  'inline-flex h-8 cursor-pointer select-none items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium',
+  'transition-[background-color,border-color,color,box-shadow] duration-150 active:scale-[.98]',
+  'outline-none focus-visible:ring-2 focus-visible:ring-(--brand-200) focus-visible:ring-offset-1',
+  '[&_.tabular-nums]:inline-flex [&_.tabular-nums]:h-[18px] [&_.tabular-nums]:min-w-[18px] [&_.tabular-nums]:items-center',
+  '[&_.tabular-nums]:justify-center [&_.tabular-nums]:rounded-full [&_.tabular-nums]:bg-current/10 [&_.tabular-nums]:px-1.5',
+  '[&_.tabular-nums]:text-[11px] [&_.tabular-nums]:font-semibold',
   activo
-    ? 'font-semibold text-(--brand-soft-fg) bg-(--brand-soft) [border:1px_solid_var(--brand-100)]'
-    : 'text-(--fg-2) bg-card [border:1px_solid_var(--line)] hover:bg-(--surface-2)',
+    ? 'font-semibold text-(--brand-soft-fg) bg-(--brand-soft) [border:1px_solid_var(--brand-200)] shadow-none'
+    : 'text-(--fg-2) bg-card [border:1px_solid_var(--line)] shadow-(--shadow-sm) hover:text-foreground hover:[border-color:var(--line-strong)] hover:bg-(--surface-2)',
+)
+
+/* Lista / Columnas es un segmentado y no dos chips sueltos: es una sola elección, no dos filtros. */
+const segmento = (activo: boolean) => cn(
+  'inline-flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium',
+  'transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-2 focus-visible:ring-(--brand-200)',
+  activo
+    ? 'bg-card text-foreground font-semibold shadow-(--shadow-sm)'
+    : 'text-(--fg-muted) hover:text-foreground',
 )
 
 /** El buscador por nombre y teléfono. En el escritorio va en la cabecera de la tabla, en el
@@ -58,7 +74,8 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
   onLimpiar: () => void
 }) {
   const hayFiltros = filtros.q.trim() !== '' || filtros.stageFilter.size > 0 || filtros.sinTareas
-    || filtros.overdueOnly || filtros.conTareas || filtros.includeDiscarded || filtros.paraRecontactar || filtros.ordenPorEstado
+    || filtros.overdueOnly || filtros.conTareas || filtros.paraRecontactar || filtros.ordenPorEstado
+    || filtros.conTelMaps || filtros.objetivo !== null
   const columnas = vista === 'columnas'
 
   const alternar = <T,>(set: Set<T>, v: T) => {
@@ -73,6 +90,8 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
     <div className="flex flex-wrap items-center gap-1.5 px-3 pb-2 max-md:px-2">
         {conBuscador && <BuscadorLeads q={filtros.q} onCambiar={onCambiar} className="mr-0.5 w-full md:w-[340px]" />}
 
+        <span className="mr-0.5 text-[12px] font-bold uppercase tracking-[0.06em] text-(--fg-2)">Filtros</span>
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className={chip(filtros.stageFilter.size > 0)}>
@@ -80,6 +99,8 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
               <Icon icon={ChevronDown} size="xs" />
             </button>
           </DropdownMenuTrigger>
+          {/* Descartado es una opción más (16/10/2026): sin elegirla, los descartados no se ven.
+              Reemplazó al chip «Incluir descartados». */}
           <DropdownMenuContent align="start" className="w-60">
             {etapas.map(e => (
               <DropdownMenuCheckboxItem
@@ -115,24 +136,14 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
             </button>
           </div>
         ) : (
-          <>
-            {/* Además de filtrar, ordena por la próxima tarea y cambia las columnas (ver CrmLeadList).
-                Apagarla apaga también su subfiltro, que si no quedaría prendido y escondido. */}
-            <button type="button" aria-pressed={filtros.conTareas} className={chip(filtros.conTareas)}
-              onClick={() => onCambiar(filtros.conTareas
-                ? { conTareas: false, overdueOnly: false, ordenPorEstado: false }
-                : { conTareas: true })}>
-              Tareas <span className="tabular-nums">{contadores.conTareasCount}</span>
+          // «Sin tareas» se elige en columnas; en la lista aparece solo si quedó puesto, para
+          // que no filtre escondido y se pueda apagar.
+          filtros.sinTareas && (
+            <button type="button" aria-pressed className={chip(true)}
+              onClick={() => onCambiar({ sinTareas: false })}>
+              Sin tareas <span className="tabular-nums">{contadores.sinTareasCount}</span>
             </button>
-            {/* «Sin tareas» se elige en columnas; en la lista aparece solo si quedó puesto, para
-                que no filtre escondido y se pueda apagar. */}
-            {filtros.sinTareas && (
-              <button type="button" aria-pressed className={chip(true)}
-                onClick={() => onCambiar({ sinTareas: false })}>
-                Sin tareas <span className="tabular-nums">{contadores.sinTareasCount}</span>
-              </button>
-            )}
-          </>
+          )
         )}
 
         {/* «Vencidas» es subfiltro de «Tareas» (12/10/2026): aparece cuando está prendida, o si un
@@ -162,11 +173,6 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
           </button>
         )}
 
-        <button type="button" aria-pressed={filtros.includeDiscarded} className={chip(filtros.includeDiscarded)}
-          onClick={() => onCambiar({ includeDiscarded: !filtros.includeDiscarded })}>
-          Incluir descartados <span className="tabular-nums">{contadores.discardedCount}</span>
-        </button>
-
         {/* Los descartados que «podrían calificar» vuelven acá cuando llega su fecha (recontact_at).
             Con alguno pendiente el chip se pone ámbar: es
             trabajo que volvió, no una alarma. Sin ninguno, solo aparece si está prendido. */}
@@ -181,6 +187,11 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
           </button>
         )}
 
+        <button type="button" aria-pressed={filtros.conTelMaps} className={chip(filtros.conTelMaps)}
+          onClick={() => onCambiar({ conTelMaps: !filtros.conTelMaps })}>
+          Con tel. de Google Maps <span className="tabular-nums">{contadores.telMapsCount}</span>
+        </button>
+
         {hayFiltros && (
           <Button variant="ghost" size="sm" onClick={onLimpiar}>
             <Icon icon={X} size="xs" />
@@ -188,16 +199,32 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
           </Button>
         )}
 
+        <div className="ml-auto inline-flex items-center gap-1.5">
+        {/* «Tareas» va al lado de la vista porque convierte la lista en la planilla de tareas.
+            Además de filtrar, ordena por la próxima tarea y cambia las columnas (ver CrmLeadList).
+            Apagarla apaga también sus subfiltros, que si no quedarían prendidos y escondidos.
+            En columnas no va: ahí las tareas son el grupo Todas / Con / Sin. */}
+        {!columnas && (
+          <button type="button" aria-pressed={filtros.conTareas} className={chip(filtros.conTareas)}
+            onClick={() => onCambiar(filtros.conTareas
+              ? { conTareas: false, overdueOnly: false, ordenPorEstado: false }
+              : { conTareas: true })}>
+            Tareas <span className="tabular-nums">{contadores.conTareasCount}</span>
+          </button>
+        )}
+
         {/* La vista no es un filtro: «Limpiar filtros» no la toca. */}
-        <div role="group" aria-label="Vista" className="ml-auto inline-flex gap-1">
-          <button type="button" aria-pressed={!columnas} className={chip(!columnas)} onClick={() => onVista('lista')}>
+        <div role="group" aria-label="Vista"
+          className="inline-flex items-center gap-0.5 rounded-full bg-(--surface-2) p-0.5 [border:1px_solid_var(--line)]">
+          <button type="button" aria-pressed={!columnas} className={segmento(!columnas)} onClick={() => onVista('lista')}>
             <Icon icon={List} size="xs" />
             Lista
           </button>
-          <button type="button" aria-pressed={columnas} className={chip(columnas)} onClick={() => onVista('columnas')}>
+          <button type="button" aria-pressed={columnas} className={segmento(columnas)} onClick={() => onVista('columnas')}>
             <Icon icon={Columns3} size="xs" />
             Columnas
           </button>
+        </div>
         </div>
     </div>
   )

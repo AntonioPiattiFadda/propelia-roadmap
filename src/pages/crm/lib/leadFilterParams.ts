@@ -1,4 +1,5 @@
 import { filtrosVacios, type LeadFilterState } from './leadFilters'
+import { esObjetivo, type Objetivo } from './objetivos'
 
 /* Copiado de propelia-frontend (src/pages/leads/lib/leadFilterParams.ts) sin `buildLeadFiltersJson`
    (era para el RPC de listado, que acá no hay) y con el parser/escritor que allá vive suelto en
@@ -11,7 +12,7 @@ export const OWNERS_PARAM = 'owners'
 /** El lead abierto en el dialog: un enlace abre ese lead ya abierto. */
 export const LEAD_PARAM = 'lead'
 
-export const LEAD_FILTER_PARAMS = ['overdue', 'tareas', 'stages', 'includeDiscarded', 'recontactar', 'orden'] as const
+export const LEAD_FILTER_PARAMS = ['overdue', 'tareas', 'stages', 'recontactar', 'orden', 'telMaps', 'objetivo'] as const
 export const LEAD_FILTER_PARAMS_WITH_QUERY = [...LEAD_FILTER_PARAMS, 'q'] as const
 
 /** `?tareas=sin`: los que no tienen ninguna tarea pendiente. `?tareas=1` sigue siendo «con». */
@@ -35,6 +36,8 @@ export function escribirVista(params: URLSearchParams, vista: VistaCrm): URLSear
   return next
 }
 
+const objetivoDesdeUrl = (v: string | null): Objetivo | null => (esObjetivo(v) ? v : null)
+
 const lista = (v: string | null) => (v ?? '').split(',').map(s => s.trim()).filter(Boolean)
 
 export function filtrosDesdeUrl(params: URLSearchParams): LeadFilterState {
@@ -45,9 +48,10 @@ export function filtrosDesdeUrl(params: URLSearchParams): LeadFilterState {
     overdueOnly: params.get('overdue') === '1',
     conTareas: params.get('tareas') === '1',
     sinTareas: params.get('tareas') === TAREAS_SIN,
-    includeDiscarded: params.get('includeDiscarded') === '1',
     paraRecontactar: params.get('recontactar') === '1',
     ordenPorEstado: params.get('orden') === 'estado',
+    conTelMaps: params.get('telMaps') === '1',
+    objetivo: objetivoDesdeUrl(params.get('objetivo')),
   }
 }
 
@@ -71,9 +75,13 @@ export function escribirFiltros(params: URLSearchParams, patch: Partial<LeadFilt
     else if (patch.sinTareas) con = false
     poner('tareas', con ? '1' : sin ? TAREAS_SIN : '')
   }
-  if (patch.includeDiscarded !== undefined) poner('includeDiscarded', patch.includeDiscarded ? '1' : '')
   if (patch.paraRecontactar !== undefined) poner('recontactar', patch.paraRecontactar ? '1' : '')
   if (patch.ordenPorEstado !== undefined) poner('orden', patch.ordenPorEstado ? 'estado' : '')
+  // Prender «Tareas» arranca por vencimiento (lo vencido arriba): un orden por estado que quedó
+  // puesto de antes le ganaría. Prendido después, con «Tareas» ya puesto, se respeta.
+  else if (patch.conTareas) next.delete('orden')
+  if (patch.conTelMaps !== undefined) poner('telMaps', patch.conTelMaps ? '1' : '')
+  if (patch.objetivo !== undefined) poner('objetivo', patch.objetivo ?? '')
   return next
 }
 

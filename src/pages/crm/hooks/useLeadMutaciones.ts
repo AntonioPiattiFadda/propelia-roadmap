@@ -171,6 +171,8 @@ export function useMutacionDelDetalle<TVars, TData>(
     onSuccess: () => { if (opciones.exito) toast.success(opciones.exito) },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: key })
+      // La «Última actividad» de la lista sale de los registros del detalle.
+      void qc.invalidateQueries({ queryKey: CRM_KEYS.leads })
       void qc.invalidateQueries({ queryKey: CRM_KEYS.tareasPendientes })
       void qc.invalidateQueries({ queryKey: ['crm', 'reuniones'] })
       void qc.invalidateQueries({ queryKey: CRM_KEYS.llamadas })

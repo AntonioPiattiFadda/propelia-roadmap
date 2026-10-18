@@ -39,11 +39,6 @@ describe('computeLeadListCounters', () => {
   })
   it('una etapa sola', () => expect(c.stageCount('n')).toBe(3))
   it('elegir la etapa Descartado cuenta a los descartados', () => expect(c.stageCount('d')).toBe(1))
-  // Con la etapa «n» elegida, prender «incluir descartados» no suma ninguno.
-  it('descartados que aparecerían al incluirlos', () => {
-    expect(c.discardedCount).toBe(0)
-    expect(computeLeadListCounters(leads, filtrosVacios(), ctx).discardedCount).toBe(1)
-  })
   it('lo que queda con todo puesto', () => expect(c.matchingCount).toBe(3))
 })
 
@@ -56,5 +51,14 @@ describe('para recontactar', () => {
   it('cuenta los descartados con la fecha cumplida, prendido o no', () => {
     expect(computeLeadListCounters(leads, filtrosVacios(), ctx).recontactarCount).toBe(1)
     expect(computeLeadListCounters(leads, { ...filtrosVacios(), paraRecontactar: true }, ctx).recontactarCount).toBe(1)
+  })
+})
+
+describe('con teléfono de Google Maps', () => {
+  const conMaps = (id: string) => lead(id, { client: { google_maps_phone: '931000000' } as CrmLeadRow['client'] })
+  const leads = [conMaps('a'), conMaps('b'), lead('z')]
+  it('cuenta los que lo tienen cargado, prendido o no', () => {
+    expect(computeLeadListCounters(leads, filtrosVacios(), ctx).telMapsCount).toBe(2)
+    expect(computeLeadListCounters(leads, { ...filtrosVacios(), conTelMaps: true }, ctx).telMapsCount).toBe(2)
   })
 })

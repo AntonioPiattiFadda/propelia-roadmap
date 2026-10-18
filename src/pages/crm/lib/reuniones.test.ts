@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmMeeting } from '../types'
-import { agruparReuniones, armarReunion } from './reuniones'
+import { agruparReuniones, armarReunion, descripcionDeDemo, esEmailValido } from './reuniones'
 
 const reunion = (id: string, starts: Date, status: CrmMeeting['status'] = 'scheduled'): CrmMeeting => ({
   id, lead_id: 'l', assigned_to: 'u', starts_at: starts.toISOString(), ends_at: new Date(starts.getTime() + 3600_000).toISOString(),
@@ -13,6 +13,25 @@ describe('armarReunion', () => {
     expect(new Date(r.starts_at).getHours()).toBe(9)
     expect(new Date(r.starts_at).getMinutes()).toBe(30)
     expect(Date.parse(r.ends_at) - Date.parse(r.starts_at)).toBe(45 * 60_000)
+  })
+})
+
+describe('esEmailValido', () => {
+  it('acepta un mail con espacios alrededor y rechaza lo que no es un mail', () => {
+    expect(esEmailValido('  ana@inmo.es ')).toBe(true)
+    expect(esEmailValido('')).toBe(false)
+    expect(esEmailValido('ana@inmo')).toBe(false)
+    expect(esEmailValido('ana inmo@x.es')).toBe(false)
+  })
+})
+
+describe('descripcionDeDemo', () => {
+  it('a quién va la invitación, quién asiste y las notas, un renglón por cosa', () => {
+    expect(descripcionDeDemo({ email: ' ana@inmo.es ', asistentes: ['Ana (decisora)', 'Pedro'], notas: '  Quiere ver el portal.  ' }))
+      .toBe('Invitación a: ana@inmo.es\nAsisten: Ana (decisora), Pedro\nQuiere ver el portal.')
+  })
+  it('sin asistentes ni notas no deja renglones vacíos', () => {
+    expect(descripcionDeDemo({ email: 'ana@inmo.es', asistentes: [], notas: '   ' })).toBe('Invitación a: ana@inmo.es')
   })
 })
 

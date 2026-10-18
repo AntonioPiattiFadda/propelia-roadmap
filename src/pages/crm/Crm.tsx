@@ -11,6 +11,8 @@ import { ImportarLoteDialog } from './components/ImportarLoteDialog'
 import { ManageChannelsDialog } from './components/ManageChannelsDialog'
 import { NewLeadDialog } from './components/NewLeadDialog'
 import { TestEmailDialog } from './components/TestEmailDialog'
+import { PlanningDiarioDialog } from './components/PlanningDiarioDialog'
+import { PlaybookDialog } from './components/PlaybookDialog'
 import { useCarteras } from './hooks/useCarteras'
 import { useCrmRealtime } from './hooks/useCrmRealtime'
 import { escribirLeadAbierto } from './lib/leadFilterParams'
@@ -30,6 +32,9 @@ export function Crm() {
     <div className="ui-scale-md flex flex-col">
       <header className="flex items-center justify-end gap-2 px-4 pb-2 pt-3 max-md:px-2">
         <h1 className="mr-auto text-lg font-semibold text-foreground">CRM</h1>
+        {/* Para todos, SDR incluido: es la jornada contra la que se trabaja la lista. */}
+        <PlanningDiarioDialog />
+        <PlaybookDialog />
         <AgentFilterButton />
         {/* Solo SUPERADMIN (la RLS lo exige igual): un SDR que renombra una etapa desarma el
             funnel de todos. En el teléfono no: se configura una vez al mes, desde el escritorio. */}

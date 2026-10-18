@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { RotateCw } from 'lucide-react'
+import { ArrowDownWideNarrow, ListTodo, RotateCw } from 'lucide-react'
 import { AvatarUsuario } from '@/components/AvatarUsuario'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -13,6 +13,7 @@ import { computeLeadListCounters } from '../lib/computeLeadListCounters'
 import { etapaDelLead } from '../lib/effectiveStage'
 import { estadoDeLista } from '../lib/estadoDeLista'
 import { vecinoMarcable } from '../lib/seleccionConFlechas'
+import { fmtUltimaActividad } from '../lib/ultimaActividad'
 import { fmtIngresoDate, fmtShortDate } from '../lib/leadCellFormat'
 import {
   deleteLeadFilterParams, escribirFiltros, escribirLeadAbierto, escribirVista, filtrosDesdeUrl, formatFilterList, LEAD_FILTER_PARAMS_WITH_QUERY, LEAD_PARAM,
@@ -24,6 +25,7 @@ import { estaVencida, idsConTareasVencidas, ordenarPorEstado, ordenarPorProximaT
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
 import { useReasignar } from '../hooks/useLeadMutaciones'
+import { useObjetivos } from '../hooks/useObjetivos'
 import { useVisibleAgents } from '../hooks/useVisibleAgents'
 import { nombreDe } from '../lib/permisos'
 import type { ReassignCandidate } from '../lib/reassignCollisions'
@@ -51,8 +53,11 @@ type RenglonProps = {
   acciones?: ReactNode
   /** Modo selección para reasignar en lote (Task 11): el riel se vuelve casilla. */
   seleccion?: { marcado: boolean; onToggle: () => void }
-  /** Con el filtro «Tareas» puesto: la próxima tarea del lead (la que ordena la lista). */
-  modoTareas?: { proxima: ProximaTarea | undefined; hoy: string }
+  /** La próxima tarea pendiente del lead (undefined = no tiene ninguna). */
+  proxima: ProximaTarea | undefined
+  hoy: string
+  /** Con el filtro «Tareas» puesto, la tarea reemplaza a teléfono y última actividad. */
+  modoTareas: boolean
 }
 
 /* Con «Tareas» la pregunta deja de ser «en qué está este lead» y pasa a ser «qué tengo que hacer
@@ -82,6 +87,22 @@ function VenceTarea({ proxima, hoy }: { proxima: ProximaTarea | undefined; hoy: 
   )
 }
 
+/* Fuera del modo «Tareas»: si el lead tiene algo agendado o no. Con tarea, cuándo vence la
+   próxima (el mismo rótulo de VenceTarea); sin tarea, dicho en ámbar, que es el lead que se
+   queda sin seguimiento. */
+function TareaAgendada({ proxima, hoy }: { proxima: ProximaTarea | undefined; hoy: string }) {
+  if (!proxima) {
+    return <span className="whitespace-nowrap text-[12.5px] font-medium text-(--warning-fg)">Sin tarea</span>
+  }
+  const mas = proxima.pendientes - 1
+  return (
+    <span className="inline-flex items-center gap-1" title={`${proxima.tarea.title}${mas > 0 ? ` (+${mas} más)` : ''}`}>
+      <Icon icon={ListTodo} size="xs" className="text-(--fg-muted)" />
+      <VenceTarea proxima={proxima} hoy={hoy} />
+    </span>
+  )
+}
+
 // Los portales (popovers, menús) burbujean por el árbol de React aunque su DOM viva afuera: sin
 // este corte, un clic adentro del menú de acciones abriría el lead. Y la casilla de selección
 // vive adentro de un `data-row-actions`: su clic lo atiende ella, no el renglón (si no, marcaría
@@ -91,7 +112,7 @@ function clicDelRenglon(e: React.MouseEvent<HTMLElement>): boolean {
   return e.currentTarget.contains(target) && !target.closest('[data-row-actions]')
 }
 
-function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion, modoTareas }: RenglonProps) {
+function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion, proxima, hoy, modoTareas }: RenglonProps) {
   return (
     <tr
       data-lead-id={lead.id}
@@ -123,8 +144,8 @@ function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion
       {modoTareas ? (
         <>
           <td className="px-[18px] py-[11px]"><StageBadge etapa={etapa} /></td>
-          <td className="px-[18px] py-[11px]"><TituloTarea proxima={modoTareas.proxima} /></td>
-          <td className="px-[18px] py-[11px]"><VenceTarea proxima={modoTareas.proxima} hoy={modoTareas.hoy} /></td>
+          <td className="px-[18px] py-[11px]"><TituloTarea proxima={proxima} /></td>
+          <td className="px-[18px] py-[11px]"><VenceTarea proxima={proxima} hoy={hoy} /></td>
         </>
       ) : (
         <>
@@ -132,9 +153,12 @@ function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion
             <div className="truncate">{lead.client?.phone ?? ''}</div>
           </td>
           <td className="px-[18px] py-[11px]"><StageBadge etapa={etapa} /></td>
-          <td className="whitespace-nowrap px-[18px] py-[11px] text-[12.5px] tabular-nums text-(--fg-muted)">
-            {fmtShortDate(lead.last_important_event_at)}
+          {/* La hora exacta queda en el `title`: «Hoy» solo no dice a qué hora. */}
+          <td className="whitespace-nowrap px-[18px] py-[11px] text-[12.5px] tabular-nums text-(--fg-muted)"
+            title={lead.ultima_actividad_at ? fmtShortDate(lead.ultima_actividad_at) : undefined}>
+            {fmtUltimaActividad(lead.ultima_actividad_at)}
           </td>
+          <td className="px-[18px] py-[11px]"><TareaAgendada proxima={proxima} hoy={hoy} /></td>
         </>
       )}
       <td className="px-2 py-[11px] text-right" data-row-actions>{acciones}</td>
@@ -144,7 +168,7 @@ function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion
 
 /** El mismo renglón en el teléfono: empresa arriba, etapa abajo (con «Tareas», además
  *  la próxima tarea y cuándo vence). */
-function LeadCard({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion, modoTareas }: RenglonProps) {
+function LeadCard({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion, proxima, hoy, modoTareas }: RenglonProps) {
   return (
     <div
       role="button"
@@ -169,14 +193,14 @@ function LeadCard({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccio
         <div className="min-w-0 flex-1">
           <div className="truncate text-[15px] font-semibold text-foreground">{nombreDelLead(lead.client)}</div>
           {modoTareas
-            ? <TituloTarea proxima={modoTareas.proxima} />
+            ? <TituloTarea proxima={proxima} />
             : <div className="truncate text-[12.5px] text-(--fg-muted)">{lead.client?.phone ?? ''}</div>}
         </div>
         <span data-row-actions>{acciones}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <StageBadge etapa={etapa} />
-        {modoTareas && <VenceTarea proxima={modoTareas.proxima} hoy={modoTareas.hoy} />}
+        {modoTareas ? <VenceTarea proxima={proxima} hoy={hoy} /> : <TareaAgendada proxima={proxima} hoy={hoy} />}
       </div>
     </div>
   )
@@ -185,9 +209,8 @@ function LeadCard({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccio
 /* Las columnas de alta y lead no llevan título: ese lugar lo ocupa el buscador (BUSCADOR, con
    colSpan 2), que es justamente por nombre y teléfono. */
 const BUSCADOR = 'buscador'
-const HEADERS = ['', BUSCADOR, 'Teléfono', 'Estado', 'Última actividad', '']
+const HEADERS = ['', BUSCADOR, 'Teléfono', 'Estado', 'Última actividad', 'Tarea', '']
 const HEADERS_TAREAS = ['', BUSCADOR, 'Estado', 'Tarea pendiente', 'Vence', '']
-const COLUMNAS = 7
 
 export function CrmLeadList() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -231,22 +254,24 @@ export function CrmLeadList() {
   // propósito: cada vez que llegan datos nuevos (realtime, mutación) se toma un «ahora» nuevo, así
   // un descartado que llega a su fecha de recontactar con la pantalla abierta aparece en el
   // próximo refresco.
+  // Los de «Objetivos hoy»: la misma consulta que el contador de arriba, sale de la caché.
+  const objetivosQ = useObjetivos(hoy, filtros.objetivo !== null)
+  const leadsDelObjetivo = filtros.objetivo ? objetivosQ.data?.leads[filtros.objetivo] : undefined
   const ctx = useMemo<LeadFilterContext>(
-    () => ({ overdueLeadIds, leadIdsConTareas, etapas: cat.etapasPorId, now: Date.now() }),
+    () => ({ overdueLeadIds, leadIdsConTareas, etapas: cat.etapasPorId, now: Date.now(), leadsDelObjetivo }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [overdueLeadIds, leadIdsConTareas, cat.etapasPorId, leadsQ.dataUpdatedAt],
+    [overdueLeadIds, leadIdsConTareas, cat.etapasPorId, leadsQ.dataUpdatedAt, leadsDelObjetivo],
   )
 
   const deCarteras = useMemo(
     () => leadsDeCarteras(leadsQ.data ?? SIN_LEADS, carteras ?? SIN_IDS), [leadsQ.data, carteras])
-  // Con «Tareas» la lista va por la próxima tarea (lo vencido arriba) o, con «Ordenar por estado»,
-  // por etapa. Las flechas del dialog recorren `visibles`, así que siguen este orden solas.
+  // «Ordenar por estado» (el chip o la cabecera «Estado» de la tabla) ordena por etapa con o sin
+  // «Tareas»; sin él, con «Tareas» la lista va por la próxima tarea (lo vencido arriba). Las flechas
+  // del dialog recorren `visibles`, así que siguen este orden solas.
   const visibles = useMemo(() => {
     const filtrados = filterLeads(deCarteras, filtros, ctx)
-    if (!filtros.conTareas) return filtrados
-    return filtros.ordenPorEstado
-      ? ordenarPorEstado(filtrados, proximas, l => etapaDelLead(l, cat.etapasPorId))
-      : ordenarPorProximaTarea(filtrados, proximas)
+    if (filtros.ordenPorEstado) return ordenarPorEstado(filtrados, proximas, l => etapaDelLead(l, cat.etapasPorId))
+    return filtros.conTareas ? ordenarPorProximaTarea(filtrados, proximas) : filtrados
   }, [deCarteras, filtros, ctx, proximas, cat.etapasPorId])
   const headers = filtros.conTareas ? HEADERS_TAREAS : HEADERS
   // En columnas, las etapas elegidas en «Estado» dicen qué columnas se ven (agruparPorEtapa).
@@ -293,10 +318,12 @@ export function CrmLeadList() {
     seleccion: seleccionando && agentes.puedeEscribir(lead.assigned_to)
       ? { marcado: marcados.has(lead.id), onToggle: () => alternarMarcado(lead.id) }
       : undefined,
-    modoTareas: filtros.conTareas ? { proxima: proximas.get(lead.id), hoy } : undefined,
+    proxima: proximas.get(lead.id),
+    hoy,
+    modoTareas: filtros.conTareas,
   })
   const fichaDe = (lead: CrmLeadRow): FichaProps => {
-    const { etapa: _etapa, modoTareas: _modo, ...resto } = propsDe(lead)
+    const { etapa: _etapa, proxima: _proxima, hoy: _hoy, modoTareas: _modo, ...resto } = propsDe(lead)
     return { ...resto, pendientes: proximas.get(lead.id)?.pendientes ?? 0, conVencidas: overdueLeadIds.has(lead.id) }
   }
 
@@ -346,6 +373,7 @@ export function CrmLeadList() {
     filtros.overdueOnly && 'Tareas vencidas',
     filtros.conTareas && 'Tareas',
     filtros.sinTareas && 'Sin tareas',
+    filtros.objetivo && 'el objetivo elegido',
   ].filter((v): v is string => typeof v === 'string' && !!v)
 
   const sinResultados = (
@@ -427,6 +455,21 @@ export function CrmLeadList() {
                     <BuscadorLeads q={filtros.q} onCambiar={cambiarFiltros} className="w-full max-w-[340px]" />
                   ) : i === headers.length - 1 ? (
                     <span className="block text-right tabular-nums">{visibles.length} lead{visibles.length === 1 ? '' : 's'}</span>
+                  ) : h === 'Estado' ? (
+                    // El mismo `ordenPorEstado` que el chip de los filtros: dos puertas, un solo dato.
+                    <button
+                      type="button"
+                      aria-pressed={filtros.ordenPorEstado}
+                      title={filtros.ordenPorEstado ? 'Quitar el orden por estado' : 'Lo más avanzado del funnel arriba; descartados al final'}
+                      onClick={() => cambiarFiltros({ ordenPorEstado: !filtros.ordenPorEstado })}
+                      className={cn(
+                        'inline-flex items-center gap-1 uppercase tracking-[0.06em] hover:text-foreground',
+                        filtros.ordenPorEstado && 'text-foreground',
+                      )}
+                    >
+                      Estado
+                      <Icon icon={ArrowDownWideNarrow} size="xs" className={cn(!filtros.ordenPorEstado && 'opacity-40')} />
+                    </button>
                   ) : h}
                 </th>
               ))}
@@ -435,7 +478,7 @@ export function CrmLeadList() {
           <tbody>
             {estado === 'ok'
               ? visibles.map(lead => <LeadRow key={lead.id} {...propsDe(lead)} />)
-              : <tr><td colSpan={COLUMNAS}>{sinResultados}</td></tr>}
+              : <tr><td colSpan={headers.length + 1 /* el buscador ocupa dos */}>{sinResultados}</td></tr>}
           </tbody>
         </table>
       )}
