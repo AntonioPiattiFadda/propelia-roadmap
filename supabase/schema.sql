@@ -54,6 +54,11 @@ create table if not exists public.users (
   -- La baja es esto y nunca un delete: crm_* apunta acá con FK y el roadmap guarda estos
   -- uuids adentro de su JSON.
   activo     boolean not null default true,
+  -- La firma de los mails del CRM. Opcionales: ver la migración users_firma_de_email.
+  firma_nombre   text,
+  firma_cargo    text,
+  firma_email    text,
+  firma_telefono text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -232,6 +237,11 @@ end $$;
 insert into storage.buckets (id, name, public)
 values ('roadmap-adjuntos', 'roadmap-adjuntos', false)
 on conflict (id) do update set public = false;
+
+-- Público y sin policies: lo que se manda afuera (el vídeo de los mails). Escribe solo la service role.
+insert into storage.buckets (id, name, public, file_size_limit)
+values ('publico', 'publico', true, 52428800)
+on conflict (id) do update set public = true;
 
 drop policy if exists adjuntos_read on storage.objects;
 create policy adjuntos_read on storage.objects for select

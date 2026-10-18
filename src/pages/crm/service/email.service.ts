@@ -1,5 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import type { CamposEmail, PlantillaEmailId } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 
 export type EmailAttachment = { filename: string; content: string }
 export type OutgoingEmail = { to: string; subject: string; text: string; attachments?: EmailAttachment[] }
@@ -24,9 +25,12 @@ export function fileToAttachment(file: File): Promise<EmailAttachment> {
   })
 }
 
+export type OutgoingTemplateEmail = { to: string; plantilla: PlantillaEmailId; campos: CamposEmail }
+
 /* Va por la edge function `send-email`: la API key de Resend no puede ir al navegador, y el
-   remitente (`info@propelia.es`) lo pone el servidor, no quien llama. */
-export async function sendEmail(payload: OutgoingEmail): Promise<{ id: string }> {
+   remitente (`info@propelia.es`) lo pone el servidor, no quien llama. Con una plantilla manda solo
+   los campos: el HTML lo arma la función, con el mismo `renderEmail` que pinta la vista previa. */
+export async function sendEmail(payload: OutgoingEmail | OutgoingTemplateEmail): Promise<{ id: string }> {
   const { data, error } = await supabase.functions.invoke<{ id: string }>('send-email', { body: payload })
   if (error) {
     if (error instanceof FunctionsHttpError) {

@@ -1030,6 +1030,10 @@ export type Database = {
           color: string
           created_at: string
           email: string
+          firma_cargo: string | null
+          firma_email: string | null
+          firma_nombre: string | null
+          firma_telefono: string | null
           id: string
           iniciales: string
           nombre: string
@@ -1042,6 +1046,10 @@ export type Database = {
           color: string
           created_at?: string
           email: string
+          firma_cargo?: string | null
+          firma_email?: string | null
+          firma_nombre?: string | null
+          firma_telefono?: string | null
           id: string
           iniciales: string
           nombre: string
@@ -1054,6 +1062,10 @@ export type Database = {
           color?: string
           created_at?: string
           email?: string
+          firma_cargo?: string | null
+          firma_email?: string | null
+          firma_nombre?: string | null
+          firma_telefono?: string | null
           id?: string
           iniciales?: string
           nombre?: string

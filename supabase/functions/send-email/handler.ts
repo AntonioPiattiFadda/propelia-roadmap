@@ -5,13 +5,24 @@
    a `_shared/email.ts` desde el servidor. */
 
 import type { EmailAttachment, EmailMessage } from '../_shared/email.ts'
+import { camposDesde, plantillaEmail, problemaDeCampos, remitenteDe, renderEmail, replyToDe } from '../_shared/plantillasEmail.ts'
 
-export type SendEmailInput = { to: string; subject: string; text: string; attachments: unknown }
+/* Dos formas de llamarla. Con `plantilla` y `campos` el HTML lo arma el servidor
+   (`_shared/plantillasEmail.ts`) y de lo que llega solo entra texto escapado: por eso alcanza con
+   ser usuario activo, SDR incluido. Sin plantilla es texto libre con adjuntos, y eso sigue siendo
+   de SUPERADMIN. La firma sale de la fila de `users` de quien llama, no de lo que mande. */
+export type SendEmailInput = {
+  to: string; subject: string; text: string; attachments: unknown
+  plantilla?: string; campos?: unknown
+}
 
 export type SendEmailDeps = {
-  getCaller(id: string): Promise<{ rol: string; activo: boolean } | null>
+  getCaller(id: string): Promise<Caller | null>
   send(msg: EmailMessage): Promise<{ id: string }>
 }
+
+/** La fila de `users`; las `firma_*` pueden no venir (antes de la migración). */
+export type Caller = { rol: string; activo: boolean } & NonNullable<Parameters<typeof remitenteDe>[0]>
 
 export type SendEmailResult =
   | { ok: true; id: string }
@@ -41,8 +52,9 @@ export function parseAttachments(value: unknown): EmailAttachment[] | null {
 }
 
 export async function handleSendEmail(callerId: string, input: SendEmailInput, deps: SendEmailDeps): Promise<SendEmailResult> {
-  // La misma regla que `es_superadmin()`: rol y fila activa.
   const caller = await deps.getCaller(callerId)
+  if (input.plantilla !== undefined) return handlePlantilla(caller, input, deps)
+  // La misma regla que `es_superadmin()`: rol y fila activa.
   if (!caller || !caller.activo || caller.rol !== 'SUPERADMIN') return fail(403, 'No autorizado')
 
   const to = input.to.trim()
@@ -58,5 +70,29 @@ export async function handleSendEmail(callerId: string, input: SendEmailInput, d
   }
 
   const { id } = await deps.send({ to, subject, text: input.text, ...(attachments.length ? { attachments } : {}) })
+  return { ok: true, id }
+}
+
+async function handlePlantilla(
+  caller: Caller | null,
+  input: SendEmailInput,
+  deps: SendEmailDeps,
+): Promise<SendEmailResult> {
+  // La misma regla que `es_usuario()`: fila activa, cualquier rol.
+  if (!caller || !caller.activo) return fail(403, 'No autorizado')
+
+  const to = input.to.trim()
+  if (!EMAIL.test(to)) return fail(400, 'La casilla de destino no es válida')
+  const plantilla = plantillaEmail(input.plantilla ?? '')
+  if (!plantilla) return fail(400, 'Plantilla desconocida')
+  const campos = camposDesde(input.campos)
+  if (!campos) return fail(400, 'Campos inválidos')
+  const problema = problemaDeCampos(plantilla.id, campos)
+  if (problema) return fail(400, problema)
+
+  const remitente = remitenteDe(caller)
+  const { subject, html, text } = renderEmail(plantilla.id, campos, remitente)
+  const replyTo = replyToDe(remitente)
+  const { id } = await deps.send({ to, subject, html, text, ...(replyTo ? { replyTo } : {}) })
   return { ok: true, id }
 }

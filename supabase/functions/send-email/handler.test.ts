@@ -68,3 +68,40 @@ Deno.test('adjuntos inválidos → 400 y de más de 10MB → 413, sin mandar', a
   assertEquals((await handleSendEmail('me', { ...VALID, attachments: big }, deps)) as unknown, { ok: false, status: 413, error: 'Los adjuntos pasan los 10MB' })
   assertEquals(sent.length, 0)
 })
+
+const CAMPOS_VIDEO = { asunto: 'Propelia', cuerpo: 'Hola <b>', urlVideo: 'https://youtu.be/x', nombre: 'Ana' }
+const PLANTILLA: SendEmailInput = { to: 'ana@example.com', subject: '', text: '', attachments: undefined, plantilla: 'presentacion-video', campos: CAMPOS_VIDEO }
+
+Deno.test('plantilla: un SDR activo la manda, en HTML escapado, firmada y respondiendo a su email', async () => {
+  const { deps, sent } = fakeDeps({ getCaller: async () => ({ rol: 'SDR', activo: true, nombre: 'Lore', firma_nombre: 'Lorenzo Piatti Fadda', firma_email: 'lorenzo@propelia.es' }) })
+  assertEquals(await handleSendEmail('me', PLANTILLA, deps), { ok: true, id: 'email_1' })
+  assertEquals(sent[0].subject, 'Propelia')
+  assertEquals(sent[0].replyTo, 'lorenzo@propelia.es')
+  assertEquals(sent[0].html?.includes('Hola &lt;b&gt;'), true)
+  assertEquals(sent[0].html?.includes('Hola <b>'), false)
+  assertEquals(sent[0].html?.includes('Lorenzo Piatti Fadda'), true)
+})
+
+Deno.test('plantilla: sin firma cargada firma con el nombre corto y no lleva reply_to', async () => {
+  const { deps, sent } = fakeDeps({ getCaller: async () => ({ rol: 'SDR', activo: true, nombre: 'Ana' }) })
+  await handleSendEmail('me', PLANTILLA, deps)
+  assertEquals('replyTo' in sent[0], false)
+  assertEquals(sent[0].html?.includes('info@propelia.es'), true)
+})
+
+Deno.test('plantilla: un inactivo o sin fila no manda (403)', async () => {
+  for (const caller of [{ rol: 'SUPERADMIN', activo: false }, null]) {
+    const { deps, sent } = fakeDeps({ getCaller: async () => caller })
+    assertEquals((await handleSendEmail('me', PLANTILLA, deps)).ok, false)
+    assertEquals(sent.length, 0)
+  }
+})
+
+Deno.test('plantilla: desconocida, sin vídeo o con un enlace raro → 400 sin mandar', async () => {
+  const { deps, sent } = fakeDeps()
+  assertEquals((await handleSendEmail('me', { ...PLANTILLA, plantilla: 'otra' }, deps)).ok, false)
+  assertEquals((await handleSendEmail('me', { ...PLANTILLA, campos: { ...CAMPOS_VIDEO, urlVideo: '' } }, deps)).ok, false)
+  assertEquals((await handleSendEmail('me', { ...PLANTILLA, campos: { ...CAMPOS_VIDEO, urlBoton: 'javascript:alert(1)' } }, deps)).ok, false)
+  assertEquals((await handleSendEmail('me', { ...PLANTILLA, campos: 'x' }, deps)).ok, false)
+  assertEquals(sent.length, 0)
+})

@@ -3,8 +3,9 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { EmailConfigError, EmailProviderError, sendEmail } from '../_shared/email.ts'
 import { handleSendEmail } from './handler.ts'
 
-/* Envío de un email desde el front (hoy, el formulario de prueba del CRM). Quién puede llamarla
-   lo decide `handleSendEmail` (SUPERADMIN activo), no el JWT: el JWT solo dice quién sos, y el
+/* Envío de un email desde el front: el formulario de prueba del CRM y las plantillas de «Mensajes».
+   Quién puede llamarla lo decide `handleSendEmail` (SUPERADMIN para texto libre, usuario activo
+   para una plantilla), no el JWT: el JWT solo dice quién sos, y el
    gateway deja pasar la anon key del bundle. La API key de Resend es un secret de la función. */
 
 const cors = {
@@ -35,10 +36,14 @@ Deno.serve(async req => {
   try {
     const r = await handleSendEmail(
       callerId,
-      { to: str(body.to), subject: str(body.subject), text: str(body.text), attachments: body.attachments },
+      {
+        to: str(body.to), subject: str(body.subject), text: str(body.text), attachments: body.attachments,
+        ...(typeof body.plantilla === 'string' ? { plantilla: body.plantilla, campos: body.campos } : {}),
+      },
       {
         async getCaller(id) {
-          const { data } = await admin.from('users').select('rol, activo').eq('id', id).maybeSingle()
+          // `*` y no la lista: así no rompe si las columnas `firma_*` todavía no están en la base.
+          const { data } = await admin.from('users').select('*').eq('id', id).maybeSingle()
           return data ?? null
         },
         send: msg => sendEmail(msg),

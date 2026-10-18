@@ -242,6 +242,21 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   producto alcanzaba con sesión). Hoy la usa solo «Email de prueba» de la cabecera del CRM
   (`TestEmailDialog`). Los envíos automáticos del CRM van a llamar a `_shared/email.ts`
   desde el servidor, no a `send-email`. Tests: `deno test` en `_shared/` y `send-email/`.
+  **Plantillas HTML** (18/10/2026): la pestaña Email de «Mensajes» del lead (`EmailConPlantilla`)
+  manda «Presentación con vídeo» y «Mail puntual», con el texto precargado y editable para ese
+  envío (no se guarda). Viven en `supabase/functions/_shared/plantillasEmail.ts`, **un solo archivo
+  para las dos puntas**: el front lo importa para la vista previa y `send-email` para armar el HTML.
+  El front manda solo `{plantilla, campos}` (texto, todo escapado) y por eso la puede usar cualquier
+  usuario activo, SDR incluido; el texto libre sigue siendo de SUPERADMIN. **La firma y los datos de
+  contacto son de quien manda** (`users.firma_nombre/cargo/email/telefono`, migración
+  `20261018203253_users_firma_de_email`): el servidor los lee de la base, nunca del front, y el
+  `reply_to` es ese email. Sin firma cargada va `nombre`, `info@propelia.es` y sin teléfono ni
+  cargo. No hay pantalla para editarlos: se cargan por SQL. Las imágenes (`mail-header.png`,
+  `mail-video.png`, `lockup_h.png`; versión blanca desde el 18/10/2026) del mail que sale están en `propelia-landing/assets/` →
+  `propelia.es/assets/`; la vista previa usa las copias de `public/email/`.
+  `URL_VIDEO` es el mp4 en el bucket **público** `publico` (migración `20261018210226_bucket_publico`,
+  sin policies: escribe solo la service role, con `supabase storage cp --linked`); una versión nueva
+  va con otro nombre. `URL_AGENDA` vacío: el botón de agenda no se dibuja. El envío no queda en la actividad del lead.
 - **Qué se copió del producto** (podado de lo inmobiliario):
   De `propelia-frontend/src/pages/leads/lib/`: `discardStage`,
   `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De

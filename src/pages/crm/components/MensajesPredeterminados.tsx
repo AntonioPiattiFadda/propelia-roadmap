@@ -6,10 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import type { PlantillaEmailId } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 import type { CrmClient } from '../types'
+import { EmailConPlantilla, ListaDePlantillasEmail } from './EmailConPlantilla'
 
-/* SOLO LA PARTE VISUAL (12/10/2026): las plantillas viven en el estado del componente y «Enviar»
-   no manda nada. Falta la tabla de plantillas, el bucket de sus adjuntos y el envío de verdad. */
+/* WhatsApp es SOLO LA PARTE VISUAL (12/10/2026): las plantillas viven en el estado del componente y
+   «Enviar» no manda nada. Falta la tabla de plantillas, el bucket de sus adjuntos y el envío de verdad.
+   Email sí manda (18/10/2026): son las dos plantillas HTML fijas de `EmailConPlantilla`. */
 
 type Canal = 'whatsapp' | 'email'
 
@@ -30,8 +33,6 @@ const EJEMPLOS: Plantilla[] = [
   { id: 'p2', canal: 'whatsapp', nombre: 'Presentación con PDF', asunto: '',
     adjuntos: [{ id: 'a1', nombre: 'Propelia - presentación.pdf', peso: 1_840_000 }],
     texto: 'Hola {nombre}, como te comenté por teléfono, te paso la presentación de Propelia. Cualquier duda me escribís por acá.' },
-  { id: 'p3', canal: 'email', nombre: 'Seguimiento', asunto: 'Propelia para {empresa}', adjuntos: [],
-    texto: 'Hola {nombre}:\n\nTe escribo para retomar la conversación que tuvimos. ¿Te viene bien una llamada esta semana?\n\nSaludos.' },
 ]
 
 const VARIABLES = ['{nombre}', '{empresa}'] as const
@@ -92,6 +93,7 @@ export function MensajesPredeterminadosDialog({ client, abierto, onCerrar }: {
   const [borrador, setBorrador] = useState<Plantilla | null>(null)
   const [borrando, setBorrando] = useState<string | null>(null)
   const [destino, setDestino] = useState('')
+  const [plantillaEmail, setPlantillaEmail] = useState<PlantillaEmailId>('presentacion-video')
 
   const delCanal = plantillas.filter(p => p.canal === canal)
   const elegida = delCanal.find(p => p.id === elegidaId) ?? delCanal[0] ?? null
@@ -128,7 +130,8 @@ export function MensajesPredeterminadosDialog({ client, abierto, onCerrar }: {
   return (
     <Dialog open={abierto} onOpenChange={o => { if (!o) { setBorrador(null); onCerrar() } }}>
       <DialogContent showCloseButton={false}
-        className="dialog-fullscreen-mobile flex h-[80vh] max-h-none w-[min(900px,94vw)] max-w-none flex-col gap-0 overflow-hidden p-0">
+        className={cn('dialog-fullscreen-mobile flex max-h-none max-w-none flex-col gap-0 overflow-hidden p-0',
+          canal === 'email' ? 'h-[88vh] w-[min(1400px,96vw)]' : 'h-[80vh] w-[min(900px,94vw)]')}>
         <header className="flex shrink-0 items-center gap-3 px-4 py-3 [border-bottom:1px_solid_var(--line)]">
           <div className="min-w-0 flex-1">
             <DialogTitle className="text-[15px]">Mensajes predeterminados</DialogTitle>
@@ -152,6 +155,7 @@ export function MensajesPredeterminadosDialog({ client, abierto, onCerrar }: {
         <div className="grid min-h-0 flex-1 overflow-y-auto md:grid-cols-[260px_1fr] md:overflow-hidden">
           {/* La lista de plantillas del canal. */}
           <aside className="flex min-w-0 flex-col bg-(--surface-2) p-2 md:min-h-0 md:overflow-y-auto md:[border-right:1px_solid_var(--line)]">
+            {canal === 'email' ? <ListaDePlantillasEmail elegida={plantillaEmail} onElegir={setPlantillaEmail} /> : <>
             <ul className="flex flex-col gap-1">
               {delCanal.map(p => {
                 const activa = !borrador && elegida?.id === p.id
@@ -196,10 +200,13 @@ export function MensajesPredeterminadosDialog({ client, abierto, onCerrar }: {
               className="mt-2 flex cursor-pointer items-center gap-1.5 self-start rounded-md px-2 py-1 text-[12.5px] font-medium text-(--fg-2) hover:bg-card hover:text-foreground">
               <Plus size={14} />Nuevo mensaje
             </button>
+            </>}
           </aside>
 
           <section className="flex min-h-0 min-w-0 flex-col">
-            {borrador ? (
+            {canal === 'email' ? (
+              <EmailConPlantilla key={plantillaEmail} id={plantillaEmail} client={client} />
+            ) : borrador ? (
               <EditorDePlantilla borrador={borrador} onCambiar={setBorrador}
                 onGuardar={guardarBorrador} onCancelar={() => setBorrador(null)} />
             ) : elegida ? (
