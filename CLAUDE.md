@@ -248,10 +248,13 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   para las dos puntas**: el front lo importa para la vista previa y `send-email` para armar el HTML.
   El front manda solo `{plantilla, campos}` (texto, todo escapado) y por eso la puede usar cualquier
   usuario activo, SDR incluido; el texto libre sigue siendo de SUPERADMIN. **La firma y los datos de
-  contacto son de quien manda** (`users.firma_nombre/cargo/email/telefono`, migración
-  `20261018203253_users_firma_de_email`): el servidor los lee de la base, nunca del front, y el
-  `reply_to` es ese email. Sin firma cargada va `nombre`, `info@propelia.es` y sin teléfono ni
-  cargo. No hay pantalla para editarlos: se cargan por SQL. Las imágenes (`mail-header.png`,
+  contacto son de quien manda** (`remitenteDe`): el servidor los lee de la base, nunca del front.
+  Sale siempre desde `info@propelia.es`; **desde el 19/10/2026** el email que se muestra (firma,
+  pie, «Darse de baja») y el `reply_to` son `users.email` **solo si es de @propelia.es** — si no
+  (los gmail de Lorenzo y Antonio) van `info@propelia.es` y sin `reply_to`. `firma_email` ya no se
+  lee. El teléfono es `users.phone` y, si falta, `firma_telefono`. Nombre y cargo siguen saliendo
+  de `firma_nombre` (o `nombre`) y `firma_cargo` (migración `20261018203253_users_firma_de_email`),
+  que se cargan por SQL. Las imágenes (`mail-header.png`,
   `mail-video.png`, `lockup_h.png`; versión blanca desde el 18/10/2026) del mail que sale están en `propelia-landing/assets/` →
   `propelia.es/assets/`; la vista previa usa las copias de `public/email/`.
   `URL_VIDEO` es `crm.propelia.es/presentacion`, una página pública de `propelia-frontend` que
@@ -259,8 +262,8 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   `20261018210226_bucket_publico`, sin policies: escribe solo la service role). Un vídeo nuevo va
   con otro nombre y se cambia en esa página.
   El botón del «Mail puntual» es «Contáctame» y arranca con el WhatsApp de quien manda
-  (`whatsappDe`, `wa.me` al `firma_telefono` con un mensaje escrito); sin teléfono queda vacío
-  y el botón no se dibuja (`predeterminadosPara`). `URL_AGENDA` vacío: el botón de agenda no se dibuja. El envío no queda en la actividad del lead.
+  (`whatsappDe`, `wa.me` al teléfono de quien manda con un mensaje escrito); sin teléfono es un
+  `mailto:` a su email (`predeterminadosPara`). El botón acepta `http(s)://` o `mailto:`. `URL_AGENDA` vacío: el botón de agenda no se dibuja. El envío no queda en la actividad del lead.
 - **Qué se copió del producto** (podado de lo inmobiliario):
   De `propelia-frontend/src/pages/leads/lib/`: `discardStage`,
   `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De
