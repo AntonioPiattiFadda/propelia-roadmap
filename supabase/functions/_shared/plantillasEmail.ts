@@ -67,6 +67,13 @@ export function remitenteDe(u: FilaUsuario | null | undefined): Remitente {
   }
 }
 
+/** El nombre del remitente en la bandeja: el nombre de pila de quien manda, «de Propelia».
+    El mail sale igual desde info@propelia.es. */
+export function nombreEnBandeja(r: Remitente): string {
+  const pila = r.nombre === 'Equipo Propelia' ? '' : r.nombre.trim().split(/\s+/)[0]
+  return pila ? `${pila} de Propelia` : 'Propelia'
+}
+
 /** A dónde van las respuestas: el email de quien manda, si es uno propio de propelia.es. */
 export const replyToDe = (r: Remitente) => (r.email === EMAIL_POR_DEFECTO ? undefined : r.email)
 const ASSETS = 'https://www.propelia.es/assets'

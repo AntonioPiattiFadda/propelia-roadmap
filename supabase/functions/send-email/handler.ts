@@ -5,7 +5,7 @@
    a `_shared/email.ts` desde el servidor. */
 
 import type { EmailAttachment, EmailMessage } from '../_shared/email.ts'
-import { camposDesde, plantillaEmail, problemaDeCampos, remitenteDe, renderEmail, replyToDe } from '../_shared/plantillasEmail.ts'
+import { camposDesde, nombreEnBandeja, plantillaEmail, problemaDeCampos, remitenteDe, renderEmail, replyToDe } from '../_shared/plantillasEmail.ts'
 
 /* Dos formas de llamarla. Con `plantilla` y `campos` el HTML lo arma el servidor
    (`_shared/plantillasEmail.ts`) y de lo que llega solo entra texto escapado: por eso alcanza con
@@ -93,6 +93,7 @@ async function handlePlantilla(
   const remitente = remitenteDe(caller)
   const { subject, html, text } = renderEmail(plantilla.id, campos, remitente)
   const replyTo = replyToDe(remitente)
-  const { id } = await deps.send({ to, subject, html, text, ...(replyTo ? { replyTo } : {}) })
+  const fromName = nombreEnBandeja(remitente)
+  const { id } = await deps.send({ fromName, to, subject, html, text, ...(replyTo ? { replyTo } : {}) })
   return { ok: true, id }
 }

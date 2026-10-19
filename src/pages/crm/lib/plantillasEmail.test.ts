@@ -133,3 +133,12 @@ describe('remitente: email del dominio propio o info@', () => {
     expect(remitenteDe(fila).email).toBe('info@propelia.es')
   })
 })
+
+describe('nombre en la bandeja', () => {
+  it('es el nombre de pila «de Propelia»', async () => {
+    const { nombreEnBandeja } = await import('../../../../supabase/functions/_shared/plantillasEmail.ts')
+    expect(nombreEnBandeja(remitenteDe({ nombre: 'Lore', firma_nombre: 'Lorenzo Piatti Fadda' }))).toBe('Lorenzo de Propelia')
+    expect(nombreEnBandeja(remitenteDe({ nombre: 'Antonio' }))).toBe('Antonio de Propelia')
+    expect(nombreEnBandeja(remitenteDe(null))).toBe('Propelia')
+  })
+})

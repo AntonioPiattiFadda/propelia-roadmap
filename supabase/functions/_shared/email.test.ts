@@ -81,3 +81,12 @@ Deno.test('adjuntos van como attachments; lista vacía no se manda', async () =>
   await sendEmail({ to: 'a@b.co', subject: 's', text: 't', attachments: [] }, { env: okEnv, fetch: g.fn })
   assertEquals('attachments' in JSON.parse(g.calls[0].init.body as string), false)
 })
+
+Deno.test('nombreDeRemitente: limpia lo que rompe la cabecera y vacío es «Propelia»', async () => {
+  const { nombreDeRemitente } = await import('./email.ts')
+  assertEquals(nombreDeRemitente('Ana de Propelia'), 'Ana de Propelia')
+  assertEquals(nombreDeRemitente('A"na <x>\r\nBcc: y'), 'Ana xBcc: y')
+  assertEquals(nombreDeRemitente('  '), 'Propelia')
+  assertEquals(nombreDeRemitente(''), 'Propelia')
+  assertEquals(nombreDeRemitente(undefined), 'Propelia')
+})

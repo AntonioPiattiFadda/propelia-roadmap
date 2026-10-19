@@ -14,6 +14,8 @@ const SENDER_NAME = 'Propelia'
 export type EmailAttachment = { filename: string; content: string }
 
 export type EmailMessage = {
+  /** El nombre que se ve en la bandeja («Antonio de Propelia»). La dirección no cambia nunca. */
+  fromName?: string
   to: string | string[]
   subject: string
   html?: string
@@ -36,6 +38,11 @@ export class EmailAlreadySentError extends Error {
   override name = 'EmailAlreadySentError'
 }
 
+/* Lo que puede romper la cabecera `From` (comillas, ángulos, saltos de línea) se saca: sin eso, un
+   nombre raro en `users` partiría la cabecera. Vacío vuelve a «Propelia». */
+export const nombreDeRemitente = (nombre?: string) =>
+  nombre?.replace(/["<>\r\n\\]/g, '').trim().slice(0, 80) || SENDER_NAME
+
 const defaultDeps = (): EmailDeps => ({ env: key => Deno.env.get(key), fetch })
 
 export async function sendEmail(msg: EmailMessage, deps: EmailDeps = defaultDeps()): Promise<{ id: string }> {
@@ -50,7 +57,7 @@ export async function sendEmail(msg: EmailMessage, deps: EmailDeps = defaultDeps
       ...(msg.idempotencyKey ? { 'Idempotency-Key': msg.idempotencyKey } : {}),
     },
     body: JSON.stringify({
-      from: `"${SENDER_NAME}" <${SENDER}>`,
+      from: `"${nombreDeRemitente(msg.fromName)}" <${SENDER}>`,
       to: Array.isArray(msg.to) ? msg.to : [msg.to],
       subject: msg.subject,
       html: msg.html,

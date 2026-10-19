@@ -8,7 +8,7 @@ import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { cn } from '@/lib/utils'
 import {
-  PLANTILLAS_EMAIL, predeterminadosPara, whatsappDe, problemaDeCampos, remitenteDe, renderEmail, ROTULOS_CAMPOS,
+  nombreEnBandeja, PLANTILLAS_EMAIL, predeterminadosPara, whatsappDe, problemaDeCampos, remitenteDe, renderEmail, ROTULOS_CAMPOS,
   type CampoEmail, type CamposEmail, type PlantillaEmailId, type Remitente,
 } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 import { sendEmail } from '../service/email.service'
@@ -188,7 +188,7 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
       </div>
       <footer className="flex shrink-0 items-center justify-end gap-3 px-4 py-3 [border-top:1px_solid_var(--line)]">
         {problema && <span className="min-w-0 truncate text-[12px] text-(--fg-muted)">{problema}</span>}
-        <span className="hidden text-[12px] text-(--fg-muted) md:inline">{problema ? '' : 'Sale desde info@propelia.es'}</span>
+        <span className="hidden text-[12px] text-(--fg-muted) md:inline">{problema ? '' : `Llega de «${nombreEnBandeja(remitente)}» <info@propelia.es>`}</span>
         <button type="button" onClick={() => enviar.mutate()} disabled={!!problema || enviar.isPending}
           className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-foreground px-3.5 text-[13px] font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">
           <Send size={14} />{enviar.isPending ? 'Enviando…' : 'Enviar email'}

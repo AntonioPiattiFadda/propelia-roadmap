@@ -80,6 +80,7 @@ Deno.test('plantilla: un SDR activo la manda, en HTML escapado, firmada y respon
   assertEquals(sent[0].html?.includes('Hola &lt;b&gt;'), true)
   assertEquals(sent[0].html?.includes('Hola <b>'), false)
   assertEquals(sent[0].html?.includes('Lorenzo Piatti Fadda'), true)
+  assertEquals(sent[0].fromName, 'Lorenzo de Propelia')
 })
 
 Deno.test('plantilla: sin firma cargada firma con el nombre corto y no lleva reply_to', async () => {
