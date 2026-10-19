@@ -325,7 +325,12 @@ conversión de filas a personas es `personasDesdeUsuarios()`, en `equipo.js`, co
   (tests con `deno test` ahí adentro): solo SUPERADMIN activo, pone `activo = true` y, si se eligió
   «Poner una nueva», antes le cambia la contraseña (si eso falla, no activa). Sin migración. No
   devuelve nada de lo que la baja traspasó, ni los permisos de `crm_data_access`: se dan de nuevo
-  desde Visibilidad. Cambios, `caja` y roles siguen por el MCP.
+  desde Visibilidad. **El teléfono** (19/10/2026, migración `20261019140832_users_phone`) es
+  `users.phone`, aparte de `firma_telefono` (el de la firma de los mails, que puede ser el de la
+  oficina). Como en el producto, **el alta lo exige** (`requiredPhoneError` en el front,
+  `telefonoCargado` en `crear-miembro`) y se guarda en E.164; los de antes pueden no tenerlo. Se
+  carga o cambia tocando la columna «Teléfono» de `/equipo` (`TelefonoMiembroDialog`, RPC
+  `crm_set_member_phone`, solo SUPERADMIN). Cambios, `caja` y roles siguen por el MCP.
 - **La baja es `activo = false`, nunca un `delete`.** Un inactivo no entra (`es_usuario()` lo
   corta y la RLS le devuelve la lista vacía), pero se sigue pintando: una tarea vieja dice
   quién la hizo y lo que pagó sigue en el saldo de la caja. Lo que no se hace es **ofrecerlo

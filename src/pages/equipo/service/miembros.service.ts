@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/database.types'
 
 export type Rol = Database['public']['Enums']['user_role']
-export type NuevoMiembro = { email: string; password: string; nombre: string; rol: Rol }
+export type NuevoMiembro = { email: string; password: string; nombre: string; telefono: string; rol: Rol }
 
 /* El alta va por la edge function `crear-miembro` y no contra `users`: crear la cuenta de auth
    pide el service_role, y el front no tiene policies de escritura sobre `users`. */
@@ -31,6 +31,13 @@ export async function reactivarMiembro(userId: string, password: string | null):
     }
     throw error
   }
+}
+
+/* El teléfono va por la RPC `crm_set_member_phone` (solo SUPERADMIN): el front no
+   escribe `users`. Vacío lo borra. */
+export async function cambiarTelefonoMiembro(userId: string, telefono: string): Promise<void> {
+  const { error } = await supabase.rpc('crm_set_member_phone', { p_user_id: userId, p_phone: telefono })
+  if (error) throw error
 }
 
 /** Lo que la baja le pasa al sucesor (o le pasaría, con `simulado`). */

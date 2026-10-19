@@ -12,6 +12,7 @@ import { VisibilityMatrix } from './components/VisibilityMatrix'
 import { NuevoMiembroDialog } from './components/NuevoMiembroDialog'
 import { BajaMiembroDialog } from './components/BajaMiembroDialog'
 import { ReactivarMiembroDialog } from './components/ReactivarMiembroDialog'
+import { TelefonoMiembroDialog } from './components/TelefonoMiembroDialog'
 import type { Usuario } from '@/pages/crm/types'
 import { estadisticasPorCartera } from './lib/estadisticasPorCartera'
 
@@ -21,13 +22,15 @@ type Estado = 'activos' | 'inactivos'
 /* Equipo: los números por cartera y quién ve a quién. Comparte la cache con el CRM (mismas keys):
    entrar acá después del CRM no pide nada de nuevo. El alta de miembros va por la edge function
    `crear-miembro`, la baja por la RPC `crm_dar_de_baja_miembro` y la vuelta por la edge function
-   `reactivar-miembro` (las tres solo SUPERADMIN); los demás cambios de `users` siguen por MCP. */
+   `reactivar-miembro` y el teléfono por la RPC `crm_set_member_phone` (todo solo
+   SUPERADMIN); los demás cambios de `users` siguen por MCP. */
 export function Equipo() {
   useCrmRealtime()
   const [pestaña, setPestaña] = useState<Pestaña>('tabla')
   const [nuevoAbierto, setNuevoAbierto] = useState(false)
   const [deBaja, setDeBaja] = useState<Usuario | null>(null)
   const [aReactivar, setAReactivar] = useState<Usuario | null>(null)
+  const [deTelefono, setDeTelefono] = useState<Usuario | null>(null)
   const [estado, setEstado] = useState<Estado>('activos')
   const { myId, usuarios, visibles, esSuperadmin, isLoading: cargandoCarteras } = useCarteras()
   const { etapasPorId, isLoading: cargandoCatalogos } = useCrmCatalogos()
@@ -100,13 +103,15 @@ export function Equipo() {
           ) : (
             <TablaEquipo filas={estado === 'activos' ? activos : inactivos} myId={myId}
               onDarDeBaja={esSuperadmin ? setDeBaja : undefined}
-              onReactivar={esSuperadmin ? setAReactivar : undefined} />
+              onReactivar={esSuperadmin ? setAReactivar : undefined}
+              onTelefono={esSuperadmin ? setDeTelefono : undefined} />
           )}
         </div>
       )}
       <NuevoMiembroDialog open={nuevoAbierto} onOpenChange={setNuevoAbierto} />
       <BajaMiembroDialog usuario={deBaja} usuarios={usuarios} onOpenChange={open => { if (!open) setDeBaja(null) }} />
       <ReactivarMiembroDialog usuario={aReactivar} onOpenChange={open => { if (!open) setAReactivar(null) }} />
+      <TelefonoMiembroDialog usuario={deTelefono} onOpenChange={open => { if (!open) setDeTelefono(null) }} />
     </div>
   )
 }

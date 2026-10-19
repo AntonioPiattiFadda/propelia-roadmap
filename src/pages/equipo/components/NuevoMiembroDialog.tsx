@@ -4,16 +4,19 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PhoneInput } from '@/components/ui/phone-input'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { requiredPhoneError, toE164 } from '@/lib/phone'
 import { CRM_KEYS } from '@/pages/crm/hooks/keys'
 import { crearMiembro, type Rol } from '../service/miembros.service'
 
-/* `CreateOrgUserDialog` del producto, adaptado a nuestra `users`: sin apellido ni teléfono, y
-   rol SDR/SUPERADMIN. Iniciales y color los calcula la edge function; `caja` nace en false. */
-type Form = { email: string; password: string; password_confirm: string; nombre: string; rol: Rol }
+/* `CreateOrgUserDialog` del producto, adaptado a nuestra `users`: sin apellido, y rol
+   SDR/SUPERADMIN. El teléfono es obligatorio, como allá (19/10/2026). Iniciales y color los
+   calcula la edge function; `caja` nace en false. */
+type Form = { email: string; password: string; password_confirm: string; nombre: string; telefono: string; rol: Rol }
 
-const VACIO: Form = { email: '', password: '', password_confirm: '', nombre: '', rol: 'SDR' }
+const VACIO: Form = { email: '', password: '', password_confirm: '', nombre: '', telefono: '', rol: 'SDR' }
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 type Props = { open: boolean; onOpenChange: (open: boolean) => void }
@@ -38,16 +41,20 @@ export function NuevoMiembroDialog({ open, onOpenChange }: Props) {
   // La edge function lo rechaza igual: acá es para decirlo antes de mandar.
   const conTildes = /[^\x00-\x7F]/.test(form.email)
   const noCoinciden = form.password_confirm.length > 0 && form.password !== form.password_confirm
+  const errorTelefono = requiredPhoneError(form.telefono)
   const valido =
     !conTildes &&
     EMAIL.test(form.email.trim()) &&
     form.password.length >= 6 &&
     form.password === form.password_confirm &&
-    form.nombre.trim().length > 0
+    form.nombre.trim().length > 0 &&
+    errorTelefono === null
 
   const enviar = () => {
     if (!valido) return
-    crear.mutate({ email: form.email.trim(), password: form.password, nombre: form.nombre.trim(), rol: form.rol })
+    crear.mutate({ email: form.email.trim(), password: form.password, nombre: form.nombre.trim(),
+      // En E.164, como el producto: el que se tipea con espacios es el mismo número.
+      telefono: toE164(form.telefono) ?? form.telefono.trim(), rol: form.rol })
   }
 
   return (
@@ -67,6 +74,12 @@ export function NuevoMiembroDialog({ open, onOpenChange }: Props) {
               <Input id="nuevo-miembro-email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
               {conTildes && <p className="text-xs text-destructive">El email no puede llevar tildes ni ñ</p>}
             </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="nuevo-miembro-telefono">Teléfono *</Label>
+            <PhoneInput id="nuevo-miembro-telefono" value={form.telefono} onChange={telefono => setForm(f => ({ ...f, telefono }))}
+              aria-invalid={form.telefono !== '' && !!errorTelefono} />
+            {form.telefono !== '' && errorTelefono && <p className="text-xs text-destructive">{errorTelefono}</p>}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="nuevo-miembro-password">Contraseña temporal</Label>

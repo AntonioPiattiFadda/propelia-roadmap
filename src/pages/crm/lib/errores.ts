@@ -27,6 +27,10 @@ const CLAVES: Record<string, string> = {
   crm_baja_ya_inactivo: 'Esa persona ya estaba dada de baja.',
   crm_baja_sucesor_invalido: 'Elegí a otra persona para quedarse con lo suyo.',
   crm_baja_falta_sucesor: 'Tiene cosas en curso: elegí quién se queda con ellas.',
+  // Las de crm_set_member_phone.
+  crm_phone_superadmin_only: 'Solo un superadmin puede cambiar el teléfono de alguien.',
+  crm_phone_invalid: 'Teléfono inválido.',
+  crm_member_not_found: 'Esa persona ya no existe. Recargá la página.',
 }
 
 export function mensajeDeError(error: unknown, porDefecto = 'Algo salió mal. Probá de nuevo.'): string {

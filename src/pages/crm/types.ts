@@ -21,7 +21,7 @@ export type CrmAssignmentHistory = Tables<'crm_assignment_history'>
 export type CrmAccess = 'read' | 'write'
 export type CrmDataAccess = Omit<Tables<'crm_data_access'>, 'access'> & { access: CrmAccess }
 /** Lo que el CRM lee de `users`: la cartera es una persona. */
-export type Usuario = Pick<Tables<'users'>, 'id' | 'email' | 'nombre' | 'iniciales' | 'color' | 'rol' | 'activo'>
+export type Usuario = Pick<Tables<'users'>, 'id' | 'email' | 'nombre' | 'iniciales' | 'color' | 'rol' | 'activo' | 'phone'>
 /** Todo lo que se pide al abrir el dialog de un lead (el `getLeadDetail` del producto). */
 export type LeadDetalle = {
   tasks: CrmTask[]

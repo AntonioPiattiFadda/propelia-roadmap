@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { UserMinus, UserPlus } from 'lucide-react'
+import { Pencil, UserMinus, UserPlus } from 'lucide-react'
 import { AvatarUsuario } from '@/components/AvatarUsuario'
+import { formatPhoneNational } from '@/lib/phone'
 import { enlaceAlCrm } from '@/pages/crm/lib/leadFilterParams'
 import type { Usuario } from '@/pages/crm/types'
 import type { FilaEquipo } from '../lib/estadisticasPorCartera'
@@ -33,13 +34,15 @@ function BarraEtapas({ fila }: { fila: FilaEquipo }) {
   )
 }
 
-/* `onDarDeBaja` y `onReactivar` solo llegan para un SUPERADMIN. La baja no se ofrece sobre uno
-   mismo (la RPC lo rechaza) ni sobre quien ya está inactivo; reactivar, solo sobre un inactivo. */
-export function TablaEquipo({ filas, myId, onDarDeBaja, onReactivar }: {
+/* `onDarDeBaja`, `onReactivar` y `onTelefono` solo llegan para un SUPERADMIN. La baja no se ofrece
+   sobre uno mismo (la RPC lo rechaza) ni sobre quien ya está inactivo; reactivar, solo sobre un
+   inactivo. El teléfono se carga o cambia sobre cualquiera. */
+export function TablaEquipo({ filas, myId, onDarDeBaja, onReactivar, onTelefono }: {
   filas: FilaEquipo[]
   myId?: string | null
   onDarDeBaja?: (usuario: Usuario) => void
   onReactivar?: (usuario: Usuario) => void
+  onTelefono?: (usuario: Usuario) => void
 }) {
   const navigate = useNavigate()
   const th = 'whitespace-nowrap bg-(--surface-2) px-4 py-[7px] text-left text-[12px] font-bold uppercase tracking-[0.06em] text-(--fg-2) shadow-[inset_0_-1px_0_var(--line-strong)]'
@@ -48,7 +51,7 @@ export function TablaEquipo({ filas, myId, onDarDeBaja, onReactivar }: {
       <table className="w-full border-collapse">
         <thead>
           <tr>
-            <th className={th}>Cartera</th><th className={th}>Email</th><th className={th}>Rol</th><th className={th}>Leads activos</th>
+            <th className={th}>Cartera</th><th className={th}>Email</th><th className={th}>Teléfono</th><th className={th}>Rol</th><th className={th}>Leads activos</th>
             <th className={th}>Por estado</th>
             <th className={th}>Leads con tareas vencidas</th><th className={th}>Reuniones este mes</th>
             {onDarDeBaja && <th className={th}><span className="sr-only">Acciones</span></th>}
@@ -68,6 +71,20 @@ export function TablaEquipo({ filas, myId, onDarDeBaja, onReactivar }: {
                   </div>
                 </td>
                 <td className="px-4 py-3 text-[13px] text-(--fg-2)">{f.usuario.email}</td>
+                <td className="px-4 py-3 text-[13px] text-(--fg-2)">
+                  {onTelefono ? (
+                    <button type="button" title={f.usuario.phone ? 'Cambiar teléfono' : 'Cargar teléfono'}
+                      onClick={e => { e.stopPropagation(); onTelefono(f.usuario) }}
+                      className="group inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md px-1.5 py-0.5 -mx-1.5 hover:bg-secondary">
+                      {f.usuario.phone
+                        ? <span className="tabular-nums">{formatPhoneNational(f.usuario.phone)}</span>
+                        : <span className="text-(--warning-fg)">Cargar</span>}
+                      <Pencil className="size-3 text-(--fg-muted) opacity-0 group-hover:opacity-100" />
+                    </button>
+                  ) : (
+                    <span className="whitespace-nowrap tabular-nums">{formatPhoneNational(f.usuario.phone) ?? <span className="text-(--fg-muted)">—</span>}</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-[13px] text-(--fg-2)">{ROL[f.usuario.rol] ?? f.usuario.rol}</td>
                 <td className="px-4 py-3"><Numero valor={f.leadsActivos} to={enlaceAlCrm({ owners })} /></td>
                 <td className="px-4 py-3"><BarraEtapas fila={f} /></td>

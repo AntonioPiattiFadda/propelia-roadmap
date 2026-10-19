@@ -5,7 +5,7 @@ import {
 } from './permisos'
 
 const u = (id: string, over: Partial<Usuario> = {}): Usuario =>
-  ({ id, email: `${id}@x`, nombre: id, iniciales: id.slice(0, 2).toUpperCase(), color: '#000', rol: 'SDR', activo: true, ...over })
+  ({ id, email: `${id}@x`, nombre: id, iniciales: id.slice(0, 2).toUpperCase(), color: '#000', rol: 'SDR', activo: true, phone: null, ...over })
 const ADMIN = u('admin', { rol: 'SUPERADMIN' })
 const SDR = u('sdr')
 const ANA = u('ana')

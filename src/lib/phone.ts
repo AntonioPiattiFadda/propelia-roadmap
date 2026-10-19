@@ -90,6 +90,16 @@ export function formatPhoneNational(
   return parsed?.isValid() ? parsed.formatNational() : trimmed
 }
 
+/**
+ * Validación del teléfono obligatorio (alta de miembro), copiada del producto.
+ * Vacío o sólo "+<código de país>" cuenta como no cargado.
+ */
+export function requiredPhoneError(raw: string): string | null {
+  const trimmed = raw.trim()
+  if (!trimmed || /^\+\d{1,3}$/.test(trimmed)) return 'El teléfono es obligatorio'
+  return parsePhone(trimmed).isValid ? null : 'Teléfono inválido'
+}
+
 const regionNames = new Intl.DisplayNames(['es'], { type: 'region' })
 
 export function getCountryOptions(): CountryOption[] {

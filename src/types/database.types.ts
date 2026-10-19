@@ -1038,6 +1038,7 @@ export type Database = {
           iniciales: string
           nombre: string
           rol: Database["public"]["Enums"]["user_role"]
+          phone: string | null
           updated_at: string
         }
         Insert: {
@@ -1054,6 +1055,7 @@ export type Database = {
           iniciales: string
           nombre: string
           rol?: Database["public"]["Enums"]["user_role"]
+          phone?: string | null
           updated_at?: string
         }
         Update: {
@@ -1070,6 +1072,7 @@ export type Database = {
           iniciales?: string
           nombre?: string
           rol?: Database["public"]["Enums"]["user_role"]
+          phone?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1092,6 +1095,10 @@ export type Database = {
           p_phone?: string
         }
         Returns: Json
+      }
+      crm_set_member_phone: {
+        Args: { p_phone: string; p_user_id: string }
+        Returns: undefined
       }
       crm_dar_de_baja_miembro: {
         Args: { p_simular?: boolean; p_sucesor?: string; p_user_id: string }

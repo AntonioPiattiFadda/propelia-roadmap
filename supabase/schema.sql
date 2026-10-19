@@ -59,6 +59,9 @@ create table if not exists public.users (
   firma_cargo    text,
   firma_email    text,
   firma_telefono text,
+  -- El teléfono del miembro (migración users_phone). Aparte del de la firma, que puede ser
+  -- el de la oficina. Lo exige el alta (`crear-miembro`); los de antes pueden no tenerlo.
+  phone      text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1383,6 +1386,33 @@ $$;
 
 revoke all on function public.crm_dar_de_baja_miembro(uuid, uuid, boolean) from public, anon;
 grant execute on function public.crm_dar_de_baja_miembro(uuid, uuid, boolean) to authenticated;
+
+-- ---------- Teléfono de un miembro: crm_set_member_phone ----------
+-- Migración `20261019140832_users_phone`. El front no escribe `users`: el teléfono que se
+-- carga desde /equipo pasa por acá. Solo SUPERADMIN, sobre cualquiera. Vacío lo borra. Que el
+-- número sea válido lo mira el front (libphonenumber); acá solo que tenga dígitos.
+create or replace function public.crm_set_member_phone(
+  p_user_id  uuid,
+  p_phone    text
+) returns void language plpgsql security definer set search_path to 'public' as $$
+declare
+  v_phone text := nullif(btrim(coalesce(p_phone, '')), '');
+begin
+  if not public.crm_es_superadmin() then
+    raise exception 'crm_phone_superadmin_only';
+  end if;
+  if v_phone is not null and length(regexp_replace(v_phone, '\D', '', 'g')) < 6 then
+    raise exception 'crm_phone_invalid';
+  end if;
+  update public.users set phone = v_phone, updated_at = now() where id = p_user_id;
+  if not found then
+    raise exception 'crm_member_not_found';
+  end if;
+end;
+$$;
+
+revoke execute on function public.crm_set_member_phone(uuid, text) from public, anon;
+grant execute on function public.crm_set_member_phone(uuid, text) to authenticated;
 
 -- ===== FIN permisos por cartera =====
 

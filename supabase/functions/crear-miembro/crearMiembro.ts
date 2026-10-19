@@ -5,14 +5,14 @@
 export type Rol = 'SUPERADMIN' | 'SDR'
 const ROLES: readonly string[] = ['SUPERADMIN', 'SDR']
 
-export type CrearMiembroInput = { email: string; password: string; nombre: string; rol: string }
+export type CrearMiembroInput = { email: string; password: string; nombre: string; telefono: string; rol: string }
 
 export type CrearMiembroDb = {
   quienLlama(id: string): Promise<{ rol: string; activo: boolean } | null>
   coloresUsados(): Promise<string[]>
   crearCuenta(input: { email: string; password: string }): Promise<{ id: string } | { error: string }>
   crearFila(fila: {
-    id: string; email: string; nombre: string; iniciales: string; color: string
+    id: string; email: string; nombre: string; phone: string; iniciales: string; color: string
     rol: Rol; caja: false; activo: true
   }): Promise<{ error?: string }>
   borrarCuenta(id: string): Promise<void>
@@ -26,6 +26,12 @@ export type CrearMiembroResult =
 export const PALETA = ['#6E6BA0', '#4F7F79', '#A0716B', '#5B7FA6', '#8A7A4F', '#9A6B8F', '#6B8F5B', '#A6875B']
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Obligatorio, como en el producto. Que sea un número válido lo mira el front con libphonenumber;
+ *  acá, que no venga vacío ni con el prefijo solo («+34»). */
+export function telefonoCargado(telefono: string): boolean {
+  return telefono.replace(/\D/g, '').length >= 6
+}
 
 export function inicialesDe(nombre: string): string {
   const partes = nombre.trim().split(/\s+/).filter(Boolean)
@@ -54,6 +60,8 @@ export async function crearMiembro(callerId: string, input: CrearMiembroInput, d
   if (!EMAIL.test(email)) return falla(400, 'El email no es válido')
   if (input.password.length < 6) return falla(400, 'La contraseña tiene que tener al menos 6 caracteres')
   if (!nombre) return falla(400, 'Falta el nombre')
+  const telefono = input.telefono.trim()
+  if (!telefonoCargado(telefono)) return falla(400, 'El teléfono es obligatorio')
   if (!ROLES.includes(input.rol)) return falla(400, 'Rol inválido')
 
   const cuenta = await db.crearCuenta({ email, password: input.password })
@@ -64,7 +72,7 @@ export async function crearMiembro(callerId: string, input: CrearMiembroInput, d
   // `caja` siempre en false: entrar al reparto de la caja mueve los saldos de todos, eso se
   // decide a mano. Sin trigger sobre auth.users, la fila la escribe esto y nadie más.
   const fila = await db.crearFila({
-    id: cuenta.id, email, nombre, iniciales: inicialesDe(nombre),
+    id: cuenta.id, email, nombre, phone: telefono, iniciales: inicialesDe(nombre),
     color: colorLibre(await db.coloresUsados()), rol: input.rol as Rol, caja: false, activo: true,
   })
   if (fila.error) {
