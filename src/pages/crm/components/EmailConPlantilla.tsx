@@ -84,7 +84,11 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
     const url = whatsappDe(remitente, { nombre: campos.nombre, empresa }, id)
     setCampos(c => (c.urlBoton === url ? c : { ...c, urlBoton: url }))
   }, [id, botonTocado, remitente, campos.nombre, empresa])
-  const html = useMemo(() => renderEmail(id, campos, remitente, { assets: `${window.location.origin}/email` }).html, [id, campos, remitente])
+  /* `<base target="_blank">`: en la vista previa los enlaces se prueban como en el mail (el botón de
+     WhatsApp, el vídeo, la firma), pero en una pestaña nueva y no adentro del iframe. Solo va en la
+     vista previa: el mail que sale lo arma el servidor sin esto. */
+  const html = useMemo(() => renderEmail(id, campos, remitente, { assets: `${window.location.origin}/email` }).html
+    .replace('<head>', '<head><base target="_blank">'), [id, campos, remitente])
 
   /* El iframe recarga el documento entero con cada `srcDoc` nuevo y queda en blanco hasta el `load`
      (que espera las imágenes). Por eso se le pasa recién cuando se deja de tipear, y mientras
@@ -165,7 +169,9 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
       <div className="flex min-w-0 flex-col gap-1.5 bg-(--surface-2) p-3 max-xl:[border-top:1px_solid_var(--line)] xl:min-h-0 xl:[border-left:1px_solid_var(--line)]">
         <span className={cn(ETIQUETA, 'px-1')}>Vista previa</span>
         <div className="relative h-[70vh] w-full overflow-hidden rounded-lg bg-white [border:1px_solid_var(--line)] xl:h-auto xl:min-h-0 xl:flex-1">
-          <iframe title="Vista previa del email" srcDoc={htmlEnVista} sandbox="" onLoad={() => setCargando(false)}
+          <iframe title="Vista previa del email" srcDoc={htmlEnVista}
+            // Sin scripts; solo abrir enlaces en otra pestaña, y que esa pestaña no herede el sandbox.
+            sandbox="allow-popups allow-popups-to-escape-sandbox" onLoad={() => setCargando(false)}
             className="absolute inset-0 size-full" />
           {cargando && (
             <div role="progressbar" aria-label="Cargando la vista previa"
