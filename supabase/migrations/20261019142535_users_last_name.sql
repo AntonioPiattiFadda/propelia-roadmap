@@ -30,3 +30,6 @@ grant execute on function public.crm_set_member_last_name(uuid, text) to authent
 -- Los que se saben (19/10/2026). Por email y sin pisar lo que ya tenga.
 update public.users set last_name = 'Piatti Fadda'
  where email in ('antonio.piattifadda@gmail.com', 'lorenzopiattifadda@gmail.com') and last_name is null;
+-- Lusmary Rojas Gil: estaba cargada como «lus», en minúscula y a medias.
+update public.users set nombre = 'Lusmary', last_name = 'Rojas Gil'
+ where email = 'lus@propelia.es' and last_name is null;
