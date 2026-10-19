@@ -57,7 +57,7 @@ Deno.serve(async req => {
 
   const r = await crearMiembro(
     callerId,
-    { email: texto(body.email), password: texto(body.password), nombre: texto(body.nombre), telefono: texto(body.telefono), rol: texto(body.rol) },
+    { email: texto(body.email), password: texto(body.password), nombre: texto(body.nombre), apellido: texto(body.apellido), telefono: texto(body.telefono), rol: texto(body.rol) },
     dbDe(admin),
   )
   return r.ok

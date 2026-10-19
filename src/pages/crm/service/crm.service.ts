@@ -58,7 +58,7 @@ export async function getCatalogos(): Promise<{ etapas: CrmStage[]; canales: Crm
 
 export async function getUsuarios(): Promise<Usuario[]> {
   const { data, error } = await supabase
-    .from('users').select('id, email, nombre, iniciales, color, rol, activo, phone').order('nombre')
+    .from('users').select('id, email, nombre, iniciales, color, rol, activo, phone, last_name').order('nombre')
   if (error) throw error
   return data
 }

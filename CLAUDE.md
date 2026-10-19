@@ -333,7 +333,11 @@ conversión de filas a personas es `personasDesdeUsuarios()`, en `equipo.js`, co
   oficina). Como en el producto, **el alta lo exige** (`requiredPhoneError` en el front,
   `telefonoCargado` en `crear-miembro`) y se guarda en E.164; los de antes pueden no tenerlo. Se
   carga o cambia tocando la columna «Teléfono» de `/equipo` (`TelefonoMiembroDialog`, RPC
-  `crm_set_member_phone`, solo SUPERADMIN). Cambios, `caja` y roles siguen por el MCP.
+  `crm_set_member_phone`, solo SUPERADMIN). **El apellido** (19/10/2026, migración
+  `20261019142535_users_last_name`) es `users.last_name` y va igual: obligatorio en el alta, editable
+  al lado del nombre en `/equipo` (`ApellidoMiembroDialog`, RPC `crm_set_member_last_name`).
+  `nombre` sigue siendo el corto de los avatares, y las iniciales de un alta salen de nombre y
+  apellido. Cambios, `caja` y roles siguen por el MCP.
 - **La baja es `activo = false`, nunca un `delete`.** Un inactivo no entra (`es_usuario()` lo
   corta y la RLS le devuelve la lista vacía), pero se sigue pintando: una tarea vieja dice
   quién la hizo y lo que pagó sigue en el saldo de la caja. Lo que no se hace es **ofrecerlo

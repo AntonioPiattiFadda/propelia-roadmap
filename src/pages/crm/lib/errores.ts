@@ -30,6 +30,8 @@ const CLAVES: Record<string, string> = {
   // Las de crm_set_member_phone.
   crm_phone_superadmin_only: 'Solo un superadmin puede cambiar el teléfono de alguien.',
   crm_phone_invalid: 'Teléfono inválido.',
+  // La de crm_set_member_last_name.
+  crm_last_name_superadmin_only: 'Solo un superadmin puede cambiar el apellido de alguien.',
   crm_member_not_found: 'Esa persona ya no existe. Recargá la página.',
 }
 

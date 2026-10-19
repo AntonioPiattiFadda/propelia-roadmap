@@ -2,7 +2,7 @@ import { assertEquals } from 'jsr:@std/assert@1'
 import { colorLibre, crearMiembro, inicialesDe, PALETA } from './crearMiembro.ts'
 import type { CrearMiembroDb, CrearMiembroInput } from './crearMiembro.ts'
 
-const VALIDO: CrearMiembroInput = { email: 'Nuevo@Example.com ', password: 'Test1234!', nombre: 'Juan Pérez', telefono: ' +34 661 28 68 71 ', rol: 'SDR' }
+const VALIDO: CrearMiembroInput = { email: 'Nuevo@Example.com ', password: 'Test1234!', nombre: 'Juan', apellido: ' Pérez ', telefono: ' +34 661 28 68 71 ', rol: 'SDR' }
 
 type Fila = Parameters<CrearMiembroDb['crearFila']>[0]
 
@@ -47,11 +47,12 @@ Deno.test('crearMiembro: un SUPERADMIN inactivo no da altas', async () => {
   assertEquals(r.ok ? 0 : r.status, 403)
 })
 
-Deno.test('crearMiembro: valida email, contraseña, nombre, teléfono y rol', async () => {
+Deno.test('crearMiembro: valida email, contraseña, nombre, apellido, teléfono y rol', async () => {
   for (const malo of [
     { ...VALIDO, email: 'sin-arroba' },
     { ...VALIDO, password: '12345' },
     { ...VALIDO, nombre: '   ' },
+    { ...VALIDO, apellido: '  ' },
     { ...VALIDO, telefono: '' },
     { ...VALIDO, telefono: '+34 ' },
     { ...VALIDO, rol: 'ADMIN' },
@@ -78,7 +79,7 @@ Deno.test('crearMiembro: crea la cuenta y la fila, con caja en false', async () 
   assertEquals(r, { ok: true, user: { id: 'nuevo-id', email: 'nuevo@example.com' } })
   assertEquals(llamadas.cuentas, ['nuevo@example.com'])
   assertEquals(llamadas.filas, [{
-    id: 'nuevo-id', email: 'nuevo@example.com', nombre: 'Juan Pérez', phone: '+34 661 28 68 71', iniciales: 'JP',
+    id: 'nuevo-id', email: 'nuevo@example.com', nombre: 'Juan', last_name: 'Pérez', phone: '+34 661 28 68 71', iniciales: 'JP',
     color: PALETA[1], rol: 'SDR', caja: false, activo: true,
   }])
 })

@@ -1036,6 +1036,7 @@ export type Database = {
           firma_telefono: string | null
           id: string
           iniciales: string
+          last_name: string | null
           nombre: string
           rol: Database["public"]["Enums"]["user_role"]
           phone: string | null
@@ -1053,6 +1054,7 @@ export type Database = {
           firma_telefono?: string | null
           id: string
           iniciales: string
+          last_name?: string | null
           nombre: string
           rol?: Database["public"]["Enums"]["user_role"]
           phone?: string | null
@@ -1070,6 +1072,7 @@ export type Database = {
           firma_telefono?: string | null
           id?: string
           iniciales?: string
+          last_name?: string | null
           nombre?: string
           rol?: Database["public"]["Enums"]["user_role"]
           phone?: string | null
@@ -1095,6 +1098,10 @@ export type Database = {
           p_phone?: string
         }
         Returns: Json
+      }
+      crm_set_member_last_name: {
+        Args: { p_last_name: string; p_user_id: string }
+        Returns: undefined
       }
       crm_set_member_phone: {
         Args: { p_phone: string; p_user_id: string }

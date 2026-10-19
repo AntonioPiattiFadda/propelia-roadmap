@@ -34,15 +34,16 @@ function BarraEtapas({ fila }: { fila: FilaEquipo }) {
   )
 }
 
-/* `onDarDeBaja`, `onReactivar` y `onTelefono` solo llegan para un SUPERADMIN. La baja no se ofrece
-   sobre uno mismo (la RPC lo rechaza) ni sobre quien ya está inactivo; reactivar, solo sobre un
-   inactivo. El teléfono se carga o cambia sobre cualquiera. */
-export function TablaEquipo({ filas, myId, onDarDeBaja, onReactivar, onTelefono }: {
+/* `onDarDeBaja`, `onReactivar`, `onTelefono` y `onApellido` solo llegan para un SUPERADMIN. La baja
+   no se ofrece sobre uno mismo (la RPC lo rechaza) ni sobre quien ya está inactivo; reactivar, solo
+   sobre un inactivo. El teléfono y el apellido se cargan o cambian sobre cualquiera. */
+export function TablaEquipo({ filas, myId, onDarDeBaja, onReactivar, onTelefono, onApellido }: {
   filas: FilaEquipo[]
   myId?: string | null
   onDarDeBaja?: (usuario: Usuario) => void
   onReactivar?: (usuario: Usuario) => void
   onTelefono?: (usuario: Usuario) => void
+  onApellido?: (usuario: Usuario) => void
 }) {
   const navigate = useNavigate()
   const th = 'whitespace-nowrap bg-(--surface-2) px-4 py-[7px] text-left text-[12px] font-bold uppercase tracking-[0.06em] text-(--fg-2) shadow-[inset_0_-1px_0_var(--line-strong)]'
@@ -66,7 +67,19 @@ export function TablaEquipo({ filas, myId, onDarDeBaja, onReactivar, onTelefono 
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2.5">
                     <AvatarUsuario usuario={f.usuario} />
-                    <span className="text-[14px] font-medium">{f.usuario.nombre}</span>
+                    <span className="text-[14px] font-medium">
+                      {f.usuario.nombre}
+                      {f.usuario.last_name && <span className="font-normal text-(--fg-2)"> {f.usuario.last_name}</span>}
+                    </span>
+                    {onApellido && (
+                      <button type="button" title={f.usuario.last_name ? 'Cambiar apellido' : 'Cargar apellido'}
+                        aria-label={`${f.usuario.last_name ? 'Cambiar' : 'Cargar'} el apellido de ${f.usuario.nombre}`}
+                        onClick={e => { e.stopPropagation(); onApellido(f.usuario) }}
+                        className="group/ap inline-flex cursor-pointer items-center gap-1 rounded-md px-1 py-0.5 text-[12px] hover:bg-secondary">
+                        {!f.usuario.last_name && <span className="text-(--warning-fg)">Cargar apellido</span>}
+                        <Pencil className={f.usuario.last_name ? 'size-3 text-(--fg-muted) opacity-0 group-hover:opacity-100' : 'size-3 text-(--fg-muted)'} />
+                      </button>
+                    )}
                     {!f.usuario.activo && <span className="text-[12px] text-(--fg-muted)">(inactivo)</span>}
                   </div>
                 </td>

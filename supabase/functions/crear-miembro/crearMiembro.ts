@@ -5,14 +5,14 @@
 export type Rol = 'SUPERADMIN' | 'SDR'
 const ROLES: readonly string[] = ['SUPERADMIN', 'SDR']
 
-export type CrearMiembroInput = { email: string; password: string; nombre: string; telefono: string; rol: string }
+export type CrearMiembroInput = { email: string; password: string; nombre: string; apellido: string; telefono: string; rol: string }
 
 export type CrearMiembroDb = {
   quienLlama(id: string): Promise<{ rol: string; activo: boolean } | null>
   coloresUsados(): Promise<string[]>
   crearCuenta(input: { email: string; password: string }): Promise<{ id: string } | { error: string }>
   crearFila(fila: {
-    id: string; email: string; nombre: string; phone: string; iniciales: string; color: string
+    id: string; email: string; nombre: string; last_name: string; phone: string; iniciales: string; color: string
     rol: Rol; caja: false; activo: true
   }): Promise<{ error?: string }>
   borrarCuenta(id: string): Promise<void>
@@ -60,6 +60,8 @@ export async function crearMiembro(callerId: string, input: CrearMiembroInput, d
   if (!EMAIL.test(email)) return falla(400, 'El email no es válido')
   if (input.password.length < 6) return falla(400, 'La contraseña tiene que tener al menos 6 caracteres')
   if (!nombre) return falla(400, 'Falta el nombre')
+  const apellido = input.apellido.trim()
+  if (!apellido) return falla(400, 'Falta el apellido')
   const telefono = input.telefono.trim()
   if (!telefonoCargado(telefono)) return falla(400, 'El teléfono es obligatorio')
   if (!ROLES.includes(input.rol)) return falla(400, 'Rol inválido')
@@ -72,7 +74,9 @@ export async function crearMiembro(callerId: string, input: CrearMiembroInput, d
   // `caja` siempre en false: entrar al reparto de la caja mueve los saldos de todos, eso se
   // decide a mano. Sin trigger sobre auth.users, la fila la escribe esto y nadie más.
   const fila = await db.crearFila({
-    id: cuenta.id, email, nombre, phone: telefono, iniciales: inicialesDe(nombre),
+    id: cuenta.id, email, nombre, last_name: apellido, phone: telefono,
+    // Una letra del nombre y una del apellido, como las que ya existen («AP»).
+    iniciales: inicialesDe(`${nombre} ${apellido}`),
     color: colorLibre(await db.coloresUsados()), rol: input.rol as Rol, caja: false, activo: true,
   })
   if (fila.error) {

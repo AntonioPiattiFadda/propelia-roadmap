@@ -62,6 +62,9 @@ create table if not exists public.users (
   -- El teléfono del miembro (migración users_phone). Aparte del de la firma, que puede ser
   -- el de la oficina. Lo exige el alta (`crear-miembro`); los de antes pueden no tenerlo.
   phone      text,
+  -- El apellido (migración users_last_name). `nombre` es el corto de los avatares; lo exige el
+  -- alta (`crear-miembro`) y los de antes pueden no tenerlo.
+  last_name  text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -1413,6 +1416,29 @@ $$;
 
 revoke execute on function public.crm_set_member_phone(uuid, text) from public, anon;
 grant execute on function public.crm_set_member_phone(uuid, text) to authenticated;
+
+-- ---------- Apellido de un miembro: crm_set_member_last_name ----------
+-- Migración `20261019142535_users_last_name`. Como el teléfono: el front no escribe `users`.
+-- Solo SUPERADMIN, sobre cualquiera. Vacío lo borra.
+create or replace function public.crm_set_member_last_name(
+  p_user_id   uuid,
+  p_last_name text
+) returns void language plpgsql security definer set search_path to 'public' as $$
+declare
+  v_last_name text := nullif(btrim(coalesce(p_last_name, '')), '');
+begin
+  if not public.crm_es_superadmin() then
+    raise exception 'crm_last_name_superadmin_only';
+  end if;
+  update public.users set last_name = v_last_name, updated_at = now() where id = p_user_id;
+  if not found then
+    raise exception 'crm_member_not_found';
+  end if;
+end;
+$$;
+
+revoke execute on function public.crm_set_member_last_name(uuid, text) from public, anon;
+grant execute on function public.crm_set_member_last_name(uuid, text) to authenticated;
 
 -- ===== FIN permisos por cartera =====
 

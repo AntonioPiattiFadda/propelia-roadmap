@@ -13,6 +13,7 @@ import { NuevoMiembroDialog } from './components/NuevoMiembroDialog'
 import { BajaMiembroDialog } from './components/BajaMiembroDialog'
 import { ReactivarMiembroDialog } from './components/ReactivarMiembroDialog'
 import { TelefonoMiembroDialog } from './components/TelefonoMiembroDialog'
+import { ApellidoMiembroDialog } from './components/ApellidoMiembroDialog'
 import type { Usuario } from '@/pages/crm/types'
 import { estadisticasPorCartera } from './lib/estadisticasPorCartera'
 
@@ -22,7 +23,8 @@ type Estado = 'activos' | 'inactivos'
 /* Equipo: los números por cartera y quién ve a quién. Comparte la cache con el CRM (mismas keys):
    entrar acá después del CRM no pide nada de nuevo. El alta de miembros va por la edge function
    `crear-miembro`, la baja por la RPC `crm_dar_de_baja_miembro` y la vuelta por la edge function
-   `reactivar-miembro` y el teléfono por la RPC `crm_set_member_phone` (todo solo
+   `reactivar-miembro`, y el teléfono y el apellido por las RPC `crm_set_member_phone` y
+   `crm_set_member_last_name` (todo solo
    SUPERADMIN); los demás cambios de `users` siguen por MCP. */
 export function Equipo() {
   useCrmRealtime()
@@ -31,6 +33,7 @@ export function Equipo() {
   const [deBaja, setDeBaja] = useState<Usuario | null>(null)
   const [aReactivar, setAReactivar] = useState<Usuario | null>(null)
   const [deTelefono, setDeTelefono] = useState<Usuario | null>(null)
+  const [deApellido, setDeApellido] = useState<Usuario | null>(null)
   const [estado, setEstado] = useState<Estado>('activos')
   const { myId, usuarios, visibles, esSuperadmin, isLoading: cargandoCarteras } = useCarteras()
   const { etapasPorId, isLoading: cargandoCatalogos } = useCrmCatalogos()
@@ -104,7 +107,8 @@ export function Equipo() {
             <TablaEquipo filas={estado === 'activos' ? activos : inactivos} myId={myId}
               onDarDeBaja={esSuperadmin ? setDeBaja : undefined}
               onReactivar={esSuperadmin ? setAReactivar : undefined}
-              onTelefono={esSuperadmin ? setDeTelefono : undefined} />
+              onTelefono={esSuperadmin ? setDeTelefono : undefined}
+              onApellido={esSuperadmin ? setDeApellido : undefined} />
           )}
         </div>
       )}
@@ -112,6 +116,7 @@ export function Equipo() {
       <BajaMiembroDialog usuario={deBaja} usuarios={usuarios} onOpenChange={open => { if (!open) setDeBaja(null) }} />
       <ReactivarMiembroDialog usuario={aReactivar} onOpenChange={open => { if (!open) setAReactivar(null) }} />
       <TelefonoMiembroDialog usuario={deTelefono} onOpenChange={open => { if (!open) setDeTelefono(null) }} />
+      <ApellidoMiembroDialog usuario={deApellido} onOpenChange={open => { if (!open) setDeApellido(null) }} />
     </div>
   )
 }
