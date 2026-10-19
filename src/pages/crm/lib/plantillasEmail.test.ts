@@ -5,7 +5,7 @@ import {
 
 const video = PLANTILLAS_EMAIL.find(p => p.id === 'presentacion-video')!
 const puntual = PLANTILLAS_EMAIL.find(p => p.id === 'puntual')!
-const LORE = remitenteDe({ nombre: 'Lorenzo', firma_nombre: 'Lorenzo Piatti Fadda', firma_cargo: 'Cofundador · Propelia', firma_email: 'lorenzo@propelia.es', firma_telefono: '+34 931 70 60 54' })
+const LORE = remitenteDe({ nombre: 'Lorenzo', firma_nombre: 'Lorenzo Piatti Fadda', firma_cargo: 'Cofundador · Propelia', email: 'Lorenzo@Propelia.es', phone: '+34 931 70 60 54' })
 const renderEmail = (id: PlantillaEmailId, c: CamposEmail) => render(id, c, LORE)
 const con = (base: CamposEmail, over: Partial<CamposEmail>) => ({ ...base, ...over })
 
@@ -74,9 +74,9 @@ describe('plantillasEmail', () => {
   })
 
   it('sin firma cargada: nombre corto, info@ y sin cargo ni teléfono', () => {
-    const r = remitenteDe({ nombre: 'Ana', firma_nombre: null })
-    expect(r).toEqual({ nombre: 'Ana', cargo: '', email: 'info@propelia.es', telefono: '' })
-    expect(replyToDe(r)).toBeUndefined()
+    const r = remitenteDe({ nombre: 'Ana', email: 'ana@propelia.es', firma_nombre: null })
+    expect(r).toEqual({ nombre: 'Ana', cargo: '', email: 'ana@propelia.es', telefono: '' })
+    expect(replyToDe(r)).toBe('ana@propelia.es')
     const { html } = render('puntual', puntual.predeterminados, r)
     expect(html).not.toContain('tel:')
     expect(html).not.toContain('Lorenzo')
@@ -92,15 +92,37 @@ describe('plantillasEmail', () => {
 describe('Contáctame por WhatsApp', () => {
   it('el mail puntual arranca con «Contáctame» al WhatsApp de quien manda', async () => {
     const { predeterminadosPara, whatsappDe } = await import('../../../../supabase/functions/_shared/plantillasEmail.ts')
-    const r = remitenteDe({ nombre: 'Lorenzo', firma_nombre: 'Lorenzo Piatti', firma_telefono: '+34 600 11 22 33' })
+    const r = remitenteDe({ nombre: 'Lorenzo', firma_nombre: 'Lorenzo Piatti', phone: '+34 600 11 22 33' })
     expect(whatsappDe(r)).toBe(`https://wa.me/34600112233?text=${encodeURIComponent('Hola Lorenzo, te escribo por tu correo de Propelia.')}`)
     const c = predeterminadosPara('puntual', r)
     expect(c.textoBoton).toBe('Contáctame')
     expect(c.urlBoton).toBe(whatsappDe(r))
     expect(problemaDeCampos('puntual', c)).toBeNull()
-    // Sin teléfono el enlace queda vacío y el botón no se dibuja.
-    expect(predeterminadosPara('puntual', remitenteDe({ nombre: 'Ana' })).urlBoton).toBe('')
+    // Sin teléfono, un mail a quien manda; y el mailto pasa la validación.
+    const sinTel = predeterminadosPara('puntual', remitenteDe({ nombre: 'Ana', email: 'ana@propelia.es' }))
+    expect(sinTel.urlBoton).toBe('mailto:ana@propelia.es')
+    expect(problemaDeCampos('puntual', sinTel)).toBeNull()
+    expect(problemaDeCampos('puntual', { ...sinTel, urlBoton: 'mailto:no es mail' })).not.toBeNull()
     // El del vídeo no cambia.
     expect(predeterminadosPara('presentacion-video', r).urlBoton).toBe('')
+  })
+})
+
+describe('remitente: email del dominio propio o info@', () => {
+  it('un email que no es de propelia.es firma y responde como info@', () => {
+    const r = remitenteDe({ nombre: 'Lorenzo', email: 'lorenzopiattifadda@gmail.com', phone: '+34 600 11 22 33' })
+    expect(r.email).toBe('info@propelia.es')
+    expect(replyToDe(r)).toBeUndefined()
+    expect(r.telefono).toBe('+34 600 11 22 33')
+  })
+
+  it('el teléfono es users.phone y, si falta, firma_telefono', () => {
+    expect(remitenteDe({ phone: '+34 600', firma_telefono: '+34 931' }).telefono).toBe('+34 600')
+    expect(remitenteDe({ phone: null, firma_telefono: '+34 931' }).telefono).toBe('+34 931')
+  })
+
+  it('firma_email ya no cuenta', () => {
+    const fila = { nombre: 'Lore', email: 'x@gmail.com', firma_email: 'lorenzo@propelia.es' }
+    expect(remitenteDe(fila).email).toBe('info@propelia.es')
   })
 })

@@ -73,7 +73,7 @@ const CAMPOS_VIDEO = { asunto: 'Propelia', cuerpo: 'Hola <b>', urlVideo: 'https:
 const PLANTILLA: SendEmailInput = { to: 'ana@example.com', subject: '', text: '', attachments: undefined, plantilla: 'presentacion-video', campos: CAMPOS_VIDEO }
 
 Deno.test('plantilla: un SDR activo la manda, en HTML escapado, firmada y respondiendo a su email', async () => {
-  const { deps, sent } = fakeDeps({ getCaller: async () => ({ rol: 'SDR', activo: true, nombre: 'Lore', firma_nombre: 'Lorenzo Piatti Fadda', firma_email: 'lorenzo@propelia.es' }) })
+  const { deps, sent } = fakeDeps({ getCaller: async () => ({ rol: 'SDR', activo: true, nombre: 'Lore', email: 'lorenzo@propelia.es', firma_nombre: 'Lorenzo Piatti Fadda' }) })
   assertEquals(await handleSendEmail('me', PLANTILLA, deps), { ok: true, id: 'email_1' })
   assertEquals(sent[0].subject, 'Propelia')
   assertEquals(sent[0].replyTo, 'lorenzo@propelia.es')
@@ -83,7 +83,7 @@ Deno.test('plantilla: un SDR activo la manda, en HTML escapado, firmada y respon
 })
 
 Deno.test('plantilla: sin firma cargada firma con el nombre corto y no lleva reply_to', async () => {
-  const { deps, sent } = fakeDeps({ getCaller: async () => ({ rol: 'SDR', activo: true, nombre: 'Ana' }) })
+  const { deps, sent } = fakeDeps({ getCaller: async () => ({ rol: 'SDR', activo: true, nombre: 'Ana', email: 'ana@gmail.com' }) })
   await handleSendEmail('me', PLANTILLA, deps)
   assertEquals('replyTo' in sent[0], false)
   assertEquals(sent[0].html?.includes('info@propelia.es'), true)

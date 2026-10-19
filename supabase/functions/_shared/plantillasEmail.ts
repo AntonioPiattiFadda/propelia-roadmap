@@ -41,28 +41,34 @@ export type CampoEmail = keyof CamposEmail
 export const URL_VIDEO = 'https://crm.propelia.es/presentacion'
 export const URL_AGENDA = ''
 
-/* Quién firma: sale de la fila de `users` de quien manda (columnas `firma_*`), nunca de lo que
-   mande el front. Sin email de firma va el del remitente fijo y el mail no lleva `reply_to`. */
+/* Quién firma: sale de la fila de `users` de quien manda, nunca de lo que mande el front
+   (19/10/2026). El mail sale siempre desde info@propelia.es; lo que cambia por persona es el email
+   que se muestra (firma, pie, «Darse de baja», «Contáctame» sin teléfono) y el `reply_to`:
+   - el email es el de login (`users.email`) si es del dominio propelia.es; si no (los gmail de
+     Lorenzo y Antonio), info@propelia.es, y sin `reply_to` propio. `firma_email` ya no se lee.
+   - el teléfono es `users.phone` (obligatorio en el alta) y, si falta, `firma_telefono`. */
 export const EMAIL_POR_DEFECTO = 'info@propelia.es'
+const DOMINIO_PROPIO = '@propelia.es'
 
 export type Remitente = { nombre: string; cargo: string; email: string; telefono: string }
 
 type FilaUsuario = {
-  nombre?: string | null
-  firma_nombre?: string | null; firma_cargo?: string | null; firma_email?: string | null; firma_telefono?: string | null
+  nombre?: string | null; email?: string | null; phone?: string | null
+  firma_nombre?: string | null; firma_cargo?: string | null; firma_telefono?: string | null
 }
 
 export function remitenteDe(u: FilaUsuario | null | undefined): Remitente {
   const t = (v: string | null | undefined) => v?.trim() ?? ''
+  const email = t(u?.email).toLowerCase()
   return {
     nombre: t(u?.firma_nombre) || t(u?.nombre) || 'Equipo Propelia',
     cargo: t(u?.firma_cargo),
-    email: t(u?.firma_email) || EMAIL_POR_DEFECTO,
-    telefono: t(u?.firma_telefono),
+    email: email.endsWith(DOMINIO_PROPIO) ? email : EMAIL_POR_DEFECTO,
+    telefono: t(u?.phone) || t(u?.firma_telefono),
   }
 }
 
-/** A dónde van las respuestas: el email de firma, si tiene uno propio. */
+/** A dónde van las respuestas: el email de quien manda, si es uno propio de propelia.es. */
 export const replyToDe = (r: Remitente) => (r.email === EMAIL_POR_DEFECTO ? undefined : r.email)
 const ASSETS = 'https://www.propelia.es/assets'
 const PRIVACIDAD = 'https://www.propelia.es/politica-privacidad.html'
@@ -125,17 +131,17 @@ export const PLANTILLAS_EMAIL: PlantillaEmail[] = [
 
 export const plantillaEmail = (id: string): PlantillaEmail | undefined => PLANTILLAS_EMAIL.find(p => p.id === id)
 
-/** El enlace de WhatsApp al teléfono de firma, con un mensaje ya escrito para quien lo recibe.
-    Vacío si no tiene teléfono. wa.me pide el número en dígitos, con el código de país. */
+/** «Contáctame»: el WhatsApp de quien manda, con un mensaje ya escrito para quien lo recibe. Sin
+    teléfono, un mail a su email (o a info@). wa.me pide el número en dígitos, con el código de país. */
 export function whatsappDe(r: Remitente): string {
   const digitos = r.telefono.replace(/\D/g, '')
-  if (!digitos) return ''
+  if (!digitos) return `mailto:${r.email}`
   const texto = `Hola ${r.nombre.split(' ')[0]}, te escribo por tu correo de Propelia.`
   return `https://wa.me/${digitos}?text=${encodeURIComponent(texto)}`
 }
 
 /** Lo que arranca cargado en el diálogo. El «Contáctame» del mail puntual va al WhatsApp de quien
-    manda; sin teléfono de firma queda vacío y el botón no se dibuja. */
+    manda (o a su email, sin teléfono). */
 export function predeterminadosPara(id: PlantillaEmailId, r: Remitente): CamposEmail {
   const base = plantillaEmail(id)!.predeterminados
   return id === 'puntual' ? { ...base, urlBoton: whatsappDe(r) } : { ...base }
@@ -155,6 +161,8 @@ export const ROTULOS_CAMPOS: Record<CampoEmail, string> = {
 }
 
 const ES_URL = /^https?:\/\/[^\s"'<>]+$/i
+/** El botón además puede ser un `mailto:` (el «Contáctame» de quien no tiene teléfono). */
+const ES_MAILTO = /^mailto:[^\s@"'<>]+@[^\s@"'<>]+\.[^\s"'<>]+$/i
 
 /** Lo que llega del front, recortado a los campos conocidos y siempre como texto. `null` si no es un objeto. */
 export function camposDesde(valor: unknown): CamposEmail | null {
@@ -173,7 +181,8 @@ export function problemaDeCampos(id: PlantillaEmailId, c: CamposEmail): string |
     if (!c.urlVideo.trim()) return 'Falta el enlace del vídeo'
     if (!ES_URL.test(c.urlVideo.trim())) return 'El enlace del vídeo no es válido'
   }
-  if (c.urlBoton.trim() && !ES_URL.test(c.urlBoton.trim())) return 'El enlace del botón no es válido'
+  const boton = c.urlBoton.trim()
+  if (boton && !ES_URL.test(boton) && !ES_MAILTO.test(boton)) return 'El enlace del botón no es válido'
   return null
 }
 
