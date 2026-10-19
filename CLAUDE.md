@@ -261,9 +261,11 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   reproduce el mp4 del bucket **público** `publico` de este proyecto (migración
   `20261018210226_bucket_publico`, sin policies: escribe solo la service role). Un vídeo nuevo va
   con otro nombre y se cambia en esa página.
-  El botón del «Mail puntual» es «Contáctame» y arranca con el WhatsApp de quien manda
-  (`whatsappDe`, `wa.me` al teléfono de quien manda con un mensaje escrito); sin teléfono es un
-  `mailto:` a su email (`predeterminadosPara`). El botón acepta `http(s)://` o `mailto:`. `URL_AGENDA` vacío: el botón de agenda no se dibuja. El envío no queda en la actividad del lead.
+  El botón de los dos mails («Contáctame» en el puntual, «Reservar 20 minutos» en el del vídeo,
+  que pide una demo) arranca con el WhatsApp de quien manda y un mensaje en la voz del lead
+  (`mensajeDeWhatsapp`: «¡Hola Propelia! Soy Ana, de …»); se rearma con «Nombre» mientras no se
+  edite a mano (`whatsappDe`, `predeterminadosPara`). Sin teléfono es un `mailto:` a su email.
+  El botón acepta `http(s)://` o `mailto:`. El envío no queda en la actividad del lead.
 - **Qué se copió del producto** (podado de lo inmobiliario):
   De `propelia-frontend/src/pages/leads/lib/`: `discardStage`,
   `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De

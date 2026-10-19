@@ -8,7 +8,7 @@ import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { cn } from '@/lib/utils'
 import {
-  PLANTILLAS_EMAIL, predeterminadosPara, problemaDeCampos, remitenteDe, renderEmail, ROTULOS_CAMPOS,
+  PLANTILLAS_EMAIL, predeterminadosPara, whatsappDe, problemaDeCampos, remitenteDe, renderEmail, ROTULOS_CAMPOS,
   type CampoEmail, type CamposEmail, type PlantillaEmailId, type Remitente,
 } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 import { sendEmail } from '../service/email.service'
@@ -40,7 +40,7 @@ function emailsDe(client: CrmClient | null): string[] {
 }
 
 const camposIniciales = (id: PlantillaEmailId, client: CrmClient | null, remitente: Remitente): CamposEmail => ({
-  ...predeterminadosPara(id, remitente),
+  ...predeterminadosPara(id, remitente, { nombre: client?.first_name, empresa: client?.company_name }),
   nombre: client?.first_name?.trim() ?? '',
 })
 
@@ -73,6 +73,17 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
   const yo = useYo(userSession?.user.id).data
   const remitente = useMemo(() => remitenteDe(yo), [yo])
   const [campos, setCampos] = useState<CamposEmail>(() => camposIniciales(id, client, remitente))
+
+  /* El enlace del botón (WhatsApp, en los dos mails) se rearma solo mientras nadie lo edite a mano: con el teléfono
+     de quien manda (la fila de `users` puede llegar después de abrir, y entonces el enlace quedaba
+     en un mailto a info@) y con el nombre que se escriba en «Nombre». */
+  const [botonTocado, setBotonTocado] = useState(false)
+  const empresa = client?.company_name
+  useEffect(() => {
+    if (botonTocado) return
+    const url = whatsappDe(remitente, { nombre: campos.nombre, empresa }, id)
+    setCampos(c => (c.urlBoton === url ? c : { ...c, urlBoton: url }))
+  }, [id, botonTocado, remitente, campos.nombre, empresa])
   const html = useMemo(() => renderEmail(id, campos, remitente, { assets: `${window.location.origin}/email` }).html, [id, campos, remitente])
 
   /* El iframe recarga el documento entero con cada `srcDoc` nuevo y queda en blanco hasta el `load`
@@ -99,7 +110,10 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
     onError: (e: Error) => { toast.error(e.message || 'No se pudo enviar el email') },
   })
 
-  const cambiar = (k: CampoEmail, v: string) => setCampos(c => ({ ...c, [k]: v }))
+  const cambiar = (k: CampoEmail, v: string) => {
+    if (k === 'urlBoton') setBotonTocado(true)
+    setCampos(c => ({ ...c, [k]: v }))
+  }
 
   return (
     <>
@@ -107,7 +121,7 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
       <div className="flex min-w-0 flex-col gap-3 p-4 xl:min-h-0 xl:overflow-y-auto">
         <div className="flex items-center justify-between gap-2">
           <h3 className="truncate text-[14px] font-semibold">{plantilla.nombre}</h3>
-          <button type="button" onClick={() => setCampos(camposIniciales(id, client, remitente))} title="Volver al texto de la plantilla"
+          <button type="button" onClick={() => { setBotonTocado(false); setCampos(camposIniciales(id, client, remitente)) }} title="Volver al texto de la plantilla"
             className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground">
             <RotateCcw size={13} />Restablecer
           </button>
@@ -158,7 +172,7 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
               className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 bg-white/80">
               <style>{'@keyframes barra-vista-previa{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}'}</style>
               <div className="h-1.5 w-48 overflow-hidden rounded-full bg-(--surface-2)">
-                <div className="h-full w-2/5 rounded-full bg-[#0147FE] [animation:barra-vista-previa_1.1s_ease-in-out_infinite]" />
+                <div className="h-full w-2/5 rounded-full bg-[#0147FE] animate-[barra-vista-previa_1.1s_ease-in-out_infinite]" />
               </div>
               <span className="text-[12px] font-medium text-(--fg-muted)">Cargando vista previa…</span>
             </div>

@@ -91,20 +91,27 @@ describe('plantillasEmail', () => {
 
 describe('Contáctame por WhatsApp', () => {
   it('el mail puntual arranca con «Contáctame» al WhatsApp de quien manda', async () => {
-    const { predeterminadosPara, whatsappDe } = await import('../../../../supabase/functions/_shared/plantillasEmail.ts')
+    const { mensajeDeWhatsapp, predeterminadosPara, whatsappDe } = await import('../../../../supabase/functions/_shared/plantillasEmail.ts')
     const r = remitenteDe({ nombre: 'Lorenzo', firma_nombre: 'Lorenzo Piatti', phone: '+34 600 11 22 33' })
-    expect(whatsappDe(r)).toBe(`https://wa.me/34600112233?text=${encodeURIComponent('Hola Lorenzo, te escribo por tu correo de Propelia.')}`)
-    const c = predeterminadosPara('puntual', r)
+    const ana = { nombre: 'Ana', empresa: 'Inmobiliaria Sol' }
+    expect(mensajeDeWhatsapp(ana)).toBe('¡Hola Propelia! Soy Ana, de Inmobiliaria Sol. Me interesa saber más sobre cómo podéis ayudar a mi inmobiliaria.')
+    expect(mensajeDeWhatsapp({ nombre: 'Ana' })).toContain('Soy Ana. Me interesa')
+    expect(mensajeDeWhatsapp({ empresa: 'Sol' })).toContain('Os escribo desde Sol.')
+    expect(mensajeDeWhatsapp()).toBe('¡Hola Propelia! Me interesa saber más sobre cómo podéis ayudar a mi inmobiliaria.')
+    expect(whatsappDe(r, ana)).toBe(`https://wa.me/34600112233?text=${encodeURIComponent(mensajeDeWhatsapp(ana))}`)
+    const c = predeterminadosPara('puntual', r, ana)
     expect(c.textoBoton).toBe('Contáctame')
-    expect(c.urlBoton).toBe(whatsappDe(r))
+    expect(c.urlBoton).toBe(whatsappDe(r, ana))
     expect(problemaDeCampos('puntual', c)).toBeNull()
     // Sin teléfono, un mail a quien manda; y el mailto pasa la validación.
     const sinTel = predeterminadosPara('puntual', remitenteDe({ nombre: 'Ana', email: 'ana@propelia.es' }))
     expect(sinTel.urlBoton).toBe('mailto:ana@propelia.es')
     expect(problemaDeCampos('puntual', sinTel)).toBeNull()
     expect(problemaDeCampos('puntual', { ...sinTel, urlBoton: 'mailto:no es mail' })).not.toBeNull()
-    // El del vídeo no cambia.
-    expect(predeterminadosPara('presentacion-video', r).urlBoton).toBe('')
+    // El del vídeo también va al WhatsApp, pidiendo la demo.
+    const v = predeterminadosPara('presentacion-video', r, ana)
+    expect(v.textoBoton).toBe('Reservar 20 minutos')
+    expect(decodeURIComponent(v.urlBoton)).toContain('Me gustaría reservar 20 minutos para ver una demo de Propelia.')
   })
 })
 

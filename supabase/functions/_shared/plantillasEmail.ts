@@ -37,9 +37,8 @@ export type CampoEmail = keyof CamposEmail
 
 /* La portada lleva a la página pública del vídeo en el producto (`propelia-frontend`,
    `src/pages/presentacion/`), que reproduce el mp4 del bucket público `publico` de este proyecto.
-   Un vídeo nuevo se cambia allá, no acá. Sin agenda, el botón no se dibuja. */
+   Un vídeo nuevo se cambia allá, no acá. */
 export const URL_VIDEO = 'https://crm.propelia.es/presentacion'
-export const URL_AGENDA = ''
 
 /* Quién firma: sale de la fila de `users` de quien manda, nunca de lo que mande el front
    (19/10/2026). El mail sale siempre desde info@propelia.es; lo que cambia por persona es el email
@@ -91,7 +90,7 @@ export const PLANTILLAS_EMAIL: PlantillaEmail[] = [
   {
     id: 'presentacion-video',
     nombre: 'Presentación con vídeo',
-    descripcion: 'Después de la llamada: el vídeo de dos minutos y el botón para agendar.',
+    descripcion: 'Después de la llamada: el vídeo de dos minutos y «Reservar 20 minutos» por WhatsApp.',
     editables: ['asunto', 'preencabezado', 'nombre', 'titular', 'cuerpo', 'urlVideo', 'puntos', 'textoBoton', 'urlBoton', 'notaBoton'],
     predeterminados: {
       ...VACIOS,
@@ -107,7 +106,8 @@ export const PLANTILLAS_EMAIL: PlantillaEmail[] = [
         'La IA en el trabajo del día. Corrige las fotos de los anuncios y redacta la documentación.',
       ].join('\n'),
       textoBoton: 'Reservar 20 minutos',
-      urlBoton: URL_AGENDA,
+      // Lo pone `predeterminadosPara`: el WhatsApp de quien manda, pidiendo la demo.
+      urlBoton: '',
       notaBoton: 'Te lo enseño en directo sobre tus propios anuncios.\nSi lo prefieres, contéstame a este correo y lo vemos por aquí.',
     },
   },
@@ -131,20 +131,41 @@ export const PLANTILLAS_EMAIL: PlantillaEmail[] = [
 
 export const plantillaEmail = (id: string): PlantillaEmail | undefined => PLANTILLAS_EMAIL.find(p => p.id === id)
 
-/** «Contáctame»: el WhatsApp de quien manda, con un mensaje ya escrito para quien lo recibe. Sin
-    teléfono, un mail a su email (o a info@). wa.me pide el número en dígitos, con el código de país. */
-export function whatsappDe(r: Remitente): string {
-  const digitos = r.telefono.replace(/\D/g, '')
-  if (!digitos) return `mailto:${r.email}`
-  const texto = `Hola ${r.nombre.split(' ')[0]}, te escribo por tu correo de Propelia.`
-  return `https://wa.me/${digitos}?text=${encodeURIComponent(texto)}`
+/** A quién le llega el mail: lo que se sabe del lead para escribir el WhatsApp en su nombre. */
+export type Destinatario = { nombre?: string | null; empresa?: string | null }
+
+/* Qué pide el WhatsApp según el mail: el del vídeo cierra con «Reservar 20 minutos», así que pide
+   la demo; el puntual, saber más. */
+const PEDIDO: Record<PlantillaEmailId, string> = {
+  'presentacion-video': 'Me gustaría reservar 20 minutos para ver una demo de Propelia.',
+  puntual: 'Me interesa saber más sobre cómo podéis ayudar a mi inmobiliaria.',
 }
 
-/** Lo que arranca cargado en el diálogo. El «Contáctame» del mail puntual va al WhatsApp de quien
-    manda (o a su email, sin teléfono). */
-export function predeterminadosPara(id: PlantillaEmailId, r: Remitente): CamposEmail {
-  const base = plantillaEmail(id)!.predeterminados
-  return id === 'puntual' ? { ...base, urlBoton: whatsappDe(r) } : { ...base }
+/** El mensaje que queda escrito en el WhatsApp. Lo manda quien recibió el mail, así que va en su
+    voz: «¡Hola Propelia! Soy Ana, de Inmobiliaria Sol. Me interesa…». Sin nombre ni empresa, solo
+    el saludo y el pedido. */
+export function mensajeDeWhatsapp(d: Destinatario = {}, id: PlantillaEmailId = 'puntual'): string {
+  const nombre = d.nombre?.trim() ?? ''
+  const empresa = d.empresa?.trim() ?? ''
+  const quien = nombre && empresa ? ` Soy ${nombre}, de ${empresa}.`
+    : nombre ? ` Soy ${nombre}.`
+    : empresa ? ` Os escribo desde ${empresa}.`
+    : ''
+  return `¡Hola Propelia!${quien} ${PEDIDO[id]}`
+}
+
+/** El botón de los dos mails: el WhatsApp de quien manda (wa.me abre WhatsApp Web en el ordenador
+    y la app en el móvil), con el mensaje ya escrito. Sin teléfono, un mail a su email (o a info@).
+    wa.me pide el número en dígitos, con el código de país. */
+export function whatsappDe(r: Remitente, d?: Destinatario, id: PlantillaEmailId = 'puntual'): string {
+  const digitos = r.telefono.replace(/\D/g, '')
+  if (!digitos) return `mailto:${r.email}`
+  return `https://wa.me/${digitos}?text=${encodeURIComponent(mensajeDeWhatsapp(d, id))}`
+}
+
+/** Lo que arranca cargado en el diálogo: el botón de los dos va al WhatsApp de quien manda. */
+export function predeterminadosPara(id: PlantillaEmailId, r: Remitente, d?: Destinatario): CamposEmail {
+  return { ...plantillaEmail(id)!.predeterminados, urlBoton: whatsappDe(r, d, id) }
 }
 
 export const ROTULOS_CAMPOS: Record<CampoEmail, string> = {
