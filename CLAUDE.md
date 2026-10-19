@@ -320,7 +320,12 @@ conversión de filas a personas es `personasDesdeUsuarios()`, en `equipo.js`, co
   uno mismo. En una transacción pone `activo = false` y le pasa a un sucesor sus leads, sus tareas
   del CRM sin completar, sus reuniones futuras y su lugar en `pend`/`resp` (y en los pasos) de las
   tareas del roadmap sin terminar, y borra sus filas de `crm_data_access`. La caja no se toca.
-  Con `p_simular` solo cuenta: es el preview del dialog. Cambios, `caja` y roles siguen por el MCP.
+  Con `p_simular` solo cuenta: es el preview del dialog. **La vuelta** (19/10/2026) es el ícono de
+  cada fila de Inactivos (`ReactivarMiembroDialog`), que llama a la edge function `reactivar-miembro`
+  (tests con `deno test` ahí adentro): solo SUPERADMIN activo, pone `activo = true` y, si se eligió
+  «Poner una nueva», antes le cambia la contraseña (si eso falla, no activa). Sin migración. No
+  devuelve nada de lo que la baja traspasó, ni los permisos de `crm_data_access`: se dan de nuevo
+  desde Visibilidad. Cambios, `caja` y roles siguen por el MCP.
 - **La baja es `activo = false`, nunca un `delete`.** Un inactivo no entra (`es_usuario()` lo
   corta y la RLS le devuelve la lista vacía), pero se sigue pintando: una tarea vieja dice
   quién la hizo y lo que pagó sigue en el saldo de la caja. Lo que no se hace es **ofrecerlo

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { UserMinus } from 'lucide-react'
+import { UserMinus, UserPlus } from 'lucide-react'
 import { AvatarUsuario } from '@/components/AvatarUsuario'
 import { enlaceAlCrm } from '@/pages/crm/lib/leadFilterParams'
 import type { Usuario } from '@/pages/crm/types'
@@ -33,12 +33,13 @@ function BarraEtapas({ fila }: { fila: FilaEquipo }) {
   )
 }
 
-/* `onDarDeBaja` solo llega para un SUPERADMIN; el botón no se ofrece sobre uno mismo (la RPC lo
-   rechaza) ni sobre quien ya está inactivo. */
-export function TablaEquipo({ filas, myId, onDarDeBaja }: {
+/* `onDarDeBaja` y `onReactivar` solo llegan para un SUPERADMIN. La baja no se ofrece sobre uno
+   mismo (la RPC lo rechaza) ni sobre quien ya está inactivo; reactivar, solo sobre un inactivo. */
+export function TablaEquipo({ filas, myId, onDarDeBaja, onReactivar }: {
   filas: FilaEquipo[]
   myId?: string | null
   onDarDeBaja?: (usuario: Usuario) => void
+  onReactivar?: (usuario: Usuario) => void
 }) {
   const navigate = useNavigate()
   const th = 'whitespace-nowrap bg-(--surface-2) px-4 py-[7px] text-left text-[12px] font-bold uppercase tracking-[0.06em] text-(--fg-2) shadow-[inset_0_-1px_0_var(--line-strong)]'
@@ -80,6 +81,13 @@ export function TablaEquipo({ filas, myId, onDarDeBaja }: {
                         onClick={e => { e.stopPropagation(); onDarDeBaja(f.usuario) }}
                         className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-(--fg-muted) hover:bg-destructive/10 hover:text-destructive">
                         <UserMinus className="size-4" />
+                      </button>
+                    )}
+                    {!f.usuario.activo && onReactivar && (
+                      <button type="button" title="Reactivar" aria-label={`Reactivar a ${f.usuario.nombre}`}
+                        onClick={e => { e.stopPropagation(); onReactivar(f.usuario) }}
+                        className="inline-flex size-7 cursor-pointer items-center justify-center rounded-md text-(--fg-muted) hover:bg-(--brand-soft) hover:text-(--brand-700)">
+                        <UserPlus className="size-4" />
                       </button>
                     )}
                   </td>

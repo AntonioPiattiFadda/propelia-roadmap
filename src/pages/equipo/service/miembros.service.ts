@@ -20,6 +20,19 @@ export async function crearMiembro(payload: NuevoMiembro): Promise<{ id: string;
   return data.user
 }
 
+/* La vuelta de la baja va por la edge function `reactivar-miembro`: cambiarle la contraseña a otra
+   cuenta pide el service_role. Sin `password` le queda la que tenía. */
+export async function reactivarMiembro(userId: string, password: string | null): Promise<void> {
+  const { error } = await supabase.functions.invoke('reactivar-miembro', { body: { userId, password: password ?? '' } })
+  if (error) {
+    if (error instanceof FunctionsHttpError) {
+      const body = await error.context.json().catch(() => null)
+      throw new Error(body?.error ?? 'No se pudo reactivar')
+    }
+    throw error
+  }
+}
+
 /** Lo que la baja le pasa al sucesor (o le pasaría, con `simulado`). */
 export type ResultadoDeBaja = { leads: number; tareas: number; reuniones: number; roadmap: number; simulado: boolean }
 
