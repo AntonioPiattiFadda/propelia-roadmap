@@ -106,3 +106,28 @@ Deno.test('plantilla: desconocida, sin vídeo o con un enlace raro → 400 sin m
   assertEquals((await handleSendEmail('me', { ...PLANTILLA, campos: 'x' }, deps)).ok, false)
   assertEquals(sent.length, 0)
 })
+
+const PUNTUAL: SendEmailInput = { ...PLANTILLA, plantilla: 'puntual', campos: { asunto: 'Propelia', cuerpo: 'Hola', nombre: 'Ana' } }
+
+Deno.test('plantilla: el mail puntual lleva los adjuntos, un SDR incluido', async () => {
+  const { deps, sent } = fakeDeps({ getCaller: async () => ({ rol: 'SDR', activo: true, nombre: 'Ana' }) })
+  const attachments = [{ filename: ' dossier.pdf ', content: 'aG9sYQ==' }]
+  assertEquals((await handleSendEmail('me', { ...PUNTUAL, attachments }, deps)).ok, true)
+  assertEquals(sent[0].attachments, [{ filename: 'dossier.pdf', content: 'aG9sYQ==' }])
+})
+
+Deno.test('plantilla: sin adjuntos no se manda la clave', async () => {
+  const { deps, sent } = fakeDeps()
+  await handleSendEmail('me', { ...PUNTUAL, attachments: [] }, deps)
+  assertEquals('attachments' in sent[0], false)
+})
+
+Deno.test('plantilla: adjuntos en la que no los lleva, inválidos o de más de 10MB → sin mandar', async () => {
+  const { deps, sent } = fakeDeps()
+  const uno = [{ filename: 'a.txt', content: 'aG9sYQ==' }]
+  assertEquals(await handleSendEmail('me', { ...PLANTILLA, attachments: uno }, deps), { ok: false, status: 400, error: 'Esta plantilla no lleva adjuntos' })
+  assertEquals((await handleSendEmail('me', { ...PUNTUAL, attachments: 'x' }, deps)).ok, false)
+  const big = [{ filename: 'big.bin', content: 'A'.repeat(MAX_ATTACHMENTS_BYTES + 4) }]
+  assertEquals((await handleSendEmail('me', { ...PUNTUAL, attachments: big }, deps)) as unknown, { ok: false, status: 413, error: 'Los adjuntos pasan los 10MB' })
+  assertEquals(sent.length, 0)
+})

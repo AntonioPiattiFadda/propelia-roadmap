@@ -43,7 +43,9 @@ export function TestEmailDialog() {
   const valid = EMAIL.test(to.trim()) && message.trim().length > 0 && !tooBig
 
   const addFiles = (list: FileList | null) => {
-    if (list) setFiles(prev => [...prev, ...Array.from(list)])
+    // Se copian ya: el `value = ''` de abajo vacía el mismo `FileList` antes de que corra el updater.
+    const added = Array.from(list ?? [])
+    if (added.length) setFiles(prev => [...prev, ...added])
     // Si no, elegir otra vez el mismo archivo después de sacarlo no dispara `onChange`.
     if (fileInput.current) fileInput.current.value = ''
   }

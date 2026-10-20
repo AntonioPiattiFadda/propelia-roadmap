@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { RotateCcw, Send } from 'lucide-react'
+import { Paperclip, RotateCcw, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -11,7 +11,7 @@ import {
   nombreEnBandeja, PLANTILLAS_EMAIL, predeterminadosPara, whatsappDe, problemaDeCampos, remitenteDe, renderEmail, ROTULOS_CAMPOS,
   type CampoEmail, type CamposEmail, type PlantillaEmailId, type Remitente,
 } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
-import { sendEmail } from '../service/email.service'
+import { base64Size, fileToAttachment, MAX_ATTACHMENTS_BYTES, sendEmail } from '../service/email.service'
 import type { CrmClient } from '../types'
 
 /* La pestaña Email de «Mensajes» (18/10/2026): las dos plantillas HTML de `_shared/plantillasEmail.ts`,
@@ -30,6 +30,9 @@ const MULTILINEA: Partial<Record<CampoEmail, { filas: number; ayuda?: string }>>
   puntos: { filas: 5, ayuda: 'Una tarjeta por renglón; hasta el primer punto va en negrita.' },
   notaBoton: { filas: 2 },
 }
+
+const formatSize = (bytes: number) =>
+  bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 
 const ETIQUETA = 'text-[11.5px] font-semibold uppercase tracking-wide text-(--fg-muted)'
 
@@ -106,11 +109,32 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
     const t = setTimeout(() => setCargando(false), 8000)
     return () => clearTimeout(t)
   }, [cargando, htmlEnVista])
-  const problema = !EMAIL.test(para.trim()) ? 'Falta una casilla válida en «Para»' : problemaDeCampos(id, campos)
+  /* Los adjuntos (solo el «Mail puntual», `adjuntos` de la plantilla): valen para este envío, como
+     el texto. No salen en la vista previa, que es el HTML del mail. */
+  const [archivos, setArchivos] = useState<File[]>([])
+  const elegirArchivo = useRef<HTMLInputElement>(null)
+  const sumarArchivos = (lista: FileList | null) => {
+    /* Se copian ya: el `value = ''` de abajo vacía el mismo `FileList`, y el updater de React corre
+       después. Copiándolos adentro del updater, la lista quedaba vacía. */
+    const nuevos = Array.from(lista ?? [])
+    if (nuevos.length) setArchivos(prev => [...prev, ...nuevos])
+    // Si no, elegir otra vez el mismo archivo después de sacarlo no dispara `onChange`.
+    if (elegirArchivo.current) elegirArchivo.current.value = ''
+  }
+  const pesados = archivos.reduce((n, f) => n + base64Size(f.size), 0) > MAX_ATTACHMENTS_BYTES
+
+  const problema = !EMAIL.test(para.trim()) ? 'Falta una casilla válida en «Para»'
+    : pesados ? 'Los adjuntos pasan los 10MB' : problemaDeCampos(id, campos)
 
   const enviar = useMutation({
-    mutationFn: () => sendEmail({ to: para.trim(), plantilla: id, campos }),
-    onSuccess: () => toast.success(`«${plantilla.nombre}» enviado a ${para.trim()}`),
+    mutationFn: async () => sendEmail({
+      to: para.trim(), plantilla: id, campos,
+      ...(archivos.length ? { attachments: await Promise.all(archivos.map(fileToAttachment)) } : {}),
+    }),
+    onSuccess: () => {
+      toast.success(`«${plantilla.nombre}» enviado a ${para.trim()}`)
+      setArchivos([])
+    },
     onError: (e: Error) => { toast.error(e.message || 'No se pudo enviar el email') },
   })
 
@@ -163,6 +187,34 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
               </label>
             )
           })}
+
+        {plantilla.adjuntos && (
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center justify-between gap-2">
+              <span className={ETIQUETA}>Adjuntos</span>
+              <button type="button" onClick={() => elegirArchivo.current?.click()}
+                className="inline-flex h-7 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground">
+                <Paperclip size={13} />Agregar archivo
+              </button>
+              <input ref={elegirArchivo} type="file" multiple className="hidden" onChange={e => sumarArchivos(e.target.files)} />
+            </div>
+            {archivos.length > 0 && (
+              <ul className="flex flex-col gap-1">
+                {archivos.map((f, i) => (
+                  <li key={`${f.name}-${i}`} className="flex items-center gap-2 rounded-md px-2 py-1 text-[13px] [border:1px_solid_var(--line)]">
+                    <span className="min-w-0 flex-1 truncate" title={f.name}>{f.name}</span>
+                    <span className="shrink-0 text-[11.5px] text-(--fg-muted)">{formatSize(f.size)}</span>
+                    <button type="button" aria-label={`Quitar ${f.name}`} onClick={() => setArchivos(prev => prev.filter((_, j) => j !== i))}
+                      className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-(--fg-muted) hover:bg-(--surface-2) hover:text-foreground">
+                      <X size={13} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {pesados && <span className="text-[11.5px] text-destructive">Los adjuntos pasan los 10MB</span>}
+          </div>
+        )}
       </div>
 
       {/* La vista previa: 640px son los 600 del mail más su margen, así se ve como en el escritorio. */}

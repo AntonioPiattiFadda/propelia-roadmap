@@ -85,6 +85,8 @@ export type PlantillaEmail = {
   descripcion: string
   /** Qué campos se editan en el diálogo, en ese orden. El resto la plantilla no lo usa. */
   editables: CampoEmail[]
+  /** Si se le pueden colgar archivos. El servidor rechaza adjuntos en la que no lo diga. */
+  adjuntos?: boolean
   predeterminados: CamposEmail
 }
 
@@ -123,6 +125,7 @@ export const PLANTILLAS_EMAIL: PlantillaEmail[] = [
     nombre: 'Mail puntual',
     descripcion: 'Texto libre con la marca de Propelia: titular, párrafos y el botón «Contáctame» a tu WhatsApp.',
     editables: ['asunto', 'preencabezado', 'nombre', 'titular', 'cuerpo', 'textoBoton', 'urlBoton'],
+    adjuntos: true,
     predeterminados: {
       ...VACIOS,
       asunto: 'Propelia',

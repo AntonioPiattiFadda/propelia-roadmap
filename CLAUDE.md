@@ -296,6 +296,9 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   (`mensajeDeWhatsapp`: «¡Hola Propelia! Soy Ana, de …»); se rearma con «Nombre» mientras no se
   edite a mano (`whatsappDe`, `predeterminadosPara`). Sin teléfono es un `mailto:` a su email.
   El botón acepta `http(s)://` o `mailto:`. El envío no queda en la actividad del lead.
+  **El «Mail puntual» lleva adjuntos** (20/10/2026, por pedido): `adjuntos: true` en su plantilla;
+  `send-email` rechaza archivos en la que no lo diga. Cualquier usuario activo, SDR incluido; mismo
+  tope de 10MB que el texto libre. Valen para ese envío y no salen en la vista previa.
 - **Qué se copió del producto** (podado de lo inmobiliario):
   De `propelia-frontend/src/pages/leads/lib/`: `discardStage`,
   `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De

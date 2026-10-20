@@ -10,7 +10,7 @@ import { camposDesde, nombreEnBandeja, plantillaEmail, problemaDeCampos, remiten
 /* Dos formas de llamarla. Con `plantilla` y `campos` el HTML lo arma el servidor
    (`_shared/plantillasEmail.ts`) y de lo que llega solo entra texto escapado: por eso alcanza con
    ser usuario activo, SDR incluido. Sin plantilla es texto libre con adjuntos, y eso sigue siendo
-   de SUPERADMIN. La firma sale de la fila de `users` de quien llama, no de lo que mande. */
+   de SUPERADMIN. Una plantilla con `adjuntos` (el «Mail puntual», 20/10/2026) también los lleva. La firma sale de la fila de `users` de quien llama, no de lo que mande. */
 export type SendEmailInput = {
   to: string; subject: string; text: string; attachments: unknown
   plantilla?: string; campos?: unknown
@@ -51,6 +51,16 @@ export function parseAttachments(value: unknown): EmailAttachment[] | null {
   return out
 }
 
+/** Los adjuntos validados, o el error a devolver. */
+function adjuntosDe(value: unknown): EmailAttachment[] | SendEmailResult {
+  const attachments = parseAttachments(value)
+  if (!attachments) return fail(400, 'Adjuntos inválidos')
+  if (attachments.reduce((n, a) => n + a.content.length, 0) > MAX_ATTACHMENTS_BYTES) {
+    return fail(413, 'Los adjuntos pasan los 10MB')
+  }
+  return attachments
+}
+
 export async function handleSendEmail(callerId: string, input: SendEmailInput, deps: SendEmailDeps): Promise<SendEmailResult> {
   const caller = await deps.getCaller(callerId)
   if (input.plantilla !== undefined) return handlePlantilla(caller, input, deps)
@@ -63,11 +73,8 @@ export async function handleSendEmail(callerId: string, input: SendEmailInput, d
   if (!subject) return fail(400, 'Falta el asunto')
   if (!input.text.trim()) return fail(400, 'Falta el mensaje')
 
-  const attachments = parseAttachments(input.attachments)
-  if (!attachments) return fail(400, 'Adjuntos inválidos')
-  if (attachments.reduce((n, a) => n + a.content.length, 0) > MAX_ATTACHMENTS_BYTES) {
-    return fail(413, 'Los adjuntos pasan los 10MB')
-  }
+  const attachments = adjuntosDe(input.attachments)
+  if (!Array.isArray(attachments)) return attachments
 
   const { id } = await deps.send({ to, subject, text: input.text, ...(attachments.length ? { attachments } : {}) })
   return { ok: true, id }
@@ -89,11 +96,16 @@ async function handlePlantilla(
   if (!campos) return fail(400, 'Campos inválidos')
   const problema = problemaDeCampos(plantilla.id, campos)
   if (problema) return fail(400, problema)
+  const attachments = adjuntosDe(input.attachments)
+  if (!Array.isArray(attachments)) return attachments
+  if (attachments.length && !plantilla.adjuntos) return fail(400, 'Esta plantilla no lleva adjuntos')
 
   const remitente = remitenteDe(caller)
   const { subject, html, text } = renderEmail(plantilla.id, campos, remitente)
   const replyTo = replyToDe(remitente)
   const fromName = nombreEnBandeja(remitente)
-  const { id } = await deps.send({ fromName, to, subject, html, text, ...(replyTo ? { replyTo } : {}) })
+  const { id } = await deps.send({
+    fromName, to, subject, html, text, ...(replyTo ? { replyTo } : {}), ...(attachments.length ? { attachments } : {}),
+  })
   return { ok: true, id }
 }

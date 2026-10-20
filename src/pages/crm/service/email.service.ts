@@ -25,7 +25,7 @@ export function fileToAttachment(file: File): Promise<EmailAttachment> {
   })
 }
 
-export type OutgoingTemplateEmail = { to: string; plantilla: PlantillaEmailId; campos: CamposEmail }
+export type OutgoingTemplateEmail = { to: string; plantilla: PlantillaEmailId; campos: CamposEmail; attachments?: EmailAttachment[] }
 
 /* Va por la edge function `send-email`: la API key de Resend no puede ir al navegador, y el
    remitente (`info@propelia.es`) lo pone el servidor, no quien llama. Con una plantilla manda solo
