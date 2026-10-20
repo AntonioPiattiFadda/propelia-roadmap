@@ -285,8 +285,12 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   `propelia.es/assets/`; la vista previa usa las copias de `public/email/`.
   `URL_VIDEO` es `crm.propelia.es/presentacion`, una página pública de `propelia-frontend` que
   reproduce el mp4 del bucket **público** `publico` de este proyecto (migración
-  `20261018210226_bucket_publico`, sin policies: escribe solo la service role). Un vídeo nuevo va
-  con otro nombre y se cambia en esa página.
+  `20261018210226_bucket_publico`). **Desde el 20/10/2026 el vídeo se reemplaza desde `/ajustes`**
+  (pestaña «Vídeo presentación por mail», página entera solo SUPERADMIN: `NAV` y gate
+  `esSuperadmin` adentro). Reemplazar es **pisar `videos/propelia-presentacion-v8.mp4`** (upsert,
+  caché de 60 s), el nombre que la página de propelia-frontend tiene escrito: así no se toca
+  aquel repo. El anterior no se guarda. Escriben la service role y un SUPERADMIN, solo bajo
+  `videos/` (migración `20261020171103_video_presentacion_superadmin`, policies `publico_videos_*`).
   El botón de los dos mails («Contáctame» en el puntual, «Reservar 20 minutos» en el del vídeo,
   que pide una demo) arranca con el WhatsApp de quien manda y un mensaje en la voz del lead
   (`mensajeDeWhatsapp`: «¡Hola Propelia! Soy Ana, de …»); se rearma con «Nombre» mientras no se

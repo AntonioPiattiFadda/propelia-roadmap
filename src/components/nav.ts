@@ -1,4 +1,4 @@
-import { ListChecks, ListTodo, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react'
+import { ListChecks, ListTodo, Settings, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react'
 import type { Database } from '@/types/database.types'
 
 export type Rol = Database['public']['Enums']['user_role']
@@ -21,6 +21,7 @@ export const NAV: NavItem[] = [
   { id: 'crm', icon: Users, label: 'CRM', path: '/crm', roles: TODOS },
   { id: 'equipo', icon: UsersRound, label: 'Equipo', path: '/equipo', roles: SOLO_SUPERADMIN },
   { id: 'caja', icon: Wallet, label: 'Caja', path: '/caja', roles: SOLO_SUPERADMIN },
+  { id: 'ajustes', icon: Settings, label: 'Ajustes', path: '/ajustes', roles: SOLO_SUPERADMIN },
 ]
 
 // Con la barra y no un `startsWith` pelado: si no, `/crm-viejo` marcaría activa la entrada del CRM.

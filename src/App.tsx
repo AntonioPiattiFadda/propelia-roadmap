@@ -7,6 +7,7 @@ import { SignIn } from '@/pages/auth/SignIn'
 import { PublicRoutesAuthCheck, RequireAcceso, RequireAuth, RequireRol } from '@/pages/auth/guards'
 import { Roadmap } from '@/pages/roadmap/Roadmap'
 import { Backlog } from '@/pages/roadmap/Backlog'
+import { Ajustes } from '@/pages/ajustes/Ajustes'
 import { Crm } from '@/pages/crm/Crm'
 import { Equipo } from '@/pages/equipo/Equipo'
 import { Caja } from '@/pages/caja/Caja'
@@ -45,6 +46,7 @@ const App = () => (
                 <Route path="/crm" element={<Crm />} />
                 <Route path="/equipo" element={<Equipo />} />
                 <Route path="/caja" element={<Caja />} />
+                <Route path="/ajustes" element={<Ajustes />} />
               </Route>
               {/* La ruta vieja, de cuando el backlog era una página hermana: que no se rompan los
                   favoritos. Va AFUERA de `RequireRol`: `/backlog` no está en `NAV` y el guard la

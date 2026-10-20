@@ -244,7 +244,8 @@ insert into storage.buckets (id, name, public)
 values ('roadmap-adjuntos', 'roadmap-adjuntos', false)
 on conflict (id) do update set public = false;
 
--- Público y sin policies: lo que se manda afuera (el vídeo de los mails). Escribe solo la service role.
+-- Público: lo que se manda afuera (el vídeo de los mails). Leer no pide policy; escribir, la
+-- service role o un SUPERADMIN bajo `videos/` (policies al final del archivo).
 insert into storage.buckets (id, name, public, file_size_limit)
 values ('publico', 'publico', true, 52428800)
 on conflict (id) do update set public = true;
@@ -258,6 +259,9 @@ create policy adjuntos_write on storage.objects for insert
 drop policy if exists adjuntos_delete on storage.objects;
 create policy adjuntos_delete on storage.objects for delete
   using (bucket_id = 'roadmap-adjuntos' and public.es_usuario());
+
+-- El vídeo de los mails (`publico/videos/`) lo reemplaza un SUPERADMIN desde /ajustes. Las
+-- policies van al final del archivo: llaman a crm_es_superadmin(), que se crea más abajo.
 
 -- ============================================================
 -- CRM interno: Propelia siguiendo a SUS clientes (las inmobiliarias).
@@ -1475,3 +1479,15 @@ select * from (values
 ) v(label, value, position, priority_id, management_tolerance_hours,
     is_out_of_funnel, allow_delete, allow_reorder, allow_rename)
 where not exists (select 1 from public.crm_funnel_stages);
+
+-- ---------- El vídeo de los mails: publico/videos/, solo SUPERADMIN (/ajustes) ----------
+drop policy if exists publico_videos_read on storage.objects;
+create policy publico_videos_read on storage.objects for select to authenticated
+  using (bucket_id = 'publico' and name like 'videos/%' and public.crm_es_superadmin());
+drop policy if exists publico_videos_insert on storage.objects;
+create policy publico_videos_insert on storage.objects for insert to authenticated
+  with check (bucket_id = 'publico' and name like 'videos/%' and public.crm_es_superadmin());
+drop policy if exists publico_videos_update on storage.objects;
+create policy publico_videos_update on storage.objects for update to authenticated
+  using (bucket_id = 'publico' and name like 'videos/%' and public.crm_es_superadmin())
+  with check (bucket_id = 'publico' and name like 'videos/%' and public.crm_es_superadmin());
