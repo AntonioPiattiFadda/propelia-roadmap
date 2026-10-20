@@ -9,10 +9,31 @@ import { Icon } from '@/components/ui/icon'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
+import { SelectGroup, SelectItem, SelectLabel, SelectSeparator } from '@/components/ui/select'
 import { fmtDueDate } from '../lib/leadCellFormat'
+import { etapasPorGestion } from '../lib/gestionDeEtapa'
 import type { CrmStage, CrmTask } from '../types'
 
 export type OverdueTask = Pick<CrmTask, 'id' | 'title' | 'due_date'>
+
+/** Las opciones de un select de etapas, en subgrupos (Primer contacto, Seguimiento, Otros). Va
+    adentro de un `SelectContent`; lo usan el estado del perfil y «El lead queda en». */
+export function OpcionesDeEtapa({ etapas, grande }: { etapas: CrmStage[]; grande?: boolean }) {
+  return etapasPorGestion(etapas).map((g, i) => (
+    <SelectGroup key={g.label}>
+      {i > 0 && <SelectSeparator className="my-1.5" />}
+      <SelectLabel className={cn('font-bold uppercase tracking-[0.06em] text-(--fg-muted)',
+        grande ? 'px-3 pt-2 pb-1 text-[11px]' : 'text-[10.5px]')}>
+        {g.label}
+      </SelectLabel>
+      {g.etapas.map(e => (
+        <SelectItem key={e.id} value={e.id} className={cn(grande && 'rounded-md py-2 pl-3 text-[14px] font-medium')}>
+          {e.deleted_at ? `${e.label} (borrada)` : e.label}
+        </SelectItem>
+      ))}
+    </SelectGroup>
+  ))
+}
 
 export function StageBadge({ etapa, className }: { etapa: CrmStage | null; className?: string }) {
   if (!etapa) return <span className="text-xs text-(--fg-faint)">Sin estado</span>

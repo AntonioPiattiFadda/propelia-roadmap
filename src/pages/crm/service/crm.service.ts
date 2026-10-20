@@ -159,6 +159,12 @@ export async function crearComentario(input: {
 export const marcarComentarioBorrado = (id: string, borrado: boolean) =>
   comprobar(supabase.from('crm_comments').update({ deleted_at: borrado ? ahora() : null }).eq('id', id))
 
+/** Editar lo escrito de una actividad (20/10/2026): solo el texto. La meta (`long_description`:
+ *  con quién, teléfono, resultado) no se toca, y no queda marca de «editado»: la tabla no tiene
+ *  `updated_at` y no se migra por esto. */
+export const actualizarComentario = (id: string, patch: { description: string }) =>
+  comprobar(supabase.from('crm_comments').update({ description: patch.description }).eq('id', id))
+
 /** La meta (y el lead) de las actividades que `autor` registró en [desde, hasta): de ahí sale el
  *  contador de llamadas. Se filtra por la marca en la base para no traer todos los comentarios. */
 export async function metasDeActividad(autor: string, desde: string, hasta: string): Promise<{ lead_id: string | null; long_description: string | null }[]> {
@@ -194,7 +200,8 @@ export async function crearTarea(input: {
   return data
 }
 
-export type TareaPatch = Pick<TablesUpdate<'crm_tasks'>, 'completed' | 'completed_at' | 'title' | 'due_date' | 'deleted_at'>
+/* `due_time` va solo cuando cambió (ver `cambiosDeTarea`): por lo mismo que en `crearTarea`. */
+export type TareaPatch = Pick<TablesUpdate<'crm_tasks'>, 'completed' | 'completed_at' | 'title' | 'due_date' | 'due_time' | 'deleted_at'>
 
 export async function actualizarTarea(id: string, patch: TareaPatch): Promise<CrmTask> {
   const { data, error } = await supabase.from('crm_tasks').update(patch).eq('id', id).select()

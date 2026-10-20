@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { fmtUltimaActividad } from './ultimaActividad'
+import { fmtUltimaActividad, ordenarPorUltimaActividad } from './ultimaActividad'
+
+describe('ordenarPorUltimaActividad', () => {
+  const l = (id: string, ultima_actividad_at: string | null) => ({ id, ultima_actividad_at })
+
+  it('lo más reciente arriba y los sin contactar al final, sin romper el empate', () => {
+    const leads = [l('a', null), l('b', '2026-10-10T10:00:00Z'), l('c', '2026-10-15T10:00:00Z'), l('d', null)]
+    expect(ordenarPorUltimaActividad(leads).map(x => x.id)).toEqual(['c', 'b', 'a', 'd'])
+  })
+
+  it('no modifica la lista de entrada', () => {
+    const leads = [l('a', null), l('b', '2026-10-10T10:00:00Z')]
+    ordenarPorUltimaActividad(leads)
+    expect(leads.map(x => x.id)).toEqual(['a', 'b'])
+  })
+})
 
 // Jueves 15/10/2026, 18:00 hora local.
 const ahora = new Date(2026, 9, 15, 18, 0)

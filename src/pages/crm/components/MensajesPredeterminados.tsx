@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import type { PlantillaEmailId } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
+import { enlaceDeWhatsapp } from '../lib/whatsapp'
 import type { CrmClient } from '../types'
 import { EmailConPlantilla, ListaDePlantillasEmail } from './EmailConPlantilla'
 
@@ -122,6 +123,13 @@ export function MensajesPredeterminadosDialog({ client, abierto, onCerrar }: {
 
   const enviar = () => {
     if (!elegida || !destinoEfectivo) return
+    if (canal === 'whatsapp') {
+      // Se abre en el mismo clic: después de un await el navegador bloquea la pestaña nueva.
+      const url = enlaceDeWhatsapp(destinoEfectivo, rellenar(elegida.texto, client))
+      if (!url) { toast.error('Ese teléfono no es válido para WhatsApp', { description: destinoEfectivo }); return }
+      window.open(url, '_blank', 'noopener')
+      return
+    }
     toast.info('El envío todavía no está conectado', {
       description: `«${elegida.nombre}» a ${destinoEfectivo}${elegida.adjuntos.length ? ` con ${elegida.adjuntos.length} adjunto(s)` : ''}.`,
     })

@@ -2,12 +2,18 @@ import { toIsoDate } from '@/lib/calendarDate'
 import type { CrmLeadRow, CrmStage } from '../types'
 import type { Objetivo } from './objetivos'
 import { etapaDelLead } from './effectiveStage'
+import { gestionDeEtapa } from './gestionDeEtapa'
 import { paraRecontactar } from './motivosDescarte'
 
 /* Copiado de propelia-frontend (src/pages/leads/lib/leadFilters.ts) sin lo inmobiliario (pisos,
    presupuesto, zonas, cruces, compraventa) y sin `frozenIds`. Acá la lista entera ya está en el
    cliente —la RLS recortó— así que no hay RPC con el que mantenerse en espejo. Tampoco filtra
    por gestión ni por prioridad: se sacaron del front el 10/10/2026 para rediseñarlas. */
+
+/** Última actividad (lo más reciente arriba), estado (lo más avanzado del funnel arriba) o tarea
+ *  (por vencimiento de la próxima, lo vencido arriba). */
+export const ORDENES_DE_LEADS = ['actividad', 'estado', 'tarea'] as const
+export type OrdenLeads = (typeof ORDENES_DE_LEADS)[number]
 
 export type LeadFilterState = {
   q: string
@@ -20,8 +26,12 @@ export type LeadFilterState = {
   sinTareas: boolean
   /** Solo los descartados que «podrían calificar» y ya llegaron a su fecha de volver a llamar. */
   paraRecontactar: boolean
-  /** Con «Tareas»: ordenar por estado (lo más avanzado del funnel arriba) en vez de por la próxima tarea. */
-  ordenPorEstado: boolean
+  /** Solo los leads en una etapa de «Seguimiento» (`por_tarea`) sin ninguna tarea pendiente:
+   *  hay que agendarles la próxima (20/10/2026). */
+  pendienteAgendar: boolean
+  /** Cómo se ordena la lista (20/10/2026; antes era solo `ordenPorEstado`). Null = el de fábrica:
+   *  con «Tareas», por vencimiento; sin, como llega. */
+  orden: OrdenLeads | null
   /** Uno de los números de «Objetivos semanales»: solo los leads que entran en él (`ctx.leadsDelObjetivo`). */
   objetivo: Objetivo | null
 }
@@ -30,7 +40,7 @@ export type LeadFilterState = {
 export function filtrosVacios(): LeadFilterState {
   return {
     q: '', stageFilter: new Set(), overdueOnly: false,
-    conTareas: false, sinTareas: false, paraRecontactar: false, ordenPorEstado: false,
+    conTareas: false, sinTareas: false, paraRecontactar: false, pendienteAgendar: false, orden: null,
     objetivo: null,
   }
 }
@@ -47,7 +57,14 @@ export type LeadFilterContext = {
   leadsDelObjetivo?: ReadonlySet<string>
 }
 
-export type FilterDimension = 'overdue' | 'tareas' | 'stage' | 'recontactar' | 'objetivo'
+export type FilterDimension = 'overdue' | 'tareas' | 'stage' | 'recontactar' | 'objetivo' | 'agendar'
+
+/** En una etapa de «Seguimiento» y sin ninguna tarea pendiente: nadie va a volver a llamarlo. */
+export function esPendienteAgendar(l: CrmLeadRow, ctx: Pick<LeadFilterContext, 'etapas' | 'leadIdsConTareas'>): boolean {
+  const e = etapaDelLead(l, ctx.etapas)
+  return !!e && !e.is_out_of_funnel && gestionDeEtapa(e.management_type) === 'por_tarea'
+    && !ctx.leadIdsConTareas.has(l.id)
+}
 
 export function esDescartado(l: CrmLeadRow, etapas: ReadonlyMap<string, CrmStage>): boolean {
   return etapaDelLead(l, etapas)?.is_out_of_funnel === true
@@ -110,6 +127,7 @@ export function filterLeads(
       // Acá el descarte lo sigue decidiendo su propio filtro: «Tareas» no es pedir verlos.
       && (s.has('tareas') || !filters.conTareas || ctx.leadIdsConTareas.has(l.id))
       && (s.has('tareas') || !filters.sinTareas || !ctx.leadIdsConTareas.has(l.id))
+      && (s.has('agendar') || !filters.pendienteAgendar || esPendienteAgendar(l, ctx))
   })
 }
 

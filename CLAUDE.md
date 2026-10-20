@@ -126,7 +126,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
 - **La llamada con el decisor lo fija en el perfil** (17/10/2026): reemplazó al cartel «Decisor
   contactado» (16/10). El contacto queda marcado como decisor (y se crea si se escribió a mano) y
   se fija (`decisoresDeLaLlamada()`, `lib/clientData.ts`; el fijado es de cada navegador). Con varios
-  elegidos solo se fijan los que el perfil ya da por decisores. La etiqueta «Contactado» del
+  elegidos solo se fijan los que el perfil ya da por decisores. **Desde el 20/10/2026 todo contacto
+  que pasa a decisor se fija solo**, por el camino que sea (el Sí del perfil, uno cargado nuevo o
+  una actividad): `decisoresQueSeMarcaron()` compara la foto anterior de `lead.client` con la nueva.
+  Solo el paso a «sí»: el que ya era decisor al abrir no se refija, así desfijarlo a mano dura. La etiqueta «Contactado» del
   contacto sigue saliendo de `decisorContactado()` (`lib/actividad.ts`). El 16/10/2026 salió del perfil el bloque del motivo de descarte
   (`discard_reason`/`recontact_at` siguen en la base y en el `DescartarLeadDialog`), y también la
   cruz de «cerrar sin guardar» del encabezado: la salida es «Guardar y cerrar».
@@ -149,6 +152,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   no eligen — siguen arrancando vacías. Y cada contacto fallido dice qué intento seguido es
   («Contacto fallido 2/10», `intento` en `lineaDeTiempo`, `INTENTOS_DE_CONTACTO`): la racha la
   corta solo una llamada contestada, y pasado el diez sigue contando («11/10»), no frena nada.
+- **Doble clic en una persona del registro abre su ficha** (20/10/2026, por pedido): en las
+  pastillas de «Hablaste con» / «Quién asiste», para cargarle teléfono o email sin salir de la
+  actividad. Es la misma ventanita del lápiz del perfil (`onAbrirContacto` → `setContactoEnEditor`).
+  Sin control nuevo a la vista: solo el `title`. Los dos clics prenden y apagan la pastilla.
 - **Con quién también se escribe a mano** (16/10/2026): si no está entre los contactos, se tipea
   en el renglón de «Hablaste con» y al registrar se carga solo en el perfil, sin teléfono: el
   principal si está vacío del todo, si no el primer alternativo libre (`patchDeContactosNuevos`).
@@ -196,6 +203,25 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
 - **Los descartados se ven eligiendo «Descartado» en el filtro «Estado»** (16/10/2026): por
   defecto no aparecen. Reemplazó al chip «Incluir descartados»; un `?includeDiscarded=` viejo se
   ignora. La búsqueda, «Para recontactar» y los objetivos los siguen trayendo solos.
+- **«Pendiente agendar tarea»** (20/10/2026, por pedido): chip siempre visible, `?agendar=1`.
+  Deja los leads en una etapa de «Seguimiento» (`management_type = 'por_tarea'`) sin ninguna tarea
+  pendiente (`esPendienteAgendar`, `lib/leadFilters.ts`). Con alguno, el chip va en rojo sutil.
+- **Una tarea pendiente se edita** (20/10/2026, por pedido): el lápiz de la fila (con permiso de
+  escritura) abre la misma ventana de «Nueva tarea», titulada «Editar tarea» y precargada con
+  título, día y hora. Se manda solo lo que cambió (`cambiosDeTarea`, `lib/tareas.ts`): `due_time`
+  va solo si cambió (sacarle la hora la manda en null, que si la tenía la columna existe) y sin día
+  la hora se cae, como al crearla.
+- **El texto de una actividad escrita a mano se edita** (20/10/2026, por pedido): nota, llamada y
+  contacto fallido llevan un lápiz al lado del tacho, que abre la ventana flotante «Editar
+  actividad». **Solo el texto** (`actualizarComentario`): la meta —con quién, teléfono, resultado— y
+  la etapa no se tocan. Vaciada, la llamada vuelve a su texto de fábrica y la nota no se guarda
+  (`textoEditado`, `lib/actividad.ts`). **No queda marca de «editado»**: `crm_comments` no tiene
+  `updated_at` y no se migra por esto.
+- **El último lead en el que se entró se resalta apenas en la lista** (20/10/2026, por pedido):
+  fondo `bg-primary/5` y el riel de la izquierda en la marca, en la tabla y en las tarjetas del
+  teléfono (no en columnas). Lo anota `CrmLeadList` al cambiar el `?lead=`, venga de donde venga, y
+  es **por navegador** (`localStorage`, clave `crm-ultimo-lead`, con try/catch): es «por dónde iba
+  yo», no un dato del equipo.
 - **«Objetivos semanales»** (17/10/2026; fue «Objetivos hoy»): el contador de la cabecera y su filtro
   `?objetivo=` cuentan desde el lunes (`startOfWeekIso`) y vuelven a cero al terminar el domingo.
   El diálogo sigue mostrando hoy, semana y mes. «No respondidas» es la primera columna.

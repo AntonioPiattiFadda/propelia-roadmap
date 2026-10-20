@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { esTelefonoDeOficina, telefonosDelCliente } from './clientData'
 import {
   campoDelNuevoDecisor, casilleroDelTelefonoNuevo, casilleroParaTelefonoDeGoogle, contactoDelCliente, contactosConDecisor, contactosDelCliente, decisorDelContactoNuevo, decisorSabido, decisoresDeLaLlamada, EMPTY_CLIENT, esTelefonoDeIdealista, copiasDelTelefonoDeIdealista,
-  conDecisorApuntado, inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, patchDeContactosNuevos, tieneDecisor, validateClientData,
+  conDecisorApuntado, decisoresQueSeMarcaron, inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, patchDeContactosNuevos, tieneDecisor, validateClientData,
 } from './clientData'
 
 describe('validateClientData', () => {
@@ -330,5 +330,27 @@ describe('teléfono de oficina (el de Google Maps)', () => {
   it('el de Google Maps entra como oficina aunque no esté en ningún contacto', () => {
     expect(telefonosDelCliente({ ...base, alternative_phone_2: '+34 600 2' }))
       .toEqual([{ numero: '+34 600 2', etiqueta: '+34 600 2' }, { numero: '+34 936 17 35 48', etiqueta: 'Oficina' }])
+  })
+})
+
+describe('decisoresQueSeMarcaron', () => {
+  it('el que pasa a decisor, venga de null o de false', () => {
+    expect(decisoresQueSeMarcaron(
+      { contact_is_decision_maker: null, alternative_phone_1_is_decision_maker: false },
+      { contact_is_decision_maker: true, alternative_phone_1_is_decision_maker: true },
+    )).toEqual(['contact_is_decision_maker', 'alternative_phone_1_is_decision_maker'])
+  })
+  it('el que ya era decisor no cuenta: desfijarlo a mano se respeta', () => {
+    expect(decisoresQueSeMarcaron(
+      { contact_is_decision_maker: true }, { contact_is_decision_maker: true },
+    )).toEqual([])
+  })
+  it('sin foto anterior no hay nada nuevo', () => {
+    expect(decisoresQueSeMarcaron(null, { contact_is_decision_maker: true })).toEqual([])
+  })
+  it('dejar de ser decisor no se fija', () => {
+    expect(decisoresQueSeMarcaron(
+      { alternative_phone_2_is_decision_maker: true }, { alternative_phone_2_is_decision_maker: false },
+    )).toEqual([])
   })
 })

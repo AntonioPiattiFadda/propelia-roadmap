@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { CalendarPlus, Plus } from 'lucide-react'
+import { CalendarPlus, Pencil, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { pedirPermisoDeAvisos } from '../hooks/useAlarmasDeTareas'
 import { useMutacionDelDetalle } from '../hooks/useLeadMutaciones'
 import { horaCorta, horaEnVenezuela, opcionesConLaEscrita, rotuloConHora, textoVenezuela } from '../lib/alarmas'
+import { cambiosDeTarea, type CambiosDeTarea } from '../lib/tareas'
 import { opcionesDeVencimiento } from '../lib/vencimientos'
 import { actualizarTarea, crearTarea } from '../service/crm.service'
 import type { CrmTask, LeadDetalle } from '../types'
@@ -75,20 +76,25 @@ export function ChipsDeVencimiento({ value, onChange, compacto = false }: {
   )
 }
 
-/** Crear tarea en la ventana flotante (`VentanaFlotante`): se escribe mirando el lead. Enter crea. */
-function NewTaskSheet({ open, onOpenChange, onCreate, isPending }: {
+type CamposTarea = { title: string; dueDate: string | null; dueTime: string }
+
+/** Crear tarea en la ventana flotante (`VentanaFlotante`): se escribe mirando el lead. Enter crea.
+ *  Con `editando` es la misma ventana, «Editar tarea», precargada con la tarea (20/10/2026). */
+function NewTaskSheet({ open, onOpenChange, onGuardar, isPending, editando }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCreate: (title: string, dueDate: string | null, dueTime: string | null) => void
+  onGuardar: (title: string, dueDate: string | null, dueTime: string | null) => void
   isPending: boolean
+  editando?: CamposTarea
 }) {
   const today = localTodayIso()
-  const [title, setTitle] = useState('')
-  const [dueDate, setDueDate] = useState<string | null>(today)
+  const inicial = editando ?? { title: '', dueDate: today, dueTime: '' }
+  const [title, setTitle] = useState(inicial.title)
+  const [dueDate, setDueDate] = useState<string | null>(inicial.dueDate)
   // La hora es opcional (17/10/2026, por pedido): vacía es la tarea de todo el día de siempre.
   // Con hora, suena una alarma 5 minutos antes (`useAlarmasDeTareas`).
-  const [dueTime, setDueTime] = useState('')
-  const reset = () => { setTitle(''); setDueDate(today); setDueTime('') }
+  const [dueTime, setDueTime] = useState(inicial.dueTime)
+  const reset = () => { setTitle(inicial.title); setDueDate(inicial.dueDate); setDueTime(inicial.dueTime) }
   const cerrar = (next: boolean) => { onOpenChange(next); if (!next) reset() }
   const listo = title.trim() !== '' && !isPending
   // Sin día la hora no significa nada: el campo se apaga y lo escrito no se manda.
@@ -96,14 +102,15 @@ function NewTaskSheet({ open, onOpenChange, onCreate, isPending }: {
   const veDeLaElegida = hora ? horaEnVenezuela(dueDate, hora) : null
 
   return (
-    <VentanaFlotante open={open} onOpenChange={cerrar} titulo="Nueva tarea" descripcion="Qué hay que hacer y para cuándo.">
+    <VentanaFlotante open={open} onOpenChange={cerrar} titulo={editando ? 'Editar tarea' : 'Nueva tarea'}
+      descripcion="Qué hay que hacer y para cuándo.">
       <form className="flex flex-col gap-4 p-4"
         onSubmit={e => {
           e.preventDefault()
           if (!listo) return
           // Es el gesto del usuario: fuera de un clic el navegador no deja pedir el permiso.
           if (hora) pedirPermisoDeAvisos()
-          onCreate(title.trim(), dueDate, hora)
+          onGuardar(title.trim(), dueDate, hora)
           cerrar(false)
         }}>
         <Input autoFocus aria-label="Qué hay que hacer" placeholder="Qué hay que hacer…" value={title}
@@ -149,19 +156,22 @@ function NewTaskSheet({ open, onOpenChange, onCreate, isPending }: {
         </div>
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => cerrar(false)}>Cancelar</Button>
-          <Button type="submit" disabled={!listo}>Crear tarea</Button>
+          <Button type="submit" disabled={!listo}>{editando ? 'Guardar' : 'Crear tarea'}</Button>
         </div>
       </form>
     </VentanaFlotante>
   )
 }
 
-function FilaTarea({ task, today, onToggle, disabled }: {
-  task: CrmTask; today: string; onToggle: (t: CrmTask) => void; disabled: boolean
+function FilaTarea({ task, today, onToggle, onEditar, disabled }: {
+  task: CrmTask; today: string; onToggle: (t: CrmTask) => void
+  /** Sin permiso de escritura no se ofrece el lápiz. */
+  onEditar?: (t: CrmTask) => void
+  disabled: boolean
 }) {
   const vencida = !task.completed && task.due_date != null && task.due_date < today
   return (
-    <li className="flex items-start gap-2 py-1">
+    <li className="group flex items-start gap-2 py-1">
       <button
         type="button"
         role="checkbox"
@@ -187,6 +197,13 @@ function FilaTarea({ task, today, onToggle, disabled }: {
         vencida ? '[color:var(--danger-strong)]' : 'text-(--fg-muted)')}>
         {rotuloVencimiento(task, today)}
       </span>
+      {/* Editar título, día y hora (20/10/2026, por pedido): aparece con el hover, como el tacho de la actividad. */}
+      {onEditar && (
+        <button type="button" onClick={() => onEditar(task)} aria-label={`Editar "${task.title}"`} title="Editar tarea"
+          className="-my-0.5 flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-(--fg-muted) opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:bg-(--surface-2) hover:text-foreground max-md:opacity-100">
+          <Pencil size={12} />
+        </button>
+      )}
     </li>
   )
 }
@@ -213,8 +230,19 @@ export function TareasDelLead({ leadId, responsableId, puedeEscribir, tareas, ca
     { optimista: (d: LeadDetalle, t: CrmTask) => ({ ...d, tasks: d.tasks.map(x => x.id === t.id ? { ...x, completed: !t.completed } : x) }) },
   )
 
+  // Se manda solo lo que cambió (`cambiosDeTarea`); la cache se pisa con lo mismo antes de que conteste.
+  const editar = useMutacionDelDetalle(leadId,
+    (v: { id: string; cambios: CambiosDeTarea }) => actualizarTarea(v.id, v.cambios),
+    { exito: 'Tarea editada', optimista: (d: LeadDetalle, v) => ({ ...d, tasks: d.tasks.map(x => x.id === v.id ? { ...x, ...v.cambios } : x) }) },
+  )
+  const [editando, setEditando] = useState<CrmTask | null>(null)
+
   const pendientes = tareas.filter(t => !t.completed).sort(porVencimiento)
   const alternarTarea = (t: CrmTask) => alternar.mutate(t)
+  const guardarEdicion = (t: CrmTask, title: string, dueDate: string | null, dueTime: string | null) => {
+    const cambios = cambiosDeTarea(t, { title, dueDate, dueTime })
+    if (Object.keys(cambios).length > 0) editar.mutate({ id: t.id, cambios })
+  }
 
   return (
     <div className="flex flex-col">
@@ -236,7 +264,8 @@ export function TareasDelLead({ leadId, responsableId, puedeEscribir, tareas, ca
         )
       ) : (
         <ul className="flex flex-col">
-          {pendientes.map(t => <FilaTarea key={t.id} task={t} today={today} onToggle={alternarTarea} disabled={!puedeEscribir} />)}
+          {pendientes.map(t => <FilaTarea key={t.id} task={t} today={today} onToggle={alternarTarea}
+            onEditar={puedeEscribir ? setEditando : undefined} disabled={!puedeEscribir} />)}
         </ul>
       )}
 
@@ -254,7 +283,14 @@ export function TareasDelLead({ leadId, responsableId, puedeEscribir, tareas, ca
       )}
 
       <NewTaskSheet open={creando} onOpenChange={onCreando} isPending={agregar.isPending}
-        onCreate={(title, dueDate, dueTime) => agregar.mutate({ title, dueDate, dueTime })} />
+        onGuardar={(title, dueDate, dueTime) => agregar.mutate({ title, dueDate, dueTime })} />
+      {/* Se monta por tarea (`key`): la ventana nace precargada con la que se está editando. */}
+      {editando && (
+        <NewTaskSheet key={editando.id} open onOpenChange={abierto => { if (!abierto) setEditando(null) }}
+          isPending={editar.isPending}
+          editando={{ title: editando.title, dueDate: editando.due_date?.slice(0, 10) ?? null, dueTime: horaCorta(editando.due_time) ?? '' }}
+          onGuardar={(title, dueDate, dueTime) => guardarEdicion(editando, title, dueDate, dueTime)} />
+      )}
     </div>
   )
 }

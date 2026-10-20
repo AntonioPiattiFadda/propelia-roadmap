@@ -1,14 +1,15 @@
-import { ArrowDownWideNarrow, ChevronDown, Columns3, List, Search, X } from 'lucide-react'
+import { ArrowDownWideNarrow, ChevronDown, Columns3, Layers, List, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
-  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuRadioGroup,
-  DropdownMenuRadioItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup,
+  DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
 import type { LeadListCounters } from '../lib/computeLeadListCounters'
+import { alternarGrupo, etapasPorGestion } from '../lib/gestionDeEtapa'
 import type { VistaCrm } from '../lib/leadFilterParams'
-import type { LeadFilterState } from '../lib/leadFilters'
+import type { LeadFilterState, OrdenLeads } from '../lib/leadFilters'
 import type { CrmStage } from '../types'
 
 /* El número adentro del chip (`.tabular-nums`) es una chapita teñida con el color del propio
@@ -24,6 +25,12 @@ const chip = (activo: boolean) => cn(
     ? 'font-semibold text-(--brand-soft-fg) bg-(--brand-soft) [border:1px_solid_var(--brand-200)] shadow-none'
     : 'text-(--fg-2) bg-card [border:1px_solid_var(--line)] shadow-(--shadow-sm) hover:text-foreground hover:[border-color:var(--line-strong)] hover:bg-(--surface-2)',
 )
+
+const ORDENES: { value: OrdenLeads; label: string; corto: string; ayuda: string }[] = [
+  { value: 'actividad', label: 'Por última actividad', corto: 'última actividad', ayuda: 'Lo más reciente arriba; sin contactar al final' },
+  { value: 'estado', label: 'Por estado', corto: 'estado', ayuda: 'Lo más avanzado del funnel arriba' },
+  { value: 'tarea', label: 'Por tarea', corto: 'tarea', ayuda: 'Por vencimiento: lo vencido arriba' },
+]
 
 /* Lista / Columnas es un segmentado y no dos chips sueltos: es una sola elección, no dos filtros. */
 const segmento = (activo: boolean) => cn(
@@ -75,9 +82,10 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
   onLimpiar: () => void
 }) {
   const hayFiltros = filtros.q.trim() !== '' || filtros.stageFilter.size > 0 || filtros.sinTareas
-    || filtros.overdueOnly || filtros.conTareas || filtros.paraRecontactar || filtros.ordenPorEstado
+    || filtros.overdueOnly || filtros.conTareas || filtros.paraRecontactar || filtros.pendienteAgendar || filtros.orden !== null
     || filtros.objetivo !== null
   const columnas = vista === 'columnas'
+  const ordenVigente = filtros.orden ?? (filtros.conTareas ? 'tarea' : null)
 
   const alternar = <T,>(set: Set<T>, v: T) => {
     const next = new Set(set)
@@ -95,26 +103,53 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" className={chip(filtros.stageFilter.size > 0)}>
-              Estado{filtros.stageFilter.size > 0 && ` (${filtros.stageFilter.size})`}
-              <Icon icon={ChevronDown} size="xs" />
+            {/* Más grande que el resto de los chips (20/10/2026, por pedido): es el filtro que más se usa. */}
+            <button type="button"
+              className={cn(chip(filtros.stageFilter.size > 0), 'h-9 gap-2 px-4 text-[13.5px] font-semibold data-[state=open]:[border-color:var(--brand-200)] data-[state=open]:shadow-(--shadow-md)')}>
+              <Icon icon={Layers} size="sm" />
+              Estado{filtros.stageFilter.size > 0 && <span className="tabular-nums">{filtros.stageFilter.size}</span>}
+              <Icon icon={ChevronDown} size="sm" className="transition-transform duration-150 [[data-state=open]_&]:rotate-180" />
             </button>
           </DropdownMenuTrigger>
           {/* Descartado es una opción más (16/10/2026): sin elegirla, los descartados no se ven.
-              Reemplazó al chip «Incluir descartados». */}
-          <DropdownMenuContent align="start" className="w-60">
-            {etapas.map(e => (
-              <DropdownMenuCheckboxItem
-                key={e.id}
-                className="text-xs"
-                checked={filtros.stageFilter.has(e.id)}
-                onSelect={ev => ev.preventDefault()}
-                onCheckedChange={() => onCambiar({ stageFilter: alternar(filtros.stageFilter, e.id) })}
-              >
-                <span className="flex-1">{e.label}</span>
-                <span className="tabular-nums text-(--fg-muted)">{contadores.stageCount(e.id)}</span>
-              </DropdownMenuCheckboxItem>
-            ))}
+              Reemplazó al chip «Incluir descartados». Desde el 20/10/2026 va en subgrupos: Primer
+              contacto, Seguimiento y Otros (sin clasificar y fuera del funnel), de `etapasPorGestion`. */}
+          <DropdownMenuContent align="start" className="w-72 rounded-xl p-1.5 shadow-lg">
+            {etapasPorGestion(etapas).map((g, i) => {
+              const ids = g.etapas.map(e => e.id)
+              const marcadas = ids.filter(id => filtros.stageFilter.has(id)).length
+              return (
+              <DropdownMenuGroup key={g.label}>
+                {i > 0 && <DropdownMenuSeparator className="my-1.5" />}
+                {/* El título del subgrupo es un tilde más: marca o desmarca todos sus estados de una. */}
+                <DropdownMenuCheckboxItem
+                  className="rounded-md pt-2 pb-1.5 text-[11.5px] font-bold uppercase tracking-[0.07em] text-(--fg-2)"
+                  checked={marcadas === 0 ? false : marcadas === ids.length ? true : 'indeterminate'}
+                  onSelect={ev => ev.preventDefault()}
+                  onCheckedChange={() => onCambiar({ stageFilter: alternarGrupo(filtros.stageFilter, ids) })}
+                >
+                  <span className="flex-1">{g.label}</span>
+                  <span className="text-[11px] font-semibold normal-case tracking-normal text-(--fg-muted)">
+                    {marcadas === ids.length ? 'Quitar todos' : 'Elegir todos'}
+                  </span>
+                </DropdownMenuCheckboxItem>
+                {g.etapas.map(e => (
+                  <DropdownMenuCheckboxItem
+                    key={e.id}
+                    className="rounded-md py-2 text-[13.5px]"
+                    checked={filtros.stageFilter.has(e.id)}
+                    onSelect={ev => ev.preventDefault()}
+                    onCheckedChange={() => onCambiar({ stageFilter: alternar(filtros.stageFilter, e.id) })}
+                  >
+                    <span className="flex-1">{e.label}</span>
+                    <span className="rounded-full bg-(--surface-2) px-2 text-[11.5px] font-semibold tabular-nums text-(--fg-muted)">
+                      {contadores.stageCount(e.id)}
+                    </span>
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuGroup>
+              )
+            })}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -163,42 +198,6 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
           </button>
         )}
 
-        {/* Otro subchip de «Tareas»: no filtra, elige el orden (17/10/2026: era el toggle «Ordenar
-            por estado»). Vencimiento = la próxima tarea primero (ordenarPorProximaTarea), el de
-            fábrica; Estado = lo más avanzado del funnel arriba (ordenarPorEstado). Es el mismo
-            `ordenPorEstado` de siempre. Va acá y no en la cabecera de la tabla porque el teléfono
-            no tiene cabecera. En columnas no va: ahí el estado ya es la columna. */}
-        {!columnas && (filtros.conTareas || filtros.ordenPorEstado) && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button type="button" className={chip(filtros.ordenPorEstado)}>
-                <Icon icon={ArrowDownWideNarrow} size="xs" />
-                Ordenar: {filtros.ordenPorEstado ? 'estado' : 'vencimiento'}
-                <Icon icon={ChevronDown} size="xs" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-64">
-              <DropdownMenuRadioGroup
-                value={filtros.ordenPorEstado ? 'estado' : 'vencimiento'}
-                onValueChange={v => onCambiar({ ordenPorEstado: v === 'estado' })}
-              >
-                <DropdownMenuRadioItem value="vencimiento" className="text-xs">
-                  <span className="flex flex-col">
-                    Por vencimiento
-                    <span className="text-(--fg-muted)">La próxima tarea a vencer arriba</span>
-                  </span>
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="estado" className="text-xs">
-                  <span className="flex flex-col">
-                    Por estado
-                    <span className="text-(--fg-muted)">Lo más avanzado del funnel arriba</span>
-                  </span>
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-
         {/* Los descartados que «podrían calificar» vuelven acá cuando llega su fecha (recontact_at).
             Con alguno pendiente el chip se pone ámbar: es
             trabajo que volvió, no una alarma. Sin ninguno, solo aparece si está prendido. */}
@@ -213,6 +212,17 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
           </button>
         )}
 
+        {/* Los de «Seguimiento» sin tarea pendiente (20/10/2026, por pedido): nadie los va a volver
+            a llamar. Va siempre; con alguno, rojo sutil (contorno y fondo suave), como aviso. */}
+        <button type="button" aria-pressed={filtros.pendienteAgendar}
+          className={contadores.pendienteAgendarCount > 0
+            ? cn(chip(false), 'text-(--danger-fg) bg-(--danger-soft) [border:1px_solid_var(--danger)] hover:text-(--danger-fg) hover:bg-(--danger-soft) hover:[border-color:var(--danger)]',
+              filtros.pendienteAgendar && 'font-semibold shadow-none [border-width:1.5px]')
+            : chip(filtros.pendienteAgendar)}
+          onClick={() => onCambiar({ pendienteAgendar: !filtros.pendienteAgendar })}>
+          Pendiente agendar tarea <span className="tabular-nums">{contadores.pendienteAgendarCount}</span>
+        </button>
+
         {hayFiltros && (
           <Button variant="ghost" size="sm" onClick={onLimpiar}>
             <Icon icon={X} size="xs" />
@@ -221,6 +231,39 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
         )}
 
         <div className="ml-auto inline-flex items-center gap-1.5">
+        {/* El orden: no filtra. Fue un subchip de «Tareas» con vencimiento / estado (17/10/2026);
+            desde el 20/10/2026 se ve siempre en la lista y tiene tres: última actividad, estado y
+            tarea (por vencimiento, ordenarPorProximaTarea). Sin elegir, con «Tareas» va por tarea.
+            Es el mismo `orden` que las cabeceras de la tabla; va también acá porque el teléfono no
+            tiene cabecera. En columnas no va: ahí el estado ya es la columna. Desde el 20/10/2026
+            va a la derecha, al lado de «Tareas» y no con los filtros (por pedido): no filtra. */}
+        {!columnas && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className={chip(filtros.orden !== null)}>
+                <Icon icon={ArrowDownWideNarrow} size="xs" />
+                {ordenVigente ? `Ordenar: ${ORDENES.find(o => o.value === ordenVigente)?.corto}` : 'Ordenar'}
+                <Icon icon={ChevronDown} size="xs" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuRadioGroup
+                value={ordenVigente ?? ''}
+                onValueChange={v => onCambiar({ orden: v as OrdenLeads })}
+              >
+                {ORDENES.map(o => (
+                  <DropdownMenuRadioItem key={o.value} value={o.value} className="text-xs">
+                    <span className="flex flex-col">
+                      {o.label}
+                      <span className="text-(--fg-muted)">{o.ayuda}</span>
+                    </span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         {/* «Tareas» va al lado de la vista porque convierte la lista en la planilla de tareas.
             Además de filtrar, ordena por la próxima tarea y cambia las columnas (ver CrmLeadList).
             Apagarla apaga también sus subfiltros, que si no quedarían prendidos y escondidos.
@@ -228,7 +271,7 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
         {!columnas && (
           <button type="button" aria-pressed={filtros.conTareas} className={chip(filtros.conTareas)}
             onClick={() => onCambiar(filtros.conTareas
-              ? { conTareas: false, overdueOnly: false, ordenPorEstado: false }
+              ? { conTareas: false, overdueOnly: false }
               : { conTareas: true })}>
             Tareas <span className="tabular-nums">{contadores.conTareasCount}</span>
           </button>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmTask } from '../types'
 import {
-  estaVencida, idsConTareasVencidas, ordenarPorEstado, ordenarPorProximaTarea, porVencimiento, proximaTareaPorLead,
+  cambiosDeTarea, estaVencida, idsConTareasVencidas, ordenarPorEstado, ordenarPorProximaTarea, porVencimiento, proximaTareaPorLead,
   tareasVencidasPorLead, type EtapaOrdenable,
 } from './tareas'
 
@@ -89,6 +89,28 @@ describe('ordenarPorProximaTarea', () => {
   it('no muta la lista de entrada', () => {
     ordenarPorProximaTarea(leads, proximas)
     expect(leads.map(l => l.id)).toEqual(['sinTarea', 'sinFecha', 'hoy', 'empate', 'vencida'])
+  })
+})
+
+describe('cambiosDeTarea', () => {
+  const antes = tarea({ title: 'Llamar a Marc', due_date: '2026-10-20', due_time: '10:30:00' })
+  it('sin cambios no manda nada', () => {
+    expect(cambiosDeTarea(antes, { title: ' Llamar a Marc ', dueDate: '2026-10-20', dueTime: '10:30' })).toEqual({})
+  })
+  it('solo lo que cambió', () => {
+    expect(cambiosDeTarea(antes, { title: 'Llamar a Ana', dueDate: '2026-10-20', dueTime: '10:30' })).toEqual({ title: 'Llamar a Ana' })
+    expect(cambiosDeTarea(antes, { title: 'Llamar a Marc', dueDate: '2026-10-21', dueTime: '10:30' })).toEqual({ due_date: '2026-10-21' })
+    expect(cambiosDeTarea(antes, { title: 'Llamar a Marc', dueDate: '2026-10-20', dueTime: '11:00' })).toEqual({ due_time: '11:00' })
+  })
+  it('sacarle la hora la manda en null', () => {
+    expect(cambiosDeTarea(antes, { title: 'Llamar a Marc', dueDate: '2026-10-20', dueTime: null })).toEqual({ due_time: null })
+  })
+  it('sin día la hora se cae', () => {
+    expect(cambiosDeTarea(antes, { title: 'Llamar a Marc', dueDate: null, dueTime: '10:30' })).toEqual({ due_date: null, due_time: null })
+  })
+  it('sin hora antes ni después no toca la columna (puede no existir)', () => {
+    const sinHora = { title: 'x', due_date: '2026-10-20' }
+    expect(cambiosDeTarea(sinHora, { title: 'x', dueDate: '2026-10-22', dueTime: null })).toEqual({ due_date: '2026-10-22' })
   })
 })
 

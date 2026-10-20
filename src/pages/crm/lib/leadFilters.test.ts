@@ -123,6 +123,29 @@ describe('etapa y tareas', () => {
   })
 })
 
+describe('pendiente agendar tarea', () => {
+  const etapas = new Map<string, CrmStage>([
+    ...ETAPAS,
+    ['seguimiento', etapa('seguimiento', { management_type: 'por_tarea' })],
+    ['primer', etapa('primer', { management_type: 'sin_contactar' })],
+  ])
+  const sinTarea = lead('s', { funnel_stage_id: 'seguimiento' })
+  const conTarea = lead('c', { funnel_stage_id: 'seguimiento' })
+  const primerContacto = lead('p', { funnel_stage_id: 'primer' })
+  const todos = [sinTarea, conTarea, primerContacto, lead('n')]
+  const c = ctx({ etapas, leadIdsConTareas: new Set(['c']) })
+
+  it('deja solo los de seguimiento sin tarea pendiente', () => {
+    expect(filterLeads(todos, f({ pendienteAgendar: true }), c).map(l => l.id)).toEqual(['s'])
+  })
+  it('apagado no cambia nada', () => {
+    expect(filterLeads(todos, f({}), c)).toHaveLength(4)
+  })
+  it('skip lo apaga (para el contador)', () => {
+    expect(filterLeads(todos, f({ pendienteAgendar: true }), c, ['agendar'])).toHaveLength(4)
+  })
+})
+
 describe('leadsDeCarteras', () => {
   it('se queda con los de las carteras elegidas', () => {
     expect(leadsDeCarteras([lead('a'), lead('b', { assigned_to: 'otro' })], ['otro']).map(l => l.id)).toEqual(['b'])

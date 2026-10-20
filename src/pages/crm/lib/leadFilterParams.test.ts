@@ -30,6 +30,10 @@ describe('filtrosDesdeUrl / escribirFiltros', () => {
     expect(deleteLeadFilterParams(params('/crm?tareas=1&owners=u1')).toString()).toBe('owners=u1')
   })
   it('para recontactar: ?recontactar=1, y apagado se borra; «Limpiar filtros» lo saca', () => {
+    const a = escribirFiltros(new URLSearchParams(), { pendienteAgendar: true })
+    expect(a.get('agendar')).toBe('1')
+    expect(filtrosDesdeUrl(a).pendienteAgendar).toBe(true)
+    expect(escribirFiltros(a, { pendienteAgendar: false }).has('agendar')).toBe(false)
     const p = escribirFiltros(new URLSearchParams(), { paraRecontactar: true })
     expect(p.get('recontactar')).toBe('1')
     expect(filtrosDesdeUrl(p).paraRecontactar).toBe(true)
@@ -39,17 +43,22 @@ describe('filtrosDesdeUrl / escribirFiltros', () => {
   it('un ?telMaps=1 viejo se ignora: ese filtro ya no existe', () => {
     expect(filtrosDesdeUrl(params('/crm?telMaps=1'))).toEqual(filtrosVacios())
   })
-  it('orden por estado: ?orden=estado, y apagado se borra; «Limpiar filtros» lo saca', () => {
-    const p = escribirFiltros(new URLSearchParams(), { ordenPorEstado: true })
-    expect(p.get('orden')).toBe('estado')
-    expect(filtrosDesdeUrl(p).ordenPorEstado).toBe(true)
-    expect(escribirFiltros(p, { ordenPorEstado: false }).has('orden')).toBe(false)
+  it('orden: ?orden=actividad|estado|tarea, y sin orden se borra; «Limpiar filtros» lo saca', () => {
+    for (const orden of ['actividad', 'estado', 'tarea'] as const) {
+      const p = escribirFiltros(new URLSearchParams(), { orden })
+      expect(p.get('orden')).toBe(orden)
+      expect(filtrosDesdeUrl(p).orden).toBe(orden)
+    }
+    expect(escribirFiltros(params('/crm?orden=estado'), { orden: null }).has('orden')).toBe(false)
     expect(deleteLeadFilterParams(params('/crm?orden=estado&owners=u1')).toString()).toBe('owners=u1')
   })
-  it('prender «Tareas» vuelve al orden por vencimiento: saca el orden por estado', () => {
+  it('un ?orden= desconocido es sin orden', () => {
+    expect(filtrosDesdeUrl(params('/crm?orden=otro')).orden).toBeNull()
+  })
+  it('prender «Tareas» vuelve al orden por vencimiento: saca el orden que hubiera', () => {
     expect(escribirFiltros(params('/crm?orden=estado'), { conTareas: true }).has('orden')).toBe(false)
-    // Prendido después, con «Tareas» ya puesto, el orden por estado se respeta.
-    expect(escribirFiltros(params('/crm?tareas=1'), { ordenPorEstado: true }).get('orden')).toBe('estado')
+    // Elegido después, con «Tareas» ya puesto, el orden se respeta.
+    expect(escribirFiltros(params('/crm?tareas=1'), { orden: 'estado' }).get('orden')).toBe('estado')
     expect(escribirFiltros(params('/crm?orden=estado'), { conTareas: false }).get('orden')).toBe('estado')
   })
   it('un enlace viejo con ?gestion= o ?excluded= (prioridades) se ignora sin romper nada', () => {

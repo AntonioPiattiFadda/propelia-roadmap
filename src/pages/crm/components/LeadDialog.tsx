@@ -14,10 +14,11 @@ import { useLeadDetalle } from '../hooks/useLeadDetalle'
 import { useActualizarCliente, useActualizarLead } from '../hooks/useLeadMutaciones'
 import {
   contactosConDecisor, copiasDelTelefonoDeIdealista, esTelefonoDeIdealista, esTelefonoDeOficina, ETIQUETA_OFICINA, inicialesDe,
- nombreDelLead, telefonosDelCliente, type CampoDecisor, type ClientData } from '../lib/clientData'
+ decisoresQueSeMarcaron, nombreDelLead, telefonosDelCliente, type CampoDecisor, type ClientData } from '../lib/clientData'
 import { toIsoDate } from '@/lib/calendarDate'
 import { decisorContactado } from '../lib/actividad'
 import { etapaDelLead } from '../lib/effectiveStage'
+import { etapasPorGestion } from '../lib/gestionDeEtapa'
 import { ORIGENES_DE_TELEFONO, valorDeOpcion } from '../lib/inmobiliaria'
 import { fmtFechaCompleta } from '../lib/motivosDescarte'
 import type { ClientePatch } from '../service/crm.service'
@@ -25,7 +26,7 @@ import type { CrmLeadRow } from '../types'
 import { ActividadLead, PestanasDelLead, type PestanaDelLead } from './ActividadLead'
 import { DescartarLeadDialog } from './DescartarLeadDialog'
 import type { ClienteExtra } from './ClientFields'
-import { StageBadge } from './leadCells'
+import { OpcionesDeEtapa } from './leadCells'
 import { LeadRowActions } from './LeadRowActions'
 import { BotonMensajes } from './MensajesPredeterminados'
 import { TareasDelLead } from './TareasDelLead'
@@ -203,6 +204,8 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
   const opcionesEtapa = etapasActivas.filter(e =>
     !e.is_out_of_funnel || e.id === lead.funnel_stage_id || e.id === descartada?.id)
   if (actual && !opcionesEtapa.some(e => e.id === actual.id)) opcionesEtapa.push(actual)
+  const etapaMostrada = etapaDelLead(lead, etapasPorId)
+  const grupoActual = etapaMostrada ? etapasPorGestion([etapaMostrada])[0]?.label : undefined
   const actualizarLead = useActualizarLead()
   const actualizarCliente = useActualizarCliente()
   const escribe = puedeEscribir(lead.assigned_to)
@@ -286,6 +289,16 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
      «Decisor contactado», que decía lo mismo que la etiqueta «Decisor» del contacto. */
   const fijarDecisores = (campos: CampoDecisor[]) =>
     fijar(...CONTACTOS.filter(c => campos.includes(camposDe(c).decisor)))
+  /* Todo contacto que pasa a decisor se fija solo (20/10/2026, por pedido): con el Sí/No del
+     perfil, al cargarlo nuevo o desde una actividad. Los tres caminos terminan en `lead.client`,
+     así que se compara contra la foto anterior; el que ya era decisor al abrir no se toca. */
+  const clienteAnterior = useRef(lead.client)
+  useEffect(() => {
+    const nuevos = decisoresQueSeMarcaron(clienteAnterior.current, lead.client)
+    clienteAnterior.current = lead.client
+    if (nuevos.length) fijarDecisores(nuevos)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- solo cuando llega otra foto del cliente
+  }, [lead.client])
   const contactos: Contacto[] = [
     ...(principalCargado || agregadas.includes('principal') ? ['principal' as const] : []),
     ...visibles.map(i => OTRAS_PERSONAS[i].telefono),
@@ -764,18 +777,21 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
                   }}
                 >
                   {/* El estado ocupa todo el botón y va en el color de marca (17/10/2026, por pedido): como
-                      chapita chica se perdía al lado del nombre. */}
+                      chapita chica se perdía al lado del nombre. Desde el 20/10/2026 es más alto, dice
+                      arriba en qué subgrupo cae (Primer contacto / Seguimiento) y el menú va agrupado. */}
                   <SelectTrigger aria-label="Estado"
-                    className="h-10! w-[46%] shrink-0 justify-between gap-1 rounded-lg border-transparent bg-(--brand-soft) px-1 shadow-none [border:1px_solid_var(--brand-100)] hover:brightness-95">
-                    <StageBadge etapa={etapaDelLead(lead, etapasPorId)}
-                      className="min-w-0 flex-1 justify-center truncate [border:0] bg-transparent py-1.5 px-2 text-[14px] font-bold text-(--brand-soft-fg)" />
+                    className="h-12! w-[46%] shrink-0 justify-between gap-2 rounded-xl bg-(--brand-soft) pr-3 pl-4 shadow-sm [border:1px_solid_var(--brand-100)] transition-[filter,box-shadow] hover:shadow-md hover:brightness-[0.97] data-[state=open]:shadow-md [&_svg]:size-5! [&_svg]:opacity-70 [&_svg]:text-(--brand-soft-fg)!">
+                    <span className="flex min-w-0 flex-1 flex-col items-start leading-tight">
+                      {grupoActual && grupoActual !== 'Otros' && (
+                        <span className="text-[10.5px] font-semibold uppercase tracking-[0.07em] text-(--brand-soft-fg) opacity-70">{grupoActual}</span>
+                      )}
+                      <span className="w-full truncate text-left text-[15px] font-bold text-(--brand-soft-fg)">
+                        {etapaMostrada?.label ?? 'Sin estado'}
+                      </span>
+                    </span>
                   </SelectTrigger>
-                  <SelectContent align="end">
-                    {opcionesEtapa.map(e => (
-                      <SelectItem key={e.id} value={e.id}>
-                        {e.deleted_at ? `${e.label} (borrada)` : e.label}
-                      </SelectItem>
-                    ))}
+                  <SelectContent align="end" className="min-w-[260px] rounded-xl p-1 shadow-lg">
+                    <OpcionesDeEtapa etapas={opcionesEtapa} grande />
                   </SelectContent>
                 </Select>
               </div>
@@ -846,7 +862,11 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
 
         <div className="flex min-h-[75vh] min-w-0 flex-col lg:min-h-0">
           <ActividadLead lead={lead} detalle={detalleQ.data} cargando={detalleQ.isLoading} puedeEscribir={escribe}
-            pestana={pestana} onDecisorContactado={fijarDecisores} otrosContactos={otrosContactos} telefonosSueltos={telefonosNodo} emailsSueltos={emailsNodo} />
+            pestana={pestana} onDecisorContactado={fijarDecisores}
+            onAbrirContacto={escribe ? campo => {
+              const c = CONTACTOS.find(x => camposDe(x).decisor === campo)
+              if (c) setContactoEnEditor(c)
+            } : undefined}otrosContactos={otrosContactos} telefonosSueltos={telefonosNodo} emailsSueltos={emailsNodo} />
         </div>
       </div>
     </>

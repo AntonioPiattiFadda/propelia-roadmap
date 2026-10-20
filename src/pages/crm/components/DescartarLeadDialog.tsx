@@ -5,6 +5,7 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import { useDescartar } from '../hooks/useLeadMutaciones'
 import { GRUPOS_DE_DESCARTE, MOTIVOS_DE_DESCARTE, type GrupoDescarte, type MotivoDescarte } from '../lib/motivosDescarte'
@@ -25,17 +26,21 @@ export function DescartarLeadDialog({ leadId, etapa, onClose }: {
   const descartar = useDescartar()
   const [grupo, setGrupo] = useState<GrupoDescarte>('podria_calificar')
   const [motivo, setMotivo] = useState<MotivoDescarte | ''>('')
+  const [razon, setRazon] = useState('')
   const paraSiempre = grupo === 'no_califica'
   const g = GRUPOS_DE_DESCARTE.find(x => x.id === grupo)!
+  // El descarte para siempre se explica con palabras propias: un texto libre, sin grupo y sin recontacto.
+  const elegido = paraSiempre ? razon.trim() : motivo
 
   const cambiarGrupo = (nuevo: GrupoDescarte) => {
     setGrupo(nuevo)
     setMotivo('')
+    setRazon('')
   }
 
   const confirmar = () => {
-    if (!motivo) return
-    descartar.mutate({ leadId, etapaId: etapa.id, motivo })
+    if (!elegido) return
+    descartar.mutate({ leadId, etapaId: etapa.id, motivo: elegido })
     onClose()
   }
 
@@ -49,20 +54,34 @@ export function DescartarLeadDialog({ leadId, etapa, onClose }: {
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <RadioGroup value={motivo} onValueChange={v => setMotivo(v as MotivoDescarte)} className="gap-4" aria-label="Motivo del descarte">
-          <fieldset className="grid gap-2">
-            <legend className="mb-1.5">
-              <span className={cn('text-[12.5px] font-semibold', paraSiempre ? 'text-destructive' : 'text-foreground')}>{g.label}</span>
-              {g.detalle && <span className="block text-[12px] text-(--fg-muted)">{g.detalle}</span>}
-            </legend>
-            {MOTIVOS_DE_DESCARTE.filter(m => m.grupo === grupo).map(m => (
-              <label key={m.code} className="flex cursor-pointer items-center gap-2 text-[13px] text-(--fg-2)">
-                <RadioGroupItem value={m.code} />
-                {m.label}
-              </label>
-            ))}
-          </fieldset>
-        </RadioGroup>
+        {paraSiempre ? (
+          <label className="grid gap-1.5">
+            <span className="text-[12.5px] font-semibold text-destructive">{g.label}</span>
+            <Textarea
+              autoFocus
+              value={razon}
+              onChange={e => setRazon(e.target.value)}
+              placeholder="¿Por qué no califica ni calificará?"
+              aria-label="Motivo del descarte"
+              className="min-h-20 text-[13px]"
+            />
+          </label>
+        ) : (
+          <RadioGroup value={motivo} onValueChange={v => setMotivo(v as MotivoDescarte)} className="gap-4" aria-label="Motivo del descarte">
+            <fieldset className="grid gap-2">
+              <legend className="mb-1.5">
+                <span className="text-[12.5px] font-semibold text-foreground">{g.label}</span>
+                {g.detalle && <span className="block text-[12px] text-(--fg-muted)">{g.detalle}</span>}
+              </legend>
+              {MOTIVOS_DE_DESCARTE.filter(m => m.grupo === grupo).map(m => (
+                <label key={m.code} className="flex cursor-pointer items-center gap-2 text-[13px] text-(--fg-2)">
+                  <RadioGroupItem value={m.code} />
+                  {m.label}
+                </label>
+              ))}
+            </fieldset>
+          </RadioGroup>
+        )}
 
         {paraSiempre ? (
           <button
@@ -91,7 +110,7 @@ export function DescartarLeadDialog({ leadId, etapa, onClose }: {
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
           <AlertDialogAction
             onClick={confirmar}
-            disabled={!motivo || descartar.isPending}
+            disabled={!elegido || descartar.isPending}
             className={cn(paraSiempre && 'bg-destructive text-white hover:bg-destructive/90')}
           >
             {paraSiempre ? 'Descartar para siempre' : 'Descartar'}

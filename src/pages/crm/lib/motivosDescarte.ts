@@ -2,7 +2,10 @@
    descartes de antes de este catálogo guardan texto libre, y ese texto se sigue mostrando tal cual.
    Son dos grupos: lo que no va a calificar nunca y lo que hoy no califica pero puede hacerlo más
    adelante. A estos últimos se los vuelve a llamar: el descarte les pone `recontact_at` a seis meses
-   y la lista los vuelve a mostrar cuando llega el día («Para recontactar»). */
+   y la lista los vuelve a mostrar cuando llega el día («Para recontactar»).
+   Desde el 20/10/2026 el descarte para siempre no elige del catálogo: el motivo se escribe a mano
+   y se guarda como texto libre (sin grupo, así que no lleva `recontact_at`). Los códigos de
+   `no_califica` quedan para mostrar los descartes que ya los guardaron. */
 
 export type GrupoDescarte = 'no_califica' | 'podria_calificar'
 

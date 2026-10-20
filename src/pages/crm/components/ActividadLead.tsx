@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  CalendarDays, ChevronDown, CircleCheck, Clock, Info, MessageSquare, Phone, PhoneMissed, Plus, Trash2, UserRound, X,
+  CalendarDays, ChevronDown, CircleCheck, Clock, Info, MessageSquare, Pencil, Phone, PhoneMissed, Plus, Trash2, UserRound, X,
   type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { localTodayIso } from '@/lib/calendarDate'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -13,8 +14,8 @@ import { useCarteras } from '../hooks/useCarteras'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useActualizarCliente, useActualizarLead, useMutacionDelDetalle } from '../hooks/useLeadMutaciones'
 import {
-  agruparPorDia, armarMetaDeActividad, horaDe, INTENTOS_DE_CONTACTO, lineaDeTiempo, primeroLosUltimos, ultimoContacto, type ItemActividad,
-  type MetaDeActividad, type ResultadoDeLlamada,
+  agruparPorDia, armarMetaDeActividad, horaDe, INTENTOS_DE_CONTACTO, lineaDeTiempo, primeroLosUltimos, TEXTO_DE_LLAMADA, textoEditado,
+  ultimoContacto, type ItemActividad, type MetaDeActividad, type ResultadoDeLlamada,
 } from '../lib/actividad'
 import {
   campoDelNuevoDecisor, casilleroDelTelefonoNuevo, conDecisorApuntado, contactosConDecisor, tieneDecisor, decisorDelContactoNuevo, decisorSabido,
@@ -22,12 +23,13 @@ import {
 } from '../lib/clientData'
 import { GUIA_DE_DEMO, GUIA_DE_LLAMADA, type SeccionDeGuia } from '../lib/guiaDeLlamada'
 import { armarReunion, descripcionDeDemo, esEmailValido } from '../lib/reuniones'
-import { crearComentario, crearReunion, marcarComentarioBorrado } from '../service/crm.service'
+import { actualizarComentario, crearComentario, crearReunion, marcarComentarioBorrado } from '../service/crm.service'
 import type { CrmLeadRow, LeadDetalle } from '../types'
 import { InmobiliariaDelLead } from './InmobiliariaDelLead'
 import { DescartarLeadDialog } from './DescartarLeadDialog'
 import { CamposDeReunion, camposReunionVacios, type CamposReunion } from './ReunionesDelLead'
 import { VentanaFlotante } from './VentanaFlotante'
+import { OpcionesDeEtapa } from './leadCells'
 
 /* NUEVO. En el producto el chat de actividad vive adentro de LeadAccordion (5.600 líneas); acá
    es la columna derecha del dialog del lead. Arriba la línea de tiempo partida por día; abajo,
@@ -132,9 +134,6 @@ function tituloDe(i: ItemActividad): string | undefined {
   return i.tipo === 'llamada' && i.decisor ? `${conQuien} · decisor` : conQuien
 }
 
-/** Lo que queda escrito en la llamada si no se escribió nada: el resultado ya es el dato. */
-const TEXTO_DE_LLAMADA: Record<ResultadoDeLlamada, string> = { contestada: 'Llamada contestada.', no_respondida: 'No respondió.' }
-
 const pastilla = (on: boolean) => cn(
   'inline-flex h-7 max-w-[200px] shrink-0 cursor-pointer items-center gap-1 rounded-full px-2.5 text-[12px] transition-colors',
   on ? 'font-semibold text-(--brand-soft-fg) bg-(--brand-soft) [border:1px_solid_var(--brand-100)]'
@@ -143,6 +142,40 @@ const pastilla = (on: boolean) => cn(
 // El «+» que abre el campo para escribir a mano: sin fondo ni marco hasta el hover, para que no
 // compita con las pastillas.
 const botonEscribir = 'inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-(--fg-faint) transition-colors hover:bg-(--surface-2) hover:text-(--fg-2)'
+
+/* Editar lo escrito de una nota, llamada o contacto fallido (20/10/2026, por pedido). Solo el
+   texto: con quién, el teléfono, el resultado y la etapa quedan como se registraron. Vaciada, la
+   llamada vuelve a su texto de fábrica y la nota no se guarda (`textoEditado`). Se monta por
+   actividad (`key`), así nace con el texto de la que se abrió. */
+function EditarActividad({ item, onCerrar, onGuardar }: {
+  item: ItemActividad
+  onCerrar: () => void
+  onGuardar: (description: string) => void
+}) {
+  const [texto, setTexto] = useState(item.texto)
+  const nuevo = textoEditado(item, texto)
+  const guardar = () => {
+    if (nuevo === null) return
+    if (nuevo !== item.texto) onGuardar(nuevo)
+    onCerrar()
+  }
+  return (
+    <VentanaFlotante open onOpenChange={abierto => { if (!abierto) onCerrar() }} titulo="Editar actividad"
+      descripcion="Solo el texto: el resto queda como se registró.">
+      <form className="flex flex-col gap-3 p-4" onSubmit={e => { e.preventDefault(); guardar() }}>
+        <Textarea autoFocus rows={5} aria-label="Texto de la actividad" value={texto}
+          onChange={e => setTexto(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); guardar() } }}
+          className="min-h-28 resize-y text-[13px] md:text-[13px]" />
+        {nuevo === null && <p className="text-[12px] text-(--fg-muted)">La nota no puede quedar vacía.</p>}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onCerrar}>Cancelar</Button>
+          <Button type="submit" disabled={nuevo === null}>Guardar</Button>
+        </div>
+      </form>
+    </VentanaFlotante>
+  )
+}
 
 /* La columna tiene dos pestañas: la actividad y la inmobiliaria. El selector vive en la cabecera
    del dialog, centrado, y el estado en `CuerpoDelLead`: al cambiar de lead se vuelve a la
@@ -176,8 +209,10 @@ export function PestanasDelLead({ lead, pestana, onCambiar }: {
   )
 }
 
-export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana, otrosContactos, telefonosSueltos, emailsSueltos, onDecisorContactado }: {
+export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana, otrosContactos, telefonosSueltos, emailsSueltos, onDecisorContactado, onAbrirContacto }: {
   lead: CrmLeadRow
+  /** Doble clic en una persona del registro abre su ficha del perfil (20/10/2026, por pedido). */
+  onAbrirContacto?: (campo: CampoDecisor) => void
   /** Una llamada con el decisor fija a ese contacto en el perfil (17/10/2026, por pedido). */
   onDecisorContactado?: (campos: CampoDecisor[]) => void
   detalle: LeadDetalle | undefined
@@ -314,6 +349,12 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       action: { label: 'Deshacer', onClick: () => borrarActividad.mutate({ id, borrado: false }) },
     }),
   })
+  // Editar el texto: mismo optimista que borrar, sobre la `description` del comentario.
+  const [editandoActividad, setEditandoActividad] = useState<ItemActividad | null>(null)
+  const editarActividad = useMutacionDelDetalle(lead.id,
+    (v: { id: string; description: string }) => actualizarComentario(v.id, { description: v.description }),
+    { exito: 'Actividad editada',
+      optimista: (d, v) => ({ ...d, comments: d.comments.map(c => c.id === v.id ? { ...c, description: v.description } : c) }) })
   const actualizarCliente = useActualizarCliente()
 
   /* Recién con la actividad guardada se mueve la etapa: si el registro falla, el lead no avanza por
@@ -506,6 +547,13 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                       )}
                     </div>
                     {borrable && (
+                      <button type="button" onClick={() => setEditandoActividad(i)} aria-label="Editar esta actividad"
+                        title="Editar el texto"
+                        className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-(--fg-muted) opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:bg-(--surface-2) hover:text-foreground max-md:opacity-100">
+                        <Pencil size={14} />
+                      </button>
+                    )}
+                    {borrable && (
                       <button type="button" onClick={() => borrar(i.id)} aria-label="Borrar esta actividad"
                         title="Borrar (se cargó por error)" disabled={borrarActividad.isPending}
                         className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-(--fg-muted) opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:bg-(--danger-soft) hover:text-(--danger) max-md:opacity-100">
@@ -567,8 +615,13 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 <span className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo('con'))}>{tipo === 'llamada' ? 'Hablaste con' : tipo === 'reunion' ? 'Quién asiste' : 'Con'}</span>
                 {contactos.map(c => {
                   const on = con.includes(c)
+                  // Doble clic abre su ficha para cargarle teléfono o email. Los dos clics prenden y
+                  // apagan la pastilla: la elección queda como estaba.
+                  const campo = conDecisor.find(p => p.nombre === c)?.campoDecisor
                   return (
                     <button key={c} type="button" aria-pressed={on}
+                      title={campo && onAbrirContacto ? 'Doble clic: abrir la ficha' : undefined}
+                      onDoubleClick={() => { if (campo) onAbrirContacto?.(campo) }}
                       onClick={() => setCon(xs => on ? xs.filter(x => x !== c) : [...xs, c])}
                       className={pastilla(on)}>
                       <span className="truncate">{c}</span>
@@ -728,9 +781,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                     <SelectValue placeholder="Elegí una etapa" />
                   </SelectTrigger>
                   <SelectContent>
-                    {opcionesEtapa.map(e => (
-                      <SelectItem key={e.id} value={e.id}>{e.deleted_at ? `${e.label} (borrada)` : e.label}</SelectItem>
-                    ))}
+                    <OpcionesDeEtapa etapas={opcionesEtapa} />
                   </SelectContent>
                 </Select>
                 {faltaEtapa
@@ -752,6 +803,10 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       )}
       {descartando && descartada && (
         <DescartarLeadDialog leadId={lead.id} etapa={descartada} onClose={() => setDescartando(false)} />
+      )}
+      {editandoActividad && (
+        <EditarActividad key={editandoActividad.id} item={editandoActividad} onCerrar={() => setEditandoActividad(null)}
+          onGuardar={description => editarActividad.mutate({ id: editandoActividad.id, description })} />
       )}
     </div>
   )

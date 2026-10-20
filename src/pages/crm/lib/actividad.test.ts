@@ -1,9 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmMeeting, CrmTask, LeadDetalle, Usuario } from '../types'
 import {
-  agruparPorDia, armarMetaDeActividad, decisorContactado, horaDe, leerMetaDeActividad, lineaDeTiempo, primeroLosUltimos, resumenDeLlamadas, ultimoContacto,
-  type ItemActividad, type MetaDeActividad,
+  agruparPorDia, armarMetaDeActividad, decisorContactado, horaDe, leerMetaDeActividad, lineaDeTiempo, primeroLosUltimos, resumenDeLlamadas, textoEditado,
+  ultimoContacto, type ItemActividad, type MetaDeActividad,
 } from './actividad'
+
+describe('textoEditado', () => {
+  it('lo escrito, sin espacios de más', () => {
+    expect(textoEditado({ tipo: 'comentario' }, '  Llamar el lunes ')).toBe('Llamar el lunes')
+    expect(textoEditado({ tipo: 'llamada', resultado: 'contestada' }, 'Pidió precio')).toBe('Pidió precio')
+  })
+  it('una nota vacía no se guarda', () => {
+    expect(textoEditado({ tipo: 'comentario' }, '   ')).toBeNull()
+  })
+  it('una llamada vacía vuelve al texto de fábrica de su resultado', () => {
+    expect(textoEditado({ tipo: 'llamada', resultado: 'contestada' }, '')).toBe('Llamada contestada.')
+    expect(textoEditado({ tipo: 'llamada', resultado: 'no_respondida' }, ' ')).toBe('No respondió.')
+  })
+  it('una llamada vieja sin resultado no tiene texto de fábrica: vacía no se guarda', () => {
+    expect(textoEditado({ tipo: 'llamada' }, '')).toBeNull()
+  })
+})
 
 const vacio: LeadDetalle = { tasks: [], comments: [], events: [], meetings: [], stageHistory: [], assignmentHistory: [] }
 const usuarios = [{ id: 'a', nombre: 'Antonio' }, { id: 'l', nombre: 'Lorenzo' }] as Usuario[]

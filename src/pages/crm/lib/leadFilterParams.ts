@@ -1,4 +1,4 @@
-import { filtrosVacios, type LeadFilterState } from './leadFilters'
+import { ORDENES_DE_LEADS, filtrosVacios, type LeadFilterState } from './leadFilters'
 import { esObjetivo, type Objetivo } from './objetivos'
 
 /* Copiado de propelia-frontend (src/pages/leads/lib/leadFilterParams.ts) sin `buildLeadFiltersJson`
@@ -13,7 +13,7 @@ export const OWNERS_PARAM = 'owners'
 /** El lead abierto en el dialog: un enlace abre ese lead ya abierto. */
 export const LEAD_PARAM = 'lead'
 
-export const LEAD_FILTER_PARAMS = ['overdue', 'tareas', 'stages', 'recontactar', 'orden', 'objetivo'] as const
+export const LEAD_FILTER_PARAMS = ['overdue', 'tareas', 'stages', 'recontactar', 'agendar', 'orden', 'objetivo'] as const
 export const LEAD_FILTER_PARAMS_WITH_QUERY = [...LEAD_FILTER_PARAMS, 'q'] as const
 
 /** `?tareas=sin`: los que no tienen ninguna tarea pendiente. `?tareas=1` sigue siendo «con». */
@@ -50,7 +50,8 @@ export function filtrosDesdeUrl(params: URLSearchParams): LeadFilterState {
     conTareas: params.get('tareas') === '1',
     sinTareas: params.get('tareas') === TAREAS_SIN,
     paraRecontactar: params.get('recontactar') === '1',
-    ordenPorEstado: params.get('orden') === 'estado',
+    pendienteAgendar: params.get('agendar') === '1',
+    orden: ORDENES_DE_LEADS.find(o => o === params.get('orden')) ?? null,
     objetivo: objetivoDesdeUrl(params.get('objetivo')),
   }
 }
@@ -76,9 +77,10 @@ export function escribirFiltros(params: URLSearchParams, patch: Partial<LeadFilt
     poner('tareas', con ? '1' : sin ? TAREAS_SIN : '')
   }
   if (patch.paraRecontactar !== undefined) poner('recontactar', patch.paraRecontactar ? '1' : '')
-  if (patch.ordenPorEstado !== undefined) poner('orden', patch.ordenPorEstado ? 'estado' : '')
-  // Prender «Tareas» arranca por vencimiento (lo vencido arriba): un orden por estado que quedó
-  // puesto de antes le ganaría. Prendido después, con «Tareas» ya puesto, se respeta.
+  if (patch.pendienteAgendar !== undefined) poner('agendar', patch.pendienteAgendar ? '1' : '')
+  if (patch.orden !== undefined) poner('orden', patch.orden ?? '')
+  // Prender «Tareas» arranca por vencimiento (lo vencido arriba): un orden que quedó puesto de
+  // antes le ganaría. Elegido después, con «Tareas» ya puesto, se respeta.
   else if (patch.conTareas) next.delete('orden')
   if (patch.objetivo !== undefined) poner('objetivo', patch.objetivo ?? '')
   return next

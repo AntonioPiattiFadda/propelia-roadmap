@@ -58,9 +58,9 @@ export function useActualizarCliente() {
   })
 }
 
-/** Lo que escribe un descarte: el código del motivo y, si «podría calificar», desde cuándo volver a
- *  llamarlo. Una sola cuenta para el optimista y para la base. */
-export type VarsDescarte = { leadId: string; etapaId: string; motivo: MotivoDescarte }
+/** Lo que escribe un descarte: el código del motivo (o el texto libre del descarte para siempre) y,
+ *  si «podría calificar», desde cuándo volver a llamarlo. Una sola cuenta para el optimista y para la base. */
+export type VarsDescarte = { leadId: string; etapaId: string; motivo: MotivoDescarte | string }
 const patchDeDescarte = ({ etapaId, motivo }: VarsDescarte) =>
   ({ funnel_stage_id: etapaId, discard_reason: motivo, recontact_at: recontactoDeMotivo(motivo, localTodayIso()) })
 

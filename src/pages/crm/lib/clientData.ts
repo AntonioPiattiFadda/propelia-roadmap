@@ -124,6 +124,23 @@ export function decisoresDeLaLlamada(
   return [...new Set([...existentes.map(c => c.campoDecisor), ...nuevos])]
 }
 
+const CAMPOS_DECISOR: CampoDecisor[] = [
+  'contact_is_decision_maker', 'alternative_phone_1_is_decision_maker', 'alternative_phone_2_is_decision_maker',
+]
+
+/**
+ * Los contactos que pasaron a decisores entre dos fotos del cliente, para fijarlos en el perfil
+ * (20/10/2026, por pedido): se marquen a mano, desde una actividad o al cargar un contacto nuevo.
+ * Solo el paso a «sí»: el que ya era decisor no se vuelve a fijar, así desfijarlo a mano dura.
+ */
+export function decisoresQueSeMarcaron(
+  antes: Partial<Record<CampoDecisor, boolean | null>> | null | undefined,
+  despues: Partial<Record<CampoDecisor, boolean | null>> | null | undefined,
+): CampoDecisor[] {
+  if (!antes || !despues) return []
+  return CAMPOS_DECISOR.filter(campo => despues[campo] === true && antes[campo] !== true)
+}
+
 type CasilleroDeNombre ='first_name' | 'alternative_phone_1_note' | 'alternative_phone_2_note'
 const DECISOR_DEL_CASILLERO: Record<CasilleroDeNombre, CampoDecisor> = {
   first_name: 'contact_is_decision_maker',

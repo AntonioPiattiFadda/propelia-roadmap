@@ -15,14 +15,14 @@ import { etapaDelLead } from '../lib/effectiveStage'
 import { estadoDeLista } from '../lib/estadoDeLista'
 import { vecinoMarcable } from '../lib/seleccionConFlechas'
 import { vecinosEnRecorrido, type UltimaPosicion } from '../lib/recorrido'
-import { fmtUltimaActividad } from '../lib/ultimaActividad'
+import { fmtUltimaActividad, ordenarPorUltimaActividad } from '../lib/ultimaActividad'
 import { fmtIngresoDate, fmtShortDate } from '../lib/leadCellFormat'
 import {
   deleteLeadFilterParams, escribirFiltros, escribirLeadAbierto, escribirVista, filtrosDesdeUrl, formatFilterList, LEAD_FILTER_PARAMS_WITH_QUERY, LEAD_PARAM,
   vistaDesdeUrl, type VistaCrm,
 } from '../lib/leadFilterParams'
 import { agruparPorEtapa } from '../lib/columnasPorEtapa'
-import { filterLeads, leadsDeCarteras, type LeadFilterContext, type LeadFilterState } from '../lib/leadFilters'
+import { filterLeads, leadsDeCarteras, type LeadFilterContext, type LeadFilterState, type OrdenLeads } from '../lib/leadFilters'
 import { estaVencida, idsConTareasVencidas, ordenarPorEstado, ordenarPorProximaTarea, proximaTareaPorLead, type ProximaTarea } from '../lib/tareas'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
@@ -60,7 +60,22 @@ type RenglonProps = {
   hoy: string
   /** Con el filtro «Tareas» puesto, la tarea reemplaza a teléfono y última actividad. */
   modoTareas: boolean
+  /** El último lead en el que se entró: se resalta apenas, para retomar desde ahí. */
+  ultimo: boolean
 }
+
+/* El último lead abierto (20/10/2026, por pedido), por navegador: es «por dónde iba yo», no un
+   dato del equipo. `localStorage` puede tirar (modo privado, datos bloqueados): sin él, el resalte
+   dura lo que la pestaña. */
+const CLAVE_ULTIMO_LEAD = 'crm-ultimo-lead'
+function leerUltimoLead(): string | null {
+  try { return localStorage.getItem(CLAVE_ULTIMO_LEAD) } catch { return null }
+}
+function guardarUltimoLead(id: string) {
+  try { localStorage.setItem(CLAVE_ULTIMO_LEAD, id) } catch { /* sin almacenamiento, queda en memoria */ }
+}
+// La marca a media fuerza: se ve en claro y en oscuro sin competir con la etapa ni con el «es mío».
+const RIEL_ULTIMO = 'color-mix(in oklch, var(--brand) 45%, transparent)'
 
 /* Con «Tareas» la pregunta deja de ser «en qué está este lead» y pasa a ser «qué tengo que hacer
    y para cuándo». Teléfono y última actividad se cambian por la próxima tarea; la etapa se
@@ -115,7 +130,7 @@ function clicDelRenglon(e: React.MouseEvent<HTMLElement>): boolean {
   return e.currentTarget.contains(target) && !target.closest('[data-row-actions]')
 }
 
-function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion, proxima, hoy, modoTareas }: RenglonProps) {
+function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion, proxima, hoy, modoTareas, ultimo }: RenglonProps) {
   return (
     <tr
       data-lead-id={lead.id}
@@ -124,13 +139,16 @@ function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion
         if (seleccion) seleccion.onToggle()
         else onAbrir(lead.id)
       }}
-      className="cursor-pointer transition-colors [border-bottom:1px_solid_var(--line-soft)] hover:bg-secondary/40"
+      className={cn('cursor-pointer transition-colors [border-bottom:1px_solid_var(--line-soft)] hover:bg-secondary/40',
+        ultimo && 'bg-primary/5')}
     >
       <td className={cn(seleccion ? 'px-3.5 py-[11px]' : 'p-0')} data-row-actions>
         {seleccion ? (
           <Checkbox checked={seleccion.marcado} onCheckedChange={seleccion.onToggle} aria-label="Seleccionar lead" />
         ) : (
-          <span aria-hidden className="block h-[44px] w-[4px] rounded-r-[3px]" style={{ background: 'var(--line-soft)' }} />
+          // El riel de siempre, en el color de la marca para el último lead abierto.
+          <span aria-hidden className="block h-[44px] w-[4px] rounded-r-[3px]"
+            style={{ background: ultimo ? RIEL_ULTIMO : 'var(--line-soft)' }} />
         )}
       </td>
       <td className="whitespace-nowrap px-[18px] py-[11px] text-[13.5px] font-medium tabular-nums text-(--fg-2)">
@@ -171,7 +189,7 @@ function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion
 
 /** El mismo renglón en el teléfono: empresa arriba, etapa abajo (con «Tareas», además
  *  la próxima tarea y cuándo vence). */
-function LeadCard({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion, proxima, hoy, modoTareas }: RenglonProps) {
+function LeadCard({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion, proxima, hoy, modoTareas, ultimo }: RenglonProps) {
   return (
     <div
       role="button"
@@ -184,7 +202,9 @@ function LeadCard({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccio
       }}
       // Solo el Enter de la tarjeta misma: el de un botón interno (el menú de acciones) burbujea hasta acá.
       onKeyDown={e => { if (e.key === 'Enter' && e.target === e.currentTarget && !seleccion) onAbrir(lead.id) }}
-      className="flex flex-col gap-2 bg-card px-3 py-3 [border-bottom:1px_solid_var(--line-soft)]"
+      className={cn('flex flex-col gap-2 px-3 py-3 [border-bottom:1px_solid_var(--line-soft)]',
+        ultimo ? 'bg-primary/5' : 'bg-card')}
+      style={ultimo ? { boxShadow: `inset 3px 0 0 ${RIEL_ULTIMO}` } : undefined}
     >
       <div className="flex items-center gap-2.5">
         {seleccion && (
@@ -214,6 +234,15 @@ function LeadCard({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccio
 const BUSCADOR = 'buscador'
 const HEADERS = ['', BUSCADOR, 'Teléfono', 'Estado', 'Última actividad', 'Tarea', '']
 const HEADERS_TAREAS = ['', BUSCADOR, 'Estado', 'Tarea pendiente', 'Vence', '']
+/** Las cabeceras que ordenan la lista al tocarlas. */
+const ORDEN_DE_CABECERA: Record<string, OrdenLeads | undefined> = {
+  Estado: 'estado', 'Última actividad': 'actividad', Tarea: 'tarea', Vence: 'tarea',
+}
+const TITULO_DE_ORDEN: Record<OrdenLeads, string> = {
+  actividad: 'Lo más reciente arriba; los sin contactar al final',
+  estado: 'Lo más avanzado del funnel arriba; descartados al final',
+  tarea: 'Por vencimiento de la próxima tarea: lo vencido arriba',
+}
 
 export function CrmLeadList() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -233,6 +262,7 @@ export function CrmLeadList() {
   const reasignar = useReasignar()
   // Desde dónde siguen las flechas: el último lead que se tocó en el modo selección.
   const [cursor, setCursor] = useState<string | null>(null)
+  const [ultimoLeadId, setUltimoLeadId] = useState<string | null>(leerUltimoLead)
   const empezarSeleccion = (leadId: string) => { setSeleccionando(true); setMarcados(new Set([leadId])); setCursor(leadId) }
   const salirDeSeleccion = () => { setSeleccionando(false); setMarcados(new Set()); setCursor(null) }
   const alternarMarcado = (leadId: string) => {
@@ -268,13 +298,16 @@ export function CrmLeadList() {
 
   const deCarteras = useMemo(
     () => leadsDeCarteras(leadsQ.data ?? SIN_LEADS, carteras ?? SIN_IDS), [leadsQ.data, carteras])
-  // «Ordenar por estado» (el chip o la cabecera «Estado» de la tabla) ordena por etapa con o sin
-  // «Tareas»; sin él, con «Tareas» la lista va por la próxima tarea (lo vencido arriba). Las flechas
+  // El orden (el chip «Ordenar» o las cabeceras de la tabla): última actividad, estado o tarea (por
+  // vencimiento). Sin elegir, con «Tareas» va por la próxima tarea (lo vencido arriba). Las flechas
   // del dialog recorren `visibles`, así que siguen este orden solas.
   const visibles = useMemo(() => {
     const filtrados = filterLeads(deCarteras, filtros, ctx)
-    if (filtros.ordenPorEstado) return ordenarPorEstado(filtrados, proximas, l => etapaDelLead(l, cat.etapasPorId))
-    return filtros.conTareas ? ordenarPorProximaTarea(filtrados, proximas) : filtrados
+    const orden = filtros.orden ?? (filtros.conTareas ? 'tarea' : null)
+    if (orden === 'estado') return ordenarPorEstado(filtrados, proximas, l => etapaDelLead(l, cat.etapasPorId))
+    if (orden === 'actividad') return ordenarPorUltimaActividad(filtrados)
+    if (orden === 'tarea') return ordenarPorProximaTarea(filtrados, proximas)
+    return filtrados
   }, [deCarteras, filtros, ctx, proximas, cat.etapasPorId])
   const headers = filtros.conTareas ? HEADERS_TAREAS : HEADERS
   // En columnas, las etapas elegidas en «Estado» dicen qué columnas se ven (agruparPorEtapa).
@@ -324,9 +357,10 @@ export function CrmLeadList() {
     proxima: proximas.get(lead.id),
     hoy,
     modoTareas: filtros.conTareas,
+    ultimo: lead.id === ultimoLeadId,
   })
   const fichaDe = (lead: CrmLeadRow): FichaProps => {
-    const { etapa: _etapa, proxima: _proxima, hoy: _hoy, modoTareas: _modo, ...resto } = propsDe(lead)
+    const { etapa: _etapa, proxima: _proxima, hoy: _hoy, modoTareas: _modo, ultimo: _ultimo, ...resto } = propsDe(lead)
     return { ...resto, pendientes: proximas.get(lead.id)?.pendientes ?? 0, conVencidas: overdueLeadIds.has(lead.id) }
   }
 
@@ -334,6 +368,11 @@ export function CrmLeadList() {
   // abrirlo aunque los filtros lo escondan. Las flechas recorren la lista tal como se ve.
   const leadAbiertoId = searchParams.get(LEAD_PARAM)
   const leadAbierto = leadAbiertoId ? (leadsQ.data ?? []).find(l => l.id === leadAbiertoId) ?? null : null
+  // El último en el que se entró queda resaltado en la lista. Se anota al abrirlo, venga de donde
+  // venga el `?lead=` (la lista, las flechas del dialog, un enlace).
+  // El estado se ajusta en el render (sin esperar al efecto); el efecto solo lo escribe en el navegador.
+  if (leadAbiertoId && leadAbiertoId !== ultimoLeadId) setUltimoLeadId(leadAbiertoId)
+  useEffect(() => { if (leadAbiertoId) guardarUltimoLead(leadAbiertoId) }, [leadAbiertoId])
   // Dónde estaba el abierto: si se descarta y se va de la lista, las flechas siguen desde ahí.
   const ultimaPosicion = useRef<UltimaPosicion | null>(null)
   const vecinos = vecinosEnRecorrido(recorrido.map(l => l.id), leadAbierto?.id ?? null, ultimaPosicion.current)
@@ -462,21 +501,24 @@ export function CrmLeadList() {
                     <BuscadorLeads q={filtros.q} onCambiar={cambiarFiltros} className="w-full max-w-[340px]" />
                   ) : i === headers.length - 1 ? (
                     <span className="block text-right tabular-nums">{visibles.length} lead{visibles.length === 1 ? '' : 's'}</span>
-                  ) : h === 'Estado' ? (
-                    // El mismo `ordenPorEstado` que el chip de los filtros: dos puertas, un solo dato.
-                    <button
-                      type="button"
-                      aria-pressed={filtros.ordenPorEstado}
-                      title={filtros.ordenPorEstado ? 'Quitar el orden por estado' : 'Lo más avanzado del funnel arriba; descartados al final'}
-                      onClick={() => cambiarFiltros({ ordenPorEstado: !filtros.ordenPorEstado })}
-                      className={cn(
-                        'inline-flex items-center gap-1 uppercase tracking-[0.06em] hover:text-foreground',
-                        filtros.ordenPorEstado && 'text-foreground',
-                      )}
-                    >
-                      Estado
-                      <Icon icon={ArrowDownWideNarrow} size="xs" className={cn(!filtros.ordenPorEstado && 'opacity-40')} />
-                    </button>
+                  ) : ORDEN_DE_CABECERA[h] ? (
+                    // El mismo `orden` que el chip «Ordenar» de los filtros: dos puertas, un solo dato.
+                    (() => {
+                      const orden = ORDEN_DE_CABECERA[h]
+                      const activo = (filtros.orden ?? (filtros.conTareas ? 'tarea' : null)) === orden
+                      return (
+                        <button
+                          type="button"
+                          aria-pressed={activo}
+                          title={activo ? 'Quitar este orden' : TITULO_DE_ORDEN[orden]}
+                          onClick={() => cambiarFiltros({ orden: activo ? null : orden })}
+                          className={cn('inline-flex items-center gap-1 uppercase tracking-[0.06em] hover:text-foreground', activo && 'text-foreground')}
+                        >
+                          {h}
+                          <Icon icon={ArrowDownWideNarrow} size="xs" className={cn(!activo && 'opacity-40')} />
+                        </button>
+                      )
+                    })()
                   ) : h}
                 </th>
               ))}

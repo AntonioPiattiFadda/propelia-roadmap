@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { horarioDeEspana } from './planningDiario'
+import { horarioDeEspana, JORNADAS } from './planningDiario'
+
+describe('JORNADAS', () => {
+  it('en verano Venezuela va 6 h atrás de España', () => {
+    expect(JORNADAS.verano.bloques.map(b => b.vzla)).toEqual(['04:00', '06:30', '07:00', '08:00', '09:00', '09:20', '09:40', '10:10'])
+    expect(JORNADAS.verano.fin).toEqual({ vzla: '13:00', espana: '19:00' })
+  })
+
+  it('en invierno Venezuela va 5 h atrás de España', () => {
+    expect(JORNADAS.invierno.bloques.map(b => b.vzla)).toEqual(['05:00', '07:30', '08:00', '09:00', '10:00', '10:20', '10:40', '11:10'])
+    expect(JORNADAS.invierno.fin).toEqual({ vzla: '14:00', espana: '19:00' })
+  })
+})
 
 describe('horarioDeEspana', () => {
   it('es verano entre el último domingo de marzo y el último de octubre', () => {

@@ -51,5 +51,6 @@ describe('para recontactar', () => {
   it('cuenta los descartados con la fecha cumplida, prendido o no', () => {
     expect(computeLeadListCounters(leads, filtrosVacios(), ctx).recontactarCount).toBe(1)
     expect(computeLeadListCounters(leads, { ...filtrosVacios(), paraRecontactar: true }, ctx).recontactarCount).toBe(1)
+    expect(computeLeadListCounters(leads, filtrosVacios(), ctx).pendienteAgendarCount).toBe(0)
   })
 })

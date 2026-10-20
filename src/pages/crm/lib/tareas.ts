@@ -1,4 +1,25 @@
 import type { CrmTask } from '../types'
+import { horaCorta } from './alarmas'
+
+export type CambiosDeTarea = { title?: string; due_date?: string | null; due_time?: string | null }
+
+/** Qué cambió al editar una tarea (20/10/2026, por pedido): se manda solo eso. La hora se cae sin
+ *  día, como al crearla. `due_time` va solo si cambió: sin hora antes ni después no se toca la
+ *  columna, que puede no existir todavía (lectura con `*`, ver `crearTarea`). Sacarle la hora sí la
+ *  manda en null: si la tenía, la columna existe. */
+export function cambiosDeTarea(
+  antes: { title: string; due_date: string | null; due_time?: string | null },
+  despues: { title: string; dueDate: string | null; dueTime: string | null },
+): CambiosDeTarea {
+  const cambios: CambiosDeTarea = {}
+  const title = despues.title.trim()
+  if (title !== antes.title.trim()) cambios.title = title
+  const diaAntes = antes.due_date?.slice(0, 10) ?? null
+  if (despues.dueDate !== diaAntes) cambios.due_date = despues.dueDate
+  const hora = despues.dueDate != null ? horaCorta(despues.dueTime) : null
+  if (hora !== horaCorta(antes.due_time)) cambios.due_time = hora
+  return cambios
+}
 
 type TareaVencible = Pick<CrmTask, 'due_date' | 'completed' | 'deleted_at'>
 

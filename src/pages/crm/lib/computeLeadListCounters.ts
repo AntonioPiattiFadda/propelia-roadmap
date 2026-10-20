@@ -16,6 +16,8 @@ export type LeadListCounters = {
   stageCount: (stageId: string) => number
   /** Descartados con la fecha de volver a llamar cumplida, sin su propio filtro. */
   recontactarCount: number
+  /** Los de «Seguimiento» sin tarea pendiente, como si «Pendiente agendar tarea» estuviera puesto. */
+  pendienteAgendarCount: number
   matchingCount: number
 }
 
@@ -35,7 +37,10 @@ export function computeLeadListCounters(
 
   const recontactarCount = filterLeads(leads, { ...filters, paraRecontactar: true }, ctx).length
 
+  const pendienteAgendarCount = filterLeads(leads, { ...filters, pendienteAgendar: true }, ctx).length
+
   return {
+    pendienteAgendarCount,
     tareasTotal: baseTareas.length,
     overdueLeadCount,
     conTareasCount,

@@ -50,6 +50,18 @@ export type MetaDeActividad = {
   telefono?: { numero: string; etiqueta: string }
 }
 
+/** Lo que queda escrito en la llamada si no se escribió nada: el resultado ya es el dato. */
+export const TEXTO_DE_LLAMADA: Record<ResultadoDeLlamada, string> = { contestada: 'Llamada contestada.', no_respondida: 'No respondió.' }
+
+/** El texto al editar una actividad escrita a mano (20/10/2026, por pedido). Vaciada, la llamada
+ *  vuelve al texto de fábrica de su resultado, como al registrarla; la nota (y la llamada vieja,
+ *  que no dice su resultado) no tiene con qué llenarse: `null` es «no se puede guardar». */
+export function textoEditado(i: Pick<ItemActividad, 'tipo' | 'resultado'>, texto: string): string | null {
+  const limpio = texto.trim()
+  if (limpio) return limpio
+  return i.tipo === 'llamada' && i.resultado ? TEXTO_DE_LLAMADA[i.resultado] : null
+}
+
 /** Lo que va a `long_description`. Una nota sin nadie no guarda nada: es un comentario de siempre. */
 export function armarMetaDeActividad(meta: MetaDeActividad): string | null {
   if (meta.tipo === 'nota' && meta.con.length === 0) return null
