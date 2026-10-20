@@ -16,7 +16,7 @@ function fakeDeps(over: Partial<SendEmailDeps> = {}) {
 
 Deno.test('un SUPERADMIN activo manda, con la casilla recortada', async () => {
   const { deps, sent } = fakeDeps()
-  assertEquals(await handleSendEmail('me', VALID, deps), { ok: true, id: 'email_1' })
+  assertEquals(await handleSendEmail('me', VALID, deps), { ok: true, id: 'email_1', to: 'prueba@example.com', subject: 'Prueba' })
   assertEquals(sent, [{ to: 'prueba@example.com', subject: 'Prueba', text: 'Hola\nmundo' }])
 })
 
@@ -74,7 +74,7 @@ const PLANTILLA: SendEmailInput = { to: 'ana@example.com', subject: '', text: ''
 
 Deno.test('plantilla: un SDR activo la manda, en HTML escapado, firmada y respondiendo a su email', async () => {
   const { deps, sent } = fakeDeps({ getCaller: async () => ({ rol: 'SDR', activo: true, nombre: 'Lore', email: 'lorenzo@propelia.es', firma_nombre: 'Lorenzo Piatti Fadda' }) })
-  assertEquals(await handleSendEmail('me', PLANTILLA, deps), { ok: true, id: 'email_1' })
+  assertEquals(await handleSendEmail('me', PLANTILLA, deps), { ok: true, id: 'email_1', to: 'ana@example.com', subject: 'Propelia', plantilla: 'presentacion-video' })
   assertEquals(sent[0].subject, 'Propelia')
   assertEquals(sent[0].replyTo, 'lorenzo@propelia.es')
   assertEquals(sent[0].html?.includes('Hola &lt;b&gt;'), true)

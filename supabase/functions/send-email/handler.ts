@@ -24,8 +24,9 @@ export type SendEmailDeps = {
 /** La fila de `users`; las `firma_*` pueden no venir (antes de la migración). */
 export type Caller = { rol: string; activo: boolean } & NonNullable<Parameters<typeof remitenteDe>[0]>
 
+/** `to`, `subject` y `plantilla` son lo que se registra en `crm_emails` (lo arma `index.ts`). */
 export type SendEmailResult =
-  | { ok: true; id: string }
+  | { ok: true; id: string; to: string; subject: string; plantilla?: string }
   | { ok: false; status: number; error: string }
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -77,7 +78,7 @@ export async function handleSendEmail(callerId: string, input: SendEmailInput, d
   if (!Array.isArray(attachments)) return attachments
 
   const { id } = await deps.send({ to, subject, text: input.text, ...(attachments.length ? { attachments } : {}) })
-  return { ok: true, id }
+  return { ok: true, id, to, subject }
 }
 
 async function handlePlantilla(
@@ -107,5 +108,5 @@ async function handlePlantilla(
   const { id } = await deps.send({
     fromName, to, subject, html, text, ...(replyTo ? { replyTo } : {}), ...(attachments.length ? { attachments } : {}),
   })
-  return { ok: true, id }
+  return { ok: true, id, to, subject, plantilla: plantilla.id }
 }

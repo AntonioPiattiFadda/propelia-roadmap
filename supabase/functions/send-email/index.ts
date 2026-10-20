@@ -1,5 +1,5 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
-import { createClient } from 'jsr:@supabase/supabase-js@2'
+import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { EmailConfigError, EmailProviderError, sendEmail } from '../_shared/email.ts'
 import { handleSendEmail } from './handler.ts'
 
@@ -15,18 +15,30 @@ const cors = {
 const jsonHeaders = { ...cors, 'Content-Type': 'application/json' }
 const respond = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: jsonHeaders })
 
-async function getCallerId(req: Request): Promise<string | null> {
-  const client = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
-    global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
-  })
-  const { data } = await client.auth.getUser()
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+const clienteDe = (req: Request) => createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+  global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
+})
+
+async function getCallerId(caller: SupabaseClient): Promise<string | null> {
+  const { data } = await caller.auth.getUser()
   return data?.user?.id ?? null
+}
+
+/* El lead se pega solo si quien manda lo puede leer: la fila la escribe la service role, y sin
+   esto cualquiera podría colgarle un envío al lead de otra cartera. Se pregunta con SU sesión. */
+async function leadVisible(caller: SupabaseClient, leadId: unknown): Promise<string | null> {
+  if (typeof leadId !== 'string' || !UUID.test(leadId)) return null
+  const { data } = await caller.from('crm_leads').select('id').eq('id', leadId).maybeSingle()
+  return data?.id ?? null
 }
 
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
 
-  const callerId = await getCallerId(req)
+  const caller = clienteDe(req)
+  const callerId = await getCallerId(caller)
   if (!callerId) return respond(401, { error: 'Sesión inválida' })
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>
@@ -49,7 +61,15 @@ Deno.serve(async req => {
         send: msg => sendEmail(msg),
       },
     )
-    return r.ok ? respond(200, { id: r.id }) : respond(r.status, { error: r.error })
+    if (!r.ok) return respond(r.status, { error: r.error })
+    /* El registro que después actualiza `resend-webhook` (20/10/2026). El mail ya salió: si esto
+       falla no se le dice que no al que mandó, solo se pierde el aviso de rebote de este envío. */
+    const { error } = await admin.from('crm_emails').insert({
+      resend_id: r.id, lead_id: await leadVisible(caller, body.leadId), sent_by: callerId,
+      to_email: r.to, subject: r.subject, plantilla: r.plantilla ?? null,
+    })
+    if (error) console.error('crm_emails: no se pudo registrar el envío', r.id, error.message)
+    return respond(200, { id: r.id })
   } catch (error) {
     if (error instanceof EmailConfigError) return respond(500, { error: 'El envío de emails no está configurado (falta RESEND_API_KEY)' })
     if (error instanceof EmailProviderError) return respond(502, { error: error.message })

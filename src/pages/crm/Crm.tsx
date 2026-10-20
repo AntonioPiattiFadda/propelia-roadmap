@@ -4,6 +4,7 @@ import { PlusIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { AgentFilterButton } from './components/AgentFilterButton'
+import { CampanaDeEmails } from './components/EmailsQueNoLlegaron'
 import { ContadorDeLlamadas } from './components/ContadorDeLlamadas'
 import { CrmLeadList } from './components/CrmLeadList'
 import { FunnelConfigDialog } from './components/FunnelConfigDialog'
@@ -48,6 +49,8 @@ export function Crm() {
             <ManageChannelsDialog />
           </div>
         )}
+        {/* Notificaciones: tus emails que rebotaron o no salieron; tocar uno abre el lead. */}
+        <CampanaDeEmails />
         <Button onClick={() => setAltaAbierta(true)}>
           <Icon icon={PlusIcon} size="xs" />
           <span className="hidden md:inline">Nuevo lead</span>

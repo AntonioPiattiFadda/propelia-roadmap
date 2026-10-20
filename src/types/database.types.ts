@@ -347,6 +347,76 @@ export type Database = {
           },
         ]
       }
+      crm_emails: {
+        Row: {
+          id: string
+          lead_id: string | null
+          plantilla: string | null
+          resend_id: string
+          seen_at: string | null
+          seen_by: string | null
+          sent_at: string
+          sent_by: string
+          status: string
+          status_at: string | null
+          status_detail: string | null
+          subject: string
+          to_email: string
+        }
+        Insert: {
+          id?: string
+          lead_id?: string | null
+          plantilla?: string | null
+          resend_id: string
+          seen_at?: string | null
+          seen_by?: string | null
+          sent_at?: string
+          sent_by: string
+          status?: string
+          status_at?: string | null
+          status_detail?: string | null
+          subject?: string
+          to_email: string
+        }
+        Update: {
+          id?: string
+          lead_id?: string | null
+          plantilla?: string | null
+          resend_id?: string
+          seen_at?: string | null
+          seen_by?: string | null
+          sent_at?: string
+          sent_by?: string
+          status?: string
+          status_at?: string | null
+          status_detail?: string | null
+          subject?: string
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_emails_seen_by_fkey"
+            columns: ["seen_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_emails_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "crm_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_emails_sent_by_fkey"
+            columns: ["sent_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_funnel_stages: {
         Row: {
           allow_delete: boolean
@@ -1103,6 +1173,11 @@ export type Database = {
         Args: { p_last_name: string; p_user_id: string }
         Returns: undefined
       }
+      crm_email_evento: {
+        Args: { p_at: string; p_detalle: string; p_resend_id: string; p_status: string }
+        Returns: boolean
+      }
+      crm_email_visto: { Args: { p_id: string; p_visto?: boolean }; Returns: undefined }
       crm_set_member_phone: {
         Args: { p_phone: string; p_user_id: string }
         Returns: undefined

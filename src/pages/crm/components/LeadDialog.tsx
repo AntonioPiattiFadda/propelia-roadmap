@@ -28,6 +28,7 @@ import { DescartarLeadDialog } from './DescartarLeadDialog'
 import type { ClienteExtra } from './ClientFields'
 import { OpcionesDeEtapa } from './leadCells'
 import { LeadRowActions } from './LeadRowActions'
+import { EmailsQueNoLlegaronDelLead } from './EmailsQueNoLlegaron'
 import { BotonMensajes } from './MensajesPredeterminados'
 import { TareasDelLead } from './TareasDelLead'
 
@@ -818,7 +819,9 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
                 </button>
               )}
               {/* Al pie de los contactos: los mensajes se les mandan a ellos. */}
-              <BotonMensajes client={lead.client} className="mt-2 self-start" />
+              <BotonMensajes client={lead.client} leadId={lead.id} className="mt-2 self-start" />
+              {/* Los emails que rebotaron o no salieron (20/10/2026): lo dice Resend por webhook. */}
+              <EmailsQueNoLlegaronDelLead leadId={lead.id} client={lead.client} puedeEscribir={escribe} />
             </div>
           </Seccion>
 

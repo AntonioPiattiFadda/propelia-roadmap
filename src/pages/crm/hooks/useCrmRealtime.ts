@@ -16,6 +16,8 @@ const TABLAS: Record<string, QueryKey[]> = {
   crm_management_events: [CRM_KEYS.detalles],
   // `llamadas`: el contador de Objetivos cuenta también las demos agendadas.
   crm_meetings: [CRM_KEYS.detalles, ['crm', 'reuniones'], CRM_KEYS.llamadas],
+  // El webhook de Resend cambia el estado: el rebote aparece en la campana sin recargar.
+  crm_emails: [CRM_KEYS.emails],
   // Te dieron o te sacaron acceso: cambian las carteras Y lo que la RLS te deja leer.
   crm_data_access: [CRM_KEYS.accesos, CRM_KEYS.leads, CRM_KEYS.tareasPendientes],
 }

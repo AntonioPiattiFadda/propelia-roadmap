@@ -12,6 +12,7 @@ export type CrmStage = Tables<'crm_funnel_stages'>
 export type CrmChannel = Tables<'crm_channels'>
 export type CrmTask = Tables<'crm_tasks'>
 export type CrmComment = Tables<'crm_comments'>
+export type CrmEmail = Tables<'crm_emails'>
 export type CrmManagementEvent = Tables<'crm_management_events'>
 export type CrmMeeting = Tables<'crm_meetings'>
 export type CrmStageHistory = Tables<'crm_stage_history'>

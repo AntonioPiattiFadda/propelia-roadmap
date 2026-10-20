@@ -68,7 +68,7 @@ const plantillaVacia = (canal: Canal): Plantilla =>
   ({ id: '', canal, nombre: '', asunto: '', texto: '', adjuntos: [] })
 
 /** El botón del perfil del lead (panel izquierdo) que abre los mensajes predeterminados. */
-export function BotonMensajes({ client, className }: { client: CrmClient | null; className?: string }) {
+export function BotonMensajes({ client, leadId, className }: { client: CrmClient | null; leadId?: string; className?: string }) {
   const [abierto, setAbierto] = useState(false)
   return (
     <>
@@ -77,13 +77,15 @@ export function BotonMensajes({ client, className }: { client: CrmClient | null;
         <MessageCircle size={15} />
         Mensajes
       </button>
-      <MensajesPredeterminadosDialog client={client} abierto={abierto} onCerrar={() => setAbierto(false)} />
+      <MensajesPredeterminadosDialog client={client} leadId={leadId} abierto={abierto} onCerrar={() => setAbierto(false)} />
     </>
   )
 }
 
-export function MensajesPredeterminadosDialog({ client, abierto, onCerrar }: {
+export function MensajesPredeterminadosDialog({ client, leadId, abierto, onCerrar }: {
   client: CrmClient | null
+  /** Para colgarle el envío de un email al lead (`crm_emails`) y avisar si rebota. */
+  leadId?: string
   abierto: boolean
   onCerrar: () => void
 }) {
@@ -213,7 +215,7 @@ export function MensajesPredeterminadosDialog({ client, abierto, onCerrar }: {
 
           <section className="flex min-h-0 min-w-0 flex-col">
             {canal === 'email' ? (
-              <EmailConPlantilla key={plantillaEmail} id={plantillaEmail} client={client} />
+              <EmailConPlantilla key={plantillaEmail} id={plantillaEmail} client={client} leadId={leadId} />
             ) : borrador ? (
               <EditorDePlantilla borrador={borrador} onCambiar={setBorrador}
                 onGuardar={guardarBorrador} onCancelar={() => setBorrador(null)} />

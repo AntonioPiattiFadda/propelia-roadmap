@@ -299,6 +299,27 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   **El «Mail puntual» lleva adjuntos** (20/10/2026, por pedido): `adjuntos: true` en su plantilla;
   `send-email` rechaza archivos en la que no lo diga. Cualquier usuario activo, SDR incluido; mismo
   tope de 10MB que el texto libre. Valen para ese envío y no salen en la vista previa.
+- **Los emails que no llegan se avisan** (20/10/2026, migración `20261020171333_crm_emails`):
+  `send-email` escribe cada envío en `crm_emails` con el id de Resend (y el lead, si quien manda lo
+  lee; el de prueba va sin lead), y la edge function `resend-webhook` le cambia el estado cuando
+  Resend avisa (`delivered`, `bounced`, `failed`, `suppressed`, `complained`…). La puerta del
+  webhook es la firma svix (secret `RESEND_WEBHOOK_SECRET`, `verify_jwt = false` en `config.toml`)
+  y el estado solo avanza (`crm_email_evento()`): los eventos llegan desordenados. Escribe solo la
+  service role. **En el pie del mail**, al lado de «Enviar email», una pastilla dice «Enviando…» y
+  después lo que va contando Resend (`estadoDelEnvio`; pregunta cada 4 s hasta entregado o no
+  llegó, además del realtime). Lo que no llegó se avisa en tres lados: un **toast** con «Abrir
+  lead» (y notificación del navegador si ya hay permiso), una vez por navegador y esté donde esté
+  (`useAvisosDeEmails`, montado en `AppLayout` como las alarmas; fuera del CRM pregunta cada 30 s);
+  la **campana** de la cabecera del CRM (`CampanaDeEmails`, siempre a la vista, número rojo con lo
+  tuyo sin ver; tocar uno abre el lead y lo marca visto con `crm_email_visto`), y el **cartel del
+  lead** debajo de «Mensajes» (todos, plegado de entrada, y si la dirección sigue en el perfil lo
+  dice). Cada línea del cartel lleva **«Listo»** (con «Deshacer»): es el mismo `seen_at`, así que
+  marcarlo apaga también la campana de quien lo mandó; la línea queda gris y con todas en gris el
+  cartel deja de ser rojo. Lo marca quien lo mandó o quien escribe el lead (`crm_email_visto(id,
+  visto)`, migración `20261020174926_crm_emails_listo`, que agregó `seen_by`).
+  Reglas en `lib/emails.ts`. Ojo: después de un rebote duro
+  Resend suprime la dirección y no le vuelve a mandar («No se envió») hasta sacarla a mano de su
+  lista de supresión.
 - **Qué se copió del producto** (podado de lo inmobiliario):
   De `propelia-frontend/src/pages/leads/lib/`: `discardStage`,
   `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De

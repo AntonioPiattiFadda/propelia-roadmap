@@ -6,6 +6,7 @@ import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { useAlarmasDeTareas } from '@/pages/crm/hooks/useAlarmasDeTareas'
+import { useAvisosDeEmails } from '@/pages/crm/hooks/useEmails'
 
 // El del producto sin el asistente, las sugerencias ni el saludo al entrar.
 export function AppLayout() {
@@ -13,7 +14,10 @@ export function AppLayout() {
   // sonando si uno se fue al Roadmap en la misma pestaña. Solo para quien puede entrar al CRM.
   const { userSession } = useUserSession()
   const { data: yo } = useYo(userSession?.user.id)
-  useAlarmasDeTareas(!!yo && puedeEntrar(yo.rol, '/crm'))
+  const conCrm = !!yo && puedeEntrar(yo.rol, '/crm')
+  useAlarmasDeTareas(conCrm)
+  // Lo mismo con los emails que no llegaron (20/10/2026): el toast sale aunque estés en otra página.
+  useAvisosDeEmails(conCrm)
 
   return (
     <SidebarProvider defaultOpen={false}>

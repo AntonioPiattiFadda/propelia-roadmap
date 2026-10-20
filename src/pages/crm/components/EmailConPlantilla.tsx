@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { Paperclip, RotateCcw, Send, X } from 'lucide-react'
+import { CheckCircle2, Clock, Loader2, MailX, Paperclip, RotateCcw, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -12,6 +12,8 @@ import {
   type CampoEmail, type CamposEmail, type PlantillaEmailId, type Remitente,
 } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 import { base64Size, fileToAttachment, MAX_ATTACHMENTS_BYTES, sendEmail } from '../service/email.service'
+import { useEstadoDeEnvio } from '../hooks/useEmails'
+import { estadoDelEnvio, motivoLegible } from '../lib/emails'
 import type { CrmClient } from '../types'
 
 /* La pestaña Email de «Mensajes» (18/10/2026): las dos plantillas HTML de `_shared/plantillasEmail.ts`,
@@ -67,7 +69,7 @@ export function ListaDePlantillasEmail({ elegida, onElegir }: { elegida: Plantil
 
 /** El lado derecho: para quién y los campos editables, la vista previa al lado, y «Enviar». Se monta con
     `key` por plantilla, así que cambiar de plantilla arranca de cero. */
-export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client: CrmClient | null }) {
+export function EmailConPlantilla({ id, client, leadId }: { id: PlantillaEmailId; client: CrmClient | null; leadId?: string }) {
   const plantilla = PLANTILLAS_EMAIL.find(p => p.id === id)!
   const conocidos = useMemo(() => emailsDe(client), [client])
   const [para, setPara] = useState(conocidos[0] ?? '')
@@ -128,7 +130,7 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
 
   const enviar = useMutation({
     mutationFn: async () => sendEmail({
-      to: para.trim(), plantilla: id, campos,
+      to: para.trim(), plantilla: id, campos, leadId,
       ...(archivos.length ? { attachments: await Promise.all(archivos.map(fileToAttachment)) } : {}),
     }),
     onSuccess: () => {
@@ -240,12 +242,46 @@ export function EmailConPlantilla({ id, client }: { id: PlantillaEmailId; client
       </div>
       <footer className="flex shrink-0 items-center justify-end gap-3 px-4 py-3 [border-top:1px_solid_var(--line)]">
         {problema && <span className="min-w-0 truncate text-[12px] text-(--fg-muted)">{problema}</span>}
-        <span className="hidden text-[12px] text-(--fg-muted) md:inline">{problema ? '' : `Llega de «${nombreEnBandeja(remitente)}» <info@propelia.es>`}</span>
+        {/* Lo que pasó con el último envío, al lado del botón; mientras no se mandó nada, de quién llega. */}
+        {enviar.isPending || enviar.data
+          ? <EstadoDelEnvio enviando={enviar.isPending} resendId={enviar.isPending ? null : enviar.data?.id ?? null} />
+          : <span className="hidden text-[12px] text-(--fg-muted) md:inline">{problema ? '' : `Llega de «${nombreEnBandeja(remitente)}» <info@propelia.es>`}</span>}
         <button type="button" onClick={() => enviar.mutate()} disabled={!!problema || enviar.isPending}
           className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-foreground px-3.5 text-[13px] font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">
           <Send size={14} />{enviar.isPending ? 'Enviando…' : 'Enviar email'}
         </button>
       </footer>
     </>
+  )
+}
+
+const TONOS = {
+  pendiente: 'bg-(--surface-2) text-(--fg-2)',
+  ok: 'bg-emerald-50 text-emerald-700',
+  aviso: 'bg-amber-50 text-amber-700',
+  error: 'bg-red-50 text-red-700',
+} as const
+
+/* La pastilla del pie (20/10/2026): «Enviando…» mientras sale, y después lo que dice Resend por el
+   webhook (`crm_emails`), que se va actualizando solo: entregado, rebotó, no se pudo enviar… Si no
+   llegó, el aviso con «Abrir lead» lo da `useAvisosDeEmails` aunque esta ventana ya esté cerrada. */
+function EstadoDelEnvio({ enviando, resendId }: { enviando: boolean; resendId: string | null }) {
+  const q = useEstadoDeEnvio(resendId)
+  if (enviando) {
+    return (
+      <span className={cn('inline-flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium', TONOS.pendiente)}>
+        <Loader2 size={13} className="animate-spin" />Enviando…
+      </span>
+    )
+  }
+  const estado = estadoDelEnvio(q.data?.status ?? null)
+  const motivo = q.data ? motivoLegible(q.data) : null
+  const Icono = estado.tono === 'ok' ? CheckCircle2 : estado.tono === 'error' ? MailX : estado.tono === 'aviso' ? Clock : Loader2
+  return (
+    <span title={[motivo, q.data?.status_detail && `Resend: ${q.data.status_detail}`].filter(Boolean).join(' — ') || undefined} aria-live="polite"
+      className={cn('inline-flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium', TONOS[estado.tono])}>
+      <Icono size={13} className={cn('shrink-0', estado.tono === 'pendiente' && 'animate-spin')} />
+      <span className="truncate">{estado.texto}{estado.tono === 'error' && motivo ? ` · ${motivo}` : ''}</span>
+    </span>
   )
 }
