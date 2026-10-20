@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmMeeting } from '../types'
-import { agruparReuniones, armarReunion, descripcionDeDemo, esEmailValido } from './reuniones'
+import { agruparReuniones, armarReunion, descripcionDeDemo, esEmailValido, leerDescripcionDeDemo } from './reuniones'
 
 const reunion = (id: string, starts: Date, status: CrmMeeting['status'] = 'scheduled'): CrmMeeting => ({
   id, lead_id: 'l', assigned_to: 'u', starts_at: starts.toISOString(), ends_at: new Date(starts.getTime() + 3600_000).toISOString(),
@@ -46,5 +46,20 @@ describe('agruparReuniones', () => {
     ], now)
     expect(g.proximas.map(r => r.id)).toEqual(['pronto', 'luego'])
     expect(g.pasadas.map(r => r.id)).toEqual(['cancelada', 'pasada'])
+  })
+})
+
+describe('leerDescripcionDeDemo', () => {
+  it('es la vuelta de descripcionDeDemo', () => {
+    const d = descripcionDeDemo({ email: 'a@b.es', asistentes: ['Ana', 'Luis'], notas: 'Quiere ver el CRM\ny precios' })
+    expect(leerDescripcionDeDemo(d)).toEqual({ email: 'a@b.es', asistentes: ['Ana', 'Luis'], notas: 'Quiere ver el CRM\ny precios' })
+  })
+  it('sin asistentes ni notas', () => {
+    expect(leerDescripcionDeDemo(descripcionDeDemo({ email: 'a@b.es', asistentes: [], notas: '' })))
+      .toEqual({ email: 'a@b.es', asistentes: [], notas: '' })
+  })
+  it('una descripción a mano, o vacía, son todo notas', () => {
+    expect(leerDescripcionDeDemo('Llevar la propuesta')).toEqual({ email: '', asistentes: [], notas: 'Llevar la propuesta' })
+    expect(leerDescripcionDeDemo(null)).toEqual({ email: '', asistentes: [], notas: '' })
   })
 })

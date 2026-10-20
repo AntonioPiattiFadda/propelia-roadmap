@@ -222,6 +222,15 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   teléfono (no en columnas). Lo anota `CrmLeadList` al cambiar el `?lead=`, venga de donde venga, y
   es **por navegador** (`localStorage`, clave `crm-ultimo-lead`, con try/catch): es «por dónde iba
   yo», no un dato del equipo.
+- **Página «Demos» y aviso de demo nueva** (20/10/2026, por pedido): `/demos`, solo SUPERADMIN
+  (`NAV` y gate `esSuperadmin` adentro, como Ajustes). Una tabla con todas las `crm_meetings`
+  (próximas / pasadas, `agruparReuniones`); invitación, asistentes y notas salen de `description`
+  con `leerDescripcionDeDemo()` (`lib/reuniones.ts`). **Sin migración**: un SUPERADMIN ya lee todas
+  por `crm_puede` y la tabla ya estaba en realtime. El aviso es `useAvisosDeDemos` en `AppLayout`
+  (toast con «Abrir lead» + notificación del navegador si hay permiso, que se pide desde la página):
+  a todo SUPERADMIN salvo a quien la agendó. La marca es por navegador (`crm-demos-avisadas-hasta`,
+  el `created_at` más nuevo ya mirado; `demosParaAvisar`, `pages/demos/lib/demos.ts`): la primera
+  vez no avisa nada, y lo agendado con la app cerrada avisa al abrirla. Sin push, como las alarmas.
 - **«Objetivos semanales»** (17/10/2026; fue «Objetivos hoy»): el contador de la cabecera y su filtro
   `?objetivo=` cuentan desde el lunes (`startOfWeekIso`) y vuelven a cero al terminar el domingo.
   El diálogo sigue mostrando hoy, semana y mes. «No respondidas» es la primera columna.

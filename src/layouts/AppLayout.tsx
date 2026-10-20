@@ -7,6 +7,7 @@ import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { useAlarmasDeTareas } from '@/pages/crm/hooks/useAlarmasDeTareas'
 import { useAvisosDeEmails } from '@/pages/crm/hooks/useEmails'
+import { useAvisosDeDemos } from '@/pages/demos/hooks/useDemos'
 
 // El del producto sin el asistente, las sugerencias ni el saludo al entrar.
 export function AppLayout() {
@@ -18,6 +19,8 @@ export function AppLayout() {
   useAlarmasDeTareas(conCrm)
   // Lo mismo con los emails que no llegaron (20/10/2026): el toast sale aunque estés en otra página.
   useAvisosDeEmails(conCrm)
+  // Y la demo nueva (20/10/2026): solo a quien puede entrar a Demos, o sea a los SUPERADMIN.
+  useAvisosDeDemos(!!yo && puedeEntrar(yo.rol, '/demos'))
 
   return (
     <SidebarProvider defaultOpen={false}>

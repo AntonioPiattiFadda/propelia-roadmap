@@ -8,6 +8,7 @@ import { PublicRoutesAuthCheck, RequireAcceso, RequireAuth, RequireRol } from '@
 import { Roadmap } from '@/pages/roadmap/Roadmap'
 import { Backlog } from '@/pages/roadmap/Backlog'
 import { Ajustes } from '@/pages/ajustes/Ajustes'
+import { Demos } from '@/pages/demos/Demos'
 import { Crm } from '@/pages/crm/Crm'
 import { Equipo } from '@/pages/equipo/Equipo'
 import { Caja } from '@/pages/caja/Caja'
@@ -44,6 +45,7 @@ const App = () => (
                 <Route path="/roadmap" element={<Roadmap />} />
                 <Route path="/roadmap/backlog" element={<Backlog />} />
                 <Route path="/crm" element={<Crm />} />
+                <Route path="/demos" element={<Demos />} />
                 <Route path="/equipo" element={<Equipo />} />
                 <Route path="/caja" element={<Caja />} />
                 <Route path="/ajustes" element={<Ajustes />} />

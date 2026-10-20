@@ -10,6 +10,8 @@ export const CRM_KEYS = {
   detalles: ['crm', 'lead'] as const,
   detalle: (leadId: string) => ['crm', 'lead', leadId] as const,
   reuniones: (desde: string) => ['crm', 'reuniones', desde] as const,
+  /** Todas las demos, para la página Demos y el aviso de demo nueva (solo SUPERADMIN). */
+  demos: ['crm', 'reuniones', 'todas'] as const,
   /** Prefijo de todo lo de `crm_emails`: el realtime invalida esto. */
   emails: ['crm', 'emails'] as const,
   /** Los emails que no llegaron (campana de la cabecera y cartel del lead). */
