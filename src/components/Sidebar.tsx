@@ -3,7 +3,8 @@ import { Link, useLocation } from 'react-router-dom'
 import { CalendarClock, LogOut } from 'lucide-react'
 import { PlanningDiario } from '@/components/PlanningDiario'
 import propeliaIcon from '@/assets/propelia-icon.png'
-import { entradaActiva, estaActivo, navDe } from '@/components/nav'
+import { entradaActiva, estaActivo, navDe, soloSuperadmin } from '@/components/nav'
+import { SuperadminBadge } from '@/components/SuperadminBadge'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { useCerrarSesion } from '@/hooks/useCerrarSesion'
@@ -23,7 +24,7 @@ import {
 } from '@/components/ui/sidebar'
 
 /* La del producto, recortada: un solo grupo de navegación, quién sos y cerrar sesión. Sin
-   badges de superadmin ni tutorial. Ofrece solo las páginas de tu rol (`navDe`). Se abre al pasar el
+   tutorial. Las páginas que solo ve un SUPERADMIN llevan el badge SA, como en el producto (21/10/2026). Ofrece solo las páginas de tu rol (`navDe`). Se abre al pasar el
    cursor, como la del tablero vanilla y la del producto. */
 export function Sidebar() {
   const { pathname } = useLocation()
@@ -80,7 +81,12 @@ export function Sidebar() {
                 <SidebarMenuButton asChild isActive={entradaActiva(pathname, item)} tooltip={item.label}>
                   <Link to={item.path} onClick={cerrarEnTelefono}>
                     <item.icon />
+                    {/* `truncate` explícito y no el `[&>span:last-child]:truncate` del primitivo: con
+                        badge, el último hijo es el badge y la etiqueta partiría en dos líneas. */}
                     <span className="truncate">{item.label}</span>
+                    {soloSuperadmin(item) && (
+                      <SuperadminBadge className="ml-auto group-data-[collapsible=icon]:hidden" />
+                    )}
                   </Link>
                 </SidebarMenuButton>
                 {/* Siempre desplegado: son uno o dos hijos y plegarlos sería un clic de más
@@ -93,6 +99,7 @@ export function Sidebar() {
                           <Link to={hijo.path} onClick={cerrarEnTelefono}>
                             <hijo.icon />
                             <span className="truncate">{hijo.label}</span>
+                            {soloSuperadmin(hijo) && <SuperadminBadge className="ml-auto" />}
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>

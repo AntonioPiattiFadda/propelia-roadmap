@@ -64,6 +64,7 @@ describe('lineaDeTiempo', () => {
 describe('lineaDeTiempo · reuniones', () => {
   const reunion = (id: string, extra: Partial<CrmMeeting> = {}): CrmMeeting => ({
     id, lead_id: 'x', assigned_to: 'l', title: 'Demo', description: null, status: 'scheduled', cancel_reason: null,
+    sync_status: 'disabled', sync_error: null, sync_attempts: 0, external_event_id: null, external_provider: null, ics_sequence: 0, color_id: null, reminder_minutes: null, guest_user_ids: [], guest_emails: [],
     // Hora local armada a mano: el texto se lee en la zona de quien mira.
     starts_at: new Date(2026, 9, 7, 12, 0).toISOString(), ends_at: new Date(2026, 9, 7, 13, 0).toISOString(),
     created_by: 'a', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-01T10:00:00Z', deleted_at: null, ...extra,

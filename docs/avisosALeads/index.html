@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="es"><!--
+  Visor de los previews de los mails a la inmobiliaria (Avisos a leads), copiado de
+  docs/leadNotifications/ de propelia-frontend (21/10/2026). Abrilo en el navegador (doble clic, o
+  "node ../../.claude/static-server.mjs" corrido desde esta carpeta) y cambiá de template con el
+  select. Los *-preview.html se editan a mano para iterar; los *-generated.html los escribe
+  generar.ts con el template real. Ver el encabezado de generar.ts. Cada template es un .html
+  independiente: el visor sólo lo carga en un iframe, no les agrega nada.
+  Se puede abrir directo en uno: index.html#visit-cancelled-preview.html
+-->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Avisos a leads</title>
+<style>
+  :root {
+    --bg: #eef2f5; --surface: #ffffff; --border: #dceaf3;
+    --text: #142f47; --muted: #55728b; --brand: #3644f2;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0f1720; --surface: #17212c; --border: #26333f; --text: #e6edf3; --muted: #94a7b8; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    position: sticky; top: 0; z-index: 1;
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
+  }
+  h1 { margin: 0; font-size: 14px; font-weight: 600; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  select, button {
+    font: inherit; font-size: 13px; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px;
+  }
+  select:focus-visible, button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
+  button { cursor: pointer; }
+  button[aria-pressed="true"] { border-color: var(--brand); color: var(--brand); }
+  .subject { width: 100%; font-size: 12px; color: var(--muted); }
+  .subject strong { color: var(--text); font-weight: 600; }
+  main { display: flex; justify-content: center; padding: 16px; }
+  iframe {
+    width: 100%; max-width: 760px; height: calc(100vh - 140px); min-height: 560px;
+    border: 1px solid var(--border); border-radius: 12px; background: #f2f6f9;
+    transition: max-width .2s ease;
+  }
+  iframe.mobile { max-width: 390px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Avisos a leads · mails de demo</h1>
+  <div class="controls">
+    <label for="tpl" class="subject" style="width:auto">Template</label>
+    <select id="tpl">
+      <optgroup label="Demos (previews, se editan a mano)">
+        <option value="demo-scheduled-preview.html">Demo agendada</option>
+        <option value="demo-rescheduled-preview.html">Demo reprogramada</option>
+        <option value="demo-cancelled-preview.html">Demo cancelada</option>
+        <option value="demo-reminder-day-before-preview.html">Recordatorio: el día antes</option>
+        <option value="demo-reminder-same-day-preview.html">Recordatorio: el mismo día</option>
+        <option value="demo-review-request-preview.html">Pedido de reseña</option>
+      </optgroup>
+      <optgroup label="Generados con el template real (generar.ts)">
+        <option value="demo-scheduled-generated.html">Demo agendada</option>
+        <option value="demo-rescheduled-generated.html">Demo reprogramada</option>
+        <option value="demo-cancelled-generated.html">Demo cancelada</option>
+      </optgroup>
+      <optgroup label="Ajustes">
+        <option value="admin-preferences-reference.html">Avisos a leads (referencia de la tabla)</option>
+      </optgroup>
+    </select>
+    <button id="mobile" type="button" aria-pressed="false">Ancho móvil</button>
+    <button id="open" type="button">Abrir solo</button>
+  </div>
+  <p class="subject" id="subject"></p>
+</header>
+<main>
+  <iframe id="frame" title="Preview del mail"></iframe>
+</main>
+<script>
+  const select = document.getElementById('tpl');
+  const frame = document.getElementById('frame');
+  const subject = document.getElementById('subject');
+  const mobile = document.getElementById('mobile');
+
+  function load(file) {
+    if (![...select.options].some(o => o.value === file)) file = select.options[0].value;
+    select.value = file;
+    frame.src = file;
+    history.replaceState(null, '', '#' + file);
+  }
+
+  // El asunto vive en el comentario de cabecera de cada template ("Asunto: ...").
+  frame.addEventListener('load', () => {
+    try {
+      const doc = frame.contentDocument;
+      const comment = [...doc.childNodes, ...doc.documentElement.childNodes, ...doc.body.childNodes]
+        .find(n => n.nodeType === Node.COMMENT_NODE && n.textContent.includes('Asunto:'));
+      const m = comment && comment.textContent.match(/Asunto:\s*(.+)/);
+      subject.innerHTML = m ? 'Asunto: <strong></strong>' : '';
+      if (m) subject.querySelector('strong').textContent = m[1].trim();
+    } catch { subject.textContent = ''; } // file:// en Chrome bloquea leer el iframe
+  });
+
+  select.addEventListener('change', () => load(select.value));
+  mobile.addEventListener('click', () => {
+    const on = frame.classList.toggle('mobile');
+    mobile.setAttribute('aria-pressed', String(on));
+  });
+  document.getElementById('open').addEventListener('click', () => window.open(select.value, '_blank'));
+
+  load(decodeURIComponent(location.hash.slice(1)));
+</script>
+</body>
+</html>

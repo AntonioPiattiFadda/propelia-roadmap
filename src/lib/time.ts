@@ -8,7 +8,30 @@ export const TIME_VALUES = Array.from({ length: 24 * 4 }, (_, i) => {
   return `${hours}:${minutes}`
 })
 
-export const formatTime12h = (hhmm: string): string => {
+// Horarios sugeridos al agendar: sin noche ni madrugada (07:00 a 22:00). Cualquier otro
+// horario se escribe a mano en el mismo selector.
+export const SUGGESTED_TIME_VALUES = TIME_VALUES.filter(t => t >= '07:00' && t <= '22:00')
+
+// Interpreta lo que el usuario escribe como hora y devuelve "HH:MM" en 24h, o null si
+// no es una hora válida. Acepta "9", "9:10", "0910", "910", "21.30", "9:10pm", "9 am".
+export const parseTimeInput = (raw: string): string | null => {
+  const text = raw.trim().toLowerCase().replace(/\s+/g, '')
+  const match = /^(\d{1,2})(?:[:.h]?(\d{2}))?(am|pm|a|p)?$/.exec(text)
+  if (!match) return null
+  let hours = Number(match[1])
+  const minutes = match[2] ? Number(match[2]) : 0
+  const period = match[3]?.[0]
+  if (minutes > 59) return null
+  if (period) {
+    if (hours < 1 || hours > 12) return null
+    if (period === 'a' && hours === 12) hours = 0
+    if (period === 'p' && hours !== 12) hours += 12
+  }
+  if (hours > 23) return null
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+}
+
+export const formatTime12h =(hhmm: string): string => {
   const [h, m] = hhmm.split(':').map(Number)
   const period = h < 12 ? 'am' : 'pm'
   const hour12 = h % 12 === 0 ? 12 : h % 12

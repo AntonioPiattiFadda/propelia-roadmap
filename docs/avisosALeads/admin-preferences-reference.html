@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="es"><!--
+  REFERENCIA de UI (no es código de producción): Ajustes → "Avisos a leads", vista del SUPERADMIN.
+  Copiada de docs/leadNotifications/ de propelia-frontend (21/10/2026), con demos en vez de visitas.
+
+  Un SUPERADMIN decide, para todo el equipo, qué avisos le salen a la inmobiliaria en cada evento y
+  por qué vía (email, SMS, WhatsApp). Una tabla evento × vía: cada fila es un evento, cada columna
+  una vía. Los eventos son los de las plantillas de este directorio (ver index.html).
+
+  Una pastilla se puede prender sólo si el evento Y la vía están habilitados:
+    - evento: todos menos los dos recordatorios (día antes / mismo día) y el pedido de reseña,
+      que quedan "Próximamente".
+    - vía:    está en AVAILABLE_CHANNELS de _shared/leadNotifications/channels.ts (hoy sólo email)
+  Todos se mandan solos: el trigger de crm_meetings encola y el dispatcher manda. Sin el grupo
+  «Propiedad» del producto (vendida / alquilada, con confirmación): acá no hay inmuebles.
+
+  Modelo (migración 20261021155052_lead_notifications; arranca todo apagado):
+
+    lead_notification_preferences
+      id          uuid  primary key
+      event_type  text  demo_scheduled | demo_rescheduled | ...
+      channel     text  email | sms | whatsapp
+      enabled     bool  default false        sin fila = apagado
+      updated_by  uuid  → users(id)          qué SUPERADMIN lo tocó
+      updated_at  timestamptz
+      unique (event_type, channel)
+
+    RLS: select → es_usuario().  insert/update/delete → crm_es_superadmin().
+    Dispatcher: enabledChannels(event.type).
+
+  Abrilo en el navegador: es un .html suelto, sin dependencias.
+-->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Avisos a leads (admin)</title>
+<style>
+  :root {
+    --bg: #f6f7fb; --surface: #ffffff; --surface-2: #f3f4f8; --border: #e4e6ef;
+    --text: #141a33; --muted: #646b85; --brand: #3644f2; --brand-soft: #eef0ff; --brand-fg: #fff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1120; --surface: #161a2c; --surface-2: #1c2136; --border: #2a3049;
+      --text: #e7e9f3; --muted: #9aa0ba; --brand: #6f7bff; --brand-soft: #232a55; --brand-fg: #fff;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1120; --surface: #161a2c; --surface-2: #1c2136; --border: #2a3049;
+    --text: #e7e9f3; --muted: #9aa0ba; --brand: #6f7bff; --brand-soft: #232a55; --brand-fg: #fff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text); font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  .page { max-width: 760px; margin: 0 auto; padding: 24px 16px 96px; display: flex; flex-direction: column; gap: 16px; }
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tab { padding: 6px 10px; border-radius: 8px; color: var(--muted); }
+  .tab.active { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 0 0 1px var(--border); }
+  h2 { margin: 0; font-size: 14px; font-weight: 600; }
+  p { margin: 0; }
+  .muted { color: var(--muted); }
+  .head { display: flex; flex-direction: column; gap: 4px; }
+  .soon { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 420px; }
+  th, td { padding: 10px 12px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: 0; }
+  thead th { background: var(--surface-2); font-weight: 600; font-size: 11px; }
+  th.ev, td.ev { text-align: left; width: 100%; }
+  tr.group td { background: var(--surface-2); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; padding: 6px 12px; text-align: left; }
+  .evname { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .evname a { color: inherit; text-decoration: none; border-bottom: 1px dashed var(--border); font-weight: 500; }
+  .evname a:hover { color: var(--brand); border-color: var(--brand); }
+  .chhead { display: inline-flex; flex-direction: column; align-items: center; gap: 4px; }
+  .chhead svg { width: 14px; height: 14px; }
+  tr.off td.ev { color: var(--muted); }
+  .mode { font-size: 10px; padding: 1px 6px; border-radius: 999px; background: var(--brand-soft); color: var(--brand); white-space: nowrap; }
+
+  /* Mock de la user_suggestion que aparece al marcar una propiedad como vendida. */
+  .sugg { max-width: 380px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+  .sugg .kicker { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .sugg .actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .sugg .actions button { font: inherit; border-radius: 8px; padding: 6px 12px; cursor: pointer; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+  .sugg .actions .primary { background: var(--brand); border-color: var(--brand); color: var(--brand-fg); font-weight: 600; }
+
+  /* Pastilla de vía: sólo el ícono; el nombre va en la cabecera de la columna y en aria-label. */
+  .chip {
+    font: inherit; width: 28px; height: 28px; padding: 0; border-radius: 999px; cursor: pointer;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .chip svg { width: 14px; height: 14px; flex: none; }
+  .chip[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: var(--brand-fg); }
+  .chip:disabled { cursor: not-allowed; opacity: .35; }
+  .chip:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .chip.dirty { box-shadow: 0 0 0 3px var(--brand-soft); }
+
+  .bar {
+    position: fixed; left: 50%; bottom: 16px; transform: translate(-50%, 140%); transition: transform .2s ease;
+    display: flex; gap: 12px; align-items: center; padding: 10px 12px 10px 16px; border-radius: 12px;
+    background: var(--text); color: var(--bg); box-shadow: 0 8px 24px rgba(0,0,0,.2); width: max-content; max-width: calc(100% - 32px);
+  }
+  .bar.show { transform: translate(-50%, 0); }
+  .bar button { font: inherit; border-radius: 8px; padding: 6px 12px; cursor: pointer; border: 0; }
+  .bar .ghost { background: transparent; color: inherit; opacity: .8; }
+  .bar .primary { background: var(--brand); color: var(--brand-fg); font-weight: 600; }
+
+  .notes { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .note { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 4px; }
+  .note b { font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <nav class="tabs" aria-label="Ajustes">
+    <span class="tab">Integraciones</span><span class="tab active">Avisos a leads</span><span class="tab">Vídeo presentación por mail</span>
+  </nav>
+
+  <div class="head">
+    <h2>Avisos a leads</h2>
+    <p class="muted">Qué le avisamos a las inmobiliarias y por dónde. Vale para todo el equipo. Si la inmobiliaria responde, le llega a quien tiene la demo (si su email es de @propelia.es; si no, a info@propelia.es).</p>
+  </div>
+
+  <div class="card">
+    <div class="scroll">
+      <table>
+        <thead><tr id="head"><th class="ev">Evento</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note"><b>Para todo el equipo</b><span class="muted">Un miembro nuevo usa esta misma configuración desde el primer día. Sólo los SUPERADMIN ven esta pestaña.</span></div>
+    <div class="note"><b>Próximamente</b><span class="muted">Las vías y los eventos que todavía no se envían se ven deshabilitados.</span></div>
+    <div class="note"><b>A quién le llega</b><span class="muted">Al mail de la invitación de la demo (nunca a Lorenzo ni a nadie del equipo) y, si no hay, al de la inmobiliaria.</span></div>
+  </div>
+
+</div>
+
+<div class="bar" id="bar" role="status" aria-live="polite">
+  <span id="count"></span>
+  <button type="button" class="ghost" id="discard">Descartar</button>
+  <button type="button" class="primary" id="save">Guardar</button>
+</div>
+
+<script>
+  // Vías: `live` = está en AVAILABLE_CHANNELS.
+  const CHANNELS = [
+    { id: 'email', label: 'Email', live: true, icon: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>' },
+    { id: 'sms', label: 'SMS', icon: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>' },
+    { id: 'whatsapp', label: 'WhatsApp', icon: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>' },
+  ];
+  // Íconos de Lucide (mail, message-square, message-circle), como el wrapper Icon de la app.
+  const svg = (ch) =>
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ch.icon}</svg>`;
+  // `live` = se puede prender.
+  const EVENTS = [
+    { group: 'Demos', type: 'demo_scheduled', label: 'Demo agendada', file: 'demo-scheduled-preview.html', live: true },
+    { group: 'Demos', type: 'demo_rescheduled', label: 'Demo reprogramada', file: 'demo-rescheduled-preview.html', live: true },
+    { group: 'Demos', type: 'demo_cancelled', label: 'Demo cancelada', file: 'demo-cancelled-preview.html', live: true },
+    { group: 'Demos', type: 'demo_reminder_day_before', label: 'Recordatorio día antes', file: 'demo-reminder-day-before-preview.html' },
+    { group: 'Demos', type: 'demo_reminder_same_day', label: 'Recordatorio mismo día', file: 'demo-reminder-same-day-preview.html' },
+    { group: 'Demos', type: 'demo_review_request', label: 'Pedido de reseña', file: 'demo-review-request-preview.html' },
+  ];
+  // Estado guardado: lo que vendría de lead_notification_preferences (del equipo).
+  let saved = { 'demo_scheduled|email': true };
+  let draft = { ...saved };
+
+  const key = (e, c) => `${e}|${c}`;
+  const on = (state, e, c) => !!state[key(e, c)];
+  const usable = (ev, ch) => !!(ev.live && ch.live);
+
+  const head = document.getElementById('head');
+  for (const ch of CHANNELS) {
+    const th = document.createElement('th');
+    th.innerHTML = `<span class="chhead">${svg(ch)}${ch.label}${ch.live ? '' : '<span class="soon">Próximamente</span>'}</span>`;
+    head.appendChild(th);
+  }
+
+  const tbody = document.getElementById('rows');
+  EVENTS.forEach((ev, i) => {
+    if (i === 0 || EVENTS[i - 1].group !== ev.group) {
+      const gtr = document.createElement('tr');
+      gtr.className = 'group';
+      gtr.innerHTML = `<td colspan="${CHANNELS.length + 1}">${ev.group}</td>`;
+      tbody.appendChild(gtr);
+    }
+    const tr = document.createElement('tr');
+    if (!ev.live) tr.className = 'off';
+    tr.innerHTML = `<td class="ev"><div class="evname"><a href="${ev.file}" target="_blank" title="Ver plantilla">${ev.label}</a>${
+      ev.confirm ? '<span class="mode" title="Se ofrece como sugerencia al cerrar la propiedad">Con confirmación</span>' : ''}${
+      ev.live ? '' : '<span class="soon">Próximamente</span>'}</div></td>` +
+      CHANNELS.map((ch) => `<td><button type="button" class="chip" data-e="${ev.type}" data-c="${ch.id}" title="${ch.label}"
+        aria-label="${ev.label} por ${ch.label}" aria-pressed="false" ${usable(ev, ch) ? '' : 'disabled'}>${svg(ch)}</button></td>`).join('');
+    tbody.appendChild(tr);
+  });
+
+  function render() {
+    document.querySelectorAll('.chip[data-e]').forEach((b) => {
+      const { e, c } = b.dataset;
+      b.setAttribute('aria-pressed', String(on(draft, e, c)));
+      b.classList.toggle('dirty', on(draft, e, c) !== on(saved, e, c));
+    });
+    const changes = Object.keys({ ...saved, ...draft }).filter((k) => !!saved[k] !== !!draft[k]).length;
+    document.getElementById('count').textContent = `${changes} ${changes === 1 ? 'cambio' : 'cambios'} sin guardar`;
+    document.getElementById('bar').classList.toggle('show', changes > 0);
+  }
+
+  document.addEventListener('click', (e) => {
+    const t = e.target.closest('button.chip[data-e]');
+    if (!t || t.disabled) return;
+    const { e: ev, c } = t.dataset;
+    draft[key(ev, c)] = !on(draft, ev, c);
+    render();
+  });
+  document.getElementById('discard').onclick = () => { draft = { ...saved }; render(); };
+  document.getElementById('save').onclick = () => { saved = { ...draft }; render(); };
+  render();
+</script>
+</body>
+</html>

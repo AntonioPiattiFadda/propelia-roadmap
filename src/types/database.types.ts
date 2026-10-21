@@ -16,6 +16,71 @@ export type Database = {
   }
   public: {
     Tables: {
+      calendar_connections: {
+        Row: {
+          access_token: string | null
+          calendar_id: string
+          connected_email: string | null
+          created_at: string
+          id: string
+          provider: string
+          refresh_token: string
+          status: string
+          sync_token: string | null
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+          watch_channel_id: string | null
+          watch_expires_at: string | null
+          watch_resource_id: string | null
+          watch_token: string | null
+        }
+        Insert: {
+          access_token?: string | null
+          calendar_id?: string
+          connected_email?: string | null
+          created_at?: string
+          id?: string
+          provider: string
+          refresh_token: string
+          status?: string
+          sync_token?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+          watch_channel_id?: string | null
+          watch_expires_at?: string | null
+          watch_resource_id?: string | null
+          watch_token?: string | null
+        }
+        Update: {
+          access_token?: string | null
+          calendar_id?: string
+          connected_email?: string | null
+          created_at?: string
+          id?: string
+          provider?: string
+          refresh_token?: string
+          status?: string
+          sync_token?: string | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+          watch_channel_id?: string | null
+          watch_expires_at?: string | null
+          watch_resource_id?: string | null
+          watch_token?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_connections_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_assignment_history: {
         Row: {
           changed_at: string
@@ -347,6 +412,27 @@ export type Database = {
           },
         ]
       }
+      crm_email_plantillas: {
+        Row: {
+          campos: Json
+          plantilla: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          campos?: Json
+          plantilla: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          campos?: Json
+          plantilla?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       crm_emails: {
         Row: {
           id: string
@@ -624,45 +710,75 @@ export type Database = {
         Row: {
           assigned_to: string
           cancel_reason: string | null
+          color_id: string | null
           created_at: string
           created_by: string | null
           deleted_at: string | null
           description: string | null
           ends_at: string
+          external_event_id: string | null
+          external_provider: string | null
+          guest_emails: string[]
+          guest_user_ids: string[]
+          ics_sequence: number
           id: string
           lead_id: string | null
+          reminder_minutes: number | null
           starts_at: string
           status: string
+          sync_attempts: number
+          sync_error: string | null
+          sync_status: string
           title: string | null
           updated_at: string
         }
         Insert: {
           assigned_to: string
           cancel_reason?: string | null
+          color_id?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           ends_at: string
+          external_event_id?: string | null
+          external_provider?: string | null
+          guest_emails?: string[]
+          guest_user_ids?: string[]
+          ics_sequence?: number
           id?: string
           lead_id?: string | null
+          reminder_minutes?: number | null
           starts_at: string
           status?: string
+          sync_attempts?: number
+          sync_error?: string | null
+          sync_status?: string
           title?: string | null
           updated_at?: string
         }
         Update: {
           assigned_to?: string
           cancel_reason?: string | null
+          color_id?: string | null
           created_at?: string
           created_by?: string | null
           deleted_at?: string | null
           description?: string | null
           ends_at?: string
+          external_event_id?: string | null
+          external_provider?: string | null
+          guest_emails?: string[]
+          guest_user_ids?: string[]
+          ics_sequence?: number
           id?: string
           lead_id?: string | null
+          reminder_minutes?: number | null
           starts_at?: string
           status?: string
+          sync_attempts?: number
+          sync_error?: string | null
+          sync_status?: string
           title?: string | null
           updated_at?: string
         }
@@ -991,6 +1107,156 @@ export type Database = {
           },
         ]
       }
+      lead_notification_deliveries: {
+        Row: {
+          channel: string
+          created_at: string
+          error: string | null
+          event_id: string
+          id: string
+          provider_message_id: string | null
+          recipient: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          error?: string | null
+          event_id: string
+          id?: string
+          provider_message_id?: string | null
+          recipient?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          error?: string | null
+          event_id?: string
+          id?: string
+          provider_message_id?: string | null
+          recipient?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_notification_deliveries_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "lead_notification_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_notification_events: {
+        Row: {
+          actor_user_id: string
+          attempts: number
+          created_at: string
+          dedupe_key: string
+          id: string
+          last_error: string | null
+          locked_at: string | null
+          next_attempt_at: string
+          payload: Json
+          processed_at: string | null
+          status: string
+          subject_id: string
+          type: string
+        }
+        Insert: {
+          actor_user_id: string
+          attempts?: number
+          created_at?: string
+          dedupe_key?: string
+          id?: string
+          last_error?: string | null
+          locked_at?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          processed_at?: string | null
+          status?: string
+          subject_id: string
+          type: string
+        }
+        Update: {
+          actor_user_id?: string
+          attempts?: number
+          created_at?: string
+          dedupe_key?: string
+          id?: string
+          last_error?: string | null
+          locked_at?: string | null
+          next_attempt_at?: string
+          payload?: Json
+          processed_at?: string | null
+          status?: string
+          subject_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_notification_events_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_notification_preferences: {
+        Row: {
+          channel: string
+          enabled: boolean
+          event_type: string
+          id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          channel: string
+          enabled?: boolean
+          event_type: string
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          channel?: string
+          enabled?: boolean
+          event_type?: string
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_notification_preferences_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      oauth_state_nonces: {
+        Row: {
+          nonce: string
+          used_at: string
+        }
+        Insert: {
+          nonce: string
+          used_at?: string
+        }
+        Update: {
+          nonce?: string
+          used_at?: string
+        }
+        Relationships: []
+      }
       roadmap_notas: {
         Row: {
           id: string
@@ -1106,6 +1372,7 @@ export type Database = {
           firma_telefono: string | null
           id: string
           iniciales: string
+          last_meeting_color_id: string | null
           last_name: string | null
           nombre: string
           rol: Database["public"]["Enums"]["user_role"]
@@ -1124,6 +1391,7 @@ export type Database = {
           firma_telefono?: string | null
           id: string
           iniciales: string
+          last_meeting_color_id?: string | null
           last_name?: string | null
           nombre: string
           rol?: Database["public"]["Enums"]["user_role"]
@@ -1142,6 +1410,7 @@ export type Database = {
           firma_telefono?: string | null
           id?: string
           iniciales?: string
+          last_meeting_color_id?: string | null
           last_name?: string | null
           nombre?: string
           rol?: Database["public"]["Enums"]["user_role"]
@@ -1178,6 +1447,11 @@ export type Database = {
         Returns: boolean
       }
       crm_email_visto: { Args: { p_id: string; p_visto?: boolean }; Returns: undefined }
+      claim_lead_notification_events: {
+        Args: { p_limit: number }
+        Returns: Database["public"]["Tables"]["lead_notification_events"]["Row"][]
+      }
+      crm_set_last_meeting_color: { Args: { p_color_id: string | null }; Returns: undefined }
       crm_set_member_phone: {
         Args: { p_phone: string; p_user_id: string }
         Returns: undefined

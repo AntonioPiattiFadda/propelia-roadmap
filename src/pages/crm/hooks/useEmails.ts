@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useUserSession } from '@/hooks/useUserSession'
-import { getEmailsQueNoLlegaron, getEstadoDeEnvio, marcarEmailVisto, type EmailQueNoLlego } from '../service/email.service'
+import { getEmailsQueNoLlegaron, getEstadoDeEnvio, getPlantillasGuardadas, marcarEmailVisto, type EmailQueNoLlego } from '../service/email.service'
 import { avisosSinVer, estadoDelEnvio, motivoLegible, rotuloDelEstado } from '../lib/emails'
 import { enlaceAlCrm, escribirLeadAbierto } from '../lib/leadFilterParams'
 import { CRM_KEYS } from './keys'
@@ -18,6 +18,11 @@ export function useEmailsQueNoLlegaron(opciones: { enabled?: boolean; refetchInt
     refetchInterval: opciones.refetchInterval,
     refetchIntervalInBackground: opciones.refetchInterval != null,
   })
+}
+
+/** El último enviado de cada plantilla. Lo invalida el envío (y el realtime de `crm_emails`, por prefijo). */
+export function usePlantillasGuardadas() {
+  return useQuery({ queryKey: CRM_KEYS.plantillasGuardadas, queryFn: getPlantillasGuardadas, staleTime: 60_000 })
 }
 
 /** El estado de un envío recién hecho. Pregunta cada 4 s hasta que Resend lo cierra (entregado o

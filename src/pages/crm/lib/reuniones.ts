@@ -55,3 +55,21 @@ export function leerDescripcionDeDemo(descripcion: string | null): { email: stri
   }
   return { email, asistentes, notas: notas.join('\n').trim() }
 }
+
+/** Invitado fijo de toda demo (21/10/2026, por pedido), además de la inmobiliaria. */
+export const INVITADO_DE_TODA_DEMO = 'lorenzo.piattifadda@gmail.com'
+
+/**
+ * El enlace a /agenda con todo lo de la demo en searchParams, como el «Agendar visita» del producto:
+ * la Agenda lo lee (`schedulingContext`) y la reunión que se cree tocando la grilla queda atada al
+ * lead, del responsable y con los invitados ya cargados. Los mails van en `guestEmail` repetido, en
+ * minúscula y sin duplicados; uno inválido no entra.
+ */
+export function enlaceParaAgendarDemo(d: {
+  leadId: string; assignedTo: string; title: string; description: string; email: string
+}): string {
+  const p = new URLSearchParams({ leadId: d.leadId, assignedTo: d.assignedTo, title: d.title, description: d.description })
+  const emails = [d.email, INVITADO_DE_TODA_DEMO].map(e => e.trim().toLowerCase()).filter(esEmailValido)
+  for (const e of new Set(emails)) p.append('guestEmail', e)
+  return `/agenda?${p.toString()}`
+}

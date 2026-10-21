@@ -26,6 +26,7 @@ const tarea = (id: string, assigned: string, due: string, leadId: string | null 
 const reunion = (id: string, assigned: string, status: CrmMeeting['status']): CrmMeeting => ({
   id, lead_id: null, assigned_to: assigned, starts_at: '', ends_at: '', status, title: null, description: null,
   cancel_reason: null, created_by: null, created_at: '', updated_at: '', deleted_at: null,
+  sync_status: 'disabled', sync_error: null, sync_attempts: 0, external_event_id: null, external_provider: null, ics_sequence: 0, color_id: null, reminder_minutes: null, guest_user_ids: [], guest_emails: [],
 })
 
 describe('estadisticasPorCartera', () => {

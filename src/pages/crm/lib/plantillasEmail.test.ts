@@ -142,3 +142,26 @@ describe('nombre en la bandeja', () => {
     expect(nombreEnBandeja(remitenteDe(null))).toBe('Propelia')
   })
 })
+
+describe('el último enviado es la plantilla', () => {
+  it('guarda el texto, pero no el nombre del lead ni el botón armado solo', async () => {
+    const { conGuardada, plantillaGuardable, predeterminadosPara } = await import('../../../../supabase/functions/_shared/plantillasEmail.ts')
+    const r = remitenteDe({ nombre: 'Lorenzo', phone: '+34 600 11 22 33' })
+    const enviado = { ...predeterminadosPara('presentacion-video', r, { nombre: 'Ana' }), nombre: 'Ana', asunto: 'Nuevo asunto' }
+    const g = plantillaGuardable('presentacion-video', enviado)
+    expect(g.asunto).toBe('Nuevo asunto')
+    expect(g).not.toHaveProperty('nombre')
+    expect(g).not.toHaveProperty('urlBoton')
+    // Un enlace escrito a mano sí queda.
+    expect(plantillaGuardable('puntual', { ...enviado, urlBoton: 'https://calendly.com/x' }).urlBoton).toBe('https://calendly.com/x')
+    // Al abrir: lo guardado sobre lo de fábrica, solo los campos que la plantilla edita.
+    const base = predeterminadosPara('puntual', r, { nombre: 'Luis' })
+    const c = conGuardada('puntual', base, { asunto: 'Otro', nombre: 'Ana', puntos: 'x', cuerpo: 3 })
+    expect(c.asunto).toBe('Otro')
+    expect(c.nombre).toBe(base.nombre)
+    expect(c.puntos).toBe(base.puntos)
+    expect(c.cuerpo).toBe(base.cuerpo)
+    expect(c.urlBoton).toBe(base.urlBoton)
+    expect(conGuardada('puntual', base, null)).toEqual(base)
+  })
+})

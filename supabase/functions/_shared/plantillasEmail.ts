@@ -178,6 +178,35 @@ export function predeterminadosPara(id: PlantillaEmailId, r: Remitente, d?: Dest
   return { ...plantillaEmail(id)!.predeterminados, urlBoton: whatsappDe(r, d, id) }
 }
 
+/* El último enviado es la plantilla (21/10/2026, por pedido): `send-email` guarda en
+   `crm_email_plantillas` el texto de cada envío y el diálogo arranca desde ahí. Es una por plantilla
+   y del equipo, no de cada uno. Lo que es de ese envío y no de la plantilla no se guarda: el nombre
+   del lead y el botón armado solo (el WhatsApp o el mailto de quien mandó, con el nombre del lead
+   adentro). Un enlace del botón escrito a mano (un Calendly) sí queda. */
+const BOTON_AUTOMATICO = /^(https:\/\/wa\.me\/|mailto:)/i
+
+/** Lo que de un envío pasa a ser la plantilla de la próxima vez. */
+export function plantillaGuardable(id: PlantillaEmailId, c: CamposEmail): Partial<CamposEmail> {
+  const out: Partial<CamposEmail> = {}
+  for (const k of plantillaEmail(id)!.editables) {
+    if (k === 'nombre') continue
+    if (k === 'urlBoton' && (!c.urlBoton.trim() || BOTON_AUTOMATICO.test(c.urlBoton.trim()))) continue
+    out[k] = c[k]
+  }
+  return out
+}
+
+/** Los campos de fábrica con lo guardado encima. Solo entra lo que la plantilla edita y es texto. */
+export function conGuardada(id: PlantillaEmailId, base: CamposEmail, guardada: unknown): CamposEmail {
+  if (!guardada || typeof guardada !== 'object' || Array.isArray(guardada)) return base
+  const g = guardada as Record<string, unknown>
+  const out = { ...base }
+  for (const k of plantillaEmail(id)!.editables) {
+    if (k !== 'nombre' && typeof g[k] === 'string') out[k] = g[k] as string
+  }
+  return out
+}
+
 export const ROTULOS_CAMPOS: Record<CampoEmail, string> = {
   asunto: 'Asunto',
   preencabezado: 'Preencabezado',

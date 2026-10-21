@@ -415,3 +415,14 @@ enabled = true
 [functions.resend-webhook]
 # Lo llama Resend, que no tiene JWT: la autenticación es la firma svix (RESEND_WEBHOOK_SECRET).
 verify_jwt = false
+
+# Redirect al que Google manda el navegador al terminar el consentimiento OAuth (copiado de
+# propelia-frontend). Es una navegación del browser, no hay JWT posible: se autentica validando el
+# `state` firmado contra `oauth_state_nonces`.
+[functions.calendar-oauth-callback]
+verify_jwt = false
+
+# Push notification de Google Calendar: la emite la infraestructura de Google, sin JWT. Se
+# autentica comparando el header `x-goog-channel-token` contra `calendar_connections.watch_token`.
+[functions.calendar-webhook]
+verify_jwt = false

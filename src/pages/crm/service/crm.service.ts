@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { Json, TablesInsert, TablesUpdate } from '@/types/database.types'
+import { cancelMeeting, requestMeetingSync } from '@/pages/agenda/service/meetings.service'
 import type { FilaDelLote } from '../lib/importarLote'
 import type { NivelAcceso } from '../lib/permisos'
 import type {
@@ -209,11 +210,23 @@ export async function actualizarTarea(id: string, patch: TareaPatch): Promise<Cr
   return unaFila(data)
 }
 
-export type ReunionNueva = Pick<TablesInsert<'crm_meetings'>, 'lead_id' | 'assigned_to' | 'starts_at' | 'ends_at' | 'title' | 'description'>
+export type ReunionNueva = Pick<TablesInsert<'crm_meetings'>, 'lead_id' | 'assigned_to' | 'starts_at' | 'ends_at' | 'title' | 'description' | 'guest_emails'>
 
+/* Desde el 21/10/2026 la reunión va sola al Google Calendar de su responsable, si lo tiene
+   conectado (`calendar-sync`, copiado del producto). Nace con `sync_status = 'pending'` y se empuja
+   en el momento, fire-and-forget: si falla, la levanta el barrido de cada 5 minutos. */
 export async function crearReunion(input: ReunionNueva): Promise<CrmMeeting> {
   const { data, error } = await supabase.from('crm_meetings').insert(input).select().single()
   if (error) throw error
+  requestMeetingSync(data.id).catch(() => {})
+  return data
+}
+
+/* Cancelar re-encola el sync: borra el evento de Google y Google les avisa a los invitados.
+   Marcarla hecha (`actualizarReunion` con status) no, a propósito: ver `markMeetingOutcome`. */
+export async function cancelarReunion(reunion: Pick<CrmMeeting, 'id' | 'ics_sequence'>, motivo: string | null): Promise<CrmMeeting> {
+  const data = await cancelMeeting(reunion.id, reunion, motivo)
+  requestMeetingSync(data.id).catch(() => {})
   return data
 }
 

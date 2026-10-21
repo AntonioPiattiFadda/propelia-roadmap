@@ -1607,3 +1607,433 @@ begin
     alter publication supabase_realtime add table public.crm_emails;
   end if;
 end $$;
+
+-- ---------- La plantilla de cada email es el último enviado: crm_email_plantillas
+-- (migración 20261021121051_crm_email_plantillas) ----------
+-- El último email enviado de cada plantilla es la plantilla (21/10/2026). `send-email` guarda acá
+-- el texto de cada envío («Presentación con vídeo» y «Mail puntual») y el diálogo «Mensajes» del
+-- CRM arranca desde ahí en vez del texto de fábrica de `_shared/plantillasEmail.ts`. Una fila por
+-- plantilla, del equipo. Sin el nombre del lead ni el botón armado solo (`plantillaGuardable`).
+-- Escribe solo la service role: no hay policies de escritura.
+create table if not exists public.crm_email_plantillas (
+  plantilla  text primary key check (plantilla in ('presentacion-video', 'puntual')),
+  campos     jsonb not null default '{}',
+  updated_by uuid references public.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.crm_email_plantillas enable row level security;
+
+drop policy if exists crm_email_plantillas_leer on public.crm_email_plantillas;
+create policy crm_email_plantillas_leer on public.crm_email_plantillas for select using (public.es_usuario());
+
+-- ---------- Google Calendar: conexión, agenda y sync de reuniones
+-- (migración 20261021151726_crm_google_calendar) ----------
+-- (Ver el encabezado de la migración: secrets que hacen falta y de dónde se copió.)
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+-- ---------- La conexión de cada uno ----------
+-- Una fila por persona y proveedor (hoy solo Google). Los tokens van cifrados (AES-GCM con
+-- TOKEN_ENCRYPTION_KEY) y no los lee nadie más que la service role: el front ve solo las columnas
+-- de abajo y solo su fila. Sin `organization_id` (el producto lo tiene): acá no hay organizaciones.
+create table if not exists public.calendar_connections (
+  id                uuid primary key default gen_random_uuid(),
+  user_id           uuid not null references public.users(id),
+  provider          text not null check (provider = 'google'),
+  refresh_token     text not null,
+  access_token      text,
+  token_expires_at  timestamptz,
+  connected_email   text,
+  calendar_id       text not null default 'primary',
+  watch_channel_id  text,
+  watch_resource_id text,
+  watch_expires_at  timestamptz,
+  watch_token       text,
+  sync_token        text,
+  status            text not null default 'active' check (status in ('active', 'revoked', 'error')),
+  created_at        timestamptz not null default now(),
+  updated_at        timestamptz not null default now(),
+  constraint calendar_connections_user_provider_unique unique (user_id, provider)
+);
+
+alter table public.calendar_connections enable row level security;
+
+drop policy if exists calendar_connections_leer on public.calendar_connections;
+create policy calendar_connections_leer on public.calendar_connections for select
+  using (user_id = (select auth.uid()));
+-- Desconectar es borrar la fila propia. Escribirla (alta, tokens, watch) es solo de la service role.
+drop policy if exists calendar_connections_borrar on public.calendar_connections;
+create policy calendar_connections_borrar on public.calendar_connections for delete
+  using (user_id = (select auth.uid()));
+
+-- Grants por columna, como en el producto: aunque la RLS deje leer la fila, los tokens no salen.
+revoke all on table public.calendar_connections from anon, authenticated;
+grant select (id, user_id, provider, connected_email, calendar_id, status, created_at, updated_at)
+  on table public.calendar_connections to authenticated;
+grant delete on table public.calendar_connections to authenticated;
+grant all on table public.calendar_connections to service_role;
+
+-- ---------- El `state` de OAuth, de un solo uso ----------
+-- El callback inserta el nonce del `state`: si ya estaba, es un replay. `calendar-sync` purga los
+-- de más de una hora en cada barrido. Solo la service role.
+create table if not exists public.oauth_state_nonces (
+  nonce   text primary key,
+  used_at timestamptz not null default now()
+);
+
+alter table public.oauth_state_nonces enable row level security;
+revoke all on table public.oauth_state_nonces from anon, authenticated;
+grant all on table public.oauth_state_nonces to service_role;
+
+-- ---------- Las reuniones que van a Google ----------
+-- Las columnas de sync de `visits` del producto, con el mismo significado:
+--   sync_status: pending (hay algo para empujar), synced, error (reintenta hasta 5 veces),
+--                disabled (su responsable no tiene Google conectado).
+--   ics_sequence: el guard optimista contra el webhook (el nombre viene del .ics del producto).
+--   color_id / reminder_minutes: el color y el aviso del evento en Google.
+--   guest_user_ids / guest_emails: los invitados (compañeros por id, el resto por email); Google
+--                les manda la invitación.
+-- `sync_status` nace en 'disabled' para las que ya existen (nadie tenía Google conectado: se
+-- ofrecen desde Ajustes con «Sincronizar N reuniones existentes») y el default pasa a 'pending'
+-- después, para las nuevas. Así no hay un `update` de toda la tabla.
+alter table public.crm_meetings
+  add column if not exists sync_status       text not null default 'disabled',
+  add column if not exists sync_error        text,
+  add column if not exists sync_attempts     integer not null default 0,
+  add column if not exists external_event_id text,
+  add column if not exists external_provider text,
+  add column if not exists ics_sequence      integer not null default 0,
+  add column if not exists color_id          text,
+  add column if not exists reminder_minutes  integer,
+  add column if not exists guest_user_ids    uuid[] not null default '{}',
+  add column if not exists guest_emails      text[] not null default '{}';
+alter table public.crm_meetings alter column sync_status set default 'pending';
+
+alter table public.crm_meetings drop constraint if exists crm_meetings_sync_status_check;
+alter table public.crm_meetings add constraint crm_meetings_sync_status_check
+  check (sync_status in ('pending', 'synced', 'error', 'disabled'));
+alter table public.crm_meetings drop constraint if exists crm_meetings_external_provider_check;
+alter table public.crm_meetings add constraint crm_meetings_external_provider_check
+  check (external_provider = 'google');
+
+-- El barrido busca las pendientes cada 5 minutos.
+create index if not exists crm_meetings_sync_pending_idx on public.crm_meetings (updated_at)
+  where deleted_at is null and sync_status in ('pending', 'error');
+
+-- ---------- El último color elegido ----------
+-- El producto recuerda el color con el que cada uno agendó su última visita y lo preselecciona.
+-- Acá el front no escribe `users` (no hay policies de escritura), así que va por una RPC que solo
+-- toca la columna de quien llama.
+alter table public.users
+  add column if not exists last_meeting_color_id text;
+
+create or replace function public.crm_set_last_meeting_color(
+  p_color_id text
+) returns void language plpgsql security definer set search_path to 'public' as $$
+begin
+  if not public.es_usuario() then
+    raise exception 'crm_no_access';
+  end if;
+  update public.users set last_meeting_color_id = nullif(btrim(coalesce(p_color_id, '')), '')
+   where id = auth.uid();
+end;
+$$;
+
+revoke execute on function public.crm_set_last_meeting_color(text) from public, anon;
+grant execute on function public.crm_set_last_meeting_color(text) to authenticated;
+
+-- ---------- Los dos crons ----------
+-- La anon key va escrita y no como placeholder (lección del producto: un placeholder sin
+-- reemplazar dejó un cron dando 401 durante un mes sin que nadie se enterara). No es un secreto:
+-- es la VITE_SUPABASE_ANON_KEY que viaja en el bundle. Si se rota, hay que re-schedulear los dos.
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'calendar-sync-sweep') then
+    perform cron.unschedule('calendar-sync-sweep');
+  end if;
+  if exists (select 1 from cron.job where jobname = 'calendar-watch-renewal') then
+    perform cron.unschedule('calendar-watch-renewal');
+  end if;
+end
+$$;
+
+-- Lo pendiente que el fire-and-forget del front no llegó a empujar, y los reintentos.
+select cron.schedule(
+  'calendar-sync-sweep',
+  '*/5 * * * *',
+  $$
+  select net.http_post(
+    url := 'https://itqwxnmuxuiiydsueazb.supabase.co/functions/v1/calendar-sync',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0cXd4bm11eHVpaXlkc3VlYXpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2NzA0NDgsImV4cCI6MjEwNjI0NjQ0OH0.DrjXR-_SrMnRTYX8TDa3L6K6sN93HWsI_jD1_0ENw9o'
+    ),
+    body := '{}'::jsonb
+  );
+  $$
+);
+
+-- Los watch de Google vencen a los ~7 días: se renuevan los que vencen en menos de uno.
+select cron.schedule(
+  'calendar-watch-renewal',
+  '0 3 * * *',
+  $$
+  select net.http_post(
+    url := 'https://itqwxnmuxuiiydsueazb.supabase.co/functions/v1/calendar-sync',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0cXd4bm11eHVpaXlkc3VlYXpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2NzA0NDgsImV4cCI6MjEwNjI0NjQ0OH0.DrjXR-_SrMnRTYX8TDa3L6K6sN93HWsI_jD1_0ENw9o'
+    ),
+    body := '{"action":"renew-watches"}'::jsonb
+  );
+  $$
+);
+
+-- ---------- Avisos a leads: preferencias, bandeja y triggers de crm_meetings
+-- (migración 20261021155052_lead_notifications) ----------
+-- Avisos a leads (21/10/2026), copiados de `propelia-frontend` (sus migraciones
+-- 20261009154024_lead_notifications, 20261014202726_lead_notification_visit_property_events y
+-- 20261015204322_lead_notification_preferences_by_org). Lo que allá son visitas acá son las demos:
+-- toda reunión del CRM con lead (`crm_meetings`). Al agendarla, moverla o cancelarla se le avisa a la
+-- inmobiliaria por las vías que un SUPERADMIN prendió en Ajustes → «Avisos a leads» (hoy solo email;
+-- SMS y WhatsApp están cableados y apagados, como allá).
+--
+-- Outbox: los triggers de crm_meetings SÓLO encolan; el envío lo hace la edge function
+-- `lead-notifications-dispatch`, que corre cada minuto por cron.
+--
+-- Diferencias con el producto: sin organizaciones (las preferencias son del equipo; escribe un
+-- SUPERADMIN), sin el grupo «Propiedad» (vendida / alquilada: acá no hay inmuebles), y el cron va con
+-- la anon key como los del calendario, no con un secreto de Vault.
+
+-- ── Preferencias, del equipo ─────────────────────────────────────────────────────────────
+-- Sin fila = apagado. Que una vía o un evento tenga fila no significa que se envíe: el
+-- orquestador sólo despacha las vías disponibles (AVAILABLE_CHANNELS) y los eventos con handler.
+create table if not exists public.lead_notification_preferences (
+  id         uuid primary key default gen_random_uuid(),
+  event_type text not null check (event_type in (
+    'demo_scheduled', 'demo_rescheduled', 'demo_cancelled',
+    'demo_reminder_day_before', 'demo_reminder_same_day', 'demo_review_request'
+  )),
+  channel    text not null check (channel in ('email', 'sms', 'whatsapp')),
+  enabled    boolean not null default false,
+  updated_by uuid references public.users(id) on delete set null,
+  updated_at timestamptz not null default now(),
+  constraint lead_notification_preferences_event_channel_key unique (event_type, channel)
+);
+
+alter table public.lead_notification_preferences enable row level security;
+
+-- Leer: cualquiera del equipo. Escribir: solo un SUPERADMIN (el «admin de la org» del producto).
+drop policy if exists lead_notification_preferences_leer on public.lead_notification_preferences;
+create policy lead_notification_preferences_leer on public.lead_notification_preferences
+  for select using (public.es_usuario());
+drop policy if exists lead_notification_preferences_escribir on public.lead_notification_preferences;
+create policy lead_notification_preferences_escribir on public.lead_notification_preferences
+  for all using (public.crm_es_superadmin()) with check (public.crm_es_superadmin());
+
+-- ── Bandeja de salida ────────────────────────────────────────────────────────────────────
+-- subject_id sin FK a propósito: el registro sobrevive al borrado de la reunión.
+-- Una demo se puede reprogramar varias veces: cada horario nuevo es un evento distinto
+-- (dedupe_key = el horario). dedupe_key '' = un solo evento por (type, subject_id).
+create table if not exists public.lead_notification_events (
+  id              uuid primary key default gen_random_uuid(),
+  type            text not null,
+  subject_id      uuid not null,
+  actor_user_id   uuid not null references public.users(id) on delete cascade,
+  status          text not null default 'pending' check (status in ('pending', 'processing', 'done', 'failed')),
+  attempts        int not null default 0,
+  next_attempt_at timestamptz not null default now(),
+  locked_at       timestamptz,
+  last_error      text,
+  payload         jsonb not null default '{}'::jsonb,
+  dedupe_key      text not null default '',
+  created_at      timestamptz not null default now(),
+  processed_at    timestamptz,
+  constraint lead_notification_events_type_subject_dedupe_key unique (type, subject_id, dedupe_key)
+);
+
+create index if not exists lead_notification_events_due_idx on public.lead_notification_events (next_attempt_at)
+  where status in ('pending', 'processing');
+
+alter table public.lead_notification_events enable row level security;
+
+-- Sólo lectura para quien tiene la demo; las escrituras son del service role y de los triggers.
+drop policy if exists lead_notification_events_leer on public.lead_notification_events;
+create policy lead_notification_events_leer on public.lead_notification_events
+  for select using (actor_user_id = (select auth.uid()));
+
+-- ── Lo que salió de verdad ───────────────────────────────────────────────────────────────
+create table if not exists public.lead_notification_deliveries (
+  id                  uuid primary key default gen_random_uuid(),
+  event_id            uuid not null references public.lead_notification_events(id) on delete cascade,
+  channel             text not null check (channel in ('email', 'sms', 'whatsapp')),
+  status              text not null check (status in ('sent', 'failed', 'skipped')),
+  recipient           text,
+  provider_message_id text,
+  error               text,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now(),
+  constraint lead_notification_deliveries_event_channel_key unique (event_id, channel)
+);
+
+alter table public.lead_notification_deliveries enable row level security;
+
+drop policy if exists lead_notification_deliveries_leer on public.lead_notification_deliveries;
+create policy lead_notification_deliveries_leer on public.lead_notification_deliveries
+  for select using (
+    exists (
+      select 1 from public.lead_notification_events e
+      where e.id = event_id and e.actor_user_id = (select auth.uid())
+    )
+  );
+
+-- ── Trigger: demo con lead → evento demo_scheduled ───────────────────────────────────────
+create or replace function public.enqueue_demo_scheduled_lead_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.lead_notification_events (type, subject_id, actor_user_id)
+  values ('demo_scheduled', new.id, new.assigned_to)
+  on conflict (type, subject_id, dedupe_key) do nothing;
+  return new;
+end;
+$$;
+
+revoke execute on function public.enqueue_demo_scheduled_lead_notification() from public, anon, authenticated;
+
+drop trigger if exists crm_meetings_enqueue_lead_notification on public.crm_meetings;
+create trigger crm_meetings_enqueue_lead_notification
+  after insert on public.crm_meetings
+  for each row
+  when (new.lead_id is not null and new.deleted_at is null)
+  execute function public.enqueue_demo_scheduled_lead_notification();
+
+-- ── Trigger: demo reprogramada o cancelada ───────────────────────────────────────────────
+-- Sólo si a la inmobiliaria ya le llegó la confirmación (delivery 'sent' del demo_scheduled de esa
+-- demo): no se le avisa un cambio de una demo de la que nunca supo. Si la confirmación sigue
+-- pendiente, sale con el horario nuevo y no hace falta otro mail.
+create or replace function public.enqueue_demo_change_lead_notification()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_informed boolean;
+begin
+  if new.lead_id is null or new.deleted_at is not null then
+    return new;
+  end if;
+  -- Una demo que ya pasó no se reprograma ni se cancela "para el lead": es limpieza.
+  if new.starts_at <= now() and old.starts_at <= now() then
+    return new;
+  end if;
+  select exists (
+    select 1
+      from public.lead_notification_events e
+      join public.lead_notification_deliveries d on d.event_id = e.id
+     where e.type = 'demo_scheduled' and e.subject_id = new.id and d.status = 'sent'
+  ) into v_informed;
+  if not v_informed then
+    return new;
+  end if;
+
+  if old.status <> 'cancelled' and new.status = 'cancelled' then
+    insert into public.lead_notification_events (type, subject_id, actor_user_id, payload)
+    values ('demo_cancelled', new.id, new.assigned_to, jsonb_build_object('starts_at', new.starts_at))
+    on conflict (type, subject_id, dedupe_key) do nothing;
+  elsif new.status = 'scheduled' and old.starts_at is distinct from new.starts_at and new.starts_at > now() then
+    insert into public.lead_notification_events (type, subject_id, actor_user_id, payload, dedupe_key)
+    values ('demo_rescheduled', new.id, new.assigned_to,
+            jsonb_build_object('previous_starts_at', old.starts_at, 'starts_at', new.starts_at),
+            new.starts_at::text)
+    on conflict (type, subject_id, dedupe_key) do nothing;
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function public.enqueue_demo_change_lead_notification() from public, anon, authenticated;
+
+drop trigger if exists crm_meetings_enqueue_lead_notification_change on public.crm_meetings;
+create trigger crm_meetings_enqueue_lead_notification_change
+  after update of starts_at, status on public.crm_meetings
+  for each row
+  when (old.starts_at is distinct from new.starts_at or old.status is distinct from new.status)
+  execute function public.enqueue_demo_change_lead_notification();
+
+-- ── Reclamo de eventos (lo llama sólo el orquestador) ────────────────────────────────────
+-- skip locked: dos corridas superpuestas nunca agarran el mismo evento.
+-- processing con locked_at > 10 min = worker caído: se vuelve a reclamar, pero sólo si le quedan
+-- intentos (attempts < 3 = MAX_ATTEMPTS del dispatcher).
+create or replace function public.claim_lead_notification_events(p_limit int)
+returns setof public.lead_notification_events
+language sql
+security definer
+set search_path = public
+as $$
+  update public.lead_notification_events e
+     set status = 'processing',
+         locked_at = now(),
+         attempts = e.attempts + 1
+   where e.id in (
+     select c.id
+       from public.lead_notification_events c
+      where (c.status = 'pending' and c.next_attempt_at <= now())
+         or (c.status = 'processing' and c.locked_at < now() - interval '10 minutes' and c.attempts < 3)
+      order by c.created_at
+      limit p_limit
+      for update skip locked
+   )
+  returning e.*;
+$$;
+
+revoke execute on function public.claim_lead_notification_events(int) from public, anon, authenticated;
+grant execute on function public.claim_lead_notification_events(int) to service_role;
+
+-- ── El cron, cada minuto ─────────────────────────────────────────────────────────────────
+-- Anon key escrita, como `calendar-sync-sweep` (ver 20261021151726_crm_google_calendar).
+-- pg_net da `succeeded` aunque la function conteste 401. Para ver que ANDA:
+--   select id, status_code, created from net._http_response order by created desc limit 5;
+--   select status, count(*) from lead_notification_events group by 1;
+create extension if not exists pg_cron;
+create extension if not exists pg_net;
+
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'lead-notifications-dispatch') then
+    perform cron.unschedule('lead-notifications-dispatch');
+  end if;
+end
+$$;
+
+select cron.schedule(
+  'lead-notifications-dispatch',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url := 'https://itqwxnmuxuiiydsueazb.supabase.co/functions/v1/lead-notifications-dispatch',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml0cXd4bm11eHVpaXlkc3VlYXpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2NzA0NDgsImV4cCI6MjEwNjI0NjQ0OH0.DrjXR-_SrMnRTYX8TDa3L6K6sN93HWsI_jD1_0ENw9o'
+    ),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 120000
+  );
+  $$
+);
+
+-- (migración 20261021183824_lead_notifications_demos_activos)
+-- Los tres avisos de demo prendidos por email (21/10/2026, por pedido): agendada, reprogramada y
+-- cancelada. Es lo mismo que prenderlos en Ajustes → «Avisos a leads»; va acá para que quede
+-- escrito. Si alguien ya los tocó a mano, gana lo de la pantalla: `on conflict do nothing`.
+insert into public.lead_notification_preferences (event_type, channel, enabled)
+values
+  ('demo_scheduled', 'email', true),
+  ('demo_rescheduled', 'email', true),
+  ('demo_cancelled', 'email', true)
+on conflict (event_type, channel) do nothing;

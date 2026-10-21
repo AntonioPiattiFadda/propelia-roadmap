@@ -80,3 +80,11 @@ export async function getEstadoDeEnvio(resendId: string): Promise<EstadoDeEnvio 
   if (error) throw error
   return data
 }
+
+/* Lo último enviado de cada plantilla (`crm_email_plantillas`, la escribe `send-email`). Sin la
+   migración corrida, o si falla, el diálogo arranca con el texto de fábrica: no se avisa nada. */
+export async function getPlantillasGuardadas(): Promise<Partial<Record<PlantillaEmailId, unknown>>> {
+  const { data, error } = await supabase.from('crm_email_plantillas').select('plantilla, campos')
+  if (error) return {}
+  return Object.fromEntries((data ?? []).map(f => [f.plantilla, f.campos]))
+}

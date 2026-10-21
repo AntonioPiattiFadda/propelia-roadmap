@@ -10,21 +10,9 @@
 export const SENDER = 'info@propelia.es'
 const SENDER_NAME = 'Propelia'
 
-/** `content` va en base64. Resend acepta hasta 40MB por mail, contando el base64. */
-export type EmailAttachment = { filename: string; content: string }
-
-export type EmailMessage = {
-  /** El nombre que se ve en la bandeja («Antonio de Propelia»). La dirección no cambia nunca. */
-  fromName?: string
-  to: string | string[]
-  subject: string
-  html?: string
-  text?: string
-  replyTo?: string
-  attachments?: EmailAttachment[]
-  /** Resend dedupe 24h: misma key + mismo payload devuelve la respuesta original sin reenviar. */
-  idempotencyKey?: string
-}
+// Los tipos viven aparte, sin `Deno`: así el front (vitest, tsc) puede importarlos.
+import type { EmailMessage } from './emailMessage.ts'
+export type { EmailAttachment, EmailMessage } from './emailMessage.ts'
 
 export type EmailDeps = {
   env: (key: string) => string | undefined

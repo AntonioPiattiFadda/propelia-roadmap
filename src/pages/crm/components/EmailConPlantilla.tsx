@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Clock, Loader2, MailX, Paperclip, RotateCcw, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
@@ -8,17 +8,19 @@ import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { cn } from '@/lib/utils'
 import {
-  nombreEnBandeja, PLANTILLAS_EMAIL, predeterminadosPara, whatsappDe, problemaDeCampos, remitenteDe, renderEmail, ROTULOS_CAMPOS,
+  conGuardada, nombreEnBandeja, PLANTILLAS_EMAIL, predeterminadosPara, whatsappDe, problemaDeCampos, remitenteDe, renderEmail, ROTULOS_CAMPOS,
   type CampoEmail, type CamposEmail, type PlantillaEmailId, type Remitente,
 } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 import { base64Size, fileToAttachment, MAX_ATTACHMENTS_BYTES, sendEmail } from '../service/email.service'
-import { useEstadoDeEnvio } from '../hooks/useEmails'
+import { useEstadoDeEnvio, usePlantillasGuardadas } from '../hooks/useEmails'
+import { CRM_KEYS } from '../hooks/keys'
 import { estadoDelEnvio, motivoLegible } from '../lib/emails'
 import type { CrmClient } from '../types'
 
 /* La pestaña Email de «Mensajes» (18/10/2026): las dos plantillas HTML de `_shared/plantillasEmail.ts`,
-   con el texto precargado y editable antes de mandar. Lo editado vale para ese envío y nada más:
-   cambiar de plantilla o cerrar vuelve al texto de fábrica. La vista previa es el mismo
+   con el texto precargado y editable antes de mandar. Desde el 21/10/2026 el texto precargado es el
+   del último enviado de esa plantilla, de quien sea (`crm_email_plantillas`, lo guarda `send-email`):
+   editar y mandar cambia la plantilla para la próxima. Sin nada guardado, el texto de fábrica. La vista previa es el mismo
    `renderEmail` que arma el mail en el servidor, así que lo que se ve es lo que sale. Va en una
    tercera columna y se rearma con cada tecla: editar a ciegas y alternar para mirar era el doble
    de clics por cada cambio. En pantallas angostas cae debajo de los campos.
@@ -44,8 +46,8 @@ function emailsDe(client: CrmClient | null): string[] {
     .map(e => e?.trim() ?? '').filter(Boolean))]
 }
 
-const camposIniciales = (id: PlantillaEmailId, client: CrmClient | null, remitente: Remitente): CamposEmail => ({
-  ...predeterminadosPara(id, remitente, { nombre: client?.first_name, empresa: client?.company_name }),
+const camposIniciales = (id: PlantillaEmailId, client: CrmClient | null, remitente: Remitente, guardada: unknown): CamposEmail => ({
+  ...conGuardada(id, predeterminadosPara(id, remitente, { nombre: client?.first_name, empresa: client?.company_name }), guardada),
   nombre: client?.first_name?.trim() ?? '',
 })
 
@@ -77,12 +79,24 @@ export function EmailConPlantilla({ id, client, leadId }: { id: PlantillaEmailId
   const { userSession } = useUserSession()
   const yo = useYo(userSession?.user.id).data
   const remitente = useMemo(() => remitenteDe(yo), [yo])
-  const [campos, setCampos] = useState<CamposEmail>(() => camposIniciales(id, client, remitente))
+  const qc = useQueryClient()
+  const guardadas = usePlantillasGuardadas()
+  const guardada = guardadas.data?.[id]
+  const [campos, setCampos] = useState<CamposEmail>(() => camposIniciales(id, client, remitente, guardada))
+  /* Lo guardado puede llegar después de abrir: si todavía no se tocó nada, se carga entonces. */
+  const [editado, setEditado] = useState(false)
+  useEffect(() => {
+    if (editado || guardada === undefined) return
+    setCampos(c => ({ ...camposIniciales(id, client, remitente, guardada), urlBoton: c.urlBoton }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- solo cuando llega lo guardado
+  }, [guardada])
 
   /* El enlace del botón (WhatsApp, en los dos mails) se rearma solo mientras nadie lo edite a mano: con el teléfono
      de quien manda (la fila de `users` puede llegar después de abrir, y entonces el enlace quedaba
      en un mailto a info@) y con el nombre que se escriba en «Nombre». */
-  const [botonTocado, setBotonTocado] = useState(false)
+  const conBotonPropio = (g: unknown) => !!g && typeof g === 'object' && typeof (g as Record<string, unknown>).urlBoton === 'string'
+  const [botonTocado, setBotonTocado] = useState(() => conBotonPropio(guardada))
+  useEffect(() => { if (!editado && conBotonPropio(guardada)) setBotonTocado(true) }, [editado, guardada])
   const empresa = client?.company_name
   useEffect(() => {
     if (botonTocado) return
@@ -136,12 +150,16 @@ export function EmailConPlantilla({ id, client, leadId }: { id: PlantillaEmailId
     onSuccess: () => {
       toast.success(`«${plantilla.nombre}» enviado a ${para.trim()}`)
       setArchivos([])
+      // Lo que se acaba de mandar es la plantilla de la próxima vez.
+      setEditado(true)
+      void qc.invalidateQueries({ queryKey: CRM_KEYS.plantillasGuardadas })
     },
     onError: (e: Error) => { toast.error(e.message || 'No se pudo enviar el email') },
   })
 
   const cambiar = (k: CampoEmail, v: string) => {
     if (k === 'urlBoton') setBotonTocado(true)
+    setEditado(true)
     setCampos(c => ({ ...c, [k]: v }))
   }
 
@@ -151,7 +169,8 @@ export function EmailConPlantilla({ id, client, leadId }: { id: PlantillaEmailId
       <div className="flex min-w-0 flex-col gap-3 p-4 xl:min-h-0 xl:overflow-y-auto">
         <div className="flex items-center justify-between gap-2">
           <h3 className="truncate text-[14px] font-semibold">{plantilla.nombre}</h3>
-          <button type="button" onClick={() => { setBotonTocado(false); setCampos(camposIniciales(id, client, remitente)) }} title="Volver al texto de la plantilla"
+          <button type="button" onClick={() => { setBotonTocado(conBotonPropio(guardada)); setEditado(false); setCampos(camposIniciales(id, client, remitente, guardada)) }}
+            title={guardada ? 'Volver al texto del último enviado' : 'Volver al texto de la plantilla'}
             className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground">
             <RotateCcw size={13} />Restablecer
           </button>

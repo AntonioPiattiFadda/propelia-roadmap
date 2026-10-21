@@ -13,7 +13,9 @@ hasta que se mergee). Tres páginas en la barra lateral: Roadmap, CRM y Caja. Di
   typecheck sí anda desde WSL: `node node_modules/typescript/bin/tsc -b`.
 - **Acceso**: `accesoDe()` en `src/lib/acceso.ts` es la misma regla que `es_usuario()` en la
   base — fila activa en `users` o no pasás. Un error de red NO es «sin acceso».
-- **Páginas por rol** (6/10/2026): `SUPERADMIN` entra a todo; `SDR` solo a `/crm`. La regla es
+- **Páginas por rol** (6/10/2026): `SUPERADMIN` entra a todo; `SDR` a `/crm` y, desde el 21/10/2026,
+  a `/agenda` y `/ajustes` (ahí solo ve «Integraciones»). Lo que solo ve un SUPERADMIN lleva el badge
+  SA del producto (`SuperadminBadge`, `soloSuperadmin()` en `nav.ts`) en la barra lateral. La regla es
   `NAV[].roles` en `src/components/nav.ts` (`navDe`, `puedeEntrar`, `inicioDe`): de ahí leen la
   barra lateral, la de pestañas y el guard `RequireRol` (`pages/auth/guards.tsx`), que devuelve a
   la primera página permitida. **Es solo el front**: la RLS de las `roadmap_*`, el bucket y el
@@ -76,6 +78,71 @@ supabase db push                  # aplica al remoto y lo registra
 - **`legacy/package.json`** (`{ "type": "commonjs" }`) existe porque la raíz es ESM y los `.js`
   del vanilla exportan con `module.exports` para sus tests de node: sin él, `module` es
   undefined y la guarda de export no corre.
+
+## Google Calendar y la Agenda — `/agenda` y `/ajustes?tab=integraciones`
+
+Desde el 21/10/2026, copiado **igual** de `propelia-frontend` (por pedido). Lo que allá son visitas
+acá son las reuniones del CRM (`crm_meetings`, las demos incluidas). Migración
+`20261021151726_crm_google_calendar`.
+
+- **La conexión es de cada uno**: «Conectar» en Ajustes → `calendar-oauth-start` (URL de Google con
+  `state` firmado) → `calendar-oauth-callback` (canjea, cifra los tokens con `TOKEN_ENCRYPTION_KEY`
+  y guarda `calendar_connections`, una fila por persona) → vuelve a `/ajustes?tab=integraciones`.
+  El front lee solo columnas sin tokens (grants por columna). Desconectar borra la fila.
+- **Cada reunión va sola al Google de su responsable** (`calendar-sync`): nace con
+  `sync_status = 'pending'`, el front la empuja fire-and-forget al guardarla y el cron
+  `calendar-sync-sweep` (cada 5 min) levanta lo que quedó. Sin Google conectado queda `disabled`.
+  Editar o cancelar pasa por `buildMeetingUpdatePatch` (re-encola y bumpea `ics_sequence`);
+  **marcarla hecha no** (`markMeetingOutcome`), igual que en el producto. La demo invita por Google
+  al «mail de la invitación» (`guest_emails`).
+- **Y vuelve**: `calendar-webhook` recibe los avisos del watch de Google (renovado a diario por
+  `calendar-watch-renewal`) y mover, renombrar o borrar el evento cambia la reunión. Reconoce solo
+  los eventos con `propelia_crm_meeting_id`, **no** `propelia_visit_id`: la misma cuenta de Google
+  puede estar conectada al producto y acá, y cada sistema toca solo lo suyo.
+- **La Agenda** es la del producto: semana con tus reuniones y el resto de tu Google (solo lectura),
+  click en la grilla agenda, click en una reunión la edita. `?leadId=&title=` agenda atado a un lead.
+- **El color de la última reunión** se recuerda en `users.last_meeting_color_id` por la RPC
+  `crm_set_last_meeting_color` (el front no escribe `users`).
+- **Secrets** de las edge functions: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
+  `TOKEN_ENCRYPTION_KEY` (32 bytes en base64), `GOOGLE_CALENDAR_ALLOWED_REDIRECT_ORIGINS` (CSV de
+  orígenes; vacío = solo `http://localhost:4100`) y `APP_BASE_URL` (sin él, el evento va sin link al
+  lead). En la consola de Google, el cliente OAuth tiene que tener como redirect
+  `https://itqwxnmuxuiiydsueazb.supabase.co/functions/v1/calendar-oauth-callback`.
+- **«Agendar demo» se agenda en la Agenda** (21/10/2026, por pedido, como el «Agendar visita» del
+  producto): el formulario del lead junta mail, quién asiste, notas y etapa (ya no día ni hora) y
+  navega a `/agenda?leadId=&assignedTo=&title=Demo&description=&guestEmail=…` (`enlaceParaAgendarDemo`,
+  `lib/reuniones.ts`). La demo nace tocando la grilla, del responsable del lead, con la inmobiliaria
+  y **siempre `lorenzo.piattifadda@gmail.com`** (`INVITADO_DE_TODA_DEMO`) como invitados. La etapa se
+  mueve al seguir, no al agendar.
+- **Avisos a leads** (21/10/2026, copiado de `propelia-frontend`, migración
+  `20261021155052_lead_notifications`): Ajustes → «Avisos a leads» (solo SUPERADMIN, el «admin de la
+  org» de allá) prende por evento y vía: Demo agendada / reprogramada / cancelada; recordatorios y
+  reseña «Próximamente»; **solo email** disponible, SMS y WhatsApp cableados y apagados
+  (`AVAILABLE_CHANNELS` en `_shared/leadNotifications/channels.ts` y su espejo en
+  `src/pages/ajustes/lib/leadNotifications.ts`). Sin fila = apagado: arranca todo apagado. Outbox:
+  los triggers de `crm_meetings` (toda reunión con lead) encolan en `lead_notification_events` y
+  `lead-notifications-dispatch` manda cada minuto (cron con anon key; allá es un secreto de Vault).
+  Reprogramada y cancelada salen solo si la agendada ya había salido. El mail va al **mail de la
+  invitación** (el primer invitado que no es del equipo; Lorenzo nunca) y si no, al de la
+  inmobiliaria; firma y `reply_to` como las plantillas de «Mensajes» (`remitenteDe`). Los íconos del
+  mail se leen del bucket público `email-assets/v2` del producto (`EMAIL_ASSETS_BASE_URL` lo pisa).
+  Sin grupo «Propiedad»: acá no hay inmuebles. Estos envíos **no** van a `crm_emails` (no avisan rebotes).
+  **Los mails se iteran en `docs/avisosALeads/`** (copia de `docs/leadNotifications/` del producto):
+  `index.html` es el visor; los `*-preview.html` se editan a mano y, aceptado el cambio, se pasa a
+  `templates/demoScheduledEmail.ts`; `npm run avisos:generar` reescribe los `*-generated.html` con el
+  template real (`--previews` además pisa los previews). Los tres «Próximamente» son borradores que
+  arma `generar.ts`, todavía sin handler.
+  **Diseño elegido: tema `acento`** (21/10/2026, por pedido; `LeadEmailTheme` en `leadEmailLayout.ts`,
+  `'neutro'` es el del producto): logo de Propelia, borde de arriba azul `#0147FE` y burbujas de la
+  cabecera en azul, tarjeta y pie teñidos. Los íconos y las burbujas azules (`header-corner-brand.png`)
+  viven en `public/email/avisos/` y se sirven en `{APP_BASE_URL}/email/avisos` (`emailAssetsBaseUrl`,
+  `_shared/leadNotifications/assets.ts`): sin `APP_BASE_URL` caen al bucket del producto, donde las
+  burbujas azules no existen. Los tres avisos de demo nacen prendidos por email (migración
+  `20261021183824_lead_notifications_demos_activos`).
+- **Lo que no sigue a Google**: la baja de un miembro (`crm_dar_de_baja_miembro`) le pasa las
+  reuniones futuras al sucesor pero no las re-encola; el evento queda en el calendario del que se va.
+- Código en `src/pages/agenda/` (libs puras con sus tests, copiados del producto) y
+  `supabase/functions/_shared/{googleCalendar,webhookSync,googleOAuth,googleTokens,oauthState,tokenCrypto}.ts`.
 
 ## El CRM (y Equipo) — `/crm` y `/equipo`
 
@@ -308,6 +375,13 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   **El «Mail puntual» lleva adjuntos** (20/10/2026, por pedido): `adjuntos: true` en su plantilla;
   `send-email` rechaza archivos en la que no lo diga. Cualquier usuario activo, SDR incluido; mismo
   tope de 10MB que el texto libre. Valen para ese envío y no salen en la vista previa.
+  **El último enviado es la plantilla** (21/10/2026, por pedido, migración
+  `20261021121051_crm_email_plantillas`): al mandar, `send-email` guarda el texto en
+  `crm_email_plantillas` (una fila por plantilla, **del equipo**, escribe solo la service role) y el
+  diálogo arranca desde ahí; «Restablecer» vuelve a eso. No se guardan el nombre del lead ni el
+  botón armado solo (WhatsApp/`mailto:`); un enlace escrito a mano sí (`plantillaGuardable`,
+  `conGuardada`). El texto de fábrica de `plantillasEmail.ts` queda solo para la primera vez o
+  sin la migración corrida.
 - **Los emails que no llegan se avisan** (20/10/2026, migración `20261020171333_crm_emails`):
   `send-email` escribe cada envío en `crm_emails` con el id de Resend (y el lead, si quien manda lo
   lee; el de prueba va sin lead), y la edge function `resend-webhook` le cambia el estado cuando

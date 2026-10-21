@@ -18,6 +18,8 @@ export const CRM_KEYS = {
   emailsQueNoLlegaron: ['crm', 'emails', 'no-llegaron'] as const,
   /** El estado de un envío recién hecho, por el id de Resend (la pastilla del pie del mail). */
   envio: (resendId: string) => ['crm', 'emails', 'envio', resendId] as const,
+  /** El último enviado de cada plantilla, que es con lo que arranca el diálogo. */
+  plantillasGuardadas: ['crm', 'emails', 'plantillas'] as const,
   /** Prefijo del contador de llamadas del día. */
   llamadas: ['crm', 'llamadas'] as const,
   /** Las llamadas de `autor` desde el día `desde` (incluido) hasta `hasta` (excluido). */

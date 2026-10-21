@@ -1,0 +1,452 @@
+import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { AlignLeft, Bell, CalendarDays, Check, Clock, TriangleAlert, Users } from 'lucide-react'
+import { es } from 'react-day-picker/locale'
+import { DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { TimeSelect } from '@/components/ui/time-select'
+import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
+import { useUserSession } from '@/hooks/useUserSession'
+import { useYo } from '@/hooks/useYo'
+import { useCreateMeeting, useFreeBusy, useUpdateMeeting } from '../../hooks/useMeetings'
+import { useGoogleConnection } from '../../hooks/useCalendarConnection'
+import { formatBusyRanges } from '../../lib/busyRanges'
+import { GOOGLE_EVENT_COLORS } from '../../lib/googleEventColors'
+import type { Meeting } from '../../lib/meetings.types'
+import { CancelMeetingDialog } from './CancelMeetingDialog'
+import { MeetingGuestsField } from './MeetingGuestsField'
+
+// Si no hay un último color guardado (primera vez usando el picker), preseleccionamos el
+// primero de la paleta en vez de dejar "sin color" — siempre queda algo elegido.
+const DEFAULT_COLOR_ID = Object.keys(GOOGLE_EVENT_COLORS)[0] ?? null
+
+const REMINDER_OPTIONS = [
+  { value: 'none', label: 'Ninguno', minutes: null as number | null },
+  { value: '10', label: '10 minutos antes', minutes: 10 },
+  { value: '30', label: '30 minutos antes', minutes: 30 },
+  { value: '60', label: '1 hora antes', minutes: 60 },
+  { value: '1440', label: '1 día antes', minutes: 1440 },
+]
+
+/** Reunión existente a editar — si se pasa, el form arranca precargado y guarda con update en vez de crear. */
+export type EditableMeeting = {
+  id: string
+  ics_sequence: number
+  starts_at: string
+  ends_at: string
+  title: string | null
+  description: string | null
+  color_id: string | null
+  reminder_minutes: number | null
+  status: Meeting['status']
+  sync_status: Meeting['sync_status']
+  guest_user_ids: string[]
+  guest_emails: string[]
+  lead_id: string | null
+}
+
+type Props = {
+  open: boolean
+  onClose: () => void
+  leadId?: string
+  /** De quién es la reunión que se crea (por defecto, de quien la agenda). */
+  assignedTo?: string
+  defaultTitle?: string
+  defaultDescription?: string
+  /** Fecha/horario a precargar al crear (ej. celda clickeada en el grid de /agenda). Ignorado si `meeting` está seteado. */
+  defaultDate?: string
+  defaultStartTime?: string
+  defaultEndTime?: string
+  guests?: { label: string }[]
+  /** Invitados por email ya cargados al crear (la demo: la inmobiliaria y Lorenzo). Ignorado si `meeting` está seteado. */
+  defaultGuestEmails?: string[]
+  meeting?: EditableMeeting
+  /** Notifican cada edición de título/descripción — usado por MeetingFormPopover para reflejarlas en la URL
+   * (así el contexto de "agendando reunión para X" sobrevive a cerrar y volver a abrir el popover). */
+  onTitleChange?: (title: string) => void
+  onDescriptionChange?: (description: string) => void
+  /** Se dispara SOLO cuando la reunión se guardó con éxito (no al cancelar) — MeetingFormPopover
+   * lo usa para recién ahí limpiar el contexto de agendamiento de la URL. */
+  onSaved?: () => void
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0')
+
+// Reversa new Date(`${date}T${time}`) tal como lo interpreta el browser (hora local),
+// para poder precargar el form al editar una reunión ya guardada.
+const toLocalDateTimeParts = (iso: string): { date: string; time: string } => {
+  const d = new Date(iso)
+  return {
+    date: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`,
+    time: `${pad2(d.getHours())}:${pad2(d.getMinutes())}`,
+  }
+}
+
+const dateToInputValue = (d: Date): string => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+
+const timeToMinutes = (t: string): number => {
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + m
+}
+
+const minutesToTime = (mins: number): string => {
+  const clamped = Math.min(Math.max(mins, 0), 23 * 60 + 45)
+  return `${pad2(Math.floor(clamped / 60))}:${pad2(clamped % 60)}`
+}
+
+// "Jueves, 30 de julio" — mismo formato del encabezado de fecha/hora colapsado de Google Calendar.
+const formatDateHeading = (isoDate: string): string => {
+  const d = new Date(`${isoDate}T00:00:00`)
+  const formatted = new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).format(d)
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1)
+}
+
+// Contenido del form de reunión: `VisitFormContent` de `propelia-frontend` (21/10/2026). Lo usa
+// MeetingFormPopover (anclado a un punto, el click-to-create del grid de /agenda).
+export function MeetingFormContent({
+  open,
+  onClose,
+  leadId,
+  assignedTo,
+  defaultTitle,
+  defaultDescription,
+  defaultDate,
+  defaultStartTime,
+  defaultEndTime,
+  guests = [],
+  defaultGuestEmails = [],
+  meeting,
+  onTitleChange,
+  onDescriptionChange,
+  onSaved,
+}: Props) {
+  const isEditing = meeting != null
+  const createMutation = useCreateMeeting()
+  const updateMutation = useUpdateMeeting()
+  const [title, setTitle] = useState('')
+  const [date, setDate] = useState('')
+  const [time, setTime] = useState('')
+  const [endTime, setEndTime] = useState('')
+  const [description, setDescription] = useState('')
+  const [colorId, setColorId] = useState<string | null>(null)
+  const [reminderValue, setReminderValue] = useState('none')
+  const [showErrors, setShowErrors] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [guestUserIds, setGuestUserIds] = useState<string[]>([])
+  const [guestEmails, setGuestEmails] = useState<string[]>([])
+  const { userSession } = useUserSession()
+  const { data: currentUser } = useYo(userSession?.user.id)
+  const { data: connection, isPending: connectionPending } = useGoogleConnection()
+  const isGoogleConnected = connection?.status === 'active'
+  const { data: busy = [] } = useFreeBusy(date, isGoogleConnected)
+  const agentName = currentUser
+    ? [currentUser.nombre, currentUser.last_name].filter(Boolean).join(' ') || currentUser.email || null
+    : null
+
+  // Draft-state reset pattern: useState inicia vacío, useEffect resetea cuando se abre el dialog/popover.
+  // Necesario para evitar mantener valores previos entre aperturas. La cola de effects sincroniza
+  // el UI con la apertura del contenedor (fuente externa de verdad).
+  // Dependency array is intentionally narrow [open] to avoid re-running when defaultTitle/defaultDescription
+  // change due to async data loading (e.g., useCurrentUser resolving) — this would wipe out user input.
+  // The effect reads defaultTitle/defaultDescription/meeting vía closure en cada corrida, así toma sus
+  // valores más recientes al abrir, pero no resetea el form si cambian con el dialog ya abierto.
+  useEffect(() => {
+    if (open) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setShowErrors(false)
+      if (meeting) {
+        const { date: d, time: t } = toLocalDateTimeParts(meeting.starts_at)
+        const { time: endT } = toLocalDateTimeParts(meeting.ends_at)
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTitle(meeting.title ?? '')
+        setDate(d)
+        setTime(t)
+        setEndTime(endT)
+        setDescription(meeting.description ?? '')
+        setColorId(meeting.color_id ?? DEFAULT_COLOR_ID)
+        setReminderValue(REMINDER_OPTIONS.find(o => o.minutes === meeting.reminder_minutes)?.value ?? 'none')
+        setGuestUserIds(meeting.guest_user_ids)
+        setGuestEmails(meeting.guest_emails)
+      } else {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setTitle(defaultTitle ?? '')
+        setDate(defaultDate ?? '')
+        setTime(defaultStartTime ?? '')
+        setEndTime(defaultEndTime ?? '')
+        setDescription(defaultDescription ?? '')
+        setColorId(currentUser?.last_meeting_color_id ?? DEFAULT_COLOR_ID)
+        setReminderValue('none')
+        setGuestUserIds([])
+        setGuestEmails(defaultGuestEmails)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  // Sólo reuniones agendadas a futuro. Cancelar una que ya pasó le manda a los invitados una
+  // cancelación con fecha de ayer y borra el evento de Google.
+  const canCancel = isEditing && meeting.status === 'scheduled' && new Date(meeting.starts_at) > new Date()
+
+  const isInvalid = date === '' || time === '' || endTime === '' || endTime <= time
+  const isSaving = createMutation.isPending || updateMutation.isPending
+
+  // Al mover el "desde", el "hasta" lo sigue preservando la misma duración —
+  // si todavía no había un rango cargado, arranca en 60 min por defecto.
+  const handleStartTimeChange = (newStart: string) => {
+    const durationMinutes = time !== '' && endTime !== '' ? timeToMinutes(endTime) - timeToMinutes(time) : 60
+    setTime(newStart)
+    setEndTime(minutesToTime(timeToMinutes(newStart) + (durationMinutes > 0 ? durationMinutes : 60)))
+  }
+
+  const handleSave = () => {
+    if (isInvalid) {
+      setShowErrors(true)
+      return
+    }
+    const starts = new Date(`${date}T${time}`)
+    const ends = new Date(`${date}T${endTime}`)
+    const reminderMinutes = REMINDER_OPTIONS.find(o => o.value === reminderValue)?.minutes ?? null
+    const trimmedTitle = title.trim() === '' ? null : title.trim()
+    const trimmedDescription = description.trim() === '' ? null : description.trim()
+
+    if (isEditing) {
+      updateMutation.mutate(
+        {
+          id: meeting.id,
+          current: { ics_sequence: meeting.ics_sequence },
+          changes: {
+            startsAt: starts.toISOString(),
+            endsAt: ends.toISOString(),
+            title: trimmedTitle,
+            description: trimmedDescription,
+            colorId,
+            reminderMinutes,
+            guestUserIds,
+            guestEmails,
+          },
+        },
+        {
+          onSuccess: () => {
+            onSaved?.()
+            onClose()
+          },
+        },
+      )
+      return
+    }
+
+    createMutation.mutate(
+      {
+        startsAt: starts.toISOString(),
+        endsAt: ends.toISOString(),
+        leadId: leadId ?? null,
+        assignedTo,
+        title: trimmedTitle,
+        description: trimmedDescription,
+        colorId,
+        reminderMinutes,
+        guestUserIds,
+        guestEmails,
+      },
+      {
+        onSuccess: () => {
+          onSaved?.()
+          onClose()
+        },
+      },
+    )
+  }
+
+  return (
+    <>
+      <div className="flex flex-col gap-3">
+        <Input
+          id="meeting-title"
+          value={title}
+          onChange={(e) => {
+            setTitle(e.target.value)
+            onTitleChange?.(e.target.value)
+          }}
+          placeholder="Agregar título"
+          className="h-auto rounded-none border-0 border-b border-input bg-transparent px-0 py-1 text-lg font-normal shadow-none focus-visible:ring-0 focus-visible:border-b-2 focus-visible:border-primary"
+        />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-start gap-3">
+            <Clock className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="flex flex-1 flex-nowrap items-center gap-2 max-md:flex-wrap">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-invalid={showErrors && date === ''}
+                    className="font-normal"
+                  >
+                    {date ? formatDateHeading(date) : 'Fecha'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={date ? new Date(`${date}T00:00:00`) : undefined}
+                    onSelect={(d) => d && setDate(dateToInputValue(d))}
+                    locale={es}
+                  />
+                </PopoverContent>
+              </Popover>
+              <TimeSelect
+                value={time}
+                onChange={handleStartTimeChange}
+                aria-invalid={showErrors && time === ''}
+                className="w-auto rounded-full"
+              />
+              <span className="text-sm text-muted-foreground">–</span>
+              <TimeSelect
+                value={endTime}
+                onChange={setEndTime}
+                minTime={time}
+                aria-invalid={showErrors && (endTime === '' || endTime <= time)}
+                className="w-auto rounded-full"
+              />
+            </div>
+          </div>
+          {busy.length > 0 && (
+            <p className="ml-7 text-xs text-muted-foreground">Ocupado: {formatBusyRanges(busy)}</p>
+          )}
+        </div>
+        {/* Los invitados los invita Google (attendees + sendUpdates): sin calendario conectado
+            no hay evento al que sumarlos, así que la fila no se muestra. Los que ya tuviera la
+            reunión se conservan igual y se vuelven a mandar tal cual al guardar. */}
+        {isGoogleConnected ? (
+          <MeetingGuestsField
+            userIds={guestUserIds}
+            emails={guestEmails}
+            onUserIdsChange={setGuestUserIds}
+            onEmailsChange={setGuestEmails}
+            leadId={meeting?.lead_id ?? leadId}
+            meetingId={meeting?.id}
+            fixedLabels={guests.map(g => g.label)}
+          />
+        ) : guests.length > 0 && (
+          <div className="flex items-start gap-3">
+            <Users className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">{guests.map(g => g.label).join(', ')}</p>
+          </div>
+        )}
+        <div className="flex items-start gap-3">
+          <AlignLeft className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
+          <Textarea
+            id="meeting-description"
+            value={description}
+            onChange={(e) => {
+              setDescription(e.target.value)
+              onDescriptionChange?.(e.target.value)
+            }}
+            placeholder="Agregar descripción"
+            className="min-h-16 flex-1 resize-none rounded-none border-0 bg-transparent px-0 py-1.5 shadow-none transition-colors focus-visible:ring-0 focus-visible:rounded-md focus-visible:bg-muted focus-visible:px-3 focus-visible:py-2"
+          />
+        </div>
+        {isGoogleConnected && (
+          <>
+            <div className="flex items-start gap-3">
+              <CalendarDays className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="flex flex-1 flex-wrap items-center gap-3">
+                {agentName && <span className="text-sm font-medium">{agentName}</span>}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      title="Color del evento"
+                      className="h-6 w-6 rounded-full border border-input transition-transform hover:scale-110"
+                      style={colorId ? { background: GOOGLE_EVENT_COLORS[colorId]?.background } : undefined}
+                    />
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-3" align="start">
+                    <div className="grid grid-cols-6 gap-2">
+                      {Object.entries(GOOGLE_EVENT_COLORS).map(([id, c]) => (
+                        <PopoverClose asChild key={id}>
+                          <button
+                            type="button"
+                            title={c.name}
+                            onClick={() => setColorId(id)}
+                            className="h-5 w-5 rounded-full cursor-pointer transition-transform hover:scale-110"
+                            style={{
+                              background: c.background,
+                              outline: colorId === id ? `2px solid ${c.background}` : 'none',
+                              outlineOffset: '2px',
+                            }}
+                          />
+                        </PopoverClose>
+                      ))}
+                    </div>
+                    <PopoverClose asChild>
+                      <button
+                        type="button"
+                        onClick={() => setColorId(currentUser?.last_meeting_color_id ?? DEFAULT_COLOR_ID)}
+                        className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-muted px-3 py-1.5 text-sm transition-colors hover:bg-muted/80"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        Default
+                      </button>
+                    </PopoverClose>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <Bell className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
+              <Select value={reminderValue} onValueChange={setReminderValue}>
+                <SelectTrigger size="sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {REMINDER_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
+        {!connectionPending && connection?.status !== 'active' && (
+          <Button asChild className="mb-2 bg-red-500 text-white hover:bg-red-600">
+            <Link to="/ajustes?tab=integraciones&highlight=google-calendar">
+              <TriangleAlert className="size-4" />
+              Sincronizar con Google Calendar
+            </Link>
+          </Button>
+        )}
+      </div>
+      <DialogFooter className="mt-4">
+        {canCancel && (
+          <Button variant="destructive" onClick={() => setCancelOpen(true)} disabled={isSaving}>
+            Eliminar evento
+          </Button>
+        )}
+        <Button variant="outline" onClick={onClose}>
+          Cancelar
+        </Button>
+        <Button onClick={handleSave} disabled={isSaving}>
+          {isEditing ? 'Guardar cambios' : 'Agendar'}
+        </Button>
+      </DialogFooter>
+      {canCancel && (
+        // Montado ADENTRO del contenido del popover/dialog (no como hermano): Radix decide qué es
+        // "click afuera" por el árbol de React, y como hermano un click en la confirmación cerraría
+        // el form. z-[260] porque el popover de la agenda está en z-index 250.
+        <CancelMeetingDialog
+          open={cancelOpen}
+          onOpenChange={setCancelOpen}
+          meeting={meeting}
+          onCancelled={onClose}
+          zIndexClassName="z-[260]"
+        />
+      )}
+    </>
+  )
+}

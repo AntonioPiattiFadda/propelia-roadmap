@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NAV, entradaActiva, estaActivo, inicioDe, navDe, puedeEntrar, type NavItem } from './nav'
+import { NAV, entradaActiva, estaActivo, inicioDe, navDe, puedeEntrar, soloSuperadmin, type NavItem } from './nav'
 
 describe('estaActivo', () => {
   it('la ruta exacta', () => expect(estaActivo('/crm', '/crm')).toBe(true))
@@ -9,8 +9,8 @@ describe('estaActivo', () => {
 })
 
 describe('NAV', () => {
-  it('son las seis páginas de primer nivel, en este orden', () => {
-    expect(NAV.map(n => n.path)).toEqual(['/roadmap', '/crm', '/demos', '/equipo', '/caja', '/ajustes'])
+  it('son las siete páginas de primer nivel, en este orden', () => {
+    expect(NAV.map(n => n.path)).toEqual(['/roadmap', '/crm', '/agenda', '/demos', '/equipo', '/caja', '/ajustes'])
   })
   it('el backlog cuelga del roadmap', () => {
     const roadmap = NAV.find(n => n.id === 'roadmap')
@@ -26,11 +26,11 @@ describe('entradaActiva', () => {
 })
 
 describe('navDe', () => {
-  it('un SUPERADMIN ve las seis de primer nivel', () =>
-    expect(navDe('SUPERADMIN').map(n => n.path)).toEqual(['/roadmap', '/crm', '/demos', '/equipo', '/caja', '/ajustes']))
+  it('un SUPERADMIN ve las siete de primer nivel', () =>
+    expect(navDe('SUPERADMIN').map(n => n.path)).toEqual(['/roadmap', '/crm', '/agenda', '/demos', '/equipo', '/caja', '/ajustes']))
   it('un SUPERADMIN ve el backlog colgando del roadmap', () =>
     expect(navDe('SUPERADMIN')[0].hijos?.map(h => h.path)).toEqual(['/roadmap/backlog']))
-  it('un SDR ve solo el CRM', () => expect(navDe('SDR').map(n => n.path)).toEqual(['/crm']))
+  it('un SDR ve el CRM, la Agenda y Ajustes', () => expect(navDe('SDR').map(n => n.path)).toEqual(['/crm', '/agenda', '/ajustes']))
 })
 
 describe('puedeEntrar', () => {
@@ -39,7 +39,11 @@ describe('puedeEntrar', () => {
     expect(puedeEntrar('SDR', '/crm/lead/3')).toBe(true)
   })
   it('un SDR NO entra al resto', () => {
-    for (const p of ['/roadmap', '/roadmap/backlog', '/demos', '/equipo', '/caja', '/ajustes']) expect(puedeEntrar('SDR', p)).toBe(false)
+    for (const p of ['/roadmap', '/roadmap/backlog', '/demos', '/equipo', '/caja']) expect(puedeEntrar('SDR', p)).toBe(false)
+  })
+  it('un SDR entra a la Agenda y a Ajustes', () => {
+    expect(puedeEntrar('SDR', '/agenda')).toBe(true)
+    expect(puedeEntrar('SDR', '/ajustes')).toBe(true)
   })
   it('un SDR NO entra a una ruta que solo empieza como el CRM', () =>
     expect(puedeEntrar('SDR', '/crm-viejo')).toBe(false))
@@ -54,4 +58,14 @@ describe('puedeEntrar', () => {
 describe('inicioDe', () => {
   it('un SUPERADMIN arranca en el Roadmap', () => expect(inicioDe('SUPERADMIN')).toBe('/roadmap'))
   it('un SDR arranca en el CRM', () => expect(inicioDe('SDR')).toBe('/crm'))
+})
+
+describe('soloSuperadmin', () => {
+  const de = (id: string) => [...NAV, ...NAV.flatMap(n => n.hijos ?? [])].find(n => n.id === id)!
+  it('lleva el badge lo que solo ve un SUPERADMIN', () => {
+    for (const id of ['roadmap', 'backlog', 'demos', 'equipo', 'caja']) expect(soloSuperadmin(de(id))).toBe(true)
+  })
+  it('lo que ve todo el equipo, no', () => {
+    for (const id of ['crm', 'agenda', 'ajustes']) expect(soloSuperadmin(de(id))).toBe(false)
+  })
 })

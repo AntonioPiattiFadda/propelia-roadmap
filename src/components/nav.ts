@@ -1,4 +1,4 @@
-import { CalendarCheck, ListChecks, ListTodo, Settings, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react'
+import { CalendarCheck, CalendarDays, ListChecks, ListTodo, Settings, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react'
 import type { Database } from '@/types/database.types'
 
 export type Rol = Database['public']['Enums']['user_role']
@@ -19,11 +19,18 @@ export const NAV: NavItem[] = [
     hijos: [{ id: 'backlog', icon: ListTodo, label: 'Backlog', path: '/roadmap/backlog', roles: SOLO_SUPERADMIN }],
   },
   { id: 'crm', icon: Users, label: 'CRM', path: '/crm', roles: TODOS },
+  // La agenda y Ajustes son de todos (21/10/2026): cada uno conecta su Google y mira su semana.
+  // La pestaña del vídeo de Ajustes sigue siendo solo SUPERADMIN, con su gate adentro.
+  { id: 'agenda', icon: CalendarDays, label: 'Agenda', path: '/agenda', roles: TODOS },
   { id: 'demos', icon: CalendarCheck, label: 'Demos', path: '/demos', roles: SOLO_SUPERADMIN },
   { id: 'equipo', icon: UsersRound, label: 'Equipo', path: '/equipo', roles: SOLO_SUPERADMIN },
   { id: 'caja', icon: Wallet, label: 'Caja', path: '/caja', roles: SOLO_SUPERADMIN },
-  { id: 'ajustes', icon: Settings, label: 'Ajustes', path: '/ajustes', roles: SOLO_SUPERADMIN },
+  { id: 'ajustes', icon: Settings, label: 'Ajustes', path: '/ajustes', roles: TODOS },
 ]
+
+/* La lleva el badge SA de la barra lateral (`SuperadminBadge`, copiado del producto): avisa que esa
+   entrada no está en la pantalla del resto del equipo. Es informativo, no controla nada. */
+export const soloSuperadmin = (item: NavItem) => !item.roles.some(r => r !== 'SUPERADMIN')
 
 // Con la barra y no un `startsWith` pelado: si no, `/crm-viejo` marcaría activa la entrada del CRM.
 export const estaActivo = (pathname: string, path: string) =>

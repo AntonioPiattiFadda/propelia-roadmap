@@ -16,13 +16,14 @@ import { localTodayIso } from '@/lib/calendarDate'
 import { cn } from '@/lib/utils'
 import { useMutacionDelDetalle } from '../hooks/useLeadMutaciones'
 import { agruparReuniones, armarReunion } from '../lib/reuniones'
-import { actualizarReunion, crearReunion } from '../service/crm.service'
+import { MeetingSyncBadge } from '@/pages/agenda/components/meetings/MeetingSyncBadge'
+import { actualizarReunion, cancelarReunion, crearReunion } from '../service/crm.service'
 import type { CrmMeeting, LeadDetalle } from '../types'
 
-/* NUEVO: el producto agenda visitas a pisos contra Google Calendar; acá una reunión es con una
-   inmobiliaria y vive solo en `crm_meetings`. Fue una pestaña entera (MeetingsPanel); ahora es
-   una lista compacta en la columna del perfil, con agendar, completar y cancelar (con motivo).
-   Sin calendario (fuera de alcance, spec §8). */
+/* NUEVO: una reunión es con una inmobiliaria y vive en `crm_meetings`. Fue una pestaña entera
+   (MeetingsPanel); ahora es una lista compacta en la columna del perfil, con agendar, completar y
+   cancelar (con motivo). Desde el 21/10/2026 va al Google Calendar de su responsable como las
+   visitas del producto (`calendar-sync`): el ícono de al lado dice si ya está. Se edita en /agenda. */
 
 const DURACIONES = [15, 30, 45, 60, 90, 120]
 const fmt = new Intl.DateTimeFormat('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
@@ -74,8 +75,11 @@ function FilaReunion({ r, puedeEscribir, onCompletar, onCancelar }: {
   return (
     <li className="group flex items-start gap-2 py-1">
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className={cn('truncate text-[13px] leading-snug text-foreground', r.status === 'cancelled' && 'text-(--fg-muted) line-through')}>
-          {r.title || 'Reunión'}
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className={cn('truncate text-[13px] leading-snug text-foreground', r.status === 'cancelled' && 'text-(--fg-muted) line-through')}>
+            {r.title || 'Reunión'}
+          </span>
+          <MeetingSyncBadge meeting={r} />
         </span>
         <span className="text-[11.5px] leading-snug text-(--fg-muted)">
           <span className="tabular-nums">{fmt.format(new Date(r.starts_at))}</span>
@@ -119,15 +123,17 @@ export function ReunionesDelLead({ leadId, responsableId, puedeEscribir, reunion
     crearReunion({ lead_id: leadId, assigned_to: responsableId, title: titulo.trim() || null, ...armarReunion(campos.fecha, campos.hora, campos.duracion) }),
     { exito: 'Reunión agendada' })
   const cambiar = useMutacionDelDetalle(leadId,
-    (v: { id: string; status: 'completed' | 'cancelled'; cancel_reason?: string | null }) =>
-      actualizarReunion(v.id, { status: v.status, cancel_reason: v.cancel_reason ?? null }),
+    (v: { id: string; ics_sequence: number; status: 'completed' | 'cancelled'; cancel_reason?: string | null }) =>
+      v.status === 'cancelled'
+        ? cancelarReunion(v, v.cancel_reason ?? null)
+        : actualizarReunion(v.id, { status: v.status, cancel_reason: v.cancel_reason ?? null }),
     { optimista: (d: LeadDetalle, v) => ({ ...d, meetings: d.meetings.map(m => m.id === v.id ? { ...m, status: v.status, cancel_reason: v.cancel_reason ?? null } : m) }) },
   )
 
   const { proximas, pasadas } = agruparReuniones(reuniones, Date.now())
   const fila = (r: CrmMeeting) => (
     <FilaReunion key={r.id} r={r} puedeEscribir={puedeEscribir}
-      onCompletar={() => cambiar.mutate({ id: r.id, status: 'completed' })}
+      onCompletar={() => cambiar.mutate({ id: r.id, ics_sequence: r.ics_sequence, status: 'completed' })}
       onCancelar={() => { setMotivo(''); setCancelando(r) }} />
   )
 
@@ -183,12 +189,12 @@ export function ReunionesDelLead({ leadId, responsableId, puedeEscribir, reunion
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle>¿Cancelar la reunión?</AlertDialogTitle>
-              <AlertDialogDescription>Queda en el historial del lead como cancelada, con el motivo.</AlertDialogDescription>
+              <AlertDialogDescription>Queda en el historial del lead como cancelada, con el motivo. Si estaba en Google Calendar, se borra y Google les avisa a los invitados.</AlertDialogDescription>
             </AlertDialogHeader>
             <Textarea value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Motivo (opcional)" />
             <AlertDialogFooter>
               <AlertDialogCancel>Volver</AlertDialogCancel>
-              <AlertDialogAction onClick={() => cambiar.mutate({ id: cancelando.id, status: 'cancelled', cancel_reason: motivo.trim() || null })}>
+              <AlertDialogAction onClick={() => cambiar.mutate({ id: cancelando.id, ics_sequence: cancelando.ics_sequence, status: 'cancelled', cancel_reason: motivo.trim() || null })}>
                 Cancelar reunión
               </AlertDialogAction>
             </AlertDialogFooter>
