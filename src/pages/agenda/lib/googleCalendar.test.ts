@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mapMeetingToGoogleEvent, planGoogleSync, mapGoogleEventsToAgenda, stripLeadLink, buildGuestAttendees, mapGuestResponses } from '../../../../supabase/functions/_shared/googleCalendar'
 
-const APP_URL = 'https://equipo.propelia.es'
-
 const meeting = {
   id: 'abc123',
   lead_id: null as string | null,
@@ -20,7 +18,7 @@ const meeting = {
 
 describe('mapMeetingToGoogleEvent', () => {
   it('mapea la reunión al payload del evento con extended property', () => {
-    const event = mapMeetingToGoogleEvent(meeting, APP_URL)
+    const event = mapMeetingToGoogleEvent(meeting)
     expect(event.summary).toBe('Reunión')
     expect(event.description).toBe('llevar llaves')
     expect(event.start).toEqual({ dateTime: '2026-08-01T15:00:00+00:00' })
@@ -29,82 +27,67 @@ describe('mapMeetingToGoogleEvent', () => {
   })
 
   it('sin descripción omite description', () => {
-    const event = mapMeetingToGoogleEvent({ ...meeting, description: null }, APP_URL)
+    const event = mapMeetingToGoogleEvent({ ...meeting, description: null })
     expect(event.description).toBeUndefined()
   })
 
   it('con title usa ese texto como summary', () => {
-    const event = mapMeetingToGoogleEvent({ ...meeting, title: 'Visita — Av. Corrientes 1234 (Juan)' }, APP_URL)
+    const event = mapMeetingToGoogleEvent({ ...meeting, title: 'Visita — Av. Corrientes 1234 (Juan)' })
     expect(event.summary).toBe('Visita — Av. Corrientes 1234 (Juan)')
   })
 
 
   it('con color_id incluye colorId en el payload', () => {
-    const event = mapMeetingToGoogleEvent({ ...meeting, color_id: '5' }, APP_URL)
+    const event = mapMeetingToGoogleEvent({ ...meeting, color_id: '5' })
     expect(event.colorId).toBe('5')
   })
 
   it('con reminder_minutes arma reminders.overrides con popup', () => {
-    const event = mapMeetingToGoogleEvent({ ...meeting, reminder_minutes: 30 }, APP_URL)
+    const event = mapMeetingToGoogleEvent({ ...meeting, reminder_minutes: 30 })
     expect(event.reminders).toEqual({ useDefault: false, overrides: [{ method: 'popup', minutes: 30 }] })
   })
 
   it('sin reminder_minutes no manda reminders', () => {
-    const event = mapMeetingToGoogleEvent(meeting, APP_URL)
+    const event = mapMeetingToGoogleEvent(meeting)
     expect(event.reminders).toBeUndefined()
   })
 
   it('con reminder_minutes=0 sí manda reminders', () => {
-    const event = mapMeetingToGoogleEvent({ ...meeting, reminder_minutes: 0 }, APP_URL)
+    const event = mapMeetingToGoogleEvent({ ...meeting, reminder_minutes: 0 })
     expect(event.reminders).toEqual({ useDefault: false, overrides: [{ method: 'popup', minutes: 0 }] })
   })
 
   it('sin color_id omite el campo', () => {
-    const event = mapMeetingToGoogleEvent({ ...meeting, color_id: null }, APP_URL)
+    const event = mapMeetingToGoogleEvent({ ...meeting, color_id: null })
     expect(event.colorId).toBeUndefined()
   })
 
-  it('con lead_id agrega el link a la ficha al pie de la descripción', () => {
-    const event = mapMeetingToGoogleEvent({ ...meeting, lead_id: 'lead-1' }, APP_URL)
-    expect(event.description).toBe(
-      'llevar llaves\n\nFicha del lead: https://equipo.propelia.es/crm?lead=lead-1',
-    )
-  })
-
-  it('con lead_id y sin descripción manda sólo el link', () => {
-    const event = mapMeetingToGoogleEvent({ ...meeting, lead_id: 'lead-1', description: null }, APP_URL)
-    expect(event.description).toBe('Ficha del lead: https://equipo.propelia.es/crm?lead=lead-1')
-  })
-
-  it('sin lead_id no agrega link', () => {
-    const event = mapMeetingToGoogleEvent(meeting, APP_URL)
+  it('la descripción va tal cual, sin link al lead aunque la reunión sea de uno (la ven los invitados)', () => {
+    const deUnLead = { ...meeting, lead_id: 'lead-1' }
+    const event = mapMeetingToGoogleEvent(deUnLead)
     expect(event.description).toBe('llevar llaves')
-  })
-
-  it('ignora la barra final del dominio configurado', () => {
-    const event = mapMeetingToGoogleEvent({ ...meeting, lead_id: 'lead-1' }, 'https://equipo.propelia.es/')
-    expect(event.description).toContain('https://equipo.propelia.es/crm?lead=lead-1')
+    expect(event.description).not.toContain('crm?lead=')
   })
 })
 
 describe('mapMeetingToGoogleEvent — invitados', () => {
   it('sin attendees no manda la clave (no pisa invitados de eventos viejos)', () => {
-    const event = mapMeetingToGoogleEvent(meeting, APP_URL)
+    const event = mapMeetingToGoogleEvent(meeting)
     expect('attendees' in event).toBe(false)
   })
 
   it('con attendees los manda tal cual', () => {
-    const event = mapMeetingToGoogleEvent(meeting, APP_URL, [{ email: 'ana@org.es' }])
+    const event = mapMeetingToGoogleEvent(meeting, [{ email: 'ana@org.es' }])
     expect(event.attendees).toEqual([{ email: 'ana@org.es' }])
   })
 
   it('los invitados no ven los emails de los demás (el cliente no ve a los compañeros)', () => {
-    const event = mapMeetingToGoogleEvent(meeting, APP_URL, [{ email: 'cliente@gmail.com' }])
+    const event = mapMeetingToGoogleEvent(meeting, [{ email: 'cliente@gmail.com' }])
     expect(event.guestsCanSeeOtherGuests).toBe(false)
   })
 
   it('una lista vacía se manda: quitar a todos los invitados tiene que llegar a Google', () => {
-    const event = mapMeetingToGoogleEvent(meeting, APP_URL, [])
+    const event = mapMeetingToGoogleEvent(meeting, [])
     expect(event.attendees).toEqual([])
   })
 })
@@ -180,10 +163,6 @@ describe('stripLeadLink', () => {
     expect(stripLeadLink('llevar llaves')).toBe('llevar llaves')
   })
 
-  it('es la inversa exacta del ida y vuelta con mapMeetingToGoogleEvent', () => {
-    const event = mapMeetingToGoogleEvent({ ...meeting, lead_id: 'lead-1' }, APP_URL)
-    expect(stripLeadLink(event.description!)).toBe(meeting.description)
-  })
 })
 
 describe('planGoogleSync', () => {

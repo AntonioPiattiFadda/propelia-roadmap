@@ -51,6 +51,46 @@ export const PROPELIA_ORG: LeadEmailOrg = {
   logoOnBrandUrl: 'https://www.propelia.es/assets/lockup_h_white.png',
 }
 
+/** WhatsApp del botón «Contactar» de todos los mails de demo (21/10/2026, por pedido): fijo, el de
+    Lorenzo, sea quien sea el que tiene la demo. wa.me pide el número en dígitos con el país. */
+export const WHATSAPP_CONTACTO = '+34 675 24 91 46'
+
+/** Para qué escribe la inmobiliaria: uno por mail (los tres que salen y los tres «Próximamente»). */
+export type MotivoDeContacto = 'agendada' | 'reprogramada' | 'cancelada' | 'diaAntes' | 'mismoDia' | 'resena'
+
+/**
+ * El mensaje que queda escrito en el WhatsApp. Lo manda quien recibió el mail, así que va en su voz,
+ * como el de las plantillas de «Mensajes» (`mensajeDeWhatsapp`): «¡Hola Propelia! Soy Ana, de
+ * Inmobiliaria Sol. Os escribo por la demo del…». La fecha y la hora son las de la demo, en España.
+ */
+export function mensajeDeContacto(ctx: Pick<DemoScheduledCtx, 'startsAt' | 'clientFirstName' | 'companyName'>, motivo: MotivoDeContacto): string {
+  const nombre = ctx.clientFirstName?.trim() ?? ''
+  const empresa = ctx.companyName?.trim() ?? ''
+  const quien = nombre && empresa ? ` Soy ${nombre}, de ${empresa}.`
+    : nombre ? ` Soy ${nombre}.`
+    : empresa ? ` Somos ${empresa}.`
+    : ''
+  const fecha = formatVisitDate(ctx.startsAt)
+  const hora = formatVisitTime(ctx.startsAt)
+  const pedido: Record<MotivoDeContacto, string> = {
+    agendada: `Os escribo por la demo del ${fecha} a las ${hora}.`,
+    reprogramada: `Os escribo por el nuevo horario de la demo: ${fecha} a las ${hora}.`,
+    cancelada: `Vi que se canceló la demo del ${fecha}. Me gustaría agendar otra.`,
+    diaAntes: `Os escribo por la demo de mañana a las ${hora}.`,
+    mismoDia: `Os escribo por la demo de hoy a las ${hora}.`,
+    resena: `Os escribo por la demo del ${fecha}. Os quería comentar algo.`,
+  }
+  return `¡Hola Propelia!${quien} ${pedido[motivo]}`
+}
+
+/** wa.me abre WhatsApp Web en el ordenador y la app en el móvil, con el mensaje ya escrito. */
+export const contactarUrl = (ctx: Pick<DemoScheduledCtx, 'startsAt' | 'clientFirstName' | 'companyName'>, motivo: MotivoDeContacto) =>
+  `https://wa.me/${WHATSAPP_CONTACTO.replace(/\D/g, '')}?text=${encodeURIComponent(mensajeDeContacto(ctx, motivo))}`
+
+/** El botón «Contactar»: el único de cada mail de demo. */
+export const contactarButton = (ctx: DemoScheduledCtx, motivo: MotivoDeContacto, marginTop?: number) =>
+  ctaButton(ctx.org, contactarUrl(ctx, motivo), 'Contactar', marginTop)
+
 const dateRow = (date: string, time: string) =>
   `<p style="margin:0;color:${INK};font-size:16px;line-height:1.4;">${escapeHtml(capitalize(date))}</p>
                   <p style="margin:4px 0 0;color:${SUBTLE};font-size:13px;line-height:1.4;">a las ${escapeHtml(time)} (hora de España)</p>`
@@ -90,7 +130,9 @@ export function renderDemoScheduledEmail(ctx: DemoScheduledCtx): { subject: stri
         { icon: 'calendar', html: dateRow(date, time) },
       ],
     },
-    afterCardHtml: closing('Te llega también la invitación del calendario. Si no puedes a esa hora o quieres cambiarla, responde a este mail.'),
+    afterCardHtml: `${contactarButton(ctx, 'agendada')}
+
+      ${closing('Te llega también la invitación del calendario. Si no puedes a esa hora o quieres cambiarla, escríbenos o responde a este mail.')}`,
   })
   // El asunto es texto plano: sin escapar, pero sin datos del lead.
   return { subject: `Tu demo de Propelia está confirmada: ${date} a las ${time}`, html }
@@ -126,7 +168,9 @@ export function renderDemoRescheduledEmail(
         },
       ],
     },
-    afterCardHtml: closing('Si el nuevo horario no te viene bien, responde a este mail y lo ajustamos.'),
+    afterCardHtml: `${contactarButton(ctx, 'reprogramada')}
+
+      ${closing('Si el nuevo horario no te viene bien, escríbenos o responde a este mail y lo ajustamos.')}`,
   })
   return { subject: `Cambió el horario de tu demo de Propelia: ${date} a las ${time}`, html }
 }
@@ -134,7 +178,6 @@ export function renderDemoRescheduledEmail(
 export function renderDemoCancelledEmail(ctx: DemoScheduledCtx): { subject: string; html: string } {
   const date = formatVisitDate(ctx.startsAt)
   const time = formatVisitTime(ctx.startsAt)
-  const agentEmail = ctx.agent.email?.trim()
   const html = renderLeadEmailLayout({
     ...layoutBase(ctx),
     badgeHtml: badge('Demo cancelada', '#fdecec', '#b42318'),
@@ -152,12 +195,10 @@ export function renderDemoCancelledEmail(ctx: DemoScheduledCtx): { subject: stri
         },
       ],
     },
-    // Sin email de quien la manda no hay a quién escribir: el botón no sale y queda "responde a este mail".
-    afterCardHtml: `${
-      agentEmail ? ctaButton(ctx.org, `mailto:${agentEmail}?subject=${encodeURIComponent('Nueva demo de Propelia')}`, 'Agendar otra demo') : ''
-    }
+    // «Contactar» reemplaza al «Agendar otra demo» (un mailto) del producto: el WhatsApp ya pide otra.
+    afterCardHtml: `${contactarButton(ctx, 'cancelada')}
 
-      ${closing('Si quieres ver Propelia otro día, responde a este mail y buscamos un nuevo horario.')}`,
+      ${closing('Si quieres ver Propelia otro día, escríbenos o responde a este mail y buscamos un nuevo horario.')}`,
   })
   return { subject: `Tu demo de Propelia del ${date} fue cancelada`, html }
 }

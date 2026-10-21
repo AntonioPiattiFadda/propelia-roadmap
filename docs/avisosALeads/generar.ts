@@ -15,6 +15,7 @@ import { writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  contactarButton,
   PROPELIA_ORG,
   renderDemoCancelledEmail,
   renderDemoRescheduledEmail,
@@ -24,7 +25,6 @@ import {
 import {
   badge,
   capitalize,
-  ctaButton,
   escapeHtml,
   formatVisitDate,
   formatVisitTime,
@@ -69,21 +69,22 @@ function recordatorioDiaAntes() {
     badgeHtml: badge('Recordatorio', '#e8f0fe', '#3644f2'),
     introHtml: `Te recordamos que mañana tienes la demo con ${strong(introName(ctx.agent, ctx.org))}:`,
     card: { imageUrl: null, rows: [{ icon: 'house', html: demoRow }, { icon: 'calendar', html: whenRow(capitalize(date), `a las ${time} (hora de España)`) }] },
-    afterCardHtml: closing('Si al final no puedes o quieres cambiar la hora, responde a este mail y avisamos con tiempo.'),
+    afterCardHtml: `${contactarButton(ctx, 'diaAntes')}
+
+      ${closing('Si al final no puedes o quieres cambiar la hora, escríbenos o responde a este mail y avisamos con tiempo.')}`,
   })
   return { subject: `Mañana es tu demo de Propelia, a las ${time}`, html }
 }
 
 function recordatorioMismoDia() {
-  const tel = ctx.agent.phone ? `tel:${ctx.agent.phone.replace(/\s+/g, '')}` : null
   const html = renderLeadEmailLayout({
     ...base,
     badgeHtml: badge('Tu demo es hoy', '#e8f0fe', '#3644f2'),
     introHtml: `¡Hoy es el día! ${strong(introName(ctx.agent, ctx.org))} te espera a las ${escapeHtml(time)}:`,
     card: { imageUrl: null, rows: [{ icon: 'house', html: demoRow }, { icon: 'calendar', html: whenRow(`Hoy, ${date}`, `a las ${time} (hora de España)`) }] },
-    afterCardHtml: `${tel ? ctaButton(ctx.org, tel, `Llamar a ${pila}`) : ''}
+    afterCardHtml: `${contactarButton(ctx, 'mismoDia')}
 
-      ${closing(`Si se te complica, avísale a ${pila} por teléfono o responde a este mail.`)}`,
+      ${closing(`Si se te complica, avísale a ${pila} por WhatsApp o responde a este mail.`)}`,
   })
   return { subject: `Hoy a las ${time} es tu demo de Propelia`, html }
 }
@@ -99,7 +100,7 @@ function pedidoDeResena() {
     afterCardHtml: `<p style="margin:26px 0 8px;color:${INK};font-size:16px;line-height:1.4;font-weight:700;">¿Qué te pareció la demo?</p>
       <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>${[1, 2, 3, 4, 5].map(star).join('')}</tr></table>
       <p style="margin:6px 0 0;color:${SUBTLE};font-size:12px;line-height:1.4;">Toca una estrella para puntuar. Te lleva menos de un minuto.</p>
-      ${ctaButton(ctx.org, `mailto:${ctx.agent.email ?? ''}?subject=${encodeURIComponent('Comentario sobre la demo')}`, 'Dejar un comentario', 22)}
+      ${contactarButton(ctx, 'resena', 22)}
 
       ${closing('¿Quieres seguir con Propelia o te quedaron dudas? Responde a este mail y lo vemos.')}`,
   })

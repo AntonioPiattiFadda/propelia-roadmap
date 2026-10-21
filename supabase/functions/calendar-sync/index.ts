@@ -91,9 +91,6 @@ const getActiveConnection = async (admin: SupabaseClient, userId: string): Promi
   return (data as Connection | null) ?? null
 }
 
-// Dominio de esta app para el link al lead que va en la descripción del evento (secret
-// APP_BASE_URL). Sin él el evento sale igual, sin link: mejor eso que un link a otro sistema.
-const APP_BASE_URL = Deno.env.get('APP_BASE_URL') ?? null
 
 const WEBHOOK_ADDRESS = `${Deno.env.get('SUPABASE_URL')}/functions/v1/calendar-webhook`
 const WATCH_TTL_MS = 6 * 24 * 60 * 60 * 1000 // pedimos 6 días; Google capea ~7
@@ -276,7 +273,7 @@ const processGoogleFlow = async (admin: SupabaseClient, meeting: MeetingRow, enc
 
   const guestEmails = await getGuestEmails(admin, meeting)
   const buildPayload = (existingAttendees?: GoogleAttendee[]) =>
-    mapMeetingToGoogleEvent(meeting, APP_BASE_URL, buildGuestAttendees(guestEmails, existingAttendees))
+    mapMeetingToGoogleEvent(meeting, buildGuestAttendees(guestEmails, existingAttendees))
 
   if (plan.action === 'patch') {
     const eventPath = `/calendars/${calendarId}/events/${encodeURIComponent(meeting.external_event_id!)}`

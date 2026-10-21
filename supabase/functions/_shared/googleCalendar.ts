@@ -75,31 +75,19 @@ export const buildGuestAttendees = (
   return [...organizers, ...guests]
 }
 
-/** Rótulo de la línea que lleva el link a la ficha del lead al pie de la descripción. */
+/**
+ * Rótulo del link al lead que llevaban al pie los primeros eventos (21/10/2026). Se sacó el mismo
+ * día, por pedido: la descripción del evento la ven todos los invitados, y a la inmobiliaria le
+ * llegaba un link a nuestro CRM. En el producto sí va (ahí es la «Ficha del cliente» del agente).
+ * Queda solo para limpiar esos eventos en el camino de vuelta (`stripLeadLink`).
+ */
 export const LEAD_LINK_LABEL = 'Ficha del lead:'
 
-/** Link al lead dentro del CRM. `?lead=` lo abre en su ventana (`LEAD_PARAM` del front). */
-export const buildLeadUrl = (appBaseUrl: string, leadId: string): string =>
-  `${appBaseUrl.replace(/\/+$/, '')}/crm?lead=${encodeURIComponent(leadId)}`
-
 /**
- * Descripción del evento de Google: el detalle de la reunión y, al pie, el link al lead, para
- * saltar del aviso del calendario al CRM en un click.
- *
- * El link se agrega SOLO acá, en el payload que va a Google: `crm_meetings.description` sigue
- * llevando el texto tal cual se escribió.
- */
-export const withLeadLink = (description: string | null, leadUrl: string | null): string | null => {
-  if (!leadUrl) return description
-  return description ? `${description}\n\n${LEAD_LINK_LABEL} ${leadUrl}` : `${LEAD_LINK_LABEL} ${leadUrl}`
-}
-
-/**
- * Inversa de `withLeadLink`, para el camino de vuelta (webhook de Google -> reunión).
- *
- * Sin esto, la descripción con el link volvería como si alguien la hubiera editado a mano en
- * Google: se guardaría en `crm_meetings.description` con el link al CRM pegado. El bloque se
- * saca sólo si está al final, que es donde lo escribe `withLeadLink`.
+ * Saca el link al lead de un evento creado cuando todavía se agregaba (camino de vuelta: webhook de
+ * Google -> reunión). Sin esto, esa descripción volvería como si alguien la hubiera editado a mano
+ * en Google y se guardaría en `crm_meetings.description` con el link pegado. Sólo si está al final,
+ * que es donde iba.
  */
 export const stripLeadLink = (description: string): string =>
   description.replace(new RegExp(`\\n*${LEAD_LINK_LABEL} \\S+\\s*$`), '')
@@ -125,16 +113,12 @@ export const mapGuestResponses = (
 }
 
 export const mapMeetingToGoogleEvent = (
-  meeting: Pick<SyncMeeting, 'id' | 'lead_id' | 'starts_at' | 'ends_at' | 'description' | 'title' | 'color_id' | 'reminder_minutes'>,
-  /** Sin dominio configurado (`APP_BASE_URL`) el evento va sin link al lead. */
-  appBaseUrl: string | null,
+  meeting: Pick<SyncMeeting, 'id' | 'starts_at' | 'ends_at' | 'description' | 'title' | 'color_id' | 'reminder_minutes'>,
   /** Omitido = no se manda la clave (Google deja los invitados como están); `[]` los quita. */
   attendees?: GoogleAttendee[],
 ): GoogleEventPayload => {
-  const description = withLeadLink(
-    meeting.description,
-    meeting.lead_id && appBaseUrl ? buildLeadUrl(appBaseUrl, meeting.lead_id) : null,
-  )
+  // La descripción va tal cual: sin el link al lead (ver LEAD_LINK_LABEL), que la ven los invitados.
+  const description = meeting.description
   return {
     summary: meeting.title ?? DEFAULT_MEETING_TITLE,
     ...(description ? { description } : {}),

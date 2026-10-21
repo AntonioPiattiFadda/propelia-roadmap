@@ -6,6 +6,7 @@ import {
   createDemoCancelledHandler, createDemoRescheduledHandler, createDemoScheduledHandler,
 } from '../../../../supabase/functions/_shared/leadNotifications/handlers/demoScheduled'
 import type { LeadNotificationEvent } from '../../../../supabase/functions/_shared/leadNotifications/types'
+import { contactarUrl, mensajeDeContacto } from '../../../../supabase/functions/_shared/leadNotifications/templates/demoScheduledEmail'
 import { emailAssetsBaseUrl } from '../../../../supabase/functions/_shared/leadNotifications/assets'
 
 /* Lo que las demos tienen distinto de las visitas del producto: a quién le llega, quién firma y qué
@@ -117,14 +118,15 @@ describe('demo reprogramada y cancelada', () => {
       .load(ev('demo_rescheduled', { starts_at: '2030-01-09T09:00:00Z' }), NOW)
     expect(loaded).toEqual({ skip: 'superseded' })
   })
-  it('cancelada: badge y botón para agendar otra al email de quien la tenía', async () => {
+  it('cancelada: badge y «Contactar» por WhatsApp para agendar otra', async () => {
     const h = createDemoCancelledHandler(deps(row({ status: 'cancelled' })))
     const loaded = await h.load(ev('demo_cancelled'), NOW)
     if (!('ctx' in loaded)) throw new Error(JSON.stringify(loaded))
     const msg = h.render('email', loaded.ctx, {}, 'ana@inmo.es')
     expect(msg.subject).toContain('fue cancelada')
     expect(msg.html).toContain('Demo cancelada')
-    expect(msg.html).toContain('mailto:lucia@propelia.es')
+    expect(msg.html).toContain('https://wa.me/34675249146?text=')
+    expect(msg.html).toContain(encodeURIComponent('Me gustaría agendar otra.'))
   })
   it('cancelada pero reactivada antes de salir: no se manda', async () => {
     const loaded = await createDemoCancelledHandler(deps(row())).load(ev('demo_cancelled'), NOW)
@@ -155,5 +157,34 @@ describe('dónde viven los íconos', () => {
     expect(emailAssetsBaseUrl(undefined, 'https://equipo.propelia.es/')).toBe('https://equipo.propelia.es/email/avisos')
     expect(emailAssetsBaseUrl(undefined, undefined)).toContain('gvkdyxhxsnpumxlhvhsm.supabase.co/storage/v1/object/public/email-assets/v2')
     expect(emailAssetsBaseUrl('https://otro.cdn/x', 'https://equipo.propelia.es')).toBe('https://otro.cdn/x')
+  })
+})
+
+describe('botón Contactar', () => {
+  const base = { startsAt: '2030-01-10T09:00:00Z', clientFirstName: 'Ana', companyName: 'Inmo Serrano' }
+  it('va al WhatsApp fijo con el mensaje en la voz de la inmobiliaria', () => {
+    expect(mensajeDeContacto(base, 'agendada')).toBe('¡Hola Propelia! Soy Ana, de Inmo Serrano. Os escribo por la demo del jueves, 10 de enero a las 10:00.')
+    expect(mensajeDeContacto(base, 'mismoDia')).toBe('¡Hola Propelia! Soy Ana, de Inmo Serrano. Os escribo por la demo de hoy a las 10:00.')
+    expect(contactarUrl(base, 'resena')).toMatch(/^https:\/\/wa\.me\/34675249146\?text=/)
+  })
+  it('sin nombre, con la empresa; sin nada, solo el saludo', () => {
+    expect(mensajeDeContacto({ ...base, clientFirstName: null }, 'cancelada'))
+      .toBe('¡Hola Propelia! Somos Inmo Serrano. Vi que se canceló la demo del jueves, 10 de enero. Me gustaría agendar otra.')
+    expect(mensajeDeContacto({ ...base, clientFirstName: ' ', companyName: null }, 'diaAntes'))
+      .toBe('¡Hola Propelia! Os escribo por la demo de mañana a las 10:00.')
+  })
+  it('los tres mails que salen lo llevan', async () => {
+    for (const [h, r, type] of [
+      [createDemoScheduledHandler, row(), 'demo_scheduled'],
+      [createDemoRescheduledHandler, row(), 'demo_rescheduled'],
+      [createDemoCancelledHandler, row({ status: 'cancelled' }), 'demo_cancelled'],
+    ] as const) {
+      const handler = h(deps(r))
+      const loaded = await handler.load(ev(type), NOW)
+      if (!('ctx' in loaded)) throw new Error(JSON.stringify(loaded))
+      const { html } = handler.render('email', loaded.ctx, {}, 'ana@inmo.es')
+      expect(html).toContain('>Contactar&nbsp;&rarr;</a>')
+      expect(html).toContain('https://wa.me/34675249146?text=')
+    }
   })
 })
