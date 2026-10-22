@@ -3,7 +3,7 @@ import { isValidGuestEmail } from './guestEmail'
 
 describe('isValidGuestEmail', () => {
   it('acepta un email común', () => {
-    expect(isValidGuestEmail('lorenzo.piattifadda@gmail.com')).toBe(true)
+    expect(isValidGuestEmail('lorenzopiattifadda@gmail.com')).toBe(true)
   })
 
   it('tolera espacios alrededor', () => {
@@ -11,7 +11,7 @@ describe('isValidGuestEmail', () => {
   })
 
   it('rechaza una coma en vez de punto (el typo típico)', () => {
-    expect(isValidGuestEmail('lorenzo.piattifadda@gmail,com')).toBe(false)
+    expect(isValidGuestEmail('lorenzopiattifadda@gmail,com')).toBe(false)
   })
 
   it('rechaza sin dominio o sin arroba', () => {

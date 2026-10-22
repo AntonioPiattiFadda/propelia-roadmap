@@ -46,6 +46,15 @@ export async function getLeads(): Promise<CrmLeadRow[]> {
   })) as CrmLeadRow[]
 }
 
+/** Un lead con su cliente, para la Agenda: el registro de la demo (22/10/2026) necesita los
+ *  contactos, el responsable y la etapa, y ahí no está la lista entera del CRM. */
+export async function getLead(id: string): Promise<CrmLeadRow> {
+  const { data, error } = await supabase
+    .from('crm_leads').select('*, client:crm_clients(*)').eq('id', id).is('deleted_at', null).single()
+  if (error) throw error
+  return { ...data, ultima_actividad_at: null } as CrmLeadRow
+}
+
 /** Con las borradas: un lead en una etapa borrada tiene que poder leer su nombre (ver etapaDelLead). */
 export async function getCatalogos(): Promise<{ etapas: CrmStage[]; canales: CrmChannel[] }> {
   const [etapas, canales] = await Promise.all([

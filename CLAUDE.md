@@ -108,12 +108,20 @@ acá son las reuniones del CRM (`crm_meetings`, las demos incluidas). Migración
   orígenes; vacío = solo `http://localhost:4100`) y `APP_BASE_URL` (sin él, el evento va sin link al
   lead). En la consola de Google, el cliente OAuth tiene que tener como redirect
   `https://itqwxnmuxuiiydsueazb.supabase.co/functions/v1/calendar-oauth-callback`.
-- **«Agendar demo» se agenda en la Agenda** (21/10/2026, por pedido, como el «Agendar visita» del
-  producto): el formulario del lead junta mail, quién asiste, notas y etapa (ya no día ni hora) y
-  navega a `/agenda?leadId=&assignedTo=&title=Demo&description=&guestEmail=…` (`enlaceParaAgendarDemo`,
-  `lib/reuniones.ts`). La demo nace tocando la grilla, del responsable del lead, con la inmobiliaria
-  y **siempre `lorenzo.piattifadda@gmail.com`** (`INVITADO_DE_TODA_DEMO`) como invitados. La etapa se
-  mueve al seguir, no al agendar.
+- **«Agendar demo» se agenda en la Agenda, en otra pestaña** (22/10/2026, por pedido; un solo
+  formulario): la pastilla del lead abre `/agenda?leadId=&assignedTo=&title=Demo&demo=1&guestEmail=…`
+  (`enlaceParaAgendarDemo`, `lib/reuniones.ts`) y la demo nace tocando la grilla, del responsable del
+  lead, con la inmobiliaria y **siempre `lorenzopiattifadda@gmail.com`** (`INVITADO_DE_TODA_DEMO`,
+  sin punto) como invitados. Con `demo=1` el formulario de la grilla es el de siempre más dos cosas:
+  el **«Email del cliente»** arriba de los invitados (es el invitado de la inmobiliaria: cambiarlo
+  cambia ese invitado; si la inmobiliaria no tenía email, se le guarda) y una **segunda columna
+  «Registro de actividad»** (`RegistroDeDemoPanel` + `useRegistroDeDemo`): decisor, quién asiste,
+  el texto y «El lead queda en» (obligatoria, sin Descartado). **Es para el equipo, no llega al
+  cliente ni al evento de Google**. Con la reunión guardada deja en el lead un comentario con meta
+  `tipo: 'demo'` (con quién, `decisorApuntado` y el id de la `reunion`), carga al perfil a los
+  escritos a mano y al decisor, y mueve la etapa. La actividad pinta registro y reunión como **un
+  renglón** con el día y la hora de la reunión de hoy (`lineaDeTiempo`). La pestaña del CRM lo ve
+  sin recargar: `useCrmRealtime` invalida el detalle con cada `crm_comments`.
 - **Avisos a leads** (21/10/2026, copiado de `propelia-frontend`, migración
   `20261021155052_lead_notifications`): Ajustes → «Avisos a leads» (solo SUPERADMIN, el «admin de la
   org» de allá) prende por evento y vía: Demo agendada / reprogramada / cancelada; recordatorios y
@@ -236,7 +244,8 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   La etapa se escribe recién con la actividad guardada. Reemplazó al toast «¿Pasar a …?».
   El formulario es la misma ventana flotante y no modal que «Nueva tarea» (`VentanaFlotante`):
   mientras se registra se puede usar el resto de la pantalla.
-- **Guía de la llamada y datos de la demo** (16/10/2026): «Llamada» y «Agendar demo» muestran una
+- **Guía de la llamada y datos de la demo** (16/10/2026; la demo se mudó a la Agenda el 22/10/2026,
+  ver la sección de Google Calendar, y lo de abajo sobre la demo es historia): «Llamada» y «Agendar demo» muestran una
   guía (qué no olvidarse) colgada del borde izquierdo de la ventana: plegada es una pestaña que
   asoma y abierta sale de la ventana como panel al costado (`lateral` de `VentanaFlotante`). Nace
   plegada cada vez. Es texto fijo de `lib/guiaDeLlamada.ts` y no guarda nada. La demo pide el mail de la invitación (precargado con el de la
@@ -291,8 +300,9 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   yo», no un dato del equipo.
 - **Página «Demos» y aviso de demo nueva** (20/10/2026, por pedido): `/demos`, solo SUPERADMIN
   (`NAV` y gate `esSuperadmin` adentro, como Ajustes). Una tabla con todas las `crm_meetings`
-  (próximas / pasadas, `agruparReuniones`); invitación, asistentes y notas salen de `description`
-  con `leerDescripcionDeDemo()` (`lib/reuniones.ts`). **Sin migración**: un SUPERADMIN ya lee todas
+  (próximas / pasadas, `agruparReuniones`); invitación, asistentes y notas salen de
+  `datosDeLaDemo()` (`lib/reuniones.ts`): del registro de actividad de la demo desde el 22/10/2026,
+  y de `description` (`leerDescripcionDeDemo()`) en las de antes. **Sin migración**: un SUPERADMIN ya lee todas
   por `crm_puede` y la tabla ya estaba en realtime. El aviso es `useAvisosDeDemos` en `AppLayout`
   (toast con «Abrir lead» + notificación del navegador si hay permiso, que se pide desde la página):
   a todo SUPERADMIN salvo a quien la agendó. La marca es por navegador (`crm-demos-avisadas-hasta`,

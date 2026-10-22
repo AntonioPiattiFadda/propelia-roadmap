@@ -61,14 +61,15 @@ describe('lineaDeTiempo', () => {
   })
 })
 
+const reunion = (id: string, extra: Partial<CrmMeeting> = {}): CrmMeeting => ({
+  id, lead_id: 'x', assigned_to: 'l', title: 'Demo', description: null, status: 'scheduled', cancel_reason: null,
+  sync_status: 'disabled', sync_error: null, sync_attempts: 0, external_event_id: null, external_provider: null, ics_sequence: 0, color_id: null, reminder_minutes: null, guest_user_ids: [], guest_emails: [],
+  // Hora local armada a mano: el texto se lee en la zona de quien mira.
+  starts_at: new Date(2026, 9, 7, 12, 0).toISOString(), ends_at: new Date(2026, 9, 7, 13, 0).toISOString(),
+  created_by: 'a', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-01T10:00:00Z', deleted_at: null, ...extra,
+})
+
 describe('lineaDeTiempo · reuniones', () => {
-  const reunion = (id: string, extra: Partial<CrmMeeting> = {}): CrmMeeting => ({
-    id, lead_id: 'x', assigned_to: 'l', title: 'Demo', description: null, status: 'scheduled', cancel_reason: null,
-    sync_status: 'disabled', sync_error: null, sync_attempts: 0, external_event_id: null, external_provider: null, ics_sequence: 0, color_id: null, reminder_minutes: null, guest_user_ids: [], guest_emails: [],
-    // Hora local armada a mano: el texto se lee en la zona de quien mira.
-    starts_at: new Date(2026, 9, 7, 12, 0).toISOString(), ends_at: new Date(2026, 9, 7, 13, 0).toISOString(),
-    created_by: 'a', created_at: '2026-10-01T10:00:00Z', updated_at: '2026-10-01T10:00:00Z', deleted_at: null, ...extra,
-  })
   const items = lineaDeTiempo({ ...vacio, meetings: [
     reunion('m1'), reunion('m2', { title: null }), reunion('m3', { deleted_at: '2026-10-02T00:00:00Z' }), reunion('m4', { title: 'Con el dueño' }),
   ] }, usuarios)
@@ -83,6 +84,38 @@ describe('lineaDeTiempo · reuniones', () => {
   })
   it('las borradas no aparecen', () => {
     expect(items.some(i => i.id === 'm3')).toBe(false)
+  })
+})
+
+describe('lineaDeTiempo · demo registrada desde la Agenda', () => {
+  const registro = (id: string, meta: MetaDeActividad, description = 'Quiere ver la importación') => ({
+    id, lead_id: 'x', description, long_description: armarMetaDeActividad(meta), comment_type: 'MANUAL' as const,
+    created_by: 'a', created_at: '2026-10-01T10:00:05Z', deleted_at: null,
+  })
+  const items = lineaDeTiempo({
+    ...vacio,
+    meetings: [reunion('m1'), reunion('m2')],
+    comments: [
+      registro('r1', { tipo: 'demo', con: ['Marta', 'Pere'], decisorApuntado: 'Jordi', reunion: 'm1' }),
+      registro('r2', { tipo: 'demo', con: [], reunion: 'borrada' }, 'Demo agendada.'),
+    ],
+  }, usuarios)
+
+  it('registro y reunión son un solo renglón: la reunión con registro no se pinta aparte', () => {
+    expect(items.map(i => i.id)).toEqual(['m2', 'r1', 'r2'])
+  })
+  it('dice para cuándo (de la reunión), el decisor y lo escrito, con quién asiste', () => {
+    expect(items.find(i => i.id === 'r1')).toMatchObject({
+      tipo: 'reunion', con: ['Marta', 'Pere'], decisorApuntado: 'Jordi',
+      texto: 'Para el 07/10 a las 12:00\nDecisor: Jordi\nQuiere ver la importación',
+    })
+  })
+  it('sin reunión viva ni nada escrito queda vacío: el texto de fábrica no se repite', () => {
+    expect(items.find(i => i.id === 'r2')?.texto).toBe('')
+  })
+  it('la meta de la demo va y vuelve', () => {
+    const meta: MetaDeActividad = { tipo: 'demo', con: ['Ana'], decisorApuntado: 'Luis', reunion: 'm1' }
+    expect(leerMetaDeActividad(armarMetaDeActividad(meta))).toEqual(meta)
   })
 })
 

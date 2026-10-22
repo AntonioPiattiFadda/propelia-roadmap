@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  CalendarDays, ChevronDown, CircleCheck, Clock, Info, MessageSquare, Pencil, Phone, PhoneMissed, Plus, Trash2, UserRound, X,
+  CalendarDays, ChevronDown, CircleCheck, Clock, ExternalLink, Info, MessageSquare, Pencil, Phone, PhoneMissed, Plus, Trash2, UserRound, X,
   type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,7 +10,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { localTodayIso } from '@/lib/calendarDate'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import { useNavigate } from 'react-router-dom'
 import { useCarteras } from '../hooks/useCarteras'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useActualizarCliente, useActualizarLead, useMutacionDelDetalle } from '../hooks/useLeadMutaciones'
@@ -22,8 +21,8 @@ import {
   campoDelNuevoDecisor, casilleroDelTelefonoNuevo, conDecisorApuntado, contactosConDecisor, tieneDecisor, decisorDelContactoNuevo, decisorSabido,
   decisoresDeLaLlamada, nombreDelLead, patchDeContactosNuevos, telefonosDelCliente, type CampoDecisor,
 } from '../lib/clientData'
-import { GUIA_DE_DEMO, GUIA_DE_LLAMADA, type SeccionDeGuia } from '../lib/guiaDeLlamada'
-import { descripcionDeDemo, enlaceParaAgendarDemo, esEmailValido } from '../lib/reuniones'
+import { GUIA_DE_LLAMADA, type SeccionDeGuia } from '../lib/guiaDeLlamada'
+import { enlaceParaAgendarDemo } from '../lib/reuniones'
 import { actualizarComentario, crearComentario, marcarComentarioBorrado } from '../service/crm.service'
 import type { CrmLeadRow, LeadDetalle } from '../types'
 import { InmobiliariaDelLead } from './InmobiliariaDelLead'
@@ -41,19 +40,18 @@ import { OpcionesDeEtapa } from './leadCells'
    por pedido): es lo que más se registra y no puede costar dos clics. Se guarda igual que antes
    —una llamada con resultado 'no_respondida'—, así el contador del día no se entera. */
 
-type Tipo = 'nota' | 'llamada' | 'fallido' | 'reunion'
+type Tipo = 'nota' | 'llamada' | 'fallido'
 const TIPOS: { id: Tipo; label: string; icono: LucideIcon }[] = [
   { id: 'llamada', label: 'Llamada', icono: Phone },
   { id: 'fallido', label: 'Contacto fallido', icono: PhoneMissed },
   // «Notas» y no «Actividad» (17/10/2026, por pedido): actividad es todo lo que se registra.
   { id: 'nota', label: 'Notas', icono: MessageSquare },
-  { id: 'reunion', label: 'Agendar demo', icono: CalendarDays },
 ]
 
-/* La reunión se guarda siempre como «Demo»: es lo único que agenda esta pastilla. Desde el
-   16/10/2026 el texto de abajo son las notas de la demo (van a la descripción, con el mail y quién
-   asiste) y no el título: la actividad no repite «Demo» y la lista de reuniones lo pinta arriba. */
-const TITULO_DEMO = 'Demo'
+/* «Agendar demo» ya no es un formulario de acá (22/10/2026, por pedido): abre la Agenda en otra
+   pestaña con el lead (`enlaceParaAgendarDemo`), y allá, al lado de la reunión, se completa el
+   registro de actividad (`useRegistroDeDemo`). Lo registrado aparece solo en esta pestaña: el
+   realtime del CRM invalida el detalle con cada comentario nuevo. */
 
 /* La guía de la llamada y la de la demo: texto fijo de `lib/guiaDeLlamada.ts`, sin tildes que se
    guarden. Cuelga del borde izquierdo de la ventana de registrar (16/10/2026, por pedido): plegada
@@ -294,11 +292,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   const eligioTelefono = !!telefonoElegido
   // Con quién solo tiene sentido en lo que pasó con alguien: una nota o una llamada (que siempre es
   // contestada: la que nadie atendió es «Contacto fallido»). En la demo es quién asiste.
-  const pideConQuien = tipo === 'nota' || tipo === 'llamada' || tipo === 'reunion'
-  /* La demo pide a qué mail va la invitación (16/10/2026, por pedido), precargado con el de la
-     inmobiliaria. Si no tenía, el que se escriba se le guarda al agendar. */
-  const [mailDemo, setMailDemo] = useState(() => lead.client?.email ?? '')
-  const mailValido = esEmailValido(mailDemo)
+  const pideConQuien = tipo === 'nota' || tipo === 'llamada'
   // En una llamada los campos se piden de a uno: primero con quién, después si decide.
   // Sin contactos cargados no hay a quién elegir, y la pregunta del decisor aparece igual.
   const eligioConQuien = elegibles.length === 0 || con.some(c => elegibles.includes(c))
@@ -330,12 +324,10 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
 
   const comentar = useMutacionDelDetalle(lead.id, (v: { description: string; meta: MetaDeActividad }) =>
     crearComentario({ lead_id: lead.id, description: v.description, long_description: armarMetaDeActividad(v.meta) }))
-  /* La demo se agenda en /agenda (21/10/2026, por pedido), como las visitas del producto: este
-     formulario junta lo de la demo (mail, quién asiste, notas, etapa) y navega con searchParams;
-     el horario se elige tocando la grilla y la reunión nace ahí, ya con la inmobiliaria y
-     lorenzo.piattifadda@gmail.com invitados (`enlaceParaAgendarDemo`). Sigue siendo del
-     responsable del lead, igual que en su lista del perfil. */
-  const navigate = useNavigate()
+  const abrirAgendaDeDemo = () => {
+    window.open(enlaceParaAgendarDemo({ leadId: lead.id, assignedTo: lead.assigned_to, email: lead.client?.email ?? null }), '_blank', 'noopener')
+    setAbierto(false)
+  }
   const actualizarLead = useActualizarLead()
   /* Lo registrado a mano (nota, llamada, contacto fallido) se puede borrar si se cargó por error
      (12/10/2026, por pedido). Es soft delete y sin confirmación: el aviso trae «Deshacer». Lo que
@@ -386,8 +378,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   // La demo se puede agendar sin notas, y la llamada y el contacto fallido sin texto (el tipo ya
   // dice qué pasó); la nota, no. La llamada sí pide con quién se habló y si es decisor;
   // la demo, el mail de la invitación y quién asiste.
-  const listo = tipo === 'reunion' ? mailValido && eligioConQuien
-    : tipo === 'llamada' ? eligioTelefono && eligioConQuien && (sabido !== null || decisor !== null)
+  const listo = tipo === 'llamada' ? eligioTelefono && eligioConQuien && (sabido !== null || decisor !== null)
     : tipo === 'fallido' ? eligioTelefono
     : !!limpio
 
@@ -396,10 +387,9 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   const [intento, setIntento] = useState(false)
   const falta = {
     telefono: pideTelefono && !eligioTelefono,
-    con: (tipo === 'llamada' || tipo === 'reunion') && !eligioConQuien,
+    con: tipo === 'llamada' && !eligioConQuien,
     decisor: pideDecisor && decisor === null,
     texto: tipo === 'nota' && !limpio,
-    mail: tipo === 'reunion' && !mailValido,
   }
   const enRojo = (k: keyof typeof falta) => intento && falta[k]
   const filaEnRojo = (k: keyof typeof falta) => enRojo(k) && 'rounded-md bg-(--danger-soft) px-2 py-1 [outline:1px_solid_var(--danger)]'
@@ -481,25 +471,6 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
         cargarContactosNuevos(null)
         setTexto(''); limpiarConQuien(); setAbierto(false); moverEtapa()
       } })
-    }
-    else {
-      const email = mailDemo.trim()
-      const asistentes = [
-        ...conDecisor.filter(c => con.includes(c.nombre)).map(c => c.decisor ? `${c.nombre} (decide)` : c.nombre),
-        ...nuevosElegidos,
-      ]
-      // El mail se le guarda a la inmobiliaria solo si no tenía: el que ya estaba no se pisa.
-      const guardarMail = lead.client && !lead.client.email?.trim() ? lead.client.id : null
-      const destino = enlaceParaAgendarDemo({
-        leadId: lead.id, assignedTo: lead.assigned_to, title: TITULO_DEMO,
-        description: descripcionDeDemo({ email, asistentes, notas: limpio }), email,
-      })
-      cargarContactosNuevos(null)
-      setTexto(''); limpiarConQuien(); setAbierto(false)
-      // Si falla (otro cliente ya tiene ese mail), la demo se agenda igual: el hook avisa.
-      if (guardarMail) actualizarCliente.mutate({ clientId: guardarMail, patch: { email } })
-      moverEtapa()
-      navigate(destino)
     }
   }
 
@@ -591,7 +562,6 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
           titulo={`Registrar actividad · ${nombreDelLead(lead.client)}`}
           descripcion="Qué pasó con el lead y en qué etapa queda."
           lateral={tipo === 'llamada' ? <GuiaDelCompositor key="llamada" titulo="Guía de la llamada" secciones={GUIA_DE_LLAMADA} />
-            : tipo === 'reunion' ? <GuiaDelCompositor key="demo" titulo="Antes de agendar" secciones={GUIA_DE_DEMO} />
             : undefined}>
           <div className="flex flex-col gap-4 p-4">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -609,13 +579,19 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                   </button>
                 )
               })}
+              <button type="button" onClick={abrirAgendaDeDemo} title="Abre la Agenda en otra pestaña"
+                className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-full px-2.5 text-[12px] text-(--fg-2) bg-card transition-colors [border:1px_solid_var(--line)] hover:bg-(--surface-2)">
+                <Icon icon={CalendarDays} size="xs" />
+                Agendar demo
+                <Icon icon={ExternalLink} size="xs" />
+              </button>
             </div>
             {/* Con quién va en su renglón, debajo de las pastillas, igual que los campos de la demo:
                 cada tipo pide lo suyo en el mismo lugar. Una pastilla por contacto, que se prenden
                 varias: con dos o tres contactos, un menú era un clic de más para elegir. */}
             {pideConQuien && (
               <div className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo('con'))}>
-                <span className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo('con'))}>{tipo === 'llamada' ? 'Hablaste con' : tipo === 'reunion' ? 'Quién asiste' : 'Con'}</span>
+                <span className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo('con'))}>{tipo === 'llamada' ? 'Hablaste con' : 'Con'}</span>
                 {contactos.map(c => {
                   const on = con.includes(c)
                   // Doble clic abre su ficha para cargarle teléfono o email. Los dos clics prenden y
@@ -736,31 +712,15 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 {sabido ? 'Figura como decisor en el perfil.' : 'Figura como no decisor en el perfil.'}
               </p>
             )}
-            {tipo === 'reunion' && (
-              <div className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo('mail'))}>
-                <label htmlFor="mail-demo" className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo('mail'))}>Mail para la invitación</label>
-                <input id="mail-demo" type="email" required value={mailDemo} onChange={e => setMailDemo(e.target.value)}
-                  placeholder="email@inmobiliaria.com" aria-invalid={!!mailDemo.trim() && !mailValido}
-                  className={cn('h-7 min-w-[220px] flex-1 rounded-md bg-card px-2.5 text-[12.5px] text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]',
-                    !!mailDemo.trim() && !mailValido && '[border-color:var(--danger)]')} />
-                {!!mailDemo.trim() && !mailValido && <span role="alert" className="text-[11.5px] font-semibold text-(--danger)">No es un mail válido</span>}
-              </div>
-            )}
-            {tipo === 'reunion' && (
-              <p className="text-[11.5px] text-(--fg-muted)">
-                El día y la hora se eligen en la Agenda: al seguir, tocás el horario en la grilla.
-              </p>
-            )}
             <textarea
               value={texto}
               onChange={e => setTexto(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); enviar() } }}
-              rows={tipo === 'reunion' ? 2 : 6}
+              rows={6}
               aria-label="Registrar actividad"
               placeholder={tipo === 'llamada' ? 'Qué se habló (opcional)…'
                 : tipo === 'fallido' ? 'Detalle (opcional): no atendió, buzón, número equivocado…'
-                : tipo === 'nota' ? 'Escribí qué pasó o qué querés registrar…'
-                : 'Qué quiere ver en la demo, dudas… (opcional)'}
+                : 'Escribí qué pasó o qué querés registrar…'}
               aria-invalid={enRojo('texto')}
               className={cn('block max-h-[50vh] min-h-9 w-full resize-y rounded-md bg-card px-3 py-2 text-[13.5px] leading-5 text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]',
                 enRojo('texto') && '[border-color:var(--danger)] bg-(--danger-soft)')}
@@ -798,7 +758,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 <span role="alert" className="self-center text-[11.5px] font-semibold text-(--danger)">Completá lo marcado en rojo</span>
               )}
               <Button onClick={enviar} disabled={enviando}>
-                {enviando ? 'Registrando…' : tipo === 'reunion' ? 'Elegir horario en la Agenda' : 'Registrar'}
+                {enviando ? 'Registrando…' : 'Registrar'}
               </Button>
             </div>
           </div>

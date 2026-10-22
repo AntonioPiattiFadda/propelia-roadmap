@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmMeeting } from '../types'
-import { agruparReuniones, armarReunion, descripcionDeDemo, enlaceParaAgendarDemo, esEmailValido, INVITADO_DE_TODA_DEMO, leerDescripcionDeDemo } from './reuniones'
+import { agruparReuniones, armarReunion, datosDeLaDemo, descripcionDeDemo, enlaceParaAgendarDemo, esEmailValido, INVITADO_DE_TODA_DEMO, leerDescripcionDeDemo } from './reuniones'
 
 const reunion = (id: string, starts: Date, status: CrmMeeting['status'] = 'scheduled'): CrmMeeting => ({
   id, lead_id: 'l', assigned_to: 'u', starts_at: starts.toISOString(), ends_at: new Date(starts.getTime() + 3600_000).toISOString(),
@@ -66,24 +66,41 @@ describe('leerDescripcionDeDemo', () => {
 })
 
 describe('enlaceParaAgendarDemo', () => {
-  const base = { leadId: 'l1', assignedTo: 'u1', title: 'Demo', description: 'Invitación a: a@b.es' }
+  const base = { leadId: 'l1', assignedTo: 'u1' }
   const leer = (url: string) => new URL(url, 'https://x.test')
-  it('va a /agenda con el lead, el responsable, el título y la descripción', () => {
+  it('va a /agenda con el lead, el responsable, el título y la marca de demo', () => {
     const u = leer(enlaceParaAgendarDemo({ ...base, email: 'a@b.es' }))
     expect(u.pathname).toBe('/agenda')
     expect(u.searchParams.get('leadId')).toBe('l1')
     expect(u.searchParams.get('assignedTo')).toBe('u1')
     expect(u.searchParams.get('title')).toBe('Demo')
-    expect(u.searchParams.get('description')).toBe('Invitación a: a@b.es')
+    expect(u.searchParams.get('demo')).toBe('1')
+    expect(u.searchParams.has('description')).toBe(false)
   })
   it('invita siempre a la inmobiliaria y a Lorenzo', () => {
     const u = leer(enlaceParaAgendarDemo({ ...base, email: ' Ana@Inmo.es ' }))
     expect(u.searchParams.getAll('guestEmail')).toEqual(['ana@inmo.es', INVITADO_DE_TODA_DEMO])
   })
-  it('sin repetir ni colar un mail inválido', () => {
+  it('sin repetir ni colar un mail inválido; sin mail, solo Lorenzo', () => {
+    expect(leer(enlaceParaAgendarDemo({ ...base, email: null })).searchParams.getAll('guestEmail'))
+      .toEqual([INVITADO_DE_TODA_DEMO])
     expect(leer(enlaceParaAgendarDemo({ ...base, email: INVITADO_DE_TODA_DEMO })).searchParams.getAll('guestEmail'))
       .toEqual([INVITADO_DE_TODA_DEMO])
     expect(leer(enlaceParaAgendarDemo({ ...base, email: 'no-es-mail' })).searchParams.getAll('guestEmail'))
       .toEqual([INVITADO_DE_TODA_DEMO])
+  })
+})
+
+describe('datosDeLaDemo', () => {
+  const reunion = { description: 'Invitación a: vieja@inmo.es\nAsisten: Ana\nNotas viejas', guest_emails: [INVITADO_DE_TODA_DEMO, 'ana@inmo.es'] }
+  it('con registro: asistentes y notas del registro, el mail del invitado que no es el fijo', () => {
+    expect(datosDeLaDemo(reunion, { con: ['Marta', 'Pere'], decisorApuntado: 'Jordi', texto: 'Quiere ver la importación' }))
+      .toEqual({ email: 'ana@inmo.es', asistentes: ['Marta', 'Pere'], notas: 'Decisor: Jordi\nQuiere ver la importación' })
+  })
+  it('el texto de fábrica no es una nota', () => {
+    expect(datosDeLaDemo(reunion, { con: [], texto: 'Demo agendada.' }).notas).toBe('')
+  })
+  it('sin registro (las de antes del 22/10/2026), lo de la descripción', () => {
+    expect(datosDeLaDemo(reunion, null)).toEqual({ email: 'vieja@inmo.es', asistentes: ['Ana'], notas: 'Notas viejas' })
   })
 })

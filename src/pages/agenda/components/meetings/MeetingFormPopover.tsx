@@ -24,6 +24,8 @@ type Props = {
   onSaved?: () => void
   /** Si se pasa, el popover edita esta reunión existente en vez de crear una nueva. */
   meeting?: EditableMeeting
+  /** Agendar una demo de `leadId`, con el registro de actividad al lado (ver MeetingFormContent). */
+  demo?: boolean
 }
 
 // `VisitFormPopover` de `propelia-frontend` (21/10/2026), para reuniones del CRM.
@@ -49,6 +51,7 @@ export function MeetingFormPopover({
   onDescriptionChange,
   onSaved,
   meeting,
+  demo,
 }: Props) {
   const isMobile = useIsMobile()
   const [drag, setDrag] = useState({ x: 0, y: 0 })
@@ -119,6 +122,7 @@ export function MeetingFormPopover({
           onDescriptionChange={onDescriptionChange}
           onSaved={onSaved}
           meeting={meeting}
+          demo={demo}
         />
       </PopoverContent>
     </Popover>

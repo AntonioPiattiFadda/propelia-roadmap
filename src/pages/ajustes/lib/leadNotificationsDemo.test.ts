@@ -20,7 +20,7 @@ const row = (over: Partial<DemoScheduledRow> = {}): DemoScheduledRow => ({
   status: 'scheduled',
   deleted_at: null,
   starts_at: '2030-01-10T09:00:00Z', // 10:00 en Madrid
-  guest_emails: ['ana@inmo.es', 'lorenzo.piattifadda@gmail.com'],
+  guest_emails: ['ana@inmo.es', 'lorenzopiattifadda@gmail.com'],
   has_lead: true,
   lead_deleted_at: null,
   client: { first_name: 'Ana', company_name: 'Inmo Serrano', email: 'oficina@inmo.es', deleted_at: null },

@@ -22,6 +22,8 @@ export type ItemActividad = {
   telefono?: { numero: string; etiqueta: string }
   /** Solo contactos fallidos: qué intento seguido es (ver `INTENTOS_DE_CONTACTO`). */
   intento?: number
+  /** Solo demos registradas: el decisor que se apuntó al agendarla. */
+  decisorApuntado?: string
 }
 
 /** Los contactos fallidos seguidos se cuentan sobre este número: «2/10» (17/10/2026, por pedido).
@@ -39,7 +41,8 @@ const MARCA_ACTIVIDAD = '<!--act-->'
 /** Qué pasó en una llamada. Opcional: las llamadas anteriores al 10/10/2026 no lo dicen. */
 export type ResultadoDeLlamada = 'contestada' | 'no_respondida'
 export type MetaDeActividad = {
-  tipo: 'nota' | 'llamada'
+  /** `demo` (22/10/2026): el registro que se deja al agendar una demo desde la Agenda. */
+  tipo: 'nota' | 'llamada' | 'demo'
   con: string[]
   resultado?: ResultadoDeLlamada
   /** Si quien atendió decide. Solo tiene sentido en una llamada contestada. */
@@ -48,7 +51,15 @@ export type MetaDeActividad = {
    *  «Laura»). Va aparte de `con` porque el número marcado y quien atiende no siempre coinciden
    *  (16/10/2026, por pedido). Las llamadas anteriores no lo dicen. */
   telefono?: { numero: string; etiqueta: string }
+  /** Solo demos: el decisor que dio el doorkeeper, si se apuntó (no tiene por qué asistir). */
+  decisorApuntado?: string
+  /** Solo demos: el id de la reunión en `crm_meetings`. La actividad y la reunión se pintan como un
+   *  solo renglón, y el día y la hora salen de la reunión: si la mueven, el registro no miente. */
+  reunion?: string
 }
+
+/** El texto de la demo registrada sin nada escrito: `description` no puede ir vacío. */
+export const TEXTO_DE_DEMO = 'Demo agendada.'
 
 /** Lo que queda escrito en la llamada si no se escribió nada: el resultado ya es el dato. */
 export const TEXTO_DE_LLAMADA: Record<ResultadoDeLlamada, string> = { contestada: 'Llamada contestada.', no_respondida: 'No respondió.' }
@@ -79,17 +90,21 @@ export function leerMetaDeActividad(guardado: string | null): MetaDeActividad | 
   try {
     const m: unknown = JSON.parse(guardado.slice(MARCA_ACTIVIDAD.length))
     if (typeof m !== 'object' || m === null) return null
-    const { tipo, con, resultado, decisor, telefono } = m as Record<string, unknown>
-    if (tipo !== 'nota' && tipo !== 'llamada') return null
+    const { tipo, con, resultado, decisor, telefono, decisorApuntado, reunion } = m as Record<string, unknown>
+    if (tipo !== 'nota' && tipo !== 'llamada' && tipo !== 'demo') return null
     if (!Array.isArray(con) || !con.every(c => typeof c === 'string')) return null
     if (resultado !== undefined && resultado !== 'contestada' && resultado !== 'no_respondida') return null
     if (decisor !== undefined && typeof decisor !== 'boolean') return null
     if (telefono !== undefined && !esTelefonoGuardado(telefono)) return null
+    if (decisorApuntado !== undefined && typeof decisorApuntado !== 'string') return null
+    if (reunion !== undefined && typeof reunion !== 'string') return null
     return {
       tipo, con,
       ...(resultado !== undefined && { resultado }),
       ...(decisor !== undefined && { decisor }),
       ...(telefono !== undefined && { telefono: { numero: telefono.numero, etiqueta: telefono.etiqueta } }),
+      ...(decisorApuntado !== undefined && { decisorApuntado }),
+      ...(reunion !== undefined && { reunion }),
     }
   } catch { return null }
 }
@@ -159,10 +174,28 @@ export function primeroLosUltimos<T>(xs: readonly T[], esUltimo: (x: T) => boole
 /* El consejo de Claude ya no es actividad (17/10/2026, por pedido): lo que se muestra de él —
    personas y teléfonos— vive en la pestaña de la inmobiliaria (`investigacionDeClaude`). */
 export function lineaDeTiempo(detalle: LeadDetalle, usuarios: Usuario[]): ItemActividad[] {
+  const reuniones = new Map(detalle.meetings.filter(m => m.deleted_at == null).map(m => [m.id, m]))
+  /* La demo agendada desde la Agenda deja un registro (22/10/2026, por pedido) con quién asiste,
+     el decisor y lo escrito. Registro y reunión son UN renglón: el del registro, con el día y la
+     hora de la reunión de hoy. La reunión que tiene registro no se pinta aparte. */
+  const conRegistro = new Set<string>()
   const items: ItemActividad[] = [
     ...detalle.comments.map(c => {
       if (c.comment_type === 'SYSTEM') return { id: c.id, tipo: 'sistema' as const, fecha: c.created_at, texto: c.description, autorId: c.created_by }
       const meta = leerMetaDeActividad(c.long_description)
+      if (meta?.tipo === 'demo') {
+        const reunion = meta.reunion ? reuniones.get(meta.reunion) : undefined
+        if (reunion) conRegistro.add(reunion.id)
+        return {
+          id: c.id, tipo: 'reunion' as const, fecha: c.created_at, autorId: c.created_by, con: meta.con,
+          decisorApuntado: meta.decisorApuntado,
+          texto: [
+            reunion && `Para el ${fmtDayMonth(toIsoDate(new Date(reunion.starts_at)))} a las ${horaDe(reunion.starts_at)}`,
+            meta.decisorApuntado && `Decisor: ${meta.decisorApuntado}`,
+            c.description !== TEXTO_DE_DEMO && c.description,
+          ].filter(Boolean).join('\n'),
+        }
+      }
       return {
         id: c.id, tipo: meta?.tipo === 'llamada' ? 'llamada' as const : 'comentario' as const,
         fecha: c.created_at, texto: c.description, autorId: c.created_by, con: meta?.con ?? [],
@@ -190,7 +223,7 @@ export function lineaDeTiempo(detalle: LeadDetalle, usuarios: Usuario[]): ItemAc
     /* Una reunión entra cuando se agendó (created_at), que es lo que pasó; para cuándo es va en
        el texto. Se nombra «demo» porque es lo único que agenda el compositor, y el título «Demo»
        que le pone de fábrica no se repite: diría lo mismo dos veces. */
-    ...detalle.meetings.filter(m => m.deleted_at == null).map(m => ({
+    ...[...reuniones.values()].filter(m => !conRegistro.has(m.id)).map(m => ({
       id: m.id, tipo: 'reunion' as const, fecha: m.created_at,
       texto: `Se agendó una demo para el ${fmtDayMonth(toIsoDate(new Date(m.starts_at)))} a las ${horaDe(m.starts_at)}`
         + (m.title && m.title !== 'Demo' ? ` · ${m.title}` : ''),

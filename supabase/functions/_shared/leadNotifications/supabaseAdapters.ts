@@ -7,7 +7,7 @@ import { DEMO_SCHEDULED_SELECT, normalizeDemoScheduledRow } from './demoQuery.ts
 type Admin = ReturnType<typeof createClient>
 
 /** Invitado fijo de toda demo: es del equipo aunque su gmail no sea el de `users` (ver `sameMailbox`). */
-const INVITADO_DE_TODA_DEMO = 'lorenzo.piattifadda@gmail.com'
+const INVITADO_DE_TODA_DEMO = 'lorenzopiattifadda@gmail.com'
 
 export { emailAssetsBaseUrl } from './assets.ts'
 

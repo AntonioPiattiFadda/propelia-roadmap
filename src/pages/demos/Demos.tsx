@@ -10,7 +10,7 @@ import { useCarteras } from '@/pages/crm/hooks/useCarteras'
 import { useCrmRealtime } from '@/pages/crm/hooks/useCrmRealtime'
 import { pedirPermisoDeAvisos } from '@/pages/crm/hooks/useAlarmasDeTareas'
 import { enlaceAlCrm } from '@/pages/crm/lib/leadFilterParams'
-import { agruparReuniones, leerDescripcionDeDemo } from '@/pages/crm/lib/reuniones'
+import { agruparReuniones, datosDeLaDemo } from '@/pages/crm/lib/reuniones'
 import type { Usuario } from '@/pages/crm/types'
 import { useDemos } from './hooks/useDemos'
 import type { Demo } from './service/demos.service'
@@ -37,7 +37,7 @@ function Persona({ usuario }: { usuario: Usuario | undefined }) {
 
 function FilaDemo({ d, usuarios }: { d: Demo; usuarios: Map<string, Usuario> }) {
   const navigate = useNavigate()
-  const { email, asistentes, notas } = leerDescripcionDeDemo(d.description)
+  const { email, asistentes, notas } = datosDeLaDemo(d, d.registro)
   const estado = ESTADO[d.status] ?? ESTADO.scheduled
   const abrir = d.lead_id ? () => navigate(enlaceAlCrm({ lead: d.lead_id! })) : undefined
   return (
@@ -65,7 +65,8 @@ function FilaDemo({ d, usuarios }: { d: Demo; usuarios: Map<string, Usuario> }) 
 /* NUEVO (20/10/2026, por pedido). Todas las demos del CRM en una tabla, solo SUPERADMIN: además del
    `roles` de `NAV` (que ya rebota en `RequireRol`), el gate va acá adentro, como en Ajustes. El
    aviso de demo nueva no vive acá sino en `AppLayout` (`useAvisosDeDemos`). Tocar un renglón abre
-   el lead en el CRM. Lo de la invitación sale de `description` (`leerDescripcionDeDemo`). */
+   el lead en el CRM. Invitación, asistentes y notas: `datosDeLaDemo` (el registro de actividad, o
+   `description` en las de antes del 22/10/2026). */
 export function Demos() {
   useCrmRealtime()
   const { yo, esSuperadmin, usuarios } = useCarteras()

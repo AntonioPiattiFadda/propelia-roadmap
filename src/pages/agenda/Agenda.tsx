@@ -7,6 +7,8 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { cn } from '@/lib/utils'
+import { useLead } from '@/pages/crm/hooks/useCrmLeads'
+import { nombreDelLead } from '@/pages/crm/lib/clientData'
 import { MeetingFormPopover } from './components/meetings/MeetingFormPopover'
 import type { EditableMeeting } from './components/meetings/MeetingFormContent'
 import { useMeetingsInRange } from './hooks/useMeetings'
@@ -93,12 +95,17 @@ export function Agenda() {
       description: searchParams.get('description') ?? undefined,
       guests: guest ? [{ label: guest }] : undefined,
       guestEmails: searchParams.getAll('guestEmail'),
+      // `demo=1`: al lado de la reunión va el registro de actividad del lead (`useRegistroDeDemo`).
+      demo: searchParams.get('demo') === '1',
     }
   }, [searchParams])
 
+  // De qué inmobiliaria es la demo, para el banner (la Agenda no tiene la lista del CRM).
+  const { data: leadDeLaDemo } = useLead(schedulingContext?.demo ? schedulingContext.leadId : undefined)
+
   const clearSchedulingContext = () => {
     const next = new URLSearchParams(searchParams)
-    for (const key of ['leadId', 'assignedTo', 'title', 'description', 'guest', 'guestEmail']) next.delete(key)
+    for (const key of ['leadId', 'assignedTo', 'title', 'description', 'guest', 'guestEmail', 'demo']) next.delete(key)
     setSearchParams(next, { replace: true })
   }
 
@@ -212,7 +219,8 @@ export function Agenda() {
       {schedulingContext && (
         <div className="flex items-center justify-between gap-3 bg-primary/10 border-b border-primary/20 px-4 py-2 text-sm">
           <span className="min-w-0">
-            Agendando: <strong>{schedulingContext.title}</strong> —{' '}
+            Agendando: <strong>{schedulingContext.title}</strong>
+            {leadDeLaDemo && <> · <strong>{nombreDelLead(leadDeLaDemo.client)}</strong></>} —{' '}
             {isMobile ? 'tocá un horario.' : 'hacé click en la grilla para elegir el horario.'}
           </span>
           <Button size="icon" variant="ghost" onClick={clearSchedulingContext}>
@@ -287,6 +295,7 @@ export function Agenda() {
         defaultTitle={schedulingContext?.title}
         defaultDescription={schedulingContext?.description}
         guests={schedulingContext?.guests}
+        demo={schedulingContext?.demo}
         onTitleChange={title => setSchedulingParam('title', title)}
         onDescriptionChange={description => setSchedulingParam('description', description)}
         onSaved={() => { if (schedulingContext) clearSchedulingContext() }}

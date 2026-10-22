@@ -2,6 +2,8 @@
    Equipo comparte la cache con el CRM (mismas keys = una sola request). */
 export const CRM_KEYS = {
   leads: ['crm', 'leads'] as const,
+  /** Un lead solo (la Agenda, al agendar una demo). Cuelga de `leads`: lo que la invalida, lo refresca. */
+  lead: (leadId: string) => ['crm', 'leads', 'uno', leadId] as const,
   catalogos: ['crm', 'catalogos'] as const,
   usuarios: ['crm', 'usuarios'] as const,
   accesos: ['crm', 'accesos'] as const,

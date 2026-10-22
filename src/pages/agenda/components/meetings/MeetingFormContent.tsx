@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlignLeft, Bell, CalendarDays, Check, Clock, TriangleAlert, Users } from 'lucide-react'
+import { AlignLeft, Bell, CalendarDays, Check, Clock, Mail, TriangleAlert, Users } from 'lucide-react'
 import { es } from 'react-day-picker/locale'
 import { DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -12,6 +12,10 @@ import { Popover, PopoverClose, PopoverContent, PopoverTrigger } from '@/compone
 import { Calendar } from '@/components/ui/calendar'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
+import { cn } from '@/lib/utils'
+import { RegistroDeDemoPanel } from '@/pages/crm/components/RegistroDeDemoPanel'
+import { useRegistroDeDemo } from '@/pages/crm/hooks/useRegistroDeDemo'
+import { esEmailValido, INVITADO_DE_TODA_DEMO } from '@/pages/crm/lib/reuniones'
 import { useCreateMeeting, useFreeBusy, useUpdateMeeting } from '../../hooks/useMeetings'
 import { useGoogleConnection } from '../../hooks/useCalendarConnection'
 import { formatBusyRanges } from '../../lib/busyRanges'
@@ -65,6 +69,9 @@ type Props = {
   /** Invitados por email ya cargados al crear (la demo: la inmobiliaria y Lorenzo). Ignorado si `meeting` está seteado. */
   defaultGuestEmails?: string[]
   meeting?: EditableMeeting
+  /** Se agenda una demo de `leadId` (22/10/2026): va el «Email del cliente» arriba de los invitados
+   *  y, en una segunda columna, el registro de actividad del lead (`useRegistroDeDemo`). Solo al crear. */
+  demo?: boolean
   /** Notifican cada edición de título/descripción — usado por MeetingFormPopover para reflejarlas en la URL
    * (así el contexto de "agendando reunión para X" sobrevive a cerrar y volver a abrir el popover). */
   onTitleChange?: (title: string) => void
@@ -120,11 +127,18 @@ export function MeetingFormContent({
   guests = [],
   defaultGuestEmails = [],
   meeting,
+  demo: demoPedida = false,
   onTitleChange,
   onDescriptionChange,
   onSaved,
 }: Props) {
   const isEditing = meeting != null
+  const demo = demoPedida && !isEditing && !!leadId
+  const registro = useRegistroDeDemo(demo ? leadId : undefined, open)
+  /* El «Email del cliente» es el invitado de la inmobiliaria: cambiarlo cambia ese invitado (y uno
+     inválido o vacío lo saca). Arranca con el que trajo el enlace: el que no es el invitado fijo. */
+  const [clientEmail, setClientEmail] = useState('')
+  const clientEmailValido = esEmailValido(clientEmail)
   const createMutation = useCreateMeeting()
   const updateMutation = useUpdateMeeting()
   const [title, setTitle] = useState('')
@@ -182,6 +196,7 @@ export function MeetingFormContent({
         setReminderValue('none')
         setGuestUserIds([])
         setGuestEmails(defaultGuestEmails)
+        setClientEmail(defaultGuestEmails.find(e => e.toLowerCase() !== INVITADO_DE_TODA_DEMO) ?? '')
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -202,8 +217,20 @@ export function MeetingFormContent({
     setEndTime(minutesToTime(timeToMinutes(newStart) + (durationMinutes > 0 ? durationMinutes : 60)))
   }
 
+  const handleClientEmailChange = (value: string) => {
+    const antes = clientEmail.trim().toLowerCase()
+    const ahora = value.trim().toLowerCase()
+    setClientEmail(value)
+    setGuestEmails(prev => {
+      const sinEl = prev.filter(e => e !== antes)
+      return esEmailValido(ahora) && !sinEl.includes(ahora) ? [ahora, ...sinEl] : sinEl
+    })
+  }
+
   const handleSave = () => {
-    if (isInvalid) {
+    // El registro se valida siempre, aunque falte el horario: así se marca todo lo que falta de una vez.
+    const registroOk = !demo || registro.validar()
+    if (isInvalid || (demo && !clientEmailValido) || !registroOk) {
       setShowErrors(true)
       return
     }
@@ -253,7 +280,8 @@ export function MeetingFormContent({
         guestEmails,
       },
       {
-        onSuccess: () => {
+        onSuccess: (created) => {
+          if (demo) void registro.registrar({ reunionId: created.id, email: clientEmail })
           onSaved?.()
           onClose()
         },
@@ -263,6 +291,9 @@ export function MeetingFormContent({
 
   return (
     <>
+      {/* Con la demo, el registro va en una segunda columna para que el formulario no sea tan largo;
+          en el teléfono baja abajo de todo. */}
+      <div className={cn(demo && 'grid gap-5 md:grid-cols-[minmax(0,400px)_minmax(0,360px)]')}>
       <div className="flex flex-col gap-3">
         <Input
           id="meeting-title"
@@ -319,6 +350,27 @@ export function MeetingFormContent({
             <p className="ml-7 text-xs text-muted-foreground">Ocupado: {formatBusyRanges(busy)}</p>
           )}
         </div>
+        {demo && (
+          <div className="flex items-start gap-3">
+            <Mail className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="flex flex-1 flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <label htmlFor="meeting-client-email" className="mr-0.5 text-[11.5px] text-(--fg-muted)">Email del cliente</label>
+                <Input id="meeting-client-email" type="email" value={clientEmail}
+                  onChange={e => handleClientEmailChange(e.target.value)}
+                  placeholder="email@inmobiliaria.com"
+                  aria-invalid={(showErrors || !!clientEmail.trim()) && !clientEmailValido}
+                  title="Le llega la invitación. Si la inmobiliaria no tenía email, se le guarda al agendar."
+                  className="h-8 min-w-0 flex-1 text-[13px]" />
+              </div>
+              {(showErrors || !!clientEmail.trim()) && !clientEmailValido && (
+                <span role="alert" className="text-[11.5px] font-semibold text-(--danger)">
+                  {clientEmail.trim() ? 'No es un mail válido' : 'Falta el email del cliente'}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
         {/* Los invitados los invita Google (attendees + sendUpdates): sin calendario conectado
             no hay evento al que sumarlos, así que la fila no se muestra. Los que ya tuviera la
             reunión se conservan igual y se vuelven a mandar tal cual al guardar. */}
@@ -421,6 +473,12 @@ export function MeetingFormContent({
             </Link>
           </Button>
         )}
+      </div>
+      {demo && (
+        <div className="md:pl-5 md:[border-left:1px_solid_var(--line)] max-md:pt-4 max-md:[border-top:1px_solid_var(--line)]">
+          <RegistroDeDemoPanel r={registro} />
+        </div>
+      )}
       </div>
       <DialogFooter className="mt-4">
         {canCancel && (
