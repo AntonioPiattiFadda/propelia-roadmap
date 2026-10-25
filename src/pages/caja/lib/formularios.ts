@@ -1,10 +1,10 @@
 import type { CalendarDay } from '@/lib/dates'
-import type { TablesInsert } from '@/types/database.types'
+import type { TablesInsert, TablesUpdate } from '@/types/database.types'
 import type { Etiqueta, EstadoGasto, Gasto, TipoGasto } from '../types'
 import { nuevoGastoFijo, nuevoGastoVariable } from './altas'
 import { nombreRepetido } from './etiquetas'
 import { montoAInput, parseMonto } from './monto'
-import { tituloDePeriodo } from './periodos'
+import { periodOf, tituloDePeriodo } from './periodos'
 
 /* La lógica de los formularios de la Caja, sin React: los dialogs solo muestran el `error` y,
    si no hay, mandan el insert. Los mensajes son los del mock aprobado. */
@@ -51,6 +51,50 @@ export function validarGasto(e: EntradaGasto): { error: string } | { insert: Tab
     insert: fijo
       ? nuevoGastoFijo(e.etiqueta, { amount, date, period: e.period, paid_by: e.pagadoPor })
       : nuevoGastoVariable(e.etiqueta, { amount, date, status: e.estado, notes: e.notas, paid_by: e.pagadoPor }),
+  }
+}
+
+/** Lo editable de un gasto ya cargado. Etiqueta y tipo no: un fijo y un variable siguen reglas distintas en la base. */
+export interface EntradaEdicion {
+  monto: string
+  fecha: string
+  period: string
+  notas: string
+  pagadoPor: string | null
+}
+
+export const entradaDeEdicion = (g: Gasto): EntradaEdicion => ({
+  monto: montoAInput(g.amount), fecha: g.date ?? '', period: g.period, notas: g.notes ?? '', pagadoPor: g.paid_by,
+})
+
+/**
+ * «Editar gasto»: un error o el patch. Mismas reglas que el alta: un fijo elige su período (y no
+ * puede caer en un mes que la etiqueta ya tiene pagado por OTRO gasto), un variable lo saca de la
+ * fecha. El estado no se edita: un pendiente se paga con «Pagar», y por eso no lleva `paid_by`.
+ */
+export function validarEdicion(
+  g: Gasto,
+  e: EntradaEdicion,
+  gastos: Gasto[],
+): { error: string } | { patch: TablesUpdate<'expenses'> } {
+  const amount = parseMonto(e.monto)
+  if (!(amount > 0)) return { error: 'El monto tiene que ser mayor que cero.' }
+  if (!e.fecha) return { error: 'Falta la fecha.' }
+  const fijo = g.expense_type === 'FIXED'
+  if (fijo && !PERIODO_VALIDO.test(e.period)) return { error: 'El período tiene que ser un mes válido (AAAA-MM).' }
+  const pagado = g.status === 'PAID'
+  if (pagado && !e.pagadoPor) return { error: 'Elegí quién lo pagó.' }
+  if (fijo && g.preset_id && hayGastoDelMes(gastos.filter(o => o.id !== g.id), g.preset_id, e.period)) {
+    return { error: `${capitalizar(tituloDePeriodo(e.period))} ya está pagado para ${g.expense_name}.` }
+  }
+  const date: CalendarDay = e.fecha
+  return {
+    patch: {
+      amount, date,
+      period: fijo ? e.period : periodOf(date),
+      ...(fijo ? {} : { notes: e.notas.trim() || null }),
+      ...(pagado ? { paid_by: e.pagadoPor } : {}),
+    },
   }
 }
 

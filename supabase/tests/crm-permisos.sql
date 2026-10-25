@@ -374,5 +374,49 @@ begin
 end $$;
 reset role;
 
+-- ---------- 10. `importante` lo cambia solo un SUPERADMIN (trigger crm_leads_importante_solo_superadmin) ----------
+-- SDR1 tiene write sobre su propio lead (L1) y aun así no puede marcarlo.
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000c001","role":"authenticated"}';
+do $$
+declare ok boolean := false;
+begin
+  begin
+    update public.crm_leads set importante = true where id = '00000000-0000-4000-8000-00000000e001';
+  exception when insufficient_privilege then ok := true;
+  end;
+  if not ok then raise exception 'FALLO (10a): un SDR marcó como importante su propio lead'; end if;
+end $$;
+reset role;
+
+-- El SUPERADMIN sí, en cualquier cartera.
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000c0a0","role":"authenticated"}';
+do $$
+declare n int;
+begin
+  update public.crm_leads set importante = true where id = '00000000-0000-4000-8000-00000000e002';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALLO (10b): el SUPERADMIN no pudo marcar un lead como importante'; end if;
+end $$;
+reset role;
+
+-- SDR2 sigue editando su lead marcado: el corte es solo para el campo, no para la fila.
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000c002","role":"authenticated"}';
+do $$
+declare n int; ok boolean := false;
+begin
+  update public.crm_leads set discard_reason = 'x' where id = '00000000-0000-4000-8000-00000000e002';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALLO (10c): SDR2 no pudo editar su lead marcado como importante'; end if;
+  begin
+    update public.crm_leads set importante = false where id = '00000000-0000-4000-8000-00000000e002';
+  exception when insufficient_privilege then ok := true;
+  end;
+  if not ok then raise exception 'FALLO (10d): un SDR desmarcó un lead importante'; end if;
+end $$;
+reset role;
+
 select 'crm-permisos: OK' as resultado;
 rollback;

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- The page the WhatsApp message links to. It is static on purpose: WhatsApp builds the link preview
+       from these Open Graph tags and never runs JavaScript, so the SPA cannot provide them. -->
+  <title>Propelia en dos minutos</title>
+  <meta name="description" content="Cómo Propelia hace que ningún lead se quede sin atender, en un vídeo de dos minutos." />
+  <meta property="og:type" content="video.other" />
+  <meta property="og:site_name" content="Propelia" />
+  <meta property="og:title" content="Propelia en dos minutos" />
+  <meta property="og:description" content="Cómo hacemos que ningún lead se quede sin atender, para que tu equipo se centre en captar." />
+  <meta property="og:image" content="https://www.propelia.es/assets/mail-video.png" />
+  <meta property="og:image:secure_url" content="https://www.propelia.es/assets/mail-video.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1128" />
+  <meta property="og:image:height" content="633" />
+  <meta property="og:image:alt" content="Propelia en dos minutos" />
+  <meta property="og:video" content="https://itqwxnmuxuiiydsueazb.supabase.co/storage/v1/object/public/publico/videos/propelia-presentacion-v8.mp4" />
+  <meta property="og:video:secure_url" content="https://itqwxnmuxuiiydsueazb.supabase.co/storage/v1/object/public/publico/videos/propelia-presentacion-v8.mp4" />
+  <meta property="og:video:type" content="video/mp4" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://www.propelia.es/assets/mail-video.png" />
+  <link rel="icon" href="/favicon.png" />
+  <style>
+    :root { --bg: #f5f8ff; --fg: #0b1640; --muted: #5b6685; --brand: #0147fe; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #0b1020; --fg: #eef2ff; --muted: #9aa4c4; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px;
+      background: var(--bg); color: var(--fg); font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    main { width: 100%; max-width: 960px; display: grid; gap: 16px; }
+    h1 { margin: 0; font-size: clamp(22px, 4vw, 32px); }
+    h1 span { color: var(--brand); }
+    video { width: 100%; border-radius: 14px; background: #000; box-shadow: 0 10px 40px rgb(1 71 254 / .18); }
+    p { margin: 0; color: var(--muted); font-size: 15px; }
+    a { color: var(--brand); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Propelia <span>en dos minutos</span></h1>
+    <video controls playsinline preload="metadata" poster="https://www.propelia.es/assets/mail-video.png"
+      src="https://itqwxnmuxuiiydsueazb.supabase.co/storage/v1/object/public/publico/videos/propelia-presentacion-v8.mp4"></video>
+    <p>¿Te encaja? Respóndenos por WhatsApp y te contamos más. <a href="https://www.propelia.es">propelia.es</a></p>
+  </main>
+</body>
+</html>

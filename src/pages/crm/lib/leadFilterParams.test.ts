@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  deleteLeadFilterParams, enlaceAlCrm, escribirFiltros, escribirLeadAbierto, escribirVista, filtrosDesdeUrl, formatFilterList,
+  COMO_PARAM, deleteLeadFilterParams, enlaceAlCrm, escribirFiltros, escribirLeadAbierto, escribirVista, filtrosDesdeUrl, formatFilterList,
   LEAD_FILTER_PARAMS_WITH_QUERY, OWNERS_PARAM, vistaDesdeUrl,
 } from './leadFilterParams'
 import { filtrosVacios } from './leadFilters'
@@ -28,6 +28,13 @@ describe('filtrosDesdeUrl / escribirFiltros', () => {
   })
   it('«Limpiar filtros» también saca el de tareas', () => {
     expect(deleteLeadFilterParams(params('/crm?tareas=1&owners=u1')).toString()).toBe('owners=u1')
+  })
+  it('tareas para hoy y vencidas: ?hoy=1, y apagado se borra; «Limpiar filtros» lo saca', () => {
+    const a = escribirFiltros(new URLSearchParams(), { paraHoy: true })
+    expect(a.get('hoy')).toBe('1')
+    expect(filtrosDesdeUrl(a).paraHoy).toBe(true)
+    expect(escribirFiltros(a, { paraHoy: false }).has('hoy')).toBe(false)
+    expect(deleteLeadFilterParams(a).has('hoy')).toBe(false)
   })
   it('para recontactar: ?recontactar=1, y apagado se borra; «Limpiar filtros» lo saca', () => {
     const a = escribirFiltros(new URLSearchParams(), { pendienteAgendar: true })
@@ -146,6 +153,20 @@ describe('enlaceAlCrm', () => {
   })
   it('con un lead lo abre (la alarma de una tarea)', () => {
     expect(params(enlaceAlCrm({ lead: 'l9' })).get('lead')).toBe('l9')
+  })
+  it('«Ver como» es /crm?como=', () => {
+    expect(enlaceAlCrm({ como: 'u7' })).toBe(`/crm?${COMO_PARAM}=u7`)
+  })
+})
+
+describe('«Ver como» sobrevive a lo que se toca adentro del CRM', () => {
+  const conComo = () => params(`/crm?${COMO_PARAM}=u7&q=a&overdue=1`)
+  it('filtros, limpiar filtros, lead abierto y vista', () => {
+    expect(escribirFiltros(conComo(), { q: '', overdueOnly: false }).get(COMO_PARAM)).toBe('u7')
+    expect(deleteLeadFilterParams(conComo(), LEAD_FILTER_PARAMS_WITH_QUERY).toString()).toBe(`${COMO_PARAM}=u7`)
+    expect(escribirLeadAbierto(conComo(), 'l1').get(COMO_PARAM)).toBe('u7')
+    expect(escribirLeadAbierto(escribirLeadAbierto(conComo(), 'l1'), null).get(COMO_PARAM)).toBe('u7')
+    expect(escribirVista(conComo(), 'columnas').get(COMO_PARAM)).toBe('u7')
   })
 })
 

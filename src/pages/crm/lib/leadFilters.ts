@@ -2,7 +2,7 @@ import { toIsoDate } from '@/lib/calendarDate'
 import type { CrmLeadRow, CrmStage } from '../types'
 import type { Objetivo } from './objetivos'
 import { etapaDelLead } from './effectiveStage'
-import { gestionDeEtapa } from './gestionDeEtapa'
+import { gestionDeEtapa, permiteAgendarTarea } from './gestionDeEtapa'
 import { paraRecontactar } from './motivosDescarte'
 
 /* Copiado de propelia-frontend (src/pages/leads/lib/leadFilters.ts) sin lo inmobiliario (pisos,
@@ -29,6 +29,8 @@ export type LeadFilterState = {
   /** Solo los leads en una etapa de «Seguimiento» (`por_tarea`) sin ninguna tarea pendiente:
    *  hay que agendarles la próxima (20/10/2026). */
   pendienteAgendar: boolean
+  /** Solo los leads con alguna tarea pendiente para hoy o vencida (23/10/2026). */
+  paraHoy: boolean
   /** Cómo se ordena la lista (20/10/2026; antes era solo `ordenPorEstado`). Null = el de fábrica:
    *  con «Tareas», por vencimiento; sin, como llega. */
   orden: OrdenLeads | null
@@ -40,13 +42,15 @@ export type LeadFilterState = {
 export function filtrosVacios(): LeadFilterState {
   return {
     q: '', stageFilter: new Set(), overdueOnly: false,
-    conTareas: false, sinTareas: false, paraRecontactar: false, pendienteAgendar: false, orden: null,
+    conTareas: false, sinTareas: false, paraRecontactar: false, pendienteAgendar: false, paraHoy: false, orden: null,
     objetivo: null,
   }
 }
 
 export type LeadFilterContext = {
   overdueLeadIds: ReadonlySet<string>
+  /** Los leads con alguna tarea pendiente para hoy o vencida (`idsConTareasParaHoy`). */
+  leadIdsParaHoy: ReadonlySet<string>
   leadIdsConTareas: ReadonlySet<string>
   etapas: ReadonlyMap<string, CrmStage>
   /** Un solo «ahora» por pintada: si cada fila leyera su propio Date.now(), dos leads idénticos
@@ -57,12 +61,14 @@ export type LeadFilterContext = {
   leadsDelObjetivo?: ReadonlySet<string>
 }
 
-export type FilterDimension = 'overdue' | 'tareas' | 'stage' | 'recontactar' | 'objetivo' | 'agendar'
+export type FilterDimension = 'overdue' | 'tareas' | 'stage' | 'recontactar' | 'objetivo' | 'agendar' | 'hoy'
 
-/** En una etapa de «Seguimiento» y sin ninguna tarea pendiente: nadie va a volver a llamarlo. */
+/** En una etapa de «Seguimiento» y sin ninguna tarea pendiente: nadie va a volver a llamarlo.
+ *  Si la etapa no deja agendar tareas, no: el chip pediría algo imposible. */
 export function esPendienteAgendar(l: CrmLeadRow, ctx: Pick<LeadFilterContext, 'etapas' | 'leadIdsConTareas'>): boolean {
   const e = etapaDelLead(l, ctx.etapas)
   return !!e && !e.is_out_of_funnel && gestionDeEtapa(e.management_type) === 'por_tarea'
+    && permiteAgendarTarea(e)
     && !ctx.leadIdsConTareas.has(l.id)
 }
 
@@ -128,6 +134,8 @@ export function filterLeads(
       && (s.has('tareas') || !filters.conTareas || ctx.leadIdsConTareas.has(l.id))
       && (s.has('tareas') || !filters.sinTareas || !ctx.leadIdsConTareas.has(l.id))
       && (s.has('agendar') || !filters.pendienteAgendar || esPendienteAgendar(l, ctx))
+      // Como «Vencidas»: un descartado con tareas no es trabajo pendiente.
+      && (s.has('hoy') || !filters.paraHoy || (ctx.leadIdsParaHoy.has(l.id) && !esDescartado(l, ctx.etapas)))
   })
 }
 

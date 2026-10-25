@@ -17,6 +17,19 @@ export function escribirConPendientes(params: URLSearchParams, conPendientes: bo
   return next
 }
 
+export const VISTA_PARAM = 'vista'
+export type VistaCaja = 'lista' | 'meses'
+
+/** La lista de siempre es la de fábrica: en la URL solo se escribe «meses». */
+export const leerVista = (params: URLSearchParams): VistaCaja => (params.get(VISTA_PARAM) === 'meses' ? 'meses' : 'lista')
+
+export function escribirVista(params: URLSearchParams, vista: VistaCaja): URLSearchParams {
+  const next = new URLSearchParams(params)
+  if (vista === 'lista') next.delete(VISTA_PARAM)
+  else next.set(VISTA_PARAM, vista)
+  return next
+}
+
 export function leerTipo(params: URLSearchParams): FiltroTipo {
   const v = params.get(TIPO_PARAM)
   return v === 'FIXED' || v === 'VARIABLE' ? v : 'all'

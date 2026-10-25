@@ -13,6 +13,12 @@ export function gestionDeEtapa(valor: string | null | undefined): GestionDeEtapa
   return GESTIONES_DE_ETAPA.find(g => g.value === valor)?.value ?? null
 }
 
+/** Si en la etapa se puede agendar una tarea (`crm_funnel_stages.allows_tasks`). Espejo del
+    trigger `crm_tasks_etapa_permite` de la base, que es la regla de verdad. Sin etapa, sí. */
+export function permiteAgendarTarea(etapa: { allows_tasks: boolean } | null | undefined): boolean {
+  return etapa?.allows_tasks !== false
+}
+
 /** El tilde de un subgrupo en el filtro «Estado»: si ya están todas sus etapas, las saca; si falta
     alguna, las pone todas. Las de otros grupos no se tocan. */
 export function alternarGrupo(elegidas: Set<string>, ids: string[]): Set<string> {

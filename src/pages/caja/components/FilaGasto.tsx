@@ -1,9 +1,9 @@
-import { XIcon } from 'lucide-react'
+import { PencilIcon, XIcon } from 'lucide-react'
 import { Icon } from '@/components/ui/icon'
 import { parseCalendarDay } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { eur } from '../lib/monto'
-import type { FilaCaja, Pagador } from '../types'
+import type { Etiqueta, FilaCaja, Gasto, Pagador } from '../types'
 import { PagadorPicker } from './PagadorPicker'
 import { PillTipo } from './PillTipo'
 
@@ -17,18 +17,20 @@ const CHIP = {
 
 /* Una fila de la lista. En escritorio son cinco columnas; en el teléfono una tarjeta: la fecha a la
    izquierda ocupando los dos renglones, nombre y monto arriba, etiquetas y acciones abajo. */
-export function FilaGasto({ fila: f, pagadores, onPagar, onCambiarPagador, onBorrar }: {
+export function FilaGasto({ fila: f, pagadores, onPagar, onCambiarPagador, onEditar, onEditarEtiqueta, onBorrar }: {
   fila: FilaCaja
   pagadores: Pagador[]
   onPagar: (fila: FilaCaja) => void
   onCambiarPagador: (gastoId: string, pagadorId: string) => void
+  onEditar: (gasto: Gasto) => void
+  onEditarEtiqueta: (etiqueta: Etiqueta) => void
   onBorrar: (gastoId: string) => void
 }) {
   const d = parseCalendarDay(f.fecha)
   const chip = CHIP[f.status]
   const virtual = f.status === 'NONE'
   return (
-    <div className="group grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 px-4 py-[11px] hover:bg-(--surface-2) md:grid-cols-[52px_minmax(0,1fr)_200px_110px_96px]">
+    <div className="group grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 px-4 py-[11px] hover:bg-(--surface-2) md:grid-cols-[52px_minmax(0,1fr)_200px_110px_124px]">
       <div
         title={`${f.status === 'PAID' ? 'Pagado el' : 'Vence el'} ${d.toLocaleDateString('es-ES', FECHA_LARGA)}`}
         className="col-start-1 row-span-2 row-start-1 flex flex-col items-center leading-[1.1] md:col-auto md:row-auto md:row-span-1"
@@ -71,6 +73,18 @@ export function FilaGasto({ fila: f, pagadores, onPagar, onCambiarPagador, onBor
             className="h-[26px] cursor-pointer rounded-md border border-(--brand-200) bg-(--brand-soft) px-2.5 text-xs font-semibold text-(--brand-700) hover:bg-white"
           >
             Pagar
+          </button>
+        )}
+        {/* Un fijo pendiente no tiene gasto: lo que se edita es su etiqueta (monto habitual, vencimiento). */}
+        {(f.gasto || f.etiqueta) && (
+          <button
+            type="button"
+            title={f.gasto ? 'Editar' : 'Editar etiqueta'}
+            aria-label={`Editar ${f.nombre}`}
+            onClick={() => (f.gasto ? onEditar(f.gasto) : onEditarEtiqueta(f.etiqueta!))}
+            className="grid size-[26px] cursor-pointer place-items-center rounded-md text-(--fg-faint) hover:bg-white hover:text-foreground md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+          >
+            <Icon icon={PencilIcon} size="sm" />
           </button>
         )}
         {f.gasto && (

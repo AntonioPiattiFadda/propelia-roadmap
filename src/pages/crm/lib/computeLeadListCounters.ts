@@ -18,6 +18,8 @@ export type LeadListCounters = {
   recontactarCount: number
   /** Los de «Seguimiento» sin tarea pendiente, como si «Pendiente agendar tarea» estuviera puesto. */
   pendienteAgendarCount: number
+  /** Con alguna tarea para hoy o vencida, como si «Tareas vencidas» estuviera puesto. */
+  paraHoyCount: number
   matchingCount: number
 }
 
@@ -39,8 +41,11 @@ export function computeLeadListCounters(
 
   const pendienteAgendarCount = filterLeads(leads, { ...filters, pendienteAgendar: true }, ctx).length
 
+  const paraHoyCount = filterLeads(leads, { ...filters, paraHoy: true }, ctx).length
+
   return {
     pendienteAgendarCount,
+    paraHoyCount,
     tareasTotal: baseTareas.length,
     overdueLeadCount,
     conTareasCount,

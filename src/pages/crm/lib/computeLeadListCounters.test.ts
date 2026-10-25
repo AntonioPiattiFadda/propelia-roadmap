@@ -6,11 +6,12 @@ import { filtrosVacios, type LeadFilterContext } from './leadFilters'
 const NOW = new Date(2026, 8, 30, 12).getTime()
 const etapa = (id: string, over: Partial<CrmStage> = {}): CrmStage => ({
   id, label: id, value: id, position: 1, priority_id: null, is_out_of_funnel: false, allow_delete: true,
-  allow_reorder: true, allow_rename: true, management_tolerance_hours: 24, management_type: null, created_at: '', updated_at: '',
+  allow_reorder: true, allows_tasks: true, allow_rename: true, management_tolerance_hours: 24, management_type: null, created_at: '', updated_at: '',
   deleted_at: null, ...over,
 })
 const ctx: LeadFilterContext = {
   overdueLeadIds: new Set(['p']),
+  leadIdsParaHoy: new Set(['g', 'p', 'd']),
   leadIdsConTareas: new Set(['g', 'p', 'd']),
   etapas: new Map([['n', etapa('n')], ['d', etapa('d', { value: 'DISCARDED', is_out_of_funnel: true })]]),
   now: NOW,
@@ -40,6 +41,11 @@ describe('computeLeadListCounters', () => {
   it('una etapa sola', () => expect(c.stageCount('n')).toBe(3))
   it('elegir la etapa Descartado cuenta a los descartados', () => expect(c.stageCount('d')).toBe(1))
   it('lo que queda con todo puesto', () => expect(c.matchingCount).toBe(3))
+  // d tiene una para hoy pero está descartado: quedan g y p.
+  it('tareas para hoy y vencidas, prendido o no', () => {
+    expect(c.paraHoyCount).toBe(2)
+    expect(computeLeadListCounters(leads, { ...filtrosVacios(), paraHoy: true }, ctx).paraHoyCount).toBe(2)
+  })
 })
 
 describe('para recontactar', () => {

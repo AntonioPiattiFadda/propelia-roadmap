@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { escribirConPendientes, escribirTipo, leerConPendientes, leerTipo } from './cajaParams'
+import { escribirConPendientes, escribirTipo, escribirVista, leerConPendientes, leerTipo, leerVista } from './cajaParams'
 
 const p = (q: string) => new URLSearchParams(q)
 
@@ -41,5 +41,24 @@ describe('tipo', () => {
     const orig = p('tipo=FIXED')
     escribirTipo(orig, 'all')
     expect(orig.toString()).toBe('tipo=FIXED')
+  })
+})
+
+describe('vista', () => {
+  it('ausente o inválida es la lista', () => {
+    expect(leerVista(p(''))).toBe('lista')
+    expect(leerVista(p('vista=otra'))).toBe('lista')
+  })
+  it('meses', () => {
+    expect(leerVista(p('vista=meses'))).toBe('meses')
+  })
+  it('escribir la lista borra la clave', () => {
+    expect(escribirVista(p('vista=meses&x=1'), 'lista').toString()).toBe('x=1')
+    expect(escribirVista(p('x=1'), 'meses').toString()).toBe('x=1&vista=meses')
+  })
+  it('no muta lo que recibe', () => {
+    const orig = p('vista=meses')
+    escribirVista(orig, 'lista')
+    expect(orig.toString()).toBe('vista=meses')
   })
 })

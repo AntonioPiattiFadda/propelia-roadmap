@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  CalendarDays, ChevronDown, CircleCheck, Clock, ExternalLink, Info, MessageSquare, Pencil, Phone, PhoneMissed, Plus, Trash2, UserRound, X,
+  CalendarDays, CalendarX, ChevronDown, CircleCheck, Clock, Info, MessageSquare, Pencil, Phone, PhoneMissed, Plus, Trash2, UserRound, X,
   type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
-import { Select, SelectContent, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { localTodayIso } from '@/lib/calendarDate'
+import { fmtDayMonth, localTodayIso, toIsoDate } from '@/lib/calendarDate'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useCarteras } from '../hooks/useCarteras'
@@ -21,14 +20,21 @@ import {
   campoDelNuevoDecisor, casilleroDelTelefonoNuevo, conDecisorApuntado, contactosConDecisor, tieneDecisor, decisorDelContactoNuevo, decisorSabido,
   decisoresDeLaLlamada, nombreDelLead, patchDeContactosNuevos, telefonosDelCliente, type CampoDecisor,
 } from '../lib/clientData'
-import { GUIA_DE_LLAMADA, type SeccionDeGuia } from '../lib/guiaDeLlamada'
-import { enlaceParaAgendarDemo } from '../lib/reuniones'
-import { actualizarComentario, crearComentario, marcarComentarioBorrado } from '../service/crm.service'
-import type { CrmLeadRow, LeadDetalle } from '../types'
+import { MeetingFormContent } from '@/pages/agenda/components/meetings/MeetingFormContent'
+import { GUIA_DE_DEMO, GUIA_DE_LLAMADA, type SeccionDeGuia } from '../lib/guiaDeLlamada'
+import { DESCRIPCION_DE_DEMO, invitadosDeLaDemo, RECORDATORIO_DE_DEMO, registroDeDemoDesdeLaActividad, tituloDeLaDemo } from '../lib/reuniones'
+import { actualizarComentario, cancelarReunion, crearComentario, marcarComentarioBorrado } from '../service/crm.service'
+import type { CrmLeadRow, CrmMeeting, LeadDetalle } from '../types'
+import { CancelarDemoDialog } from './CancelarDemoDialog'
 import { InmobiliariaDelLead } from './InmobiliariaDelLead'
 import { DescartarLeadDialog } from './DescartarLeadDialog'
 import { VentanaFlotante } from './VentanaFlotante'
-import { OpcionesDeEtapa } from './leadCells'
+import { DemoAgendadaDialog } from './DemoAgendadaDialog'
+import type { DemoAgendada } from '../lib/avisoDeDemo'
+import {
+  botonEscribir, CajaDeEtapa, CampoDecisorApuntado, campoEscrito, claseDelTexto, FilaDePersonas, FilaEsDecisor,
+  filaEnRojo as filaRoja, NotaDeDecisorSabido, pastilla, rotuloEnRojo as rotuloRojo,
+} from './FilasDelRegistro'
 
 /* NUEVO. En el producto el chat de actividad vive adentro de LeadAccordion (5.600 líneas); acá
    es la columna derecha del dialog del lead. Arriba la línea de tiempo partida por día; abajo,
@@ -36,22 +42,26 @@ import { OpcionesDeEtapa } from './leadCells'
    —un comentario (nota, llamada o contacto fallido) o una demo (que es una reunión)—.
    La tarea se sacó el 10/10/2026, volvió el 12/10/2026 y se volvió a sacar el 16/10/2026, las
    tres veces por pedido: las tareas se crean desde su lista del perfil.
+   «Agendar demo» se agenda acá mismo desde el 23/10/2026 (ver `ANCHO_DE_DEMO`).
    El contacto fallido es su propia pastilla y no un resultado adentro de «Llamada» (12/10/2026,
    por pedido): es lo que más se registra y no puede costar dos clics. Se guarda igual que antes
    —una llamada con resultado 'no_respondida'—, así el contador del día no se entera. */
 
-type Tipo = 'nota' | 'llamada' | 'fallido'
+type Tipo = 'nota' | 'llamada' | 'fallido' | 'demo'
 const TIPOS: { id: Tipo; label: string; icono: LucideIcon }[] = [
   { id: 'llamada', label: 'Llamada', icono: Phone },
   { id: 'fallido', label: 'Contacto fallido', icono: PhoneMissed },
   // «Notas» y no «Actividad» (17/10/2026, por pedido): actividad es todo lo que se registra.
   { id: 'nota', label: 'Notas', icono: MessageSquare },
+  { id: 'demo', label: 'Agendar demo', icono: CalendarDays },
 ]
 
-/* «Agendar demo» ya no es un formulario de acá (22/10/2026, por pedido): abre la Agenda en otra
-   pestaña con el lead (`enlaceParaAgendarDemo`), y allá, al lado de la reunión, se completa el
-   registro de actividad (`useRegistroDeDemo`). Lo registrado aparece solo en esta pestaña: el
-   realtime del CRM invalida el detalle con cada comentario nuevo. */
+/* «Agendar demo» volvió a ser una pastilla de acá (23/10/2026, por pedido; del 22/10 abría la
+   Agenda en otra pestaña): la ventana se ensancha y muestra el formulario de la reunión de la
+   Agenda (`MeetingFormContent` con `demo`) con el registro de actividad al lado
+   (`useRegistroDeDemo`). El horario se escribe o se elige mirando la semana con «Seleccionar día
+   y hora». El formulario guarda solo (reunión + registro + etapa): «Registrar» no va. */
+const ANCHO_DE_DEMO = 880
 
 /* La guía de la llamada y la de la demo: texto fijo de `lib/guiaDeLlamada.ts`, sin tildes que se
    guarden. Cuelga del borde izquierdo de la ventana de registrar (16/10/2026, por pedido): plegada
@@ -132,14 +142,6 @@ function tituloDe(i: ItemActividad): string | undefined {
   return i.tipo === 'llamada' && i.decisor ? `${conQuien} · decisor` : conQuien
 }
 
-const pastilla = (on: boolean) => cn(
-  'inline-flex h-7 max-w-[200px] shrink-0 cursor-pointer items-center gap-1 rounded-full px-2.5 text-[12px] transition-colors',
-  on ? 'font-semibold text-(--brand-soft-fg) bg-(--brand-soft) [border:1px_solid_var(--brand-100)]'
-    : 'text-(--fg-2) bg-card [border:1px_solid_var(--line)] hover:bg-(--surface-2)',
-)
-// El «+» que abre el campo para escribir a mano: sin fondo ni marco hasta el hover, para que no
-// compita con las pastillas.
-const botonEscribir = 'inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full text-(--fg-faint) transition-colors hover:bg-(--surface-2) hover:text-(--fg-2)'
 
 /* Editar lo escrito de una nota, llamada o contacto fallido (20/10/2026, por pedido). Solo el
    texto: con quién, el teléfono, el resultado y la etapa quedan como se registraron. Vaciada, la
@@ -225,6 +227,8 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   const { etapasPorId, etapasActivas, descartada } = useCrmCatalogos()
   const { usuarios } = useCarteras()
   const [abierto, setAbierto] = useState(false)
+  // La demo recién agendada: abre el aviso por WhatsApp (`DemoAgendadaDialog`).
+  const [demoAgendada, setDemoAgendada] = useState<DemoAgendada | null>(null)
   const [texto, setTexto] = useState('')
   const [tipo, setTipo] = useState<Tipo>('llamada')
   const [con, setCon] = useState<string[]>([])
@@ -239,16 +243,12 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
      los contactos, se tipea, entra como una pastilla más y al registrar se carga solo en el perfil
      (`patchDeContactosNuevos`). Escribir uno que ya está lo elige, no lo duplica. */
   const [nuevos, setNuevos] = useState<string[]>([])
-  const [escrito, setEscrito] = useState('')
   /* El campo para escribir a mano (con quién y a qué número) no está siempre a la vista
-     (17/10/2026, por pedido): es un «+» discreto y el campo aparece al tocarlo. Lo de todos los
-     días es elegir una pastilla; el campo abierto se leía como algo que había que llenar. */
-  const [escribiendoCon, setEscribiendoCon] = useState(false)
+     (17/10/2026, por pedido): es un «+» discreto y el campo aparece al tocarlo (`FilaDePersonas`).
+     Lo de todos los días es elegir una pastilla; el campo abierto se leía como algo que había que llenar. */
   const elegibles = [...contactos, ...nuevos]
-  const agregarEscrito = () => {
-    setEscribiendoCon(false)
+  const agregarEscrito = (escrito: string) => {
     const nombre = escrito.trim().replace(/\s+/g, ' ')
-    setEscrito('')
     if (!nombre) return
     const existente = elegibles.find(c => c.toLocaleLowerCase('es') === nombre.toLocaleLowerCase('es'))
     if (!existente) setNuevos(xs => [...xs, nombre])
@@ -256,7 +256,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     setCon(xs => xs.includes(elegido) ? xs : [...xs, elegido])
   }
   // Corre al registrar con éxito: también apaga el rojo de lo que faltaba.
-  const limpiarConQuien = () => { setCon([]); setNuevos([]); setEscrito(''); setEscribiendoCon(false); setIntento(false); setDecisorApuntado('') }
+  const limpiarConQuien = () => { setCon([]); setNuevos([]); setIntento(false); setDecisorApuntado('') }
   /* A qué teléfono se llamó va aparte de con quién se habló (16/10/2026, por pedido): se marca la
      oficina y atiende Laura, o el celular de Marc y atiende su socio. Lo piden la llamada y el
      contacto fallido, primero que nada; arranca vacío, como la etapa, para que no se confirme sin
@@ -285,6 +285,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     if (telefono === telefonoNuevo) setTelefono(null)
     setTelefonoNuevo(null)
   }
+  const esDemo = tipo === 'demo'
   const pideTelefono = tipo === 'llamada' || tipo === 'fallido'
   const telefonoElegido = telefonos.find(t => t.numero === telefono)
   /* Obligatorio siempre, también sin teléfonos cargados (17/10/2026, por pedido): el número se
@@ -303,14 +304,14 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
      quien decide. Opcional, y deja de estar en cuanto el perfil tiene a alguien marcado como
      decisor. El contacto fallido no lo ofrece: ahí no habló nadie. */
   const [decisorApuntado, setDecisorApuntado] = useState('')
-  const pideDecisorApuntado = tipo !== 'fallido' && !tieneDecisor(lead.client)
+  const pideDecisorApuntado = (tipo === 'nota' || tipo === 'llamada') && !tieneDecisor(lead.client)
   /* Toda actividad registrada pide elegir en qué etapa queda el lead, para que avanzarlo no
      dependa de acordarse (12/10/2026, por pedido). Arranca VACÍA y es obligatoria: precargarla
      (con la actual o con una sugerida) hacía que se confirmara sin leerla. Registrar sin elegir
      la marca en rojo y no registra. El contacto fallido no mueve nada y no la pide. Descartado se
      ofrece desde el 16/10/2026 (por pedido), pero lleva motivo: con la actividad guardada se abre
      el mismo DescartarLeadDialog del perfil y de la fila, y cancelarlo deja al lead donde estaba. */
-  const pideEtapa = tipo !== 'fallido'
+  const pideEtapa = tipo === 'nota' || tipo === 'llamada'
   const [etapaElegida, setEtapaElegida] = useState<string | null>(null)
   const [faltaEtapa, setFaltaEtapa] = useState(false)
   const [descartando, setDescartando] = useState(false)
@@ -324,10 +325,6 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
 
   const comentar = useMutacionDelDetalle(lead.id, (v: { description: string; meta: MetaDeActividad }) =>
     crearComentario({ lead_id: lead.id, description: v.description, long_description: armarMetaDeActividad(v.meta) }))
-  const abrirAgendaDeDemo = () => {
-    window.open(enlaceParaAgendarDemo({ leadId: lead.id, assignedTo: lead.assigned_to, email: lead.client?.email ?? null }), '_blank', 'noopener')
-    setAbierto(false)
-  }
   const actualizarLead = useActualizarLead()
   /* Lo registrado a mano (nota, llamada, contacto fallido) se puede borrar si se cargó por error
      (12/10/2026, por pedido). Es soft delete y sin confirmación: el aviso trae «Deshacer». Lo que
@@ -353,15 +350,26 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   /* Recién con la actividad guardada se mueve la etapa: si el registro falla, el lead no avanza por
      algo que no quedó escrito. Lo que se confirmó igual a la actual no toca la base. */
   const moverEtapa = () => {
-    const destino = etapasPorId.get(etapaFinal)
     setEtapaElegida(null)
     setFaltaEtapa(false)
-    if (!pideEtapa || !destino || destino.id === lead.funnel_stage_id) return
+    if (pideEtapa) moverA(etapaFinal)
+  }
+  const moverA = (etapaId: string) => {
+    const destino = etapasPorId.get(etapaId)
+    if (!destino || destino.id === lead.funnel_stage_id) return
     if (destino.id === descartada?.id) { setDescartando(true); return }
     actualizarLead.mutate(
       { id: lead.id, patch: { funnel_stage_id: destino.id, discard_reason: null, recontact_at: null } },
       { onSuccess: () => toast.success(`Lead en «${destino.label}»`) })
   }
+
+  /* Cancelar una demo desde su renglón (23/10/2026, por pedido): la ventana pide la etapa en la que
+     queda el lead, y la etapa se mueve recién con la reunión cancelada, como al registrar. */
+  const [demoACancelar, setDemoACancelar] = useState<CrmMeeting | null>(null)
+  const cancelarDemo = useMutacionDelDetalle(lead.id,
+    (v: { reunion: CrmMeeting; motivo: string | null }) => cancelarReunion(v.reunion, v.motivo),
+    { exito: 'Demo cancelada' })
+  const cuandoEs = (m: CrmMeeting) => `${fmtDayMonth(toIsoDate(new Date(m.starts_at)))} a las ${horaDe(m.starts_at)}`
 
   const items = detalle ? lineaDeTiempo(detalle, usuarios) : []
   const dias = agruparPorDia(items, localTodayIso())
@@ -392,8 +400,8 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     texto: tipo === 'nota' && !limpio,
   }
   const enRojo = (k: keyof typeof falta) => intento && falta[k]
-  const filaEnRojo = (k: keyof typeof falta) => enRojo(k) && 'rounded-md bg-(--danger-soft) px-2 py-1 [outline:1px_solid_var(--danger)]'
-  const rotuloEnRojo = (k: keyof typeof falta) => enRojo(k) ? 'font-semibold text-(--danger)' : 'text-(--fg-muted)'
+  const filaEnRojo = (k: keyof typeof falta) => filaRoja(enRojo(k))
+  const rotuloEnRojo = (k: keyof typeof falta) => rotuloRojo(enRojo(k))
 
   // Los escritos a mano que siguen elegidos se cargan como contactos; `decisor` es el que quedó
   // como decisor, si es uno de ellos. Lo que no entra en el perfil queda solo en la actividad.
@@ -429,7 +437,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   const cargarContactosNuevos = (decisor: string | null) => cargarAlPerfil(decisor, nuevosElegidos)
 
   const enviar = () => {
-    if (enviando) return
+    if (enviando || esDemo) return
     if (!listo || (pideEtapa && !etapaFinal)) {
       setIntento(true)
       if (pideEtapa && !etapaFinal) setFaltaEtapa(true)
@@ -498,6 +506,8 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 const titulo = tituloDe(i)
                 const verTexto = !!titulo
                 const borrable = puedeEscribir && (i.tipo === 'comentario' || i.tipo === 'llamada')
+                const reunionCancelable = puedeEscribir && i.reunion?.estado === 'scheduled'
+                  ? detalle?.meetings.find(m => m.id === i.reunion?.id) : undefined
                 return (
                   <li key={i.id} className="group flex gap-3 py-2.5 not-first:[border-top:1px_solid_var(--line-soft)]">
                     <span aria-hidden className="mt-px flex size-7 shrink-0 items-center justify-center rounded-md bg-card text-(--fg-2) [border:1px_solid_var(--line)]">
@@ -520,6 +530,13 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                         </p>
                       )}
                     </div>
+                    {reunionCancelable && (
+                      <button type="button" onClick={() => setDemoACancelar(reunionCancelable)} aria-label="Cancelar esta demo"
+                        title="Cancelar la demo"
+                        className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-(--fg-muted) opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:bg-(--danger-soft) hover:text-(--danger) max-md:opacity-100">
+                        <CalendarX size={14} />
+                      </button>
+                    )}
                     {borrable && (
                       <button type="button" onClick={() => setEditandoActividad(i)} aria-label="Editar esta actividad"
                         title="Editar el texto"
@@ -558,10 +575,11 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
           mirar el perfil, copiar un teléfono, scrollear la actividad. Cerrar sin registrar conserva
           lo escrito: el estado es de este componente, no de la ventana. */}
       {puedeEscribir && (
-        <VentanaFlotante open={abierto} onOpenChange={setAbierto} ancho={520}
+        <VentanaFlotante open={abierto} onOpenChange={setAbierto} ancho={esDemo ? ANCHO_DE_DEMO : 520}
           titulo={`Registrar actividad · ${nombreDelLead(lead.client)}`}
           descripcion="Qué pasó con el lead y en qué etapa queda."
           lateral={tipo === 'llamada' ? <GuiaDelCompositor key="llamada" titulo="Guía de la llamada" secciones={GUIA_DE_LLAMADA} />
+            : esDemo ? <GuiaDelCompositor key="demo" titulo="Guía de la demo" secciones={GUIA_DE_DEMO} />
             : undefined}>
           <div className="flex flex-col gap-4 p-4">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -579,69 +597,41 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                   </button>
                 )
               })}
-              <button type="button" onClick={abrirAgendaDeDemo} title="Abre la Agenda en otra pestaña"
-                className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-full px-2.5 text-[12px] text-(--fg-2) bg-card transition-colors [border:1px_solid_var(--line)] hover:bg-(--surface-2)">
-                <Icon icon={CalendarDays} size="xs" />
-                Agendar demo
-                <Icon icon={ExternalLink} size="xs" />
-              </button>
             </div>
+            {esDemo ? (
+              <div>
+                <MeetingFormContent
+                  open={abierto}
+                  onClose={() => setAbierto(false)}
+                  leadId={lead.id}
+                  assignedTo={lead.assigned_to}
+                  defaultTitle={tituloDeLaDemo(lead.client?.company_name)}
+                  defaultDescription={DESCRIPCION_DE_DEMO}
+                  defaultReminderMinutes={RECORDATORIO_DE_DEMO}
+                  defaultGuestEmails={invitadosDeLaDemo(lead.client?.email ?? null)}
+                  demo
+                  /* Se lee al montarse (al elegir «Agendar demo»): lo escrito en la llamada o la nota pasa. */
+                  registroInicial={registroDeDemoDesdeLaActividad(
+                    { con, nuevos, decisorApuntado, esDecisor: decisor, texto, etapa: etapaElegida }, descartada?.id)}
+                  onAbrirContacto={onAbrirContacto}
+                  onSaved={() => setTipo('llamada')}
+                  onDemoAgendada={d => setDemoAgendada({ ...d, responsable: usuariosPorId.get(lead.assigned_to)?.nombre ?? null })}
+                />
+              </div>
+            ) : (<>
             {/* Con quién va en su renglón, debajo de las pastillas, igual que los campos de la demo:
                 cada tipo pide lo suyo en el mismo lugar. Una pastilla por contacto, que se prenden
                 varias: con dos o tres contactos, un menú era un clic de más para elegir. */}
             {pideConQuien && (
-              <div className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo('con'))}>
-                <span className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo('con'))}>{tipo === 'llamada' ? 'Hablaste con' : 'Con'}</span>
-                {contactos.map(c => {
-                  const on = con.includes(c)
-                  // Doble clic abre su ficha para cargarle teléfono o email. Los dos clics prenden y
-                  // apagan la pastilla: la elección queda como estaba.
-                  const campo = conDecisor.find(p => p.nombre === c)?.campoDecisor
-                  return (
-                    <button key={c} type="button" aria-pressed={on}
-                      title={campo && onAbrirContacto ? 'Doble clic: abrir la ficha' : undefined}
-                      onDoubleClick={() => { if (campo) onAbrirContacto?.(campo) }}
-                      onClick={() => setCon(xs => on ? xs.filter(x => x !== c) : [...xs, c])}
-                      className={pastilla(on)}>
-                      <span className="truncate">{c}</span>
-                    </button>
-                  )
-                })}
-                {/* Los escritos a mano se eligen como cualquier otro y se sacan con su ✕ (ver el
-                    teléfono escrito: el «+» que llevaban se apretaba creyendo que agregaba). */}
-                {nuevos.map(c => {
-                  const on = con.includes(c)
-                  return (
-                    <span key={`nuevo-${c}`} className={cn(pastilla(on), 'pr-1')}>
-                      <button type="button" aria-pressed={on} title="Se carga como contacto al registrar"
-                        onClick={() => setCon(xs => on ? xs.filter(x => x !== c) : [...xs, c])}
-                        className="min-w-0 cursor-pointer truncate">
-                        {c}
-                      </button>
-                      <button type="button" aria-label={`Sacar a ${c}`} title="Sacar"
-                        onClick={() => { setNuevos(xs => xs.filter(x => x !== c)); setCon(xs => xs.filter(x => x !== c)) }}
-                        className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-(--surface-2)">
-                        <X size={12} />
-                      </button>
-                    </span>
-                  )
-                })}
-                {escribiendoCon ? (
-                  <input autoFocus value={escrito} onChange={e => setEscrito(e.target.value)} onBlur={agregarEscrito}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') { e.preventDefault(); agregarEscrito() }
-                      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setEscrito(''); setEscribiendoCon(false) }
-                    }}
-                    aria-label="Escribir con quién, si no está entre los contactos"
-                    placeholder="Escribí el nombre…"
-                    className="h-7 min-w-[150px] flex-1 rounded-md bg-card px-2.5 text-[12.5px] text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]" />
-                ) : (
-                  <button type="button" onClick={() => setEscribiendoCon(true)} className={botonEscribir}
-                    title="Escribir otro nombre" aria-label="Escribir otro nombre">
-                    <Icon icon={Plus} size="xs" />
-                  </button>
-                )}
-              </div>
+              <FilaDePersonas rotulo={tipo === 'llamada' ? 'Hablaste con' : 'Con'}
+                contactos={contactos} nuevos={nuevos} con={con}
+                onAlternar={c => setCon(xs => xs.includes(c) ? xs.filter(x => x !== c) : [...xs, c])}
+                onSacar={c => { setNuevos(xs => xs.filter(x => x !== c)); setCon(xs => xs.filter(x => x !== c)) }}
+                onAgregar={agregarEscrito}
+                campoDe={c => conDecisor.find(p => p.nombre === c)?.campoDecisor}
+                onAbrirContacto={onAbrirContacto} rojo={enRojo('con')}
+                tituloNuevo="Se carga como contacto al registrar"
+                ariaEscribir="Escribir con quién, si no está entre los contactos" />
             )}
             {pideTelefono && (
               <div className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo('telefono'))}>
@@ -681,8 +671,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setTelefonoEscrito(''); setEscribiendoTelefono(false) }
                     }}
                     type="tel" inputMode="tel" aria-label="Escribir el número, si no está entre los cargados"
-                    placeholder="Escribí el número…"
-                    className="h-7 min-w-[150px] flex-1 rounded-md bg-card px-2.5 text-[12.5px] text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]" />
+                    placeholder="Escribí el número…" className={campoEscrito} />
                 ) : (
                   <button type="button" onClick={() => setEscribiendoTelefono(true)} className={botonEscribir}
                     title="Escribir otro número" aria-label="Escribir otro número">
@@ -696,22 +685,10 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 debajo de con quién, recién cuando se eligió, y hay que contestarla: sin respuesta
                 no se registra. Contestar «Sí» con un solo contacto elegido lo marca en el perfil. */}
             {pideDecisor && (
-              <div role="radiogroup" aria-label="¿Es decisor?" className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo('decisor'))}>
-                <span className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo('decisor'))}>¿Es decisor?</span>
-                {([[true, 'Sí'], [false, 'No']] as const).map(([valor, label]) => (
-                  <button key={label} type="button" role="radio" aria-checked={decisor === valor}
-                    onClick={() => setDecisor(valor)} title="Quien atendió decide en la inmobiliaria"
-                    className={pastilla(decisor === valor)}>
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <FilaEsDecisor valor={decisor} onCambiar={setDecisor} rojo={enRojo('decisor')}
+                title="Quien atendió decide en la inmobiliaria" />
             )}
-            {tipo === 'llamada' && eligioConQuien && sabido !== null && (
-              <p className="text-[11.5px] text-(--fg-muted)">
-                {sabido ? 'Figura como decisor en el perfil.' : 'Figura como no decisor en el perfil.'}
-              </p>
-            )}
+            {tipo === 'llamada' && eligioConQuien && sabido !== null && <NotaDeDecisorSabido sabido={sabido} />}
             <textarea
               value={texto}
               onChange={e => setTexto(e.target.value)}
@@ -722,35 +699,16 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 : tipo === 'fallido' ? 'Detalle (opcional): no atendió, buzón, número equivocado…'
                 : 'Escribí qué pasó o qué querés registrar…'}
               aria-invalid={enRojo('texto')}
-              className={cn('block max-h-[50vh] min-h-9 w-full resize-y rounded-md bg-card px-3 py-2 text-[13.5px] leading-5 text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]',
-                enRojo('texto') && '[border-color:var(--danger)] bg-(--danger-soft)')}
+              className={claseDelTexto(enRojo('texto'))}
             />
             {pideDecisorApuntado && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <label htmlFor="decisor-apuntado" className="mr-0.5 text-[11.5px] text-(--fg-muted)">Decisor</label>
-                <input id="decisor-apuntado" value={decisorApuntado} onChange={e => setDecisorApuntado(e.target.value)}
-                  placeholder="Nombre de quien decide, si te lo dijeron (opcional)"
-                  title="Se carga en el perfil como decisor al registrar"
-                  className="h-7 min-w-[220px] flex-1 rounded-md bg-card px-2.5 text-[12.5px] text-foreground outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] placeholder:text-(--fg-faint) max-md:text-[16px]" />
-              </div>
+              <CampoDecisorApuntado id="decisor-apuntado" valor={decisorApuntado} onCambiar={setDecisorApuntado}
+                title="Se carga en el perfil como decisor al registrar" />
             )}
             {pideEtapa && (
-              <div className={cn('flex flex-wrap items-center gap-2 rounded-md px-3 py-2',
-                faltaEtapa ? 'bg-(--danger-soft) [border:1px_solid_var(--danger)]' : 'bg-(--surface-2) [border:1px_solid_var(--line-soft)]')}>
-                <span className={cn('text-[12.5px] font-semibold', faltaEtapa ? 'text-(--danger)' : 'text-foreground')}>El lead queda en</span>
-                <Select value={etapaFinal} onValueChange={v => { setEtapaElegida(v); setFaltaEtapa(false) }}>
-                  <SelectTrigger aria-label="Etapa en la que queda el lead" aria-invalid={faltaEtapa}
-                    className={cn('h-8 w-auto min-w-[220px] bg-card text-[12.5px]', faltaEtapa && '[border-color:var(--danger)]')}>
-                    <SelectValue placeholder="Elegí una etapa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <OpcionesDeEtapa etapas={opcionesEtapa} />
-                  </SelectContent>
-                </Select>
-                {faltaEtapa
-                  ? <span role="alert" className="text-[11.5px] font-semibold text-(--danger)">Elegí en qué etapa queda antes de registrar</span>
-                  : <span className="text-[11.5px] text-(--fg-muted)">Hoy está en «{actual?.label ?? 'sin etapa'}»</span>}
-              </div>
+              <CajaDeEtapa valor={etapaFinal} onCambiar={v => { setEtapaElegida(v); setFaltaEtapa(false) }}
+                opciones={opcionesEtapa} actual={actual} rojo={faltaEtapa}
+                aviso="Elegí en qué etapa queda antes de registrar" />
             )}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setAbierto(false)}>Cancelar</Button>
@@ -761,11 +719,21 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 {enviando ? 'Registrando…' : 'Registrar'}
               </Button>
             </div>
+            </>)}
           </div>
         </VentanaFlotante>
       )}
       {descartando && descartada && (
         <DescartarLeadDialog leadId={lead.id} etapa={descartada} onClose={() => setDescartando(false)} />
+      )}
+      <DemoAgendadaDialog demo={demoAgendada} onCerrar={() => setDemoAgendada(null)} />
+      {demoACancelar && (
+        <CancelarDemoDialog key={demoACancelar.id} cuando={cuandoEs(demoACancelar)}
+          opciones={opcionesEtapa} actual={actual} cancelando={cancelarDemo.isPending}
+          onCerrar={() => setDemoACancelar(null)}
+          onConfirmar={({ motivo, etapaId }) => cancelarDemo.mutate({ reunion: demoACancelar, motivo }, {
+            onSuccess: () => { setDemoACancelar(null); moverA(etapaId) },
+          })} />
       )}
       {editandoActividad && (
         <EditarActividad key={editandoActividad.id} item={editandoActividad} onCerrar={() => setEditandoActividad(null)}

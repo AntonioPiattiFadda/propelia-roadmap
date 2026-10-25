@@ -115,12 +115,33 @@ export async function getDetalleLead(leadId: string): Promise<LeadDetalle> {
 // `gestion_*` NO está: la escribe la base (crm_gestion_refresh) y el front ya no la muestra
 // (10/10/2026). Tampoco los historiales.
 export type LeadPatch = Pick<TablesUpdate<'crm_leads'>,
-  'funnel_stage_id' | 'channel_id' | 'discard_reason' | 'recontact_at' | 'assigned_to' | 'last_important_event_at'>
+  'funnel_stage_id' | 'channel_id' | 'discard_reason' | 'recontact_at' | 'assigned_to' | 'last_important_event_at'
+  // La estrella de la lista (23/10/2026), solo SUPERADMIN. Puede no existir todavía en la base: se
+  // manda sola, nunca junto con otro campo (sin la columna, el update entero contesta FALTA_MIGRACION).
+  | 'importante'>
 
 export async function updateLead(id: string, patch: LeadPatch): Promise<CrmLead> {
   const { data, error } = await supabase.from('crm_leads').update(patch).eq('id', id).select()
   if (error) throw error
   return unaFila(data)
+}
+
+/** Eliminar un lead (23/10/2026, solo SUPERADMIN desde el menú ⋯) es soft delete, como el resto
+ *  del CRM. Se lleva sus tareas pendientes: sin el lead a la vista seguirían sonando las alarmas.
+ *  Devuelve los ids de esas tareas para que «Deshacer» devuelva exactamente lo que se borró. */
+export async function eliminarLead(id: string): Promise<{ tareas: string[] }> {
+  const { data, error } = await supabase.from('crm_leads').update({ deleted_at: ahora() }).eq('id', id).select('id')
+  if (error) throw error
+  unaFila(data)
+  const tareas = await supabase.from('crm_tasks').update({ deleted_at: ahora() })
+    .eq('lead_id', id).eq('completed', false).is('deleted_at', null).select('id')
+  if (tareas.error) throw tareas.error
+  return { tareas: tareas.data.map(t => t.id) }
+}
+
+export async function restaurarLead(id: string, tareas: string[]): Promise<void> {
+  await comprobar(supabase.from('crm_leads').update({ deleted_at: null }).eq('id', id))
+  if (tareas.length) await comprobar(supabase.from('crm_tasks').update({ deleted_at: null }).in('id', tareas))
 }
 
 export type ClientePatch = Pick<TablesUpdate<'crm_clients'>,
@@ -319,7 +340,7 @@ const ahora = () => new Date().toISOString()
 
 export type EtapaNueva = Pick<TablesInsert<'crm_funnel_stages'>,
   'label' | 'value' | 'position' | 'allow_delete' | 'allow_reorder' | 'allow_rename' | 'is_out_of_funnel'>
-export type EtapaPatch = Pick<TablesUpdate<'crm_funnel_stages'>, 'label' | 'position' | 'management_type'>
+export type EtapaPatch = Pick<TablesUpdate<'crm_funnel_stages'>, 'label' | 'position' | 'management_type' | 'allows_tasks' | 'show_in_dashboard'>
 
 export async function crearEtapa(input: EtapaNueva): Promise<CrmStage> {
   const { data, error } = await supabase.from('crm_funnel_stages').insert(input).select().single()

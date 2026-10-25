@@ -7,6 +7,17 @@ describe('mensajeDeError', () => {
     expect(mensajeDeError({ message: 'crm_falta_contacto' })).toBe('Falta teléfono o email.')
     expect(mensajeDeError({ message: 'crm_sin_permiso_cartera', code: '42501' })).toBe(SIN_PERMISO)
   })
+  it('el trigger de «importante»: gana la clave aunque el código sea 42501', () => {
+    expect(mensajeDeError({ message: 'crm_importante_solo_superadmin', code: '42501' }))
+      .toBe('Solo un superadmin puede marcar un lead como importante.')
+  })
+  it('el trigger de las etapas donde no se agendan tareas', () => {
+    expect(mensajeDeError({ message: 'crm_etapa_sin_tareas', code: 'P0001' }))
+      .toBe('En esta etapa no se pueden agendar tareas.')
+  })
+  it('marcar importante sin la columna en la base', () => {
+    expect(mensajeDeError({ code: 'PGRST204', message: "Could not find the 'importante' column of 'crm_leads'" })).toBe(FALTA_MIGRACION)
+  })
   it('un rechazo de RLS no se muestra crudo', () => {
     expect(mensajeDeError({ code: '42501', message: 'new row violates row-level security policy for table "crm_leads"' })).toBe(SIN_PERMISO)
   })

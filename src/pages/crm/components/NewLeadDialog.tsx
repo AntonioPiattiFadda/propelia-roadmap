@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { localTodayIso } from '@/lib/calendarDate'
 import { useCarteras } from '../hooks/useCarteras'
+import { useVerComo } from '../hooks/useVerComo'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrearLead } from '../hooks/useLeadMutaciones'
 import { EMPTY_CLIENT, validateClientData, type ClientData, type ClientDataErrors } from '../lib/clientData'
@@ -24,6 +25,7 @@ export function NewLeadDialog({ open, onOpenChange, onCreado }: {
   onCreado?: (leadId: string) => void
 }) {
   const { myId, conEscritura } = useCarteras()
+  const { perspectivaId } = useVerComo()
   const { canalesActivos } = useCrmCatalogos()
   const crear = useCrearLead()
   const [data, setData] = useState<ClientData>(EMPTY_CLIENT)
@@ -31,8 +33,10 @@ export function NewLeadDialog({ open, onOpenChange, onCreado }: {
   const [canal, setCanal] = useState(SIN_CANAL)
   const [responsable, setResponsable] = useState('')
   const [errorBase, setErrorBase] = useState<string | null>(null)
-  // Yo por defecto. Si no tengo write sobre mí mismo (inactivo) no hay a quién: el botón se apaga.
-  const responsableId = responsable || (conEscritura.some(u => u.id === myId) ? myId ?? '' : '')
+  // Yo por defecto (o la persona que miro con «Ver como», si puedo cargarle leads). Si no tengo
+  // write sobre ninguno de los dos no hay a quién: el botón se apaga.
+  const porDefecto = [perspectivaId, myId].find(id => !!id && conEscritura.some(u => u.id === id)) ?? ''
+  const responsableId = responsable || porDefecto
 
   const cerrar = (v: boolean) => {
     if (!v) { setData(EMPTY_CLIENT); setErrors({}); setCanal(SIN_CANAL); setResponsable(''); setErrorBase(null) }

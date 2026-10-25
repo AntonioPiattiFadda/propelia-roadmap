@@ -6,7 +6,7 @@ import { recontactoDeMotivo, type MotivoDescarte } from '../lib/motivosDescarte'
 import { comentarioDescarte, comentarioReasignacion } from '../lib/systemComment'
 import type { FilaDelLote } from '../lib/importarLote'
 import {
-  crearComentario, crearLeadConCliente, importarLote, reasignarLead, updateCliente, updateLead,
+  crearComentario, crearLeadConCliente, eliminarLead, importarLote, reasignarLead, restaurarLead, updateCliente, updateLead,
   type AltaLead, type ClientePatch, type LeadPatch,
 } from '../service/crm.service'
 import type { CrmLeadRow, LeadDetalle, Usuario } from '../types'
@@ -81,7 +81,37 @@ export function useDescartar() {
   })
 }
 
-export type ItemReasignacion = { leadId: string; deNombre: string }
+/** Sin confirmar, con «Deshacer» en el aviso (como borrar una actividad). */
+export function useEliminarLead() {
+  const qc = useQueryClient()
+  const restaurar = useMutation({
+    mutationFn: ({ leadId, tareas }: { leadId: string; tareas: string[] }) => restaurarLead(leadId, tareas),
+    onError: error => toast.error(mensajeDeError(error, 'No se pudo restaurar el lead')),
+    onSettled: (_d, _e, { leadId }) => {
+      refrescar(qc, leadId)
+      void qc.invalidateQueries({ queryKey: CRM_KEYS.tareasPendientes })
+    },
+  })
+  return useMutation({
+    mutationFn: (leadId: string) => eliminarLead(leadId),
+    onMutate: async leadId => {
+      await qc.cancelQueries({ queryKey: CRM_KEYS.leads })
+      const previo = qc.getQueryData<CrmLeadRow[]>(CRM_KEYS.leads)
+      qc.setQueryData<CrmLeadRow[]>(CRM_KEYS.leads, old => old?.filter(l => l.id !== leadId))
+      return { previo }
+    },
+    onError: (error, _v, ctx) => { revertir(qc, ctx?.previo); toast.error(mensajeDeError(error, 'No se pudo eliminar el lead')) },
+    onSuccess: ({ tareas }, leadId) => toast.success('Lead eliminado', {
+      action: { label: 'Deshacer', onClick: () => restaurar.mutate({ leadId, tareas }) },
+    }),
+    onSettled: (_d, _e, leadId) => {
+      refrescar(qc, leadId)
+      void qc.invalidateQueries({ queryKey: CRM_KEYS.tareasPendientes })
+    },
+  })
+}
+
+export type ItemReasignacion ={ leadId: string; deNombre: string }
 
 /** Reasigna de a uno (ver `reasignarLead`) y junta lo que falló en vez de cortar en el primero. */
 export function useReasignar() {

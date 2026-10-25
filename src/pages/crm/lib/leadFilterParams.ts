@@ -12,8 +12,12 @@ import { esObjetivo, type Objetivo } from './objetivos'
 export const OWNERS_PARAM = 'owners'
 /** El lead abierto en el dialog: un enlace abre ese lead ya abierto. */
 export const LEAD_PARAM = 'lead'
+/** «Ver como» (23/10/2026): el id de la persona desde cuya perspectiva se mira el CRM. No es un
+ *  filtro: «Limpiar filtros» no lo toca, y todo lo que escribe la URL adentro del CRM parte de la
+ *  actual (`prev`), así que se queda puesto mientras dure la ventana. */
+export const COMO_PARAM = 'como'
 
-export const LEAD_FILTER_PARAMS = ['overdue', 'tareas', 'stages', 'recontactar', 'agendar', 'orden', 'objetivo'] as const
+export const LEAD_FILTER_PARAMS = ['overdue', 'tareas', 'stages', 'recontactar', 'agendar', 'hoy', 'orden', 'objetivo'] as const
 export const LEAD_FILTER_PARAMS_WITH_QUERY = [...LEAD_FILTER_PARAMS, 'q'] as const
 
 /** `?tareas=sin`: los que no tienen ninguna tarea pendiente. `?tareas=1` sigue siendo «con». */
@@ -51,6 +55,7 @@ export function filtrosDesdeUrl(params: URLSearchParams): LeadFilterState {
     sinTareas: params.get('tareas') === TAREAS_SIN,
     paraRecontactar: params.get('recontactar') === '1',
     pendienteAgendar: params.get('agendar') === '1',
+    paraHoy: params.get('hoy') === '1',
     orden: ORDENES_DE_LEADS.find(o => o === params.get('orden')) ?? null,
     objetivo: objetivoDesdeUrl(params.get('objetivo')),
   }
@@ -78,6 +83,7 @@ export function escribirFiltros(params: URLSearchParams, patch: Partial<LeadFilt
   }
   if (patch.paraRecontactar !== undefined) poner('recontactar', patch.paraRecontactar ? '1' : '')
   if (patch.pendienteAgendar !== undefined) poner('agendar', patch.pendienteAgendar ? '1' : '')
+  if (patch.paraHoy !== undefined) poner('hoy', patch.paraHoy ? '1' : '')
   if (patch.orden !== undefined) poner('orden', patch.orden ?? '')
   // Prender «Tareas» arranca por vencimiento (lo vencido arriba): un orden que quedó puesto de
   // antes le ganaría. Elegido después, con «Tareas» ya puesto, se respeta.
@@ -108,8 +114,9 @@ export function formatFilterList(labels: string[]): string {
   return `${labels.slice(0, -1).join(', ')} y ${labels[labels.length - 1]}`
 }
 
-export function enlaceAlCrm(opts: { owners?: string[]; overdueOnly?: boolean; lead?: string }): string {
+export function enlaceAlCrm(opts: { owners?: string[]; overdueOnly?: boolean; lead?: string; como?: string }): string {
   let p = new URLSearchParams()
+  if (opts.como) p.set(COMO_PARAM, opts.como)
   if (opts.owners?.length) p.set(OWNERS_PARAM, [...opts.owners].sort().join(','))
   // «Tareas vencidas» es un subfiltro de «Tareas»: sin ella prendida, el chip no se ve.
   if (opts.overdueOnly) p = escribirFiltros(p, { conTareas: true, overdueOnly: true })

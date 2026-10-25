@@ -5,7 +5,7 @@ import { estadisticasPorCartera } from './estadisticasPorCartera'
 const HOY = '2026-09-30'
 const u = (id: string): Usuario => ({ id, email: '', nombre: id, iniciales: 'XX', color: '#000', rol: 'SDR', activo: true, phone: null, last_name: null })
 const etapa = (id: string, position: number, over: Partial<CrmStage> = {}): CrmStage => ({
-  id, label: id, value: id, position, priority_id: null, is_out_of_funnel: false, allow_delete: true, allow_reorder: true,
+  id, label: id, value: id, position, priority_id: null, is_out_of_funnel: false, allow_delete: true, allow_reorder: true, allows_tasks: true,
   allow_rename: true, management_tolerance_hours: 24, management_type: null, created_at: '', updated_at: '', deleted_at: null, ...over,
 })
 const ETAPAS = new Map([

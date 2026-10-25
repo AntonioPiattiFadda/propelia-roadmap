@@ -110,6 +110,21 @@ describe('lineaDeTiempo · demo registrada desde la Agenda', () => {
       texto: 'Para el 07/10 a las 12:00\nDecisor: Jordi\nQuiere ver la importación',
     })
   })
+  it('lleva su reunión y en qué estado está: es lo que ofrece cancelarla', () => {
+    expect(items.find(i => i.id === 'r1')?.reunion).toEqual({ id: 'm1', estado: 'scheduled' })
+    expect(items.find(i => i.id === 'm2')?.reunion).toEqual({ id: 'm2', estado: 'scheduled' })
+    expect(items.find(i => i.id === 'r2')?.reunion).toBeUndefined()
+  })
+  it('la cancelada lo dice arriba de todo, con el motivo', () => {
+    const [item] = lineaDeTiempo({
+      ...vacio,
+      meetings: [reunion('m1', { status: 'cancelled', cancel_reason: 'No llegan' })],
+      comments: [registro('r1', { tipo: 'demo', con: [], reunion: 'm1' }, 'Demo agendada.')],
+    }, usuarios)
+    expect(item).toMatchObject({ reunion: { id: 'm1', estado: 'cancelled' }, texto: 'Cancelada · No llegan\nPara el 07/10 a las 12:00' })
+    const [suelta] = lineaDeTiempo({ ...vacio, meetings: [reunion('m1', { status: 'cancelled' })] }, usuarios)
+    expect(suelta.texto).toBe('Se agendó una demo para el 07/10 a las 12:00 · Cancelada')
+  })
   it('sin reunión viva ni nada escrito queda vacío: el texto de fábrica no se repite', () => {
     expect(items.find(i => i.id === 'r2')?.texto).toBe('')
   })

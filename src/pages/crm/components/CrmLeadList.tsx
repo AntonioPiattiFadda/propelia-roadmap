@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ArrowDownWideNarrow, ListTodo, RotateCw } from 'lucide-react'
+import { ArrowDownWideNarrow, ListTodo, RotateCw, Star } from 'lucide-react'
 import { AvatarUsuario } from '@/components/AvatarUsuario'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -14,6 +14,7 @@ import { computeLeadListCounters } from '../lib/computeLeadListCounters'
 import { etapaDelLead } from '../lib/effectiveStage'
 import { estadoDeLista } from '../lib/estadoDeLista'
 import { vecinoMarcable } from '../lib/seleccionConFlechas'
+import { claveDeFiltros, fijarLista, type FotoDeLista } from '../lib/listaFija'
 import { vecinosEnRecorrido, type UltimaPosicion } from '../lib/recorrido'
 import { fmtUltimaActividad, ordenarPorUltimaActividad } from '../lib/ultimaActividad'
 import { fmtIngresoDate, fmtShortDate } from '../lib/leadCellFormat'
@@ -23,13 +24,14 @@ import {
 } from '../lib/leadFilterParams'
 import { agruparPorEtapa } from '../lib/columnasPorEtapa'
 import { filterLeads, leadsDeCarteras, type LeadFilterContext, type LeadFilterState, type OrdenLeads } from '../lib/leadFilters'
-import { estaVencida, idsConTareasVencidas, ordenarPorEstado, ordenarPorProximaTarea, proximaTareaPorLead, type ProximaTarea } from '../lib/tareas'
+import { estaVencida, idsConTareasParaHoy, idsConTareasVencidas, ordenarPorEstado, ordenarPorProximaTarea, proximaTareaPorLead, type ProximaTarea } from '../lib/tareas'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
 import { useReasignar } from '../hooks/useLeadMutaciones'
 import { useObjetivos } from '../hooks/useObjetivos'
 import { useVisibleAgents } from '../hooks/useVisibleAgents'
-import { nombreDe } from '../lib/permisos'
+import { nombreDe, puedeMarcarImportante } from '../lib/permisos'
+import { hayEtapasEnElDashboard, leadsImportantes } from '../lib/resumen'
 import type { ReassignCandidate } from '../lib/reassignCollisions'
 import type { CrmLeadRow, CrmStage, CrmTask, Usuario } from '../types'
 import { BulkActionBar } from './BulkActionBar'
@@ -37,7 +39,9 @@ import { ColumnasCrm, type FichaProps } from './ColumnasCrm'
 import { BuscadorLeads, FiltrosCrm } from './FiltrosCrm'
 import { LeadDialog } from './LeadDialog'
 import { LeadRowActions } from './LeadRowActions'
+import { EstrellaImportante } from './EstrellaImportante'
 import { ReassignLeadsDialog } from './ReassignLeadsDialog'
+import { ResumenCrm } from './ResumenCrm'
 import { StageBadge } from './leadCells'
 
 const SIN_TAREAS: CrmTask[] = []
@@ -62,6 +66,8 @@ type RenglonProps = {
   modoTareas: boolean
   /** El último lead en el que se entró: se resalta apenas, para retomar desde ahí. */
   ultimo: boolean
+  /** La estrella de «importante»: solo para quien puede marcar (SUPERADMIN). Sin ella, ni la columna. */
+  estrella?: ReactNode
 }
 
 /* El último lead abierto (20/10/2026, por pedido), por navegador: es «por dónde iba yo», no un
@@ -106,11 +112,11 @@ function VenceTarea({ proxima, hoy }: { proxima: ProximaTarea | undefined; hoy: 
 }
 
 /* Fuera del modo «Tareas»: si el lead tiene algo agendado o no. Con tarea, cuándo vence la
-   próxima (el mismo rótulo de VenceTarea); sin tarea, dicho en ámbar, que es el lead que se
-   queda sin seguimiento. */
+   próxima (el mismo rótulo de VenceTarea); sin tarea, dicho en gris (por pedido, 23/10/2026:
+   en ámbar llamaba la atención de más). */
 function TareaAgendada({ proxima, hoy }: { proxima: ProximaTarea | undefined; hoy: string }) {
   if (!proxima) {
-    return <span className="whitespace-nowrap text-[12.5px] font-medium text-(--warning-fg)">Sin tarea</span>
+    return <span className="whitespace-nowrap text-[12.5px] text-muted-foreground">Sin tarea</span>
   }
   const mas = proxima.pendientes - 1
   return (
@@ -130,7 +136,7 @@ function clicDelRenglon(e: React.MouseEvent<HTMLElement>): boolean {
   return e.currentTarget.contains(target) && !target.closest('[data-row-actions]')
 }
 
-function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion, proxima, hoy, modoTareas, ultimo }: RenglonProps) {
+function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion, proxima, hoy, modoTareas, ultimo, estrella }: RenglonProps) {
   return (
     <tr
       data-lead-id={lead.id}
@@ -151,6 +157,7 @@ function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion
             style={{ background: ultimo ? RIEL_ULTIMO : 'var(--line-soft)' }} />
         )}
       </td>
+      {estrella && <td className="w-[36px] py-[11px] pl-1.5 pr-0" data-row-actions>{estrella}</td>}
       <td className="whitespace-nowrap px-[18px] py-[11px] text-[13.5px] font-medium tabular-nums text-(--fg-2)">
         {fmtIngresoDate(lead.created_at)}
       </td>
@@ -189,7 +196,7 @@ function LeadRow({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion
 
 /** El mismo renglón en el teléfono: empresa arriba, etapa abajo (con «Tareas», además
  *  la próxima tarea y cuándo vence). */
-function LeadCard({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion, proxima, hoy, modoTareas, ultimo }: RenglonProps) {
+function LeadCard({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccion, proxima, hoy, modoTareas, ultimo, estrella }: RenglonProps) {
   return (
     <div
       role="button"
@@ -219,6 +226,7 @@ function LeadCard({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccio
             ? <TituloTarea proxima={proxima} />
             : <div className="truncate text-[12.5px] text-(--fg-muted)">{lead.client?.phone ?? ''}</div>}
         </div>
+        {estrella && <span data-row-actions>{estrella}</span>}
         <span data-row-actions>{acciones}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -232,6 +240,9 @@ function LeadCard({ lead, etapa, responsable, esMio, onAbrir, acciones, seleccio
 /* Las columnas de alta y lead no llevan título: ese lugar lo ocupa el buscador (BUSCADOR, con
    colSpan 2), que es justamente por nombre y teléfono. */
 const BUSCADOR = 'buscador'
+/** La columna de la estrella (23/10/2026): va después del riel y solo para quien puede marcar. */
+const ESTRELLA = 'estrella'
+const conEstrella = (headers: string[]) => [headers[0], ESTRELLA, ...headers.slice(1)]
 const HEADERS = ['', BUSCADOR, 'Teléfono', 'Estado', 'Última actividad', 'Tarea', '']
 const HEADERS_TAREAS = ['', BUSCADOR, 'Estado', 'Tarea pendiente', 'Vence', '']
 /** Las cabeceras que ordenan la lista al tocarlas. */
@@ -244,7 +255,9 @@ const TITULO_DE_ORDEN: Record<OrdenLeads, string> = {
   tarea: 'Por vencimiento de la próxima tarea: lo vencido arriba',
 }
 
-export function CrmLeadList() {
+/** `resumen`: en vez de los filtros y la lista, el resumen de un SUPERADMIN (`muestraResumen`). El
+ *  dialog del lead y la reasignación son los mismos: abrir un lead del resumen no lo saca de ahí. */
+export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const isMobile = useIsMobile()
   const leadsQ = useCrmLeads()
@@ -281,6 +294,7 @@ export function CrmLeadList() {
   const hoy = localTodayIso()
   const tareas = tareasQ.data ?? SIN_TAREAS
   const overdueLeadIds = useMemo(() => idsConTareasVencidas(tareas, hoy), [tareas, hoy])
+  const leadIdsParaHoy = useMemo(() => idsConTareasParaHoy(tareas, hoy), [tareas, hoy])
   const proximas = useMemo(() => proximaTareaPorLead(tareas), [tareas])
   const leadIdsConTareas = useMemo(() => new Set(proximas.keys()), [proximas])
   // Un solo «ahora» por pintada (ver LeadFilterContext). `dataUpdatedAt` va en las dependencias a
@@ -291,9 +305,9 @@ export function CrmLeadList() {
   const objetivosQ = useObjetivos(startOfWeekIso(hoy), filtros.objetivo !== null)
   const leadsDelObjetivo = filtros.objetivo ? objetivosQ.data?.leads[filtros.objetivo] : undefined
   const ctx = useMemo<LeadFilterContext>(
-    () => ({ overdueLeadIds, leadIdsConTareas, etapas: cat.etapasPorId, now: Date.now(), leadsDelObjetivo }),
+    () => ({ overdueLeadIds, leadIdsParaHoy, leadIdsConTareas, etapas: cat.etapasPorId, now: Date.now(), leadsDelObjetivo }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [overdueLeadIds, leadIdsConTareas, cat.etapasPorId, leadsQ.dataUpdatedAt, leadsDelObjetivo],
+    [overdueLeadIds, leadIdsParaHoy, leadIdsConTareas, cat.etapasPorId, leadsQ.dataUpdatedAt, leadsDelObjetivo],
   )
 
   const deCarteras = useMemo(
@@ -301,22 +315,40 @@ export function CrmLeadList() {
   // El orden (el chip «Ordenar» o las cabeceras de la tabla): última actividad, estado o tarea (por
   // vencimiento). Sin elegir, con «Tareas» va por la próxima tarea (lo vencido arriba). Las flechas
   // del dialog recorren `visibles`, así que siguen este orden solas.
+  // Lo que se vio con estos filtros se queda aunque deje de coincidir (fijarLista): se va al
+  // cambiar los filtros o al recargar. La foto vive en un ref; con la misma entrada da lo mismo,
+  // así que pintar dos veces no la corre.
+  const claveFiltros = claveDeFiltros(searchParams)
+  const fotoDeLista = useRef<FotoDeLista | null>(null)
   const visibles = useMemo(() => {
-    const filtrados = filterLeads(deCarteras, filtros, ctx)
+    const fijada = fijarLista(fotoDeLista.current, claveFiltros, leadsQ.data ?? SIN_LEADS, filterLeads(deCarteras, filtros, ctx))
+    fotoDeLista.current = fijada.foto
+    const filtrados = fijada.leads
     const orden = filtros.orden ?? (filtros.conTareas ? 'tarea' : null)
     if (orden === 'estado') return ordenarPorEstado(filtrados, proximas, l => etapaDelLead(l, cat.etapasPorId))
     if (orden === 'actividad') return ordenarPorUltimaActividad(filtrados)
     if (orden === 'tarea') return ordenarPorProximaTarea(filtrados, proximas)
     return filtrados
-  }, [deCarteras, filtros, ctx, proximas, cat.etapasPorId])
-  const headers = filtros.conTareas ? HEADERS_TAREAS : HEADERS
+  }, [deCarteras, filtros, ctx, proximas, cat.etapasPorId, claveFiltros, leadsQ.data])
+  // Solo SUPERADMIN ve (y toca) la columna de la estrella: un SDR no sabe ni que existe.
+  const puedeMarcar = puedeMarcarImportante(agentes.yo)
+  const headersBase = filtros.conTareas ? HEADERS_TAREAS : HEADERS
+  const headers = puedeMarcar ? conEstrella(headersBase) : headersBase
+  // El resumen: los importantes de todas las carteras (la RLS de un SUPERADMIN los trae todos),
+  // con estrella o en una etapa con «Dashboard: Sí».
+  const importantes = useMemo(
+    () => (resumen ? leadsImportantes(leadsQ.data ?? SIN_LEADS, proximas, cat.etapasPorId) : SIN_LEADS),
+    [resumen, leadsQ.data, proximas, cat.etapasPorId])
   // En columnas, las etapas elegidas en «Estado» dicen qué columnas se ven (agruparPorEtapa).
   const columnas = useMemo(
     () => (enColumnas ? agruparPorEtapa(visibles, cat.etapasPorId, filtros.stageFilter) : []),
     [enColumnas, visibles, cat.etapasPorId, filtros.stageFilter])
   // Las flechas del dialog recorren los leads en el orden en que se ven: en columnas, columna por
   // columna de izquierda a derecha.
-  const recorrido = useMemo(() => (enColumnas ? columnas.flatMap(c => c.leads) : visibles), [enColumnas, columnas, visibles])
+  // En el resumen, los importantes.
+  const recorrido = useMemo(
+    () => (resumen ? importantes : enColumnas ? columnas.flatMap(c => c.leads) : visibles),
+    [resumen, importantes, enColumnas, columnas, visibles])
   const contadores = useMemo(() => computeLeadListCounters(deCarteras, filtros, ctx), [deCarteras, filtros, ctx])
   // Lo marcado sobrevive a los filtros, la búsqueda y el cambio de cartera, pero reasignar mueve
   // leads de cartera: solo cuenta y solo se manda lo que se está viendo. Si no, la barra dice «5 de
@@ -346,7 +378,7 @@ export function CrmLeadList() {
     lead,
     etapa: etapaDelLead(lead, cat.etapasPorId),
     responsable: usuariosPorId.get(lead.assigned_to),
-    esMio: variasCarteras ? lead.assigned_to === agentes.myId : null,
+    esMio: variasCarteras ? lead.assigned_to === agentes.perspectivaId : null,
     onAbrir: abrirLead,
     acciones: <LeadRowActions lead={lead} puedeEscribir={agentes.puedeEscribir(lead.assigned_to)} onStartReassign={empezarSeleccion} />,
     // Solo se puede marcar lo que se puede mover: un lead de una cartera de solo lectura sigue
@@ -358,9 +390,10 @@ export function CrmLeadList() {
     hoy,
     modoTareas: filtros.conTareas,
     ultimo: lead.id === ultimoLeadId,
+    estrella: puedeMarcar ? <EstrellaImportante lead={lead} /> : undefined,
   })
   const fichaDe = (lead: CrmLeadRow): FichaProps => {
-    const { etapa: _etapa, proxima: _proxima, hoy: _hoy, modoTareas: _modo, ultimo: _ultimo, ...resto } = propsDe(lead)
+    const { etapa: _etapa, proxima: _proxima, hoy: _hoy, modoTareas: _modo, ultimo: _ultimo, estrella: _estrella, ...resto } = propsDe(lead)
     return { ...resto, pendientes: proximas.get(lead.id)?.pendientes ?? 0, conVencidas: overdueLeadIds.has(lead.id) }
   }
 
@@ -417,6 +450,7 @@ export function CrmLeadList() {
     filtros.q.trim() && 'Búsqueda',
     filtros.stageFilter.size > 0 && 'Estado',
     filtros.overdueOnly && 'Tareas vencidas',
+    filtros.paraHoy && 'Tareas para hoy o vencidas',
     filtros.conTareas && 'Tareas',
     filtros.sinTareas && 'Sin tareas',
     filtros.objetivo && 'el objetivo elegido',
@@ -430,6 +464,78 @@ export function CrmLeadList() {
       <Button variant="outline" className="mt-3" onClick={limpiarFiltros}>Limpiar filtros</Button>
     </div>
   )
+
+  const dialogos = (
+    <>
+      <LeadDialog
+        lead={leadAbierto}
+        indice={indiceAbierto}
+        total={recorrido.length}
+        hayAnterior={vecinos.anterior !== null}
+        haySiguiente={vecinos.siguiente !== null}
+        onPaso={pasoLead}
+        onCerrar={() => abrirLead(null)}
+        onStartReassign={leadId => setAReasignar([leadId])}
+      />
+
+      {seleccionando && (
+        <BulkActionBar
+          selectedCount={marcadosVisibles.length}
+          totalCount={recorrido.length}
+          confirmLabel="Reasignar leads"
+          onCancel={salirDeSeleccion}
+          onConfirm={() => setAReasignar(marcadosVisibles)}
+        />
+      )}
+
+      {aReasignar && (
+        <ReassignLeadsDialog
+          open
+          onOpenChange={abierto => { if (!abierto) setAReasignar(null) }}
+          candidatos={candidatos(aReasignar)}
+          leads={leadsQ.data ?? []}
+          isPending={reasignar.isPending}
+          onConfirm={(nuevo, mover) => reasignar.mutate(
+            { items: mover.map(c => ({ leadId: c.id, deNombre: nombreDe(agentes.usuarios, c.assignedTo) })), nuevo },
+            { onSettled: () => { setAReasignar(null); salirDeSeleccion() } },
+          )}
+        />
+      )}
+    </>
+  )
+
+  if (resumen) {
+    return (
+      <>
+        {leadsQ.isLoading ? (
+          <div className="flex flex-col gap-2 px-3" aria-busy="true">
+            {[0, 1, 2, 3].map(i => <div key={i} className="h-[52px] animate-pulse rounded-lg bg-secondary" />)}
+          </div>
+        ) : leadsQ.error && !leadsQ.data ? (
+          <div className="flex flex-col items-center gap-3 px-4 py-12 text-center">
+            <p className="text-[15px] font-semibold text-foreground">No pudimos cargar los leads.</p>
+            <Button variant="outline" onClick={() => void leadsQ.refetch()} disabled={leadsQ.isFetching}>
+              <Icon icon={RotateCw} size="xs" className={cn(leadsQ.isFetching && 'animate-spin')} />
+              {leadsQ.isFetching ? 'Reintentando…' : 'Reintentar'}
+            </Button>
+          </div>
+        ) : (
+          <ResumenCrm
+            leads={leadsQ.data ?? SIN_LEADS}
+            importantes={importantes}
+            hayEtapas={hayEtapasEnElDashboard(cat.etapasPorId.values())}
+            proximas={proximas}
+            etapas={cat.etapasPorId}
+            usuariosPorId={usuariosPorId}
+            hoy={hoy}
+            myId={agentes.myId}
+            onAbrirLead={abrirLead}
+          />
+        )}
+        {dialogos}
+      </>
+    )
+  }
 
   return (
     <>
@@ -494,10 +600,15 @@ export function CrmLeadList() {
                     'sticky top-0 z-10 whitespace-nowrap bg-(--surface-2) px-[18px] py-[7px] text-left text-[12px] font-bold uppercase tracking-[0.06em] text-(--fg-2)',
                     'shadow-[inset_0_-1px_0_var(--line-strong)]',
                     i === 0 && 'w-[28px] px-0',
+                    h === ESTRELLA && 'w-[36px] pl-1.5 pr-0',
                     h === BUSCADOR && 'py-[5px]',
                   )}
                 >
-                  {h === BUSCADOR ? (
+                  {h === ESTRELLA ? (
+                    <span className="inline-flex size-7 items-center justify-center" title="Importantes: van al resumen">
+                      <Icon icon={Star} size="xs" />
+                    </span>
+                  ) : h === BUSCADOR ? (
                     <BuscadorLeads q={filtros.q} onCambiar={cambiarFiltros} className="w-full max-w-[340px]" />
                   ) : i === headers.length - 1 ? (
                     <span className="block text-right tabular-nums">{visibles.length} lead{visibles.length === 1 ? '' : 's'}</span>
@@ -532,40 +643,7 @@ export function CrmLeadList() {
         </table>
       )}
 
-      <LeadDialog
-        lead={leadAbierto}
-        indice={indiceAbierto}
-        total={recorrido.length}
-        hayAnterior={vecinos.anterior !== null}
-        haySiguiente={vecinos.siguiente !== null}
-        onPaso={pasoLead}
-        onCerrar={() => abrirLead(null)}
-        onStartReassign={leadId => setAReasignar([leadId])}
-      />
-
-      {seleccionando && (
-        <BulkActionBar
-          selectedCount={marcadosVisibles.length}
-          totalCount={recorrido.length}
-          confirmLabel="Reasignar leads"
-          onCancel={salirDeSeleccion}
-          onConfirm={() => setAReasignar(marcadosVisibles)}
-        />
-      )}
-
-      {aReasignar && (
-        <ReassignLeadsDialog
-          open
-          onOpenChange={abierto => { if (!abierto) setAReasignar(null) }}
-          candidatos={candidatos(aReasignar)}
-          leads={leadsQ.data ?? []}
-          isPending={reasignar.isPending}
-          onConfirm={(nuevo, mover) => reasignar.mutate(
-            { items: mover.map(c => ({ leadId: c.id, deNombre: nombreDe(agentes.usuarios, c.assignedTo) })), nuevo },
-            { onSettled: () => { setAReasignar(null); salirDeSeleccion() } },
-          )}
-        />
-      )}
+      {dialogos}
     </>
   )
 }

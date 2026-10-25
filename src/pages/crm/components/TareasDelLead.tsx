@@ -210,17 +210,23 @@ function FilaTarea({ task, today, onToggle, onEditar, disabled }: {
 
 /* Llegan del detalle del lead (una sola consulta al abrir), no de una consulta propia. La hoja de
    nueva tarea se controla desde afuera: también la abre el «+ Tarea» del encabezado. */
-export function TareasDelLead({ leadId, responsableId, puedeEscribir, tareas, cargando, creando, onCreando }: {
+export function TareasDelLead({ leadId, responsableId, puedeEscribir, puedeAgendar, etapa, tareas, cargando, creando, onCreando }: {
   leadId: string
   /** Una tarea nueva es del responsable del lead, no de quien la anota: es su trabajo. */
   responsableId: string
   puedeEscribir: boolean
+  /** Si la etapa del lead deja agendar tareas (`permiteAgendarTarea`, 23/10/2026). Con false no
+   *  se ofrece crear; las que ya tiene se siguen tildando y editando. */
+  puedeAgendar: boolean
+  /** El nombre de la etapa, para el aviso de por qué no se puede agendar. */
+  etapa?: string
   tareas: CrmTask[]
   cargando: boolean
   creando: boolean
   onCreando: (abierto: boolean) => void
 }) {
   const today = localTodayIso()
+  const ofreceCrear = puedeEscribir && puedeAgendar
 
   const agregar = useMutacionDelDetalle(leadId, (v: { title: string; dueDate: string | null; dueTime: string | null }) =>
     crearTarea({ lead_id: leadId, title: v.title, due_date: v.dueDate, due_time: v.dueTime, assigned_to: responsableId }),
@@ -250,7 +256,7 @@ export function TareasDelLead({ leadId, responsableId, puedeEscribir, tareas, ca
         <p className="py-1 text-[12.5px] text-(--fg-muted)">Cargando tareas…</p>
       ) : pendientes.length === 0 ? (
         /* Vacío, el hueco entero es la puerta: tocar «Nada pendiente» o cerca abre la nueva tarea. */
-        puedeEscribir ? (
+        ofreceCrear ? (
           <button type="button" onClick={() => onCreando(true)}
             className="flex w-full cursor-pointer flex-col items-center gap-1 rounded-lg px-3 py-3 text-center transition-colors [border:1px_dashed_var(--line-strong)] hover:bg-(--brand-soft) hover:[border-color:var(--brand-100)]">
             <span className="text-[12.5px] text-(--fg-muted)">Nada pendiente.</span>
@@ -275,14 +281,21 @@ export function TareasDelLead({ leadId, responsableId, puedeEscribir, tareas, ca
 
       {/* Con tareas en la lista, un botón de verdad (con marco) y no un enlace: fue texto azul
           suelto y no se leía como algo que se toca. Vacía, el botón es el hueco de arriba. */}
-      {puedeEscribir && pendientes.length > 0 && !cargando && (
+      {/* La etapa no deja agendar (lo corta también el trigger de crm_tasks): se dice por qué. */}
+      {puedeEscribir && !puedeAgendar && !cargando && (
+        <p className="mt-1 text-[12px] text-(--fg-muted)">
+          {etapa ? `En la etapa «${etapa}» no se agendan tareas.` : 'En esta etapa no se agendan tareas.'}
+        </p>
+      )}
+
+      {ofreceCrear && pendientes.length > 0 && !cargando && (
         <Button type="button" variant="outline" size="sm" onClick={() => onCreando(true)} className="mt-2 w-fit">
           <Icon icon={Plus} size="xs" />
           Añadir tarea
         </Button>
       )}
 
-      <NewTaskSheet open={creando} onOpenChange={onCreando} isPending={agregar.isPending}
+      <NewTaskSheet open={creando && puedeAgendar} onOpenChange={onCreando} isPending={agregar.isPending}
         onGuardar={(title, dueDate, dueTime) => agregar.mutate({ title, dueDate, dueTime })} />
       {/* Se monta por tarea (`key`): la ventana nace precargada con la que se está editando. */}
       {editando && (

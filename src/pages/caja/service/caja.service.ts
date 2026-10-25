@@ -95,6 +95,13 @@ export async function cambiarPagador(id: string, paid_by: string): Promise<Gasto
   return aGasto(unaFila(data))
 }
 
+/** «Editar gasto»: el patch lo arma `validarEdicion` (monto, fecha, período, notas, quién pagó). */
+export async function editarGasto(id: string, patch: TablesUpdate<'expenses'>): Promise<Gasto> {
+  const { data, error } = await supabase.from('expenses').update(patch).eq('id', id).is('deleted_at', null).select()
+  if (error) throw error
+  return aGasto(unaFila(data))
+}
+
 export async function borrarGasto(id: string): Promise<void> {
   const { data, error } = await supabase
     .from('expenses').update({ deleted_at: new Date().toISOString() }).eq('id', id).is('deleted_at', null).select('id')

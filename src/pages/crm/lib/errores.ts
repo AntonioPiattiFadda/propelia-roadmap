@@ -33,6 +33,10 @@ const CLAVES: Record<string, string> = {
   // La de crm_set_member_last_name.
   crm_last_name_superadmin_only: 'Solo un superadmin puede cambiar el apellido de alguien.',
   crm_member_not_found: 'Esa persona ya no existe. Recargá la página.',
+  // La del trigger de `crm_leads.importante`.
+  crm_importante_solo_superadmin: 'Solo un superadmin puede marcar un lead como importante.',
+  // La del trigger de `crm_tasks` (etapas con «¿Se puede agendar tarea?» en No).
+  crm_etapa_sin_tareas: 'En esta etapa no se pueden agendar tareas.',
 }
 
 export function mensajeDeError(error: unknown, porDefecto = 'Algo salió mal. Probá de nuevo.'): string {

@@ -6,9 +6,13 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
-import type { PlantillaEmailId } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
-import { enlaceDeWhatsapp } from '../lib/whatsapp'
+import { useUserSession } from '@/hooks/useUserSession'
+import { useYo } from '@/hooks/useYo'
+import { remitenteDe, type PlantillaEmailId, type Remitente } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
+import type { EnvioDeMensaje } from '../lib/envioDeMensaje'
+import { enlaceDeWhatsapp, esMovil } from '../lib/whatsapp'
 import type { CrmClient } from '../types'
+import { AsentarEnvioDialog } from './AsentarEnvioDialog'
 import { EmailConPlantilla, ListaDePlantillasEmail } from './EmailConPlantilla'
 
 /* WhatsApp es SOLO LA PARTE VISUAL (12/10/2026): las plantillas viven en el estado del componente y
@@ -30,18 +34,26 @@ interface Plantilla {
 
 const EJEMPLOS: Plantilla[] = [
   { id: 'p1', canal: 'whatsapp', nombre: 'Primer contacto', asunto: '', adjuntos: [],
-    texto: 'Hola {nombre}, ¿qué tal? Te escribo de Propelia. Vi la ficha de {empresa} en Idealista y quería contarte cómo ayudamos a las inmobiliarias a gestionar sus leads. ¿Tenés 10 minutos esta semana?' },
+    texto: 'Hola {nombre}, ¿qué tal?\n\nSoy {remitente}, de *Propelia*. He visto la ficha de *{empresa}* en Idealista y quería escribirte.\n\nAyudamos a las inmobiliarias a que *ningún lead se quede sin atender*, para que el equipo pueda centrarse en lo que de verdad importa: captar.\n\nTe dejo un vídeo corto donde lo ves en 2 minutos:\n{video}\n\n¿Te va bien una llamada de *20 minutos* esta semana? Dime qué día te viene mejor y lo agendamos.' },
   { id: 'p2', canal: 'whatsapp', nombre: 'Presentación con PDF', asunto: '',
     adjuntos: [{ id: 'a1', nombre: 'Propelia - presentación.pdf', peso: 1_840_000 }],
     texto: 'Hola {nombre}, como te comenté por teléfono, te paso la presentación de Propelia. Cualquier duda me escribís por acá.' },
 ]
 
-const VARIABLES = ['{nombre}', '{empresa}'] as const
+/* `{video}` es `public/video.html` de esta app (en Vercel, `/video`): el enlace solo lleva texto, no
+   adjuntos, y esa página tiene las etiquetas Open Graph de las que WhatsApp arma la miniatura con el
+   play. La de `URL_VIDEO` (la del mail, en propelia-frontend) es una SPA sin ellas: sin vista previa.
+   Va con el dominio donde está abierto el CRM, que el de producción no está escrito en ningún lado.
+   `{remitente}` es quien manda, con el mismo nombre que firma los mails (`remitenteDe`). */
+const VARIABLES = ['{nombre}', '{empresa}', '{remitente}', '{video}'] as const
+const URL_VIDEO_WHATSAPP = `${window.location.origin}/video`
 
-function rellenar(texto: string, client: CrmClient | null): string {
+function rellenar(texto: string, client: CrmClient | null, remitente: Remitente): string {
   return texto
     .replaceAll('{nombre}', client?.first_name?.trim() || 'equipo')
     .replaceAll('{empresa}', client?.company_name?.trim() || 'tu inmobiliaria')
+    .replaceAll('{remitente}', remitente.nombre)
+    .replaceAll('{video}', URL_VIDEO_WHATSAPP)
 }
 
 function fmtPeso(bytes: number): string {
@@ -97,6 +109,13 @@ export function MensajesPredeterminadosDialog({ client, leadId, abierto, onCerra
   const [borrando, setBorrando] = useState<string | null>(null)
   const [destino, setDestino] = useState('')
   const [plantillaEmail, setPlantillaEmail] = useState<PlantillaEmailId>('presentacion-video')
+  /* El envío recién hecho, esperando la respuesta de «¿Registrar la actividad?». Sin lead no hay dónde. */
+  const [porAsentar, setPorAsentar] = useState<EnvioDeMensaje | null>(null)
+  const preguntarSiAsentar = (envio: EnvioDeMensaje) => { if (leadId) setPorAsentar(envio) }
+  // La fila de `users` ya la trajo el guard de acceso: al abrir está en caché.
+  const { userSession } = useUserSession()
+  const yo = useYo(userSession?.user.id).data
+  const remitente = useMemo(() => remitenteDe(yo), [yo])
 
   const delCanal = plantillas.filter(p => p.canal === canal)
   const elegida = delCanal.find(p => p.id === elegidaId) ?? delCanal[0] ?? null
@@ -127,9 +146,11 @@ export function MensajesPredeterminadosDialog({ client, leadId, abierto, onCerra
     if (!elegida || !destinoEfectivo) return
     if (canal === 'whatsapp') {
       // Se abre en el mismo clic: después de un await el navegador bloquea la pestaña nueva.
-      const url = enlaceDeWhatsapp(destinoEfectivo, rellenar(elegida.texto, client))
+      const url = enlaceDeWhatsapp(destinoEfectivo, rellenar(elegida.texto, client, remitente), { web: !esMovil() })
       if (!url) { toast.error('Ese teléfono no es válido para WhatsApp', { description: destinoEfectivo }); return }
       window.open(url, '_blank', 'noopener')
+      // Se pregunta al abrir WhatsApp: si de verdad salió, desde acá no se sabe.
+      preguntarSiAsentar({ canal: 'whatsapp', plantilla: elegida.nombre, destino: destinoEfectivo })
       return
     }
     toast.info('El envío todavía no está conectado', {
@@ -215,7 +236,8 @@ export function MensajesPredeterminadosDialog({ client, leadId, abierto, onCerra
 
           <section className="flex min-h-0 min-w-0 flex-col">
             {canal === 'email' ? (
-              <EmailConPlantilla key={plantillaEmail} id={plantillaEmail} client={client} leadId={leadId} />
+              <EmailConPlantilla key={plantillaEmail} id={plantillaEmail} client={client} leadId={leadId}
+                onEnviado={e => preguntarSiAsentar({ canal: 'email', ...e })} />
             ) : borrador ? (
               <EditorDePlantilla borrador={borrador} onCambiar={setBorrador}
                 onGuardar={guardarBorrador} onCancelar={() => setBorrador(null)} />
@@ -251,14 +273,14 @@ export function MensajesPredeterminadosDialog({ client, leadId, abierto, onCerra
                       <div className="rounded-xl bg-(--surface-2) p-3">
                         <div className="ml-auto flex max-w-[85%] flex-col gap-1.5 rounded-xl rounded-tr-sm bg-[#d9fdd3] p-2.5 text-[13px] leading-snug text-[#111b21] shadow-sm dark:bg-[#005c4b] dark:text-[#e9edef]">
                           {elegida.adjuntos.map(a => <ChipAdjunto key={a.id} adjunto={a} enBurbuja />)}
-                          <p className="whitespace-pre-wrap">{rellenar(elegida.texto, client)}</p>
+                          <p className="whitespace-pre-wrap">{rellenar(elegida.texto, client, remitente)}</p>
                         </div>
                       </div>
                     ) : (
                       <div className="flex flex-col gap-2 rounded-xl p-3 [border:1px_solid_var(--line)]">
                         <p className="text-[13px]"><span className="text-(--fg-muted)">Asunto: </span>
-                          <span className="font-semibold">{rellenar(elegida.asunto, client) || '(sin asunto)'}</span></p>
-                        <p className="whitespace-pre-wrap text-[13px] leading-snug">{rellenar(elegida.texto, client)}</p>
+                          <span className="font-semibold">{rellenar(elegida.asunto, client, remitente) || '(sin asunto)'}</span></p>
+                        <p className="whitespace-pre-wrap text-[13px] leading-snug">{rellenar(elegida.texto, client, remitente)}</p>
                         {elegida.adjuntos.length > 0 && (
                           <div className="flex flex-wrap gap-1.5">{elegida.adjuntos.map(a => <ChipAdjunto key={a.id} adjunto={a} />)}</div>
                         )}
@@ -278,6 +300,7 @@ export function MensajesPredeterminadosDialog({ client, leadId, abierto, onCerra
             )}
           </section>
         </div>
+        {leadId && <AsentarEnvioDialog leadId={leadId} envio={porAsentar} onCerrar={() => setPorAsentar(null)} />}
       </DialogContent>
     </Dialog>
   )

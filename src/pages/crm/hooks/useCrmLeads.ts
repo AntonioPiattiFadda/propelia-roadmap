@@ -33,3 +33,11 @@ export function useReunionesDelMes() {
   const { start, end } = periodBounds(desde, daysInMonth(desde))
   return useQuery({ queryKey: CRM_KEYS.reuniones(desde), queryFn: () => getReunionesEntre(start, end) })
 }
+
+/** Las reuniones que veo en [desde, hasta) (el resumen de /crm). La RLS recorta: un SUPERADMIN ve
+ *  todas; quién mira cuáles lo decide la pantalla. El realtime de `crm_meetings` la invalida. */
+export function useReunionesProximas(desde: string, hasta: string, enabled = true) {
+  return useQuery({
+    queryKey: CRM_KEYS.reunionesProximas(desde, hasta), queryFn: () => getReunionesEntre(desde, hasta), enabled,
+  })
+}

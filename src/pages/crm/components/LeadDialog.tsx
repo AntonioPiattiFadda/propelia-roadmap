@@ -18,7 +18,7 @@ import {
 import { toIsoDate } from '@/lib/calendarDate'
 import { decisorContactado } from '../lib/actividad'
 import { etapaDelLead } from '../lib/effectiveStage'
-import { etapasPorGestion } from '../lib/gestionDeEtapa'
+import { etapasPorGestion, permiteAgendarTarea } from '../lib/gestionDeEtapa'
 import { ORIGENES_DE_TELEFONO, valorDeOpcion } from '../lib/inmobiliaria'
 import { fmtFechaCompleta } from '../lib/motivosDescarte'
 import type { ClientePatch } from '../service/crm.service'
@@ -827,6 +827,7 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
 
           <Seccion titulo="Tareas">
             <TareasDelLead leadId={lead.id} responsableId={lead.assigned_to} puedeEscribir={escribe}
+              puedeAgendar={permiteAgendarTarea(etapaMostrada)} etapa={etapaMostrada?.label}
               tareas={detalleQ.data?.tasks ?? []} cargando={detalleQ.isLoading}
               creando={creandoTarea} onCreando={setCreandoTarea} />
           </Seccion>

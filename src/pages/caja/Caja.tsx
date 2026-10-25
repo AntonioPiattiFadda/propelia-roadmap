@@ -1,4 +1,4 @@
-import { PlusIcon, TagIcon } from 'lucide-react'
+import { CalendarRangeIcon, PlusIcon, TagIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { DatesSelectorV2 } from '@/components/datesSelectorV2/DatesSelectorV2'
@@ -11,11 +11,16 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useUserSession } from '@/hooks/useUserSession'
 import { parseCalendarDay, todayLocal } from '@/lib/dates'
+import { cn } from '@/lib/utils'
+import { CajaPorMes, ResumenPorPagador } from './components/CajaPorMes'
+import { ClaudeToni } from './components/ClaudeToni'
 import { ConfirmarPagoDialog } from './components/ConfirmarPagoDialog'
 import { EditarEtiquetaDialog } from './components/EditarEtiquetaDialog'
+import { EditarGastoDialog } from './components/EditarGastoDialog'
 import { GestionarEtiquetasDialog } from './components/GestionarEtiquetasDialog'
 import { ListaGastos } from './components/ListaGastos'
 import { NuevaEtiquetaDialog } from './components/NuevaEtiquetaDialog'
+import { NotasCaja } from './components/NotasCaja'
 import { NuevoGastoDialog } from './components/NuevoGastoDialog'
 import { PropagarCambioDialog } from './components/PropagarCambioDialog'
 import { ResumenCaja } from './components/ResumenCaja'
@@ -24,16 +29,18 @@ import { useCajaMutaciones } from './hooks/useCajaMutaciones'
 import { useEtiquetas, usePagadores, useUsoDeEtiquetas } from './hooks/useEtiquetas'
 import { useGastos } from './hooks/useGastos'
 import { nuevaEtiqueta } from './lib/altas'
-import { escribirConPendientes, escribirTipo, leerConPendientes, leerTipo } from './lib/cajaParams'
+import { escribirConPendientes, escribirTipo, escribirVista, leerConPendientes, leerTipo, leerVista } from './lib/cajaParams'
 import { cambiosDeEtiqueta } from './lib/etiquetas'
 import { filasDelRango } from './lib/filas'
 import { prefillDePagarFijo } from './lib/formularios'
 import { periodOf } from './lib/periodos'
 import { resumenDeFilas } from './lib/resumen'
 import type { AlcancePropagacion, CambiosPropagables } from './service/caja.service'
-import type { Etiqueta, FiltroTipo, FilaCaja, TipoGasto } from './types'
+import type { Etiqueta, FiltroTipo, FilaCaja, Gasto, TipoGasto } from './types'
 
 type Prefill = ReturnType<typeof prefillDePagarFijo>
+// Antes de cualquier gasto: la vista por mes muestra todo lo que haya.
+const HISTORIAL_DESDE = '2000-01-01'
 type ValoresEtiqueta = { name: string; expense_type: TipoGasto; default_amount: number | null; due_day: number | null }
 
 const DIA_CORTO: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short', year: 'numeric' }
@@ -47,11 +54,21 @@ const textoDeRango = (from: string, to: string) =>
    dialog está abierto; las cuentas son de lib/ y los dialogs solo reciben datos y callbacks. */
 export function Caja() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const tipo = leerTipo(searchParams)
-  const conPendientes = leerConPendientes(searchParams)
-  const porDefecto: DatesValue = { mode: 'range', primary: findPreset('esteMes')!.resolve(), compare: null }
+  const vista = leerVista(searchParams)
+  const porMes = vista === 'meses'
+  // «Por mes» (la «Caja vista Loro») no tiene filtros: todos los tipos, con pendientes, y todo el
+  // historial hasta fin de este mes (no más allá, que sumaría como pendientes los fijos de los
+  // meses que todavía no llegaron). Los fijos pendientes arrancan en el mes de su etiqueta.
+  const tipo: FiltroTipo = porMes ? 'all' : leerTipo(searchParams)
+  const conPendientes = porMes || leerConPendientes(searchParams)
+  const esteMes = findPreset('esteMes')!.resolve()
+  const porDefecto: DatesValue = { mode: 'range', primary: esteMes, compare: null }
   const [fechas, setFechas] = useDatesValueParams(porDefecto)
-  const rango = fechas.primary
+  const desde = porMes ? HISTORIAL_DESDE : fechas.primary.from
+  const hasta = porMes ? esteMes.to : fechas.primary.to
+  const rango = useMemo(() => ({ from: desde, to: hasta }), [desde, hasta])
+
+  const cambiarVista = () => setSearchParams(prev => escribirVista(prev, porMes ? 'lista' : 'meses'), { replace: true })
 
   const gastosQ = useGastos(rango)
   const etiquetasQ = useEtiquetas()
@@ -70,6 +87,7 @@ export function Caja() {
   // (la del alta vive adentro de NuevoGastoDialog).
   const [alta, setAlta] = useState<{ prefill: Prefill | null } | null>(null)
   const [pago, setPago] = useState<FilaCaja | null>(null)
+  const [editandoGasto, setEditandoGasto] = useState<Gasto | null>(null)
   const [gestionando, setGestionando] = useState(false)
   const [nuevaDelGestor, setNuevaDelGestor] = useState(false)
   const [editando, setEditando] = useState<Etiqueta | null>(null)
@@ -124,11 +142,56 @@ export function Caja() {
 
   return (
     // `ui-scale-md`: la escala del producto en escritorio y 1 en el teléfono (objetivos táctiles).
-    <div className="ui-scale-md mx-auto flex max-w-[1120px] flex-col gap-5 px-6 pb-16 pt-4 max-md:px-4">
-      <h1 className="text-lg font-semibold text-foreground">Caja</h1>
+    // «Por mes» (la Caja Loro) va en dos columnas desde lg: a la izquierda los botones, el resumen
+    // por persona y las notas (fijos al scrollear), a la derecha la planilla con todo el ancho.
+    <div className={cn(
+      'ui-scale-md mx-auto flex flex-col gap-5 px-6 pb-16 pt-4 max-md:px-4',
+      porMes ? 'max-w-[1600px]' : 'max-w-[1400px]',
+    )}>
+      {etiquetasQ.isError && (
+        <p role="alert" className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-danger">
+          No se pudieron cargar las etiquetas. Recargá la página para volver a intentar.
+        </p>
+      )}
+
+      {porMes ? (
+      // A la derecha, «Claude Toni · extra empresa»: aparte, porque no es plata de la empresa.
+      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[300px_minmax(0,1fr)_260px] lg:items-start lg:gap-6">
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-4">
+          <h1 className="text-lg font-semibold text-foreground">Caja</h1>
+          <div className="flex flex-wrap gap-2 [&>button]:flex-1">
+            <Button onClick={nuevo} disabled={sinEtiquetas} className="basis-full"><Icon icon={PlusIcon} size="xs" />Nuevo gasto</Button>
+            <Button variant="outline" title="Gestionar etiquetas" disabled={sinEtiquetas} onClick={() => setGestionando(true)}>
+              <Icon icon={TagIcon} size="sm" />Etiquetas
+            </Button>
+          </div>
+          <ResumenPorPagador filas={filas} pagadores={pagadores} cargando={cargando} className="lg:grid-cols-1" />
+          <NotasCaja />
+        </aside>
+
+        <CajaPorMes
+          filas={filas}
+          pagadores={pagadores}
+          cargando={cargando}
+          error={gastosQ.isError || etiquetasQ.isError}
+          onPagar={pagar}
+          onEditar={setEditandoGasto}
+          onEditarEtiqueta={setEditando}
+          onBorrar={id => m.borrarGasto.mutate(id)}
+        />
+        <ClaudeToni className="lg:sticky lg:top-4" />
+      </div>
+      ) : (
+      <>
       <header className="flex flex-wrap items-end justify-between gap-4">
-        <DatesSelectorV2 activatedModes={['single', 'range']} value={fechas} onChange={setFechas} />
+        <div className="flex flex-col gap-4">
+          <h1 className="text-lg font-semibold text-foreground">Caja</h1>
+          <DatesSelectorV2 activatedModes={['single', 'range']} value={fechas} onChange={setFechas} />
+        </div>
         <div className="flex gap-2 max-md:w-full [&>button]:max-md:flex-1">
+          <Button variant="outline" onClick={cambiarVista}>
+            <Icon icon={CalendarRangeIcon} size="sm" />Vista por mes
+          </Button>
           <Button variant="outline" title="Gestionar etiquetas" disabled={sinEtiquetas} onClick={() => setGestionando(true)}>
             <Icon icon={TagIcon} size="sm" />Etiquetas
           </Button>
@@ -136,14 +199,9 @@ export function Caja() {
         </div>
       </header>
 
-      {etiquetasQ.isError && (
-        <p role="alert" className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-danger">
-          No se pudieron cargar las etiquetas. Recargá la página para volver a intentar.
-        </p>
-      )}
-
       <ResumenCaja resumen={resumen} conPendientes={conPendientes} cargando={cargando} />
 
+      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start lg:gap-6">
       <div>
         <div className="mb-2.5 flex flex-wrap items-center justify-between gap-3">
           <Segmentado
@@ -171,10 +229,16 @@ export function Caja() {
           error={gastosQ.isError || etiquetasQ.isError}
           onPagar={pagar}
           onCambiarPagador={(id, paid_by) => m.cambiarPagador.mutate({ id, paid_by })}
+          onEditar={setEditandoGasto}
+          onEditarEtiqueta={setEditando}
           onBorrar={id => m.borrarGasto.mutate(id)}
           onNuevo={sinEtiquetas ? () => {} : nuevo}
         />
       </div>
+      <ClaudeToni className="lg:sticky lg:top-4" />
+      </div>
+      </>
+      )}
 
       {alta && etiquetas && (
         <NuevoGastoDialog
@@ -199,6 +263,17 @@ export function Caja() {
           guardando={m.confirmarPago.isPending}
           onConfirmar={async p => { await m.confirmarPago.mutateAsync({ id: pago.gasto!.id, ...p }); setPago(null) }}
           onCerrar={() => setPago(null)}
+        />
+      )}
+
+      {editandoGasto && (
+        <EditarGastoDialog
+          gasto={editandoGasto}
+          gastos={gastos ?? []}
+          pagadores={pagadores}
+          guardando={m.editarGasto.isPending}
+          onGuardar={async patch => { await m.editarGasto.mutateAsync({ id: editandoGasto.id, patch }); setEditandoGasto(null) }}
+          onCerrar={() => setEditandoGasto(null)}
         />
       )}
 

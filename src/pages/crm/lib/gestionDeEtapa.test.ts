@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GESTIONES_DE_ETAPA, alternarGrupo, etapasPorGestion, gestionDeEtapa } from './gestionDeEtapa'
+import { GESTIONES_DE_ETAPA, alternarGrupo, etapasPorGestion, gestionDeEtapa, permiteAgendarTarea } from './gestionDeEtapa'
 
 describe('alternarGrupo', () => {
   it('si falta alguna del grupo, las agrega todas sin tocar las de otros grupos', () => {
@@ -58,5 +58,17 @@ describe('gestionDeEtapa', () => {
   it('cada gestión tiene su rótulo', () => {
     expect(GESTIONES_DE_ETAPA.map(g => g.value)).toEqual(['sin_contactar', 'por_tarea'])
     expect(GESTIONES_DE_ETAPA.every(g => g.label.length > 0)).toBe(true)
+  })
+})
+
+describe('permiteAgendarTarea', () => {
+  it('sin etapa se puede agendar', () => {
+    expect(permiteAgendarTarea(null)).toBe(true)
+    expect(permiteAgendarTarea(undefined)).toBe(true)
+  })
+
+  it('solo un «No» explícito lo impide', () => {
+    expect(permiteAgendarTarea({ allows_tasks: true })).toBe(true)
+    expect(permiteAgendarTarea({ allows_tasks: false })).toBe(false)
   })
 })

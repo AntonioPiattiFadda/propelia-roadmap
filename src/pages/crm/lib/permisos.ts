@@ -12,6 +12,10 @@ export function esSuperadmin(yo: YoPermisos): boolean {
   return !!yo && yo.activo && yo.rol === 'SUPERADMIN'
 }
 
+/** El «importante» de un lead (23/10/2026): solo un SUPERADMIN lo ve y lo cambia, en cualquier
+ *  cartera. Espejo del trigger `crm_leads_importante_solo_superadmin` (supabase/schema.sql). */
+export const puedeMarcarImportante = (yo: YoPermisos): boolean => esSuperadmin(yo)
+
 export function nivelSobre(yo: YoPermisos, owner: string, accesos: readonly Acceso[]): NivelAcceso | null {
   if (!yo || !yo.activo) return null
   if (owner === yo.id || esSuperadmin(yo)) return 'write'
@@ -44,6 +48,23 @@ export function carterasVisibles(yo: YoPermisos, usuarios: Usuario[], accesos: r
 /** Donde puedo cargar o reasignar: con write y activas (la RPC rechaza un responsable inactivo). */
 export function carterasConEscritura(yo: YoPermisos, usuarios: Usuario[], accesos: readonly Acceso[]): Usuario[] {
   return carterasVisibles(yo, usuarios, accesos).filter(x => x.activo && puedeEscribir(yo, x.id, accesos))
+}
+
+/* «Ver como» (23/10/2026): mirar el CRM desde la perspectiva de otro, sin ser otro. Solo cambia
+   qué es «lo mío» en pantalla; los permisos siguen siendo los de quien mira (son los que aplica la
+   RLS). Por eso pide poder leer su cartera: mirar como alguien a quien no ves sería una lista vacía. */
+
+/** A quién puedo mirar como: activos cuya cartera veo, sin mí, por nombre. Es la lista del selector. */
+export function puedeVerComo(yo: YoPermisos, usuarios: Usuario[], accesos: readonly Acceso[]): Usuario[] {
+  if (!yo) return []
+  return carterasVisibles(yo, usuarios, accesos).filter(x => x.id !== yo.id && x.activo).sort(porNombre)
+}
+
+/** El `?como=` de la URL, si vale. Uno mismo, un desconocido, un inactivo o alguien que no veo = null:
+ *  el CRM se comporta como siempre, sin cartel ni error. */
+export function comoValido(yo: YoPermisos, comoId: string | null, usuarios: Usuario[], accesos: readonly Acceso[]): Usuario | null {
+  if (!yo || !comoId || comoId === yo.id) return null
+  return puedeVerComo(yo, usuarios, accesos).find(x => x.id === comoId) ?? null
 }
 
 export function nombreDe(usuarios: Usuario[], id: string | null): string {

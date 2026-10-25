@@ -5,6 +5,7 @@ import { Icon } from '@/components/ui/icon'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useEmailsQueNoLlegaron, useMarcarEmailVisto } from '../hooks/useEmails'
+import { useVerComo } from '../hooks/useVerComo'
 import { cn } from '@/lib/utils'
 import { avisosSinVer, cuandoSeMando, motivoLegible, noLlegaronDelLead, noLlego, rotuloDelEstado, sigueEnElPerfil } from '../lib/emails'
 import { escribirLeadAbierto } from '../lib/leadFilterParams'
@@ -21,8 +22,9 @@ const VISTOS_EN_LA_CAMPANA = 10
 /** La campana de la cabecera del CRM: siempre a la vista, con el número rojo si hay algo sin ver.
  *  Lista tus envíos que no llegaron: primero los sin ver, después los últimos ya vistos, apagados. */
 export function CampanaDeEmails() {
-  const { userSession } = useUserSession()
-  const yo = userSession?.user.id ?? null
+  // Con «Ver como», los envíos de la persona que se mira (lo ve como lo vería ella). El cartel del
+  // lead, más abajo, no: ahí `yo` decide quién puede marcar «Listo», y eso es un permiso.
+  const { perspectivaId: yo } = useVerComo()
   const emails = useEmailsQueNoLlegaron()
   const visto = useMarcarEmailVisto()
   const [, setSearchParams] = useSearchParams()

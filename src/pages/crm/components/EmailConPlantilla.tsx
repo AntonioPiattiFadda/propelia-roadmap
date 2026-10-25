@@ -71,7 +71,11 @@ export function ListaDePlantillasEmail({ elegida, onElegir }: { elegida: Plantil
 
 /** El lado derecho: para quién y los campos editables, la vista previa al lado, y «Enviar». Se monta con
     `key` por plantilla, así que cambiar de plantilla arranca de cero. */
-export function EmailConPlantilla({ id, client, leadId }: { id: PlantillaEmailId; client: CrmClient | null; leadId?: string }) {
+export function EmailConPlantilla({ id, client, leadId, onEnviado }: {
+  id: PlantillaEmailId; client: CrmClient | null; leadId?: string
+  /** Con el mail ya en Resend: `MensajesPredeterminados` pregunta si se asienta en la actividad. */
+  onEnviado?: (envio: { plantilla: string; destino: string }) => void
+}) {
   const plantilla = PLANTILLAS_EMAIL.find(p => p.id === id)!
   const conocidos = useMemo(() => emailsDe(client), [client])
   const [para, setPara] = useState(conocidos[0] ?? '')
@@ -153,6 +157,7 @@ export function EmailConPlantilla({ id, client, leadId }: { id: PlantillaEmailId
       // Lo que se acaba de mandar es la plantilla de la próxima vez.
       setEditado(true)
       void qc.invalidateQueries({ queryKey: CRM_KEYS.plantillasGuardadas })
+      onEnviado?.({ plantilla: plantilla.nombre, destino: para.trim() })
     },
     onError: (e: Error) => { toast.error(e.message || 'No se pudo enviar el email') },
   })

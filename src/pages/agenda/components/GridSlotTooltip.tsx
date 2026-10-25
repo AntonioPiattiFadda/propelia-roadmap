@@ -20,6 +20,7 @@ type Props = { gridRef: RefObject<HTMLElement | null> }
  * Va portaleado a `document.body` porque la agenda corre adentro de `.ui-scale` (`zoom: 0.9`),
  * y ahí el zoom escala también el `top`/`left` de un `position: fixed` — el tooltip se
  * despegaría del cursor. Fuera de ese subárbol, `clientX/clientY` se usan tal cual.
+ * Va en z 500 para quedar también encima del `SelectorDeHorario` (z 400).
  */
 export function GridSlotTooltip({ gridRef }: Props) {
   const tipRef = useRef<HTMLDivElement>(null)
@@ -96,7 +97,7 @@ export function GridSlotTooltip({ gridRef }: Props) {
       ref={tipRef}
       role="status"
       aria-live="off"
-      className="fixed top-0 left-0 z-50 pointer-events-none opacity-0 rounded-md bg-foreground px-2 py-1 text-xs font-medium tabular-nums text-background shadow-md transition-opacity duration-75"
+      className="fixed top-0 left-0 z-[500] pointer-events-none opacity-0 rounded-md bg-foreground px-2 py-1 text-xs font-medium tabular-nums text-background shadow-md transition-opacity duration-75"
     />,
     document.body,
   )

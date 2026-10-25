@@ -6,8 +6,10 @@ import { DEMO_SCHEDULED_SELECT, normalizeDemoScheduledRow } from './demoQuery.ts
 
 type Admin = ReturnType<typeof createClient>
 
-/** Invitado fijo de toda demo: es del equipo aunque su gmail no sea el de `users` (ver `sameMailbox`). */
-const INVITADO_DE_TODA_DEMO = 'lorenzopiattifadda@gmail.com'
+/** Invitados fijos de toda demo: son del equipo aunque no estén en `users` (ver `sameMailbox`). Sin
+ *  esto, a una inmobiliaria sin email el aviso le iría a uno de ellos. Espejo de
+ *  `INVITADOS_DE_TODA_DEMO` en `src/pages/crm/lib/reuniones.ts`. */
+const INVITADOS_DE_TODA_DEMO = ['lorenzopiattifadda@gmail.com', 'info@propelia.es']
 
 export { emailAssetsBaseUrl } from './assets.ts'
 
@@ -60,7 +62,7 @@ export function createSupabaseDemoScheduledDb(admin: Admin): DemoScheduledDb {
     async teamEmails() {
       const { data, error } = await admin.from('users').select('email')
       if (error) throw error
-      return [...((data ?? []) as { email: string }[]).map((u) => u.email), INVITADO_DE_TODA_DEMO]
+      return [...((data ?? []) as { email: string }[]).map((u) => u.email), ...INVITADOS_DE_TODA_DEMO]
     },
   }
 }

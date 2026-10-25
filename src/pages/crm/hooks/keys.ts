@@ -12,6 +12,8 @@ export const CRM_KEYS = {
   detalles: ['crm', 'lead'] as const,
   detalle: (leadId: string) => ['crm', 'lead', leadId] as const,
   reuniones: (desde: string) => ['crm', 'reuniones', desde] as const,
+  /** Las de los próximos días del resumen de /crm (todas las que veo): cuelga de `['crm', 'reuniones']`. */
+  reunionesProximas: (desde: string, hasta: string) => ['crm', 'reuniones', 'proximas', desde, hasta] as const,
   /** Todas las demos, para la página Demos y el aviso de demo nueva (solo SUPERADMIN). */
   demos: ['crm', 'reuniones', 'todas'] as const,
   /** Prefijo de todo lo de `crm_emails`: el realtime invalida esto. */

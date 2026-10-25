@@ -187,6 +187,7 @@ drop policy if exists expenses_m on public.expenses;
 create policy expenses_m on public.expenses for all
   using (public.es_usuario()) with check (public.es_usuario());
 
+
 -- ---------- Notas (grupos del backlog + hoja de notas) ----------
 create table if not exists public.roadmap_notas (
   id         text primary key,
@@ -311,6 +312,14 @@ create table if not exists public.crm_funnel_stages (
 -- Migración `20261017181741_crm_funnel_stages_management_type`.
 alter table public.crm_funnel_stages add column if not exists management_type text
   check (management_type is null or management_type in ('sin_contactar', 'por_tarea'));
+-- «¿Se puede agendar tarea?» (23/10/2026): con false, a un lead en esta etapa no se le crean tareas
+-- (lo corta el trigger `crm_tasks_etapa_permite`). Default true: las etapas de antes no cambian.
+-- Migración `20261023160156_crm_funnel_stages_allows_tasks`.
+alter table public.crm_funnel_stages add column if not exists allows_tasks boolean not null default true;
+-- «¿Se ve en el Dashboard?» (23/10/2026): con true, el Dashboard del CRM lista los leads de esta
+-- etapa. Default false: ninguna aparece hasta que se elige. Solo de pantalla.
+-- Migración `20261023164216_crm_funnel_stages_show_in_dashboard`.
+alter table public.crm_funnel_stages add column if not exists show_in_dashboard boolean not null default false;
 
 create table if not exists public.crm_channels (
   id           uuid primary key default gen_random_uuid(),
@@ -438,6 +447,11 @@ create index if not exists crm_leads_gestion_reference_at_idx
 -- mostrar en «Para recontactar». `discard_reason` guarda el código del motivo (`MOTIVOS_DE_DESCARTE`
 -- del front); los descartes de antes guardan texto libre. Migración `20261012214308_crm_etapas_y_motivos_descarte`.
 alter table public.crm_leads add column if not exists recontact_at date;
+-- Leads importantes (23/10/2026, por pedido): la estrella de la lista, solo SUPERADMIN, y del
+-- equipo (lo marcado lo ven en el resumen de /crm todos los SUPERADMIN). Que solo un SUPERADMIN lo
+-- cambie lo corta el trigger crm_leads_importante_solo_superadmin, más abajo: la RLS deja escribir
+-- a cualquiera con write sobre la cartera. Migración `20261023135323_crm_leads_importante`.
+alter table public.crm_leads add column if not exists importante boolean not null default false;
 
 create table if not exists public.crm_meetings (
   id            uuid primary key default gen_random_uuid(),
@@ -633,6 +647,28 @@ create trigger crm_leads_log_assignment after update of assigned_to on public.cr
 drop trigger if exists crm_leads_gestion on public.crm_leads;
 create trigger crm_leads_gestion after insert on public.crm_leads
   for each row execute function public.crm_gestion_from_lead();
+
+-- `importante` lo cambia solo un SUPERADMIN activo (espejo: `puedeMarcarImportante()` del front).
+-- Sin sesión (auth.uid() null: service role, postgres) no se corta: la RLS ya no deja entrar a anon.
+create or replace function public.crm_leads_importante_solo_superadmin()
+returns trigger language plpgsql security definer set search_path to 'public' as $$
+begin
+  if auth.uid() is null or public.crm_es_superadmin() then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    if new.importante then
+      raise exception 'crm_importante_solo_superadmin' using errcode = '42501';
+    end if;
+  elsif new.importante is distinct from old.importante then
+    raise exception 'crm_importante_solo_superadmin' using errcode = '42501';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists crm_leads_importante_solo_superadmin on public.crm_leads;
+create trigger crm_leads_importante_solo_superadmin before insert or update of importante on public.crm_leads
+  for each row execute function public.crm_leads_importante_solo_superadmin();
 drop trigger if exists crm_management_events_gestion on public.crm_management_events;
 create trigger crm_management_events_gestion after insert or update or delete on public.crm_management_events
   for each row execute function public.crm_gestion_from_event();
@@ -933,8 +969,12 @@ begin
   values (v_client_id, p_assigned_to, v_stage_id, p_channel_id, 'manual', auth.uid())
   returning id into v_lead_id;
 
-  insert into public.crm_tasks (lead_id, title, due_date, assigned_to, created_by)
-  values (v_lead_id, 'Asesorar cliente', p_initial_task_due_date, p_assigned_to, auth.uid());
+  -- La tarea inicial, salvo que la etapa no deje agendar tareas (`allows_tasks`, 23/10/2026): el
+  -- trigger de crm_tasks la rechazaría y se caería el alta entero.
+  if coalesce((select allows_tasks from public.crm_funnel_stages where id = v_stage_id), true) then
+    insert into public.crm_tasks (lead_id, title, due_date, assigned_to, created_by)
+    values (v_lead_id, 'Asesorar cliente', p_initial_task_due_date, p_assigned_to, auth.uid());
+  end if;
 
   return json_build_object('lead_id', v_lead_id, 'client_id', v_client_id, 'client_reused', v_reused);
 end;
@@ -946,6 +986,30 @@ revoke all on function public.crm_create_lead_with_client(uuid, date, text, text
   from public, anon;
 grant execute on function public.crm_create_lead_with_client(uuid, date, text, text, text, text, text, uuid, uuid)
   to authenticated;
+
+-- ===== Etapas donde no se agendan tareas (23/10/2026) =====
+-- Con `crm_funnel_stages.allows_tasks = false`, no se crea ninguna tarea para un lead en esa etapa,
+-- venga de donde venga. Solo la creación: las que ya tenía se siguen editando, completando y borrando.
+-- Es la regla de verdad; `permiteAgendarTarea` (src/pages/crm/lib/gestionDeEtapa.ts) es el espejo
+-- en pantalla. Sin lead o lead sin etapa, pasa. Security definer: lee la etapa sin depender de la
+-- RLS de quien inserta. Migración `20261023160156_crm_funnel_stages_allows_tasks`.
+create or replace function public.crm_tasks_etapa_permite()
+returns trigger language plpgsql security definer set search_path to 'public' as $$
+begin
+  if new.lead_id is not null and exists (
+    select 1 from public.crm_leads l
+      join public.crm_funnel_stages s on s.id = l.funnel_stage_id
+     where l.id = new.lead_id and s.allows_tasks = false) then
+    raise exception 'crm_etapa_sin_tareas';
+  end if;
+  return new;
+end;
+$$;
+revoke execute on function public.crm_tasks_etapa_permite() from public, anon, authenticated;
+
+drop trigger if exists crm_tasks_etapa_permite on public.crm_tasks;
+create trigger crm_tasks_etapa_permite before insert on public.crm_tasks
+  for each row execute function public.crm_tasks_etapa_permite();
 -- ===== Importar un lote desde el Excel (7/10/2026) =====
 -- Diseño en docs/superpowers/specs/2026-10-07-crm-importar-lote-design.md.
 

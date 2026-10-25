@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Etiqueta, Gasto } from '../types'
-import { hayGastoDelMes, moverIndice, prefillDePagarFijo, validarEtiquetaForm, validarGasto, validarPago } from './formularios'
+import {
+  entradaDeEdicion, hayGastoDelMes, moverIndice, prefillDePagarFijo, validarEdicion, validarEtiquetaForm, validarGasto, validarPago,
+} from './formularios'
 
 const et = (o: Partial<Etiqueta> = {}): Etiqueta => ({
   id: 'e1', name: 'Vercel Pro', expense_type: 'FIXED', recurrence: 'MONTHLY', default_amount: 20, due_day: 15,
@@ -98,12 +100,55 @@ describe('prefillDePagarFijo', () => {
   })
 })
 
-describe('hayGastoDelMes', () => {
-  const g = (o: Partial<Gasto> = {}): Gasto => ({
-    id: 'g1', preset_id: 'e1', expense_name: 'Vercel Pro', expense_type: 'FIXED', amount: 20, date: '2026-10-02',
-    period: '2026-10', recurrence: 'MONTHLY', status: 'PAID', notes: null, paid_by: 'u1', created_at: '2026-10-02T10:00:00Z',
-    deleted_at: null, ...o,
+const g = (o: Partial<Gasto> = {}): Gasto => ({
+  id: 'g1', preset_id: 'e1', expense_name: 'Vercel Pro', expense_type: 'FIXED', amount: 20, date: '2026-10-02',
+  period: '2026-10', recurrence: 'MONTHLY', status: 'PAID', notes: null, paid_by: 'u1', created_at: '2026-10-02T10:00:00Z',
+  deleted_at: null, ...o,
+})
+
+describe('entradaDeEdicion', () => {
+  it('precarga el formulario con lo que tiene el gasto', () => {
+    expect(entradaDeEdicion(g({ amount: 25.5, notes: 'x' }))).toEqual({ monto: '25,5', fecha: '2026-10-02', period: '2026-10', notas: 'x', pagadoPor: 'u1' })
   })
+  it('sin fecha ni notas, vacíos', () => {
+    expect(entradaDeEdicion(g({ date: null, notes: null }))).toMatchObject({ fecha: '', notas: '' })
+  })
+})
+
+describe('validarEdicion', () => {
+  const base = { monto: '30', fecha: '2026-10-05', period: '2026-10', notas: '', pagadoPor: 'u2' as string | null }
+  it('monto ilegible o cero, y sin fecha', () => {
+    expect(validarEdicion(g(), { ...base, monto: 'x' }, [])).toEqual({ error: 'El monto tiene que ser mayor que cero.' })
+    expect(validarEdicion(g(), { ...base, fecha: '' }, [])).toEqual({ error: 'Falta la fecha.' })
+  })
+  it('un fijo cambia monto, fecha, período y quién lo pagó', () => {
+    expect(validarEdicion(g(), { ...base, period: '2026-09' }, [g()]))
+      .toEqual({ patch: { amount: 30, date: '2026-10-05', period: '2026-09', paid_by: 'u2' } })
+  })
+  it('un fijo con un período inválido o ya pagado por otro gasto de la etiqueta', () => {
+    expect(validarEdicion(g(), { ...base, period: '2026-13' }, [])).toEqual({ error: 'El período tiene que ser un mes válido (AAAA-MM).' })
+    expect(validarEdicion(g(), { ...base, period: '2026-09' }, [g(), g({ id: 'g2', period: '2026-09' })]))
+      .toEqual({ error: 'Septiembre de 2026 ya está pagado para Vercel Pro.' })
+  })
+  it('su propio mes no cuenta como ya pagado', () => {
+    expect(validarEdicion(g(), base, [g()])).not.toHaveProperty('error')
+  })
+  it('un pagado sin quién lo pagó lo pide', () => {
+    expect(validarEdicion(g(), { ...base, pagadoPor: null }, [])).toEqual({ error: 'Elegí quién lo pagó.' })
+  })
+  it('un variable: el período sale de la fecha y lleva notas', () => {
+    const v = g({ expense_type: 'VARIABLE', recurrence: 'ONE_TIME', preset_id: 'e2', expense_name: 'Café' })
+    expect(validarEdicion(v, { ...base, fecha: '2026-11-01', period: '2026-01', notas: ' hola ' }, []))
+      .toEqual({ patch: { amount: 30, date: '2026-11-01', period: '2026-11', notes: 'hola', paid_by: 'u2' } })
+  })
+  it('un variable pendiente no toca quién lo pagó', () => {
+    const v = g({ expense_type: 'VARIABLE', recurrence: 'ONE_TIME', status: 'PENDING', paid_by: null })
+    expect(validarEdicion(v, { ...base, pagadoPor: null }, []))
+      .toEqual({ patch: { amount: 30, date: '2026-10-05', period: '2026-10', notes: null } })
+  })
+})
+
+describe('hayGastoDelMes', () => {
   it('mira etiqueta + período entre los vivos', () => {
     expect(hayGastoDelMes([g()], 'e1', '2026-10')).toBe(true)
     expect(hayGastoDelMes([g()], 'e1', '2026-11')).toBe(false)

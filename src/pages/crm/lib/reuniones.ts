@@ -57,22 +57,64 @@ export function leerDescripcionDeDemo(descripcion: string | null): { email: stri
   return { email, asistentes, notas: notas.join('\n').trim() }
 }
 
-/** Invitado fijo de toda demo (21/10/2026, por pedido), además de la inmobiliaria. */
-export const INVITADO_DE_TODA_DEMO = 'lorenzopiattifadda@gmail.com'
+/** Invitados fijos de toda demo, además de la inmobiliaria: Lorenzo (21/10/2026) e info@propelia.es
+ *  (23/10/2026), por pedido. Ninguno es «el mail del cliente». Su espejo en el servidor es
+ *  `INVITADOS_DE_TODA_DEMO` de `_shared/leadNotifications/supabaseAdapters.ts`. */
+export const INVITADOS_DE_TODA_DEMO = ['lorenzopiattifadda@gmail.com', 'info@propelia.es']
+
+export const esInvitadoFijo = (email: string) => INVITADOS_DE_TODA_DEMO.includes(email.trim().toLowerCase())
 
 /**
- * El enlace a /agenda para agendar una demo (22/10/2026: se abre en otra pestaña). La Agenda lee el
- * lead por `leadId` y con `demo=1` muestra al lado de la reunión el registro de actividad (quién
- * asiste, decisor, lo escrito y la etapa). El título, el responsable y los invitados (el mail de la
- * inmobiliaria y el fijo) van en la URL, como el «Agendar visita» del producto: el formulario nace
- * con ellos. Los mails van en `guestEmail` repetido, en minúscula y sin duplicados; uno inválido no
+ * Los invitados con los que nace la demo (23/10/2026: se agenda en la ventana de registrar
+ * actividad): el mail de la inmobiliaria y el fijo, en minúscula y sin duplicados. Uno inválido no
  * entra.
  */
-export function enlaceParaAgendarDemo(d: { leadId: string; assignedTo: string; email: string | null }): string {
-  const p = new URLSearchParams({ leadId: d.leadId, assignedTo: d.assignedTo, title: 'Demo', demo: '1' })
-  const emails = [d.email ?? '', INVITADO_DE_TODA_DEMO].map(e => e.trim().toLowerCase()).filter(esEmailValido)
-  for (const e of new Set(emails)) p.append('guestEmail', e)
-  return `/agenda?${p.toString()}`
+export function invitadosDeLaDemo(email: string | null): string[] {
+  const cliente = email && !esInvitadoFijo(email) ? email : ''
+  const emails = [cliente, ...INVITADOS_DE_TODA_DEMO].map(e => e.trim().toLowerCase()).filter(esEmailValido)
+  return [...new Set(emails)]
+}
+
+/** La descripción con la que nace la demo (23/10/2026, por pedido). Va al evento de Google y la lee
+ *  el cliente, que está invitado: se escribe para él, en «tú» (las inmobiliarias son de España). */
+export const DESCRIPCION_DE_DEMO = 'Demo de Propelia: te enseñamos cómo funciona la plataforma y cómo puede ayudar a tu inmobiliaria. Si necesitas cambiar el horario, responde a esta invitación.'
+
+/** El título con el que nace la demo (23/10/2026, por pedido; era «Demo» a secas). Es el del evento
+ *  de Google y lo ve el cliente en su calendario: dice de quién es y con qué inmobiliaria. */
+export function tituloDeLaDemo(inmobiliaria: string | null | undefined): string {
+  const nombre = inmobiliaria?.trim()
+  return nombre ? `Demo de Propelia · ${nombre}` : 'Demo de Propelia'
+}
+
+/** Si el título es el que se puso solo (el viejo «Demo» o `tituloDeLaDemo`): la actividad no lo repite. */
+export function esTituloDeDemoDeFabrica(titulo: string | null | undefined): boolean {
+  return titulo === 'Demo' || titulo === 'Demo de Propelia' || !!titulo?.startsWith('Demo de Propelia · ')
+}
+
+/** El recordatorio con el que nace la demo, en minutos antes (23/10/2026, por pedido). */
+export const RECORDATORIO_DE_DEMO = 10
+
+/** Lo que se venía escribiendo en otra actividad y pasa a la demo al cambiar a «Agendar demo». */
+export type RegistroInicialDeDemo = {
+  con: string[]; nuevos: string[]; decisor: string
+  /** La respuesta al «¿Es decisor?» (`null` = sin contestar). */
+  esDecisor: boolean | null
+  texto: string; etapa: string | null
+}
+
+/**
+ * Pasar de una llamada o una nota a «Agendar demo» no pierde lo escrito (23/10/2026, por pedido):
+ * con quién (los escritos a mano incluidos), el decisor apuntado, si es decisor, el texto y la etapa.
+ * Descartado no pasa: la demo no lo ofrece.
+ */
+export function registroDeDemoDesdeLaActividad(
+  a: { con: string[]; nuevos: string[]; decisorApuntado: string; esDecisor: boolean | null; texto: string; etapa: string | null },
+  descartadaId: string | undefined,
+): RegistroInicialDeDemo {
+  return {
+    con: a.con, nuevos: a.nuevos, decisor: a.decisorApuntado, esDecisor: a.esDecisor, texto: a.texto,
+    etapa: a.etapa && a.etapa !== descartadaId ? a.etapa : null,
+  }
 }
 
 /** Lo que la demo dejó en el registro de actividad del lead (ver `useRegistroDeDemo`). */
@@ -88,7 +130,7 @@ export function datosDeLaDemo(
 ): { email: string; asistentes: string[]; notas: string } {
   if (!registro) return leerDescripcionDeDemo(reunion.description)
   return {
-    email: reunion.guest_emails.find(e => e.toLowerCase() !== INVITADO_DE_TODA_DEMO) ?? '',
+    email: reunion.guest_emails.find(e => !esInvitadoFijo(e)) ?? '',
     asistentes: registro.con,
     notas: [
       registro.decisorApuntado && `Decisor: ${registro.decisorApuntado}`,

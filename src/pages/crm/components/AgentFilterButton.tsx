@@ -28,6 +28,9 @@ export function AgentFilterButton() {
     ? (visibles.find(u => u.id === selectedIds[0])?.nombre ?? 'Mis leads')
     : `${selectedIds.length} carteras`
 
+  // Un inactivo no se ofrece (23/10/2026, por pedido), salvo que ya esté marcado: así se lo puede sacar.
+  const opciones = visibles.filter(u => u.activo || selectedIds.includes(u.id))
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -39,7 +42,7 @@ export function AgentFilterButton() {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="text-xs">Ver leads de</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {visibles.map(u => (
+        {opciones.map(u => (
           <DropdownMenuCheckboxItem
             key={u.id}
             className="text-xs"

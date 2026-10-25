@@ -5,7 +5,7 @@ import { filterLeads, filtrosVacios, leadsDeCarteras, type LeadFilterContext, ty
 const NOW = new Date(2026, 8, 30, 12).getTime()
 const etapa = (id: string, over: Partial<CrmStage> = {}): CrmStage => ({
   id, label: id, value: id.toUpperCase(), position: 1, priority_id: null, is_out_of_funnel: false,
-  allow_delete: true, allow_reorder: true, allow_rename: true, management_tolerance_hours: 24, management_type: null,
+  allow_delete: true, allow_reorder: true, allows_tasks: true, allow_rename: true, management_tolerance_hours: 24, management_type: null,
   created_at: '', updated_at: '', deleted_at: null, ...over,
 })
 const ETAPAS = new Map<string, CrmStage>([
@@ -13,7 +13,7 @@ const ETAPAS = new Map<string, CrmStage>([
   ['descartado', etapa('descartado', { value: 'DISCARDED', is_out_of_funnel: true, management_tolerance_hours: null })],
 ])
 const ctx = (over: Partial<LeadFilterContext> = {}): LeadFilterContext =>
-  ({ overdueLeadIds: new Set(), leadIdsConTareas: new Set(), etapas: ETAPAS, now: NOW, ...over })
+  ({ overdueLeadIds: new Set(), leadIdsParaHoy: new Set(), leadIdsConTareas: new Set(), etapas: ETAPAS, now: NOW, ...over })
 const cliente = (over: Partial<CrmClient> = {}): CrmClient => ({
   id: 'c', first_name: null, last_name: null, company_name: null, email: null, phone: null,
   alternative_phone_1: null, alternative_phone_1_note: null, alternative_phone_2: null, alternative_phone_2_note: null,
@@ -143,6 +143,27 @@ describe('pendiente agendar tarea', () => {
   })
   it('skip lo apaga (para el contador)', () => {
     expect(filterLeads(todos, f({ pendienteAgendar: true }), c, ['agendar'])).toHaveLength(4)
+  })
+  it('no cuenta a los de una etapa donde no se agendan tareas', () => {
+    const sinTareas = new Map(etapas).set('seguimiento', etapa('seguimiento', { management_type: 'por_tarea', allows_tasks: false }))
+    expect(filterLeads(todos, f({ pendienteAgendar: true }), { ...c, etapas: sinTareas })).toEqual([])
+  })
+})
+
+describe('tareas para hoy y vencidas', () => {
+  const conHoy = lead('h')
+  const sinNada = lead('n')
+  const descartado = lead('d', { funnel_stage_id: 'descartado' })
+  const c = ctx({ leadIdsParaHoy: new Set(['h', 'd']) })
+
+  it('deja solo los que tienen una tarea para hoy o vencida', () => {
+    expect(filterLeads([conHoy, sinNada], f({ paraHoy: true }), c).map(l => l.id)).toEqual(['h'])
+  })
+  it('no levanta el descarte', () => {
+    expect(filterLeads([descartado], f({ paraHoy: true, stageFilter: new Set(['descartado']) }), c)).toEqual([])
+  })
+  it('skip lo apaga (para el contador)', () => {
+    expect(filterLeads([conHoy, sinNada], f({ paraHoy: true }), c, ['hoy'])).toHaveLength(2)
   })
 })
 

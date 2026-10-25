@@ -15,12 +15,17 @@ import { useYo } from '@/hooks/useYo'
 import { cn } from '@/lib/utils'
 import { RegistroDeDemoPanel } from '@/pages/crm/components/RegistroDeDemoPanel'
 import { useRegistroDeDemo } from '@/pages/crm/hooks/useRegistroDeDemo'
-import { esEmailValido, INVITADO_DE_TODA_DEMO } from '@/pages/crm/lib/reuniones'
+import { TEXTO_DE_DEMO } from '@/pages/crm/lib/actividad'
+import type { DemoAgendada } from '@/pages/crm/lib/avisoDeDemo'
+import { nombreDelLead, type CampoDecisor } from '@/pages/crm/lib/clientData'
+import { esEmailValido, esInvitadoFijo, type RegistroInicialDeDemo } from '@/pages/crm/lib/reuniones'
 import { useCreateMeeting, useFreeBusy, useUpdateMeeting } from '../../hooks/useMeetings'
 import { useGoogleConnection } from '../../hooks/useCalendarConnection'
 import { formatBusyRanges } from '../../lib/busyRanges'
+import { finConLaMismaDuracion, horarioDelSlot } from '../../lib/selectorDeHorario'
 import { GOOGLE_EVENT_COLORS } from '../../lib/googleEventColors'
 import type { Meeting } from '../../lib/meetings.types'
+import { SelectorDeHorario } from '../SelectorDeHorario'
 import { CancelMeetingDialog } from './CancelMeetingDialog'
 import { MeetingGuestsField } from './MeetingGuestsField'
 
@@ -69,9 +74,15 @@ type Props = {
   /** Invitados por email ya cargados al crear (la demo: la inmobiliaria y Lorenzo). Ignorado si `meeting` está seteado. */
   defaultGuestEmails?: string[]
   meeting?: EditableMeeting
-  /** Se agenda una demo de `leadId` (22/10/2026): va el «Email del cliente» arriba de los invitados
-   *  y, en una segunda columna, el registro de actividad del lead (`useRegistroDeDemo`). Solo al crear. */
+  /** Se agenda una demo de `leadId` (22/10/2026; desde el 23/10/2026 desde el CRM): va el «Email del cliente» arriba de los invitados
+   *  y, en una columna a la izquierda, el registro de actividad del lead (`useRegistroDeDemo`). Solo al crear. */
   demo?: boolean
+  /** Con `demo`: doble clic en una persona de «Quién asiste» abre su ficha del perfil, como en la llamada. */
+  onAbrirContacto?: (campo: CampoDecisor) => void
+  /** Con `demo`: lo que ya se venía escribiendo en otra actividad del lead, para que no se pierda. */
+  registroInicial?: RegistroInicialDeDemo
+  /** Recordatorio con el que nace (minutos antes; tiene que ser una de las opciones). Por defecto, ninguno. */
+  defaultReminderMinutes?: number | null
   /** Notifican cada edición de título/descripción — usado por MeetingFormPopover para reflejarlas en la URL
    * (así el contexto de "agendando reunión para X" sobrevive a cerrar y volver a abrir el popover). */
   onTitleChange?: (title: string) => void
@@ -79,6 +90,9 @@ type Props = {
   /** Se dispara SOLO cuando la reunión se guardó con éxito (no al cancelar) — MeetingFormPopover
    * lo usa para recién ahí limpiar el contexto de agendamiento de la URL. */
   onSaved?: () => void
+  /** Con `demo`, al guardarse: lo que el aviso por WhatsApp cuenta de ella (`DemoAgendadaDialog`).
+   *  El responsable lo pone quien llama, que tiene los nombres del equipo. */
+  onDemoAgendada?: (demo: Omit<DemoAgendada, 'responsable'>) => void
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0')
@@ -95,16 +109,6 @@ const toLocalDateTimeParts = (iso: string): { date: string; time: string } => {
 
 const dateToInputValue = (d: Date): string => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
 
-const timeToMinutes = (t: string): number => {
-  const [h, m] = t.split(':').map(Number)
-  return h * 60 + m
-}
-
-const minutesToTime = (mins: number): string => {
-  const clamped = Math.min(Math.max(mins, 0), 23 * 60 + 45)
-  return `${pad2(Math.floor(clamped / 60))}:${pad2(clamped % 60)}`
-}
-
 // "Jueves, 30 de julio" — mismo formato del encabezado de fecha/hora colapsado de Google Calendar.
 const formatDateHeading = (isoDate: string): string => {
   const d = new Date(`${isoDate}T00:00:00`)
@@ -112,8 +116,9 @@ const formatDateHeading = (isoDate: string): string => {
   return formatted.charAt(0).toUpperCase() + formatted.slice(1)
 }
 
-// Contenido del form de reunión: `VisitFormContent` de `propelia-frontend` (21/10/2026). Lo usa
-// MeetingFormPopover (anclado a un punto, el click-to-create del grid de /agenda).
+// Contenido del form de reunión: `VisitFormContent` de `propelia-frontend` (21/10/2026). Lo usan
+// MeetingFormPopover (anclado a un punto, el click-to-create del grid de /agenda) y, con `demo`, la
+// ventana de «Registrar actividad» del lead (23/10/2026).
 export function MeetingFormContent({
   open,
   onClose,
@@ -128,13 +133,17 @@ export function MeetingFormContent({
   defaultGuestEmails = [],
   meeting,
   demo: demoPedida = false,
+  registroInicial,
+  onAbrirContacto,
+  defaultReminderMinutes = null,
   onTitleChange,
   onDescriptionChange,
   onSaved,
+  onDemoAgendada,
 }: Props) {
   const isEditing = meeting != null
   const demo = demoPedida && !isEditing && !!leadId
-  const registro = useRegistroDeDemo(demo ? leadId : undefined, open)
+  const registro = useRegistroDeDemo(demo ? leadId : undefined, open, registroInicial)
   /* El «Email del cliente» es el invitado de la inmobiliaria: cambiarlo cambia ese invitado (y uno
      inválido o vacío lo saca). Arranca con el que trajo el enlace: el que no es el invitado fijo. */
   const [clientEmail, setClientEmail] = useState('')
@@ -150,6 +159,8 @@ export function MeetingFormContent({
   const [reminderValue, setReminderValue] = useState('none')
   const [showErrors, setShowErrors] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  // «Seleccionar día y hora» (23/10/2026, por pedido): la semana de la Agenda, encima de todo.
+  const [eligiendoHorario, setEligiendoHorario] = useState(false)
   const [guestUserIds, setGuestUserIds] = useState<string[]>([])
   const [guestEmails, setGuestEmails] = useState<string[]>([])
   const { userSession } = useUserSession()
@@ -193,10 +204,10 @@ export function MeetingFormContent({
         setEndTime(defaultEndTime ?? '')
         setDescription(defaultDescription ?? '')
         setColorId(currentUser?.last_meeting_color_id ?? DEFAULT_COLOR_ID)
-        setReminderValue('none')
+        setReminderValue(REMINDER_OPTIONS.find(o => o.minutes === defaultReminderMinutes)?.value ?? 'none')
         setGuestUserIds([])
         setGuestEmails(defaultGuestEmails)
-        setClientEmail(defaultGuestEmails.find(e => e.toLowerCase() !== INVITADO_DE_TODA_DEMO) ?? '')
+        setClientEmail(defaultGuestEmails.find(e => !esInvitadoFijo(e)) ?? '')
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -212,9 +223,8 @@ export function MeetingFormContent({
   // Al mover el "desde", el "hasta" lo sigue preservando la misma duración —
   // si todavía no había un rango cargado, arranca en 60 min por defecto.
   const handleStartTimeChange = (newStart: string) => {
-    const durationMinutes = time !== '' && endTime !== '' ? timeToMinutes(endTime) - timeToMinutes(time) : 60
     setTime(newStart)
-    setEndTime(minutesToTime(timeToMinutes(newStart) + (durationMinutes > 0 ? durationMinutes : 60)))
+    setEndTime(finConLaMismaDuracion(newStart, { time, endTime }))
   }
 
   const handleClientEmailChange = (value: string) => {
@@ -281,7 +291,23 @@ export function MeetingFormContent({
       },
       {
         onSuccess: (created) => {
-          if (demo) void registro.registrar({ reunionId: created.id, email: clientEmail })
+          if (demo) {
+            void registro.registrar({ reunionId: created.id, email: clientEmail })
+            const elegibles = [...registro.contactos, ...registro.nuevos]
+            const texto = registro.texto.trim()
+            onDemoAgendada?.({
+              inmobiliaria: registro.lead ? nombreDelLead(registro.lead.client) : null,
+              ciudad: registro.lead?.client?.city ?? null,
+              inicio: starts.toISOString(),
+              fin: ends.toISOString(),
+              agendadaPor: agentName,
+              emailCliente: clientEmail,
+              asistentes: registro.con.filter(c => elegibles.includes(c)),
+              decisor: registro.pideDecisor ? registro.decisor : '',
+              etapa: registro.opcionesEtapa.find(e => e.id === registro.etapa)?.label ?? null,
+              notas: texto === TEXTO_DE_DEMO ? '' : texto,
+            })
+          }
           onSaved?.()
           onClose()
         },
@@ -291,9 +317,15 @@ export function MeetingFormContent({
 
   return (
     <>
-      {/* Con la demo, el registro va en una segunda columna para que el formulario no sea tan largo;
-          en el teléfono baja abajo de todo. */}
-      <div className={cn(demo && 'grid gap-5 md:grid-cols-[minmax(0,400px)_minmax(0,360px)]')}>
+      {/* Con la demo, el registro va en su propia columna para que el formulario no sea tan largo.
+          Va a la izquierda y la reunión a la derecha (23/10/2026, por pedido): es lo primero que se
+          llena, con el orden y el diseño del registro de la llamada. En el teléfono va arriba. */}
+      <div className={cn(demo && 'grid gap-5 md:grid-cols-[minmax(0,420px)_minmax(0,360px)]')}>
+      {demo && (
+        <div className="md:pr-5 md:[border-right:1px_solid_var(--line)] max-md:pb-4 max-md:[border-bottom:1px_solid_var(--line)]">
+          <RegistroDeDemoPanel r={registro} onAbrirContacto={onAbrirContacto} />
+        </div>
+      )}
       <div className="flex flex-col gap-3">
         <Input
           id="meeting-title"
@@ -346,6 +378,15 @@ export function MeetingFormContent({
               />
             </div>
           </div>
+          {/* Con la demo el horario también se elige mirando la semana (23/10/2026, por pedido): el
+              formulario vive en la ventana de «Registrar actividad» del CRM, lejos de la Agenda. */}
+          {demo && (
+            <Button type="button" variant="outline" size="sm" onClick={() => setEligiendoHorario(true)}
+              className="ml-7 w-fit gap-1.5 font-normal">
+              <CalendarDays className="size-4" />
+              Seleccionar día y hora
+            </Button>
+          )}
           {busy.length > 0 && (
             <p className="ml-7 text-xs text-muted-foreground">Ocupado: {formatBusyRanges(busy)}</p>
           )}
@@ -390,7 +431,9 @@ export function MeetingFormContent({
             <p className="text-sm text-muted-foreground">{guests.map(g => g.label).join(', ')}</p>
           </div>
         )}
-        <div className="flex items-start gap-3">
+        {/* Con la demo la descripción no se muestra (23/10/2026, por pedido: hacía scroll esa columna).
+            Se manda igual: es la `defaultDescription` con la que nace (DESCRIPCION_DE_DEMO). */}
+        {!demo && <div className="flex items-start gap-3">
           <AlignLeft className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
           <Textarea
             id="meeting-description"
@@ -402,7 +445,7 @@ export function MeetingFormContent({
             placeholder="Agregar descripción"
             className="min-h-16 flex-1 resize-none rounded-none border-0 bg-transparent px-0 py-1.5 shadow-none transition-colors focus-visible:ring-0 focus-visible:rounded-md focus-visible:bg-muted focus-visible:px-3 focus-visible:py-2"
           />
-        </div>
+        </div>}
         {isGoogleConnected && (
           <>
             <div className="flex items-start gap-3">
@@ -474,11 +517,6 @@ export function MeetingFormContent({
           </Button>
         )}
       </div>
-      {demo && (
-        <div className="md:pl-5 md:[border-left:1px_solid_var(--line)] max-md:pt-4 max-md:[border-top:1px_solid_var(--line)]">
-          <RegistroDeDemoPanel r={registro} />
-        </div>
-      )}
       </div>
       <DialogFooter className="mt-4">
         {canCancel && (
@@ -493,6 +531,20 @@ export function MeetingFormContent({
           {isEditing ? 'Guardar cambios' : 'Agendar'}
         </Button>
       </DialogFooter>
+      {eligiendoHorario && (
+        // Adentro del formulario (no como hermano), por lo mismo que la confirmación de abajo.
+        <SelectorDeHorario
+          fecha={date}
+          titulo="Elegí día y hora de la demo"
+          onElegir={slot => {
+            const elegido = horarioDelSlot(slot, { time, endTime })
+            setDate(elegido.date)
+            setTime(elegido.time)
+            setEndTime(elegido.endTime)
+          }}
+          onCerrar={() => setEligiendoHorario(false)}
+        />
+      )}
       {canCancel && (
         // Montado ADENTRO del contenido del popover/dialog (no como hermano): Radix decide qué es
         // "click afuera" por el árbol de React, y como hermano un click en la confirmación cerraría

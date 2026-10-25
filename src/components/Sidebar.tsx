@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { CalendarClock, LogOut } from 'lucide-react'
 import { PlanningDiario } from '@/components/PlanningDiario'
 import propeliaIcon from '@/assets/propelia-icon.png'
-import { entradaActiva, estaActivo, navDe, soloSuperadmin } from '@/components/nav'
+import { entradaActiva, estaActivo, hrefDe, navDe, soloSuperadmin } from '@/components/nav'
 import { SuperadminBadge } from '@/components/SuperadminBadge'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
@@ -95,8 +95,11 @@ export function Sidebar() {
                   <SidebarMenuSub>
                     {item.hijos.map(hijo => (
                       <SidebarMenuSubItem key={hijo.id}>
-                        <SidebarMenuSubButton asChild isActive={estaActivo(pathname, hijo.path)}>
-                          <Link to={hijo.path} onClick={cerrarEnTelefono}>
+                        <SidebarMenuSubButton asChild isActive={!hijo.nuevaPestana && estaActivo(pathname, hijo.path)}>
+                          <Link
+                            to={hrefDe(hijo)} onClick={cerrarEnTelefono}
+                            {...(hijo.nuevaPestana && { target: '_blank', rel: 'noopener' })}
+                          >
                             <hijo.icon />
                             <span className="truncate">{hijo.label}</span>
                             {soloSuperadmin(hijo) && <SuperadminBadge className="ml-auto" />}

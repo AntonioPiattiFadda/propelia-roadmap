@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Usuario } from '../types'
 import {
-  carterasConEscritura, carterasVisibles, esSuperadmin, nivelSobre, nombreDe, puedeEscribir, puedeLeer, type Acceso,
+  carterasConEscritura, carterasVisibles, comoValido, esSuperadmin, nivelSobre, nombreDe, puedeEscribir, puedeLeer, puedeMarcarImportante, puedeVerComo,
+  type Acceso,
 } from './permisos'
 
 const u = (id: string, over: Partial<Usuario> = {}): Usuario =>
@@ -49,6 +50,46 @@ describe('carterasConEscritura', () => {
   it('read no alcanza; y a un inactivo no se le asigna nada', () => {
     expect(carterasConEscritura(SDR, USUARIOS, [{ viewer_id: 'sdr', subject_id: 'ana', access: 'read' }]).map(x => x.id)).toEqual(['sdr'])
     expect(carterasConEscritura(ADMIN, USUARIOS, []).map(x => x.id)).toEqual(['admin', 'ana', 'sdr'])
+  })
+})
+
+describe('comoValido («Ver como»)', () => {
+  it('un SUPERADMIN mira como cualquier activo', () => {
+    expect(comoValido(ADMIN, 'ana', USUARIOS, [])?.id).toBe('ana')
+    expect(comoValido(ADMIN, 'sdr', USUARIOS, [])?.id).toBe('sdr')
+  })
+  it('uno mismo no: es el CRM de siempre', () => expect(comoValido(ADMIN, 'admin', USUARIOS, [])).toBeNull())
+  it('sin parámetro o con un id que no existe, nada', () => {
+    expect(comoValido(ADMIN, null, USUARIOS, [])).toBeNull()
+    expect(comoValido(ADMIN, '', USUARIOS, [])).toBeNull()
+    expect(comoValido(ADMIN, 'nadie', USUARIOS, [])).toBeNull()
+  })
+  it('un inactivo no: no tiene día de trabajo que mirar', () => expect(comoValido(ADMIN, 'beto', USUARIOS, [])).toBeNull())
+  it('un SDR solo como alguien cuya cartera ve (read alcanza)', () => {
+    expect(comoValido(SDR, 'ana', USUARIOS, [])).toBeNull()
+    expect(comoValido(SDR, 'ana', USUARIOS, [{ viewer_id: 'sdr', subject_id: 'ana', access: 'read' }])?.id).toBe('ana')
+  })
+  it('sin yo (cargando), nada', () => expect(comoValido(null, 'ana', USUARIOS, [])).toBeNull())
+})
+
+describe('puedeVerComo', () => {
+  it('un SUPERADMIN: todos los activos menos él, por nombre', () =>
+    expect(puedeVerComo(ADMIN, USUARIOS, []).map(x => x.id)).toEqual(['ana', 'sdr']))
+  it('un SDR sin accesos: nadie', () => expect(puedeVerComo(SDR, USUARIOS, [])).toEqual([]))
+  it('un SDR: los que ve y están activos', () => {
+    const acc: Acceso[] = [
+      { viewer_id: 'sdr', subject_id: 'ana', access: 'write' }, { viewer_id: 'sdr', subject_id: 'beto', access: 'read' },
+    ]
+    expect(puedeVerComo(SDR, USUARIOS, acc).map(x => x.id)).toEqual(['ana'])
+  })
+})
+
+describe('puedeMarcarImportante (espejo de crm_leads_importante_solo_superadmin)', () => {
+  it('solo un SUPERADMIN activo, aunque el SDR escriba en esa cartera', () => {
+    expect(puedeMarcarImportante(ADMIN)).toBe(true)
+    expect(puedeMarcarImportante(SDR)).toBe(false)
+    expect(puedeMarcarImportante(u('x', { rol: 'SUPERADMIN', activo: false }))).toBe(false)
+    expect(puedeMarcarImportante(null)).toBe(false)
   })
 })
 

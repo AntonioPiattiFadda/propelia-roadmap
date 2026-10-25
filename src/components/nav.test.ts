@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NAV, entradaActiva, estaActivo, inicioDe, navDe, puedeEntrar, soloSuperadmin, type NavItem } from './nav'
+import { NAV, entradaActiva, estaActivo, hrefDe, inicioDe, navDe, puedeEntrar, soloSuperadmin, type NavItem } from './nav'
 
 describe('estaActivo', () => {
   it('la ruta exacta', () => expect(estaActivo('/crm', '/crm')).toBe(true))
@@ -12,24 +12,34 @@ describe('NAV', () => {
   it('son las siete páginas de primer nivel, en este orden', () => {
     expect(NAV.map(n => n.path)).toEqual(['/roadmap', '/crm', '/agenda', '/demos', '/equipo', '/caja', '/ajustes'])
   })
-  it('el backlog cuelga del roadmap', () => {
+  it('el backlog ya no está en la barra', () => {
     const roadmap = NAV.find(n => n.id === 'roadmap')
-    expect(roadmap?.hijos?.map(h => h.path)).toEqual(['/roadmap/backlog'])
+    expect(roadmap?.hijos).toBeUndefined()
   })
+  it('«Caja vista Loro» cuelga de la Caja y abre la vista por mes en otra pestaña', () => {
+    const hijo = NAV.find(n => n.id === 'caja')?.hijos?.[0]
+    expect(hijo?.label).toBe('Caja vista Loro')
+    expect(hijo && hrefDe(hijo)).toBe('/caja?vista=meses')
+    expect(hijo?.nuevaPestana).toBe(true)
+  })
+})
+
+describe('hrefDe', () => {
+  it('sin search es el path', () => expect(hrefDe(NAV.find(n => n.id === 'crm')!)).toBe('/crm'))
 })
 
 describe('entradaActiva', () => {
   const roadmap = NAV.find(n => n.id === 'roadmap')!
+  const caja = NAV.find(n => n.id === 'caja')!
   it('en el tablero se marca el roadmap', () => expect(entradaActiva('/roadmap', roadmap)).toBe(true))
-  it('en el backlog se marca el hijo y NO el padre', () => expect(entradaActiva('/roadmap/backlog', roadmap)).toBe(false))
+  it('en el backlog, que ya no es entrada, se marca el roadmap', () => expect(entradaActiva('/roadmap/backlog', roadmap)).toBe(true))
   it('en otra página, ninguno', () => expect(entradaActiva('/crm', roadmap)).toBe(false))
+  it('un hijo que abre otra pestaña no le apaga la marca al padre', () => expect(entradaActiva('/caja', caja)).toBe(true))
 })
 
 describe('navDe', () => {
   it('un SUPERADMIN ve las siete de primer nivel', () =>
     expect(navDe('SUPERADMIN').map(n => n.path)).toEqual(['/roadmap', '/crm', '/agenda', '/demos', '/equipo', '/caja', '/ajustes']))
-  it('un SUPERADMIN ve el backlog colgando del roadmap', () =>
-    expect(navDe('SUPERADMIN')[0].hijos?.map(h => h.path)).toEqual(['/roadmap/backlog']))
   it('un SDR ve el CRM, la Agenda y Ajustes', () => expect(navDe('SDR').map(n => n.path)).toEqual(['/crm', '/agenda', '/ajustes']))
 })
 
@@ -63,7 +73,7 @@ describe('inicioDe', () => {
 describe('soloSuperadmin', () => {
   const de = (id: string) => [...NAV, ...NAV.flatMap(n => n.hijos ?? [])].find(n => n.id === id)!
   it('lleva el badge lo que solo ve un SUPERADMIN', () => {
-    for (const id of ['roadmap', 'backlog', 'demos', 'equipo', 'caja']) expect(soloSuperadmin(de(id))).toBe(true)
+    for (const id of ['roadmap', 'demos', 'equipo', 'caja']) expect(soloSuperadmin(de(id))).toBe(true)
   })
   it('lo que ve todo el equipo, no', () => {
     for (const id of ['crm', 'agenda', 'ajustes']) expect(soloSuperadmin(de(id))).toBe(false)

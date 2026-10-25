@@ -23,6 +23,34 @@ hasta que se mergee). Tres páginas en la barra lateral: Roadmap, CRM y Caja. Di
   Los `hijos` llevan sus propios `roles` (`navDe` los recorta) y `puedeEntrar` valida contra la
   entrada **más específica** que calce, no contra el padre. El redirect de `/backlog` va afuera
   de `RequireRol`: adentro, el guard lo rebotaría al inicio antes de redirigir.
+- **«Caja vista Loro»** (25/10/2026, por pedido): hijo de Caja en la barra lateral que abre
+  `/caja?vista=meses` en **otra pestaña** (`search` y `nuevaPestana` de `NavItem`, `hrefDe`). Es la
+  Caja como planilla: un bloque por mes del más viejo al más nuevo, fijos mensuales arriba y
+  variables abajo, cada renglón con quién pagó («Pagó X» o «Sin pagar»), y arriba un «Resumen de gastos de …» por persona
+  (`lib/porMes.ts`, `CajaPorMes.tsx`). **Sin filtros**: ni fechas, ni tipo, ni «+ Pendientes», ni
+  el resumen de cuatro cajas de la lista. Muestra todo el historial hasta fin de este mes (más
+  allá sumaría como pendientes los fijos que todavía no llegaron).
+  Esta pestaña no es la de una caja «para Loro»: muestra lo mismo para cualquier SUPERADMIN.
+- **«Claude Toni · extra empresa»** (25/10/2026, por pedido): una caja chica a la derecha de la
+  lista de gastos, en las dos vistas de la Caja (en el teléfono, debajo), con lo que Toni le
+  transfiere a Lorenzo todos los meses por Claude: **siempre 55 €** (`MONTO_CLAUDE_TONI`), sin
+  monto por mes. Un renglón por mes, **el más viejo arriba** (por pedido), desde `DESDE_CLAUDE_TONI`
+  (`'2026-10'`, se cambia ahí) hasta un año después de este mes (`MESES_POR_DELANTE`), más
+  cualquier pagado que caiga afuera (`mesesClaudeToni`,
+  `lib/claudeToni.ts`), escrito corto, «Oct 26» (`mesCorto`); cada uno con un tilde **sin rótulo** (el `aria-label` dice «Pagado …») y
+  **sin resumen de deuda** arriba, las dos cosas por pedido. Un mes pagado lleva debajo una nota
+  libre de cuándo o cómo se pagó («¿Cuándo se pagó?», `conNota`), que se guarda al salir del campo
+  o con Enter; desmarcar el mes se lleva su nota. Todo es optimista y vuelve atrás si no se guarda.
+  **Es plata entre ellos y no de la empresa**: no toca `expenses`, los totales, el resumen ni
+  `porMes.ts`, y no tiene que ver con la etiqueta «Claude Suscription». **Sin migración**: vive en
+  `roadmap_notas`, fila `caja-claude-toni` (`useClaudeToni`), igual que las notas de la Caja;
+  `texto` es un JSON `{"2026-10":{"nota":"transferencia 3/10"}}` (clave presente = pagado) y se
+  lee a la defensiva (`leerPagados`: vacío o roto es ninguno pagado, y la forma vieja
+  `["2026-09"]`, que llegó a escribirse unas horas, se lee como pagado sin nota).
+- **Un gasto cargado se edita** (25/10/2026, por pedido): el lápiz de la fila, en la lista y en la vista
+  por mes, abre `EditarGastoDialog`: monto, fecha, período (fijo), notas (variable) y quién pagó (si
+  está pagado). Etiqueta, tipo y estado no: un pendiente se paga con «Pagar». Reglas en
+  `validarEdicion` (`lib/formularios.ts`), mismas que el alta. Sin migración.
 - **Variables**: `.env` con `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` (ver `.env.example`).
 
 ## Migraciones — SIEMPRE con el CLI
@@ -65,9 +93,9 @@ supabase db push                  # aplica al remoto y lo registra
 - **Deploy**: Vercel. **Netlify publica `legacy/`** mientras el Roadmap nuevo no esté portado:
   Base directory = `legacy`, Publish directory = `legacy`, Build command vacío. Con el Base
   en la raíz, Netlify haría `npm install` de todo Vite/TS en cada deploy del tablero viejo.
-- **El backlog es un subgrupo del Roadmap** (5/10/2026): vive en `/roadmap/backlog` y en la
-  barra lateral cuelga de «Roadmap» (`hijos` en `src/components/nav.ts`). `/backlog` redirige,
-  para no romper favoritos. La barra de pestañas del teléfono solo muestra el primer nivel.
+- **El backlog es un subgrupo del Roadmap** (5/10/2026): vive en `/roadmap/backlog`. **Desde el
+  23/10/2026 (por pedido) no está en la barra lateral**: la ruta sigue andando por URL y entra con
+  los roles del roadmap. `/backlog` redirige, para no romper favoritos.
 - **`/roadmap` y `/roadmap/backlog` son el tablero vanilla en un iframe** (29/9/2026), mientras el port
   no esté hecho. `servirLegacy()` en `vite.config.ts` sirve `legacy/` bajo `/legacy/` en dev y
   lo copia a `dist/legacy/` en el build, sin `scripts/` ni su `package.json`: la carpeta no se
@@ -108,20 +136,42 @@ acá son las reuniones del CRM (`crm_meetings`, las demos incluidas). Migración
   orígenes; vacío = solo `http://localhost:4100`) y `APP_BASE_URL` (sin él, el evento va sin link al
   lead). En la consola de Google, el cliente OAuth tiene que tener como redirect
   `https://itqwxnmuxuiiydsueazb.supabase.co/functions/v1/calendar-oauth-callback`.
-- **«Agendar demo» se agenda en la Agenda, en otra pestaña** (22/10/2026, por pedido; un solo
-  formulario): la pastilla del lead abre `/agenda?leadId=&assignedTo=&title=Demo&demo=1&guestEmail=…`
-  (`enlaceParaAgendarDemo`, `lib/reuniones.ts`) y la demo nace tocando la grilla, del responsable del
-  lead, con la inmobiliaria y **siempre `lorenzopiattifadda@gmail.com`** (`INVITADO_DE_TODA_DEMO`,
-  sin punto) como invitados. Con `demo=1` el formulario de la grilla es el de siempre más dos cosas:
-  el **«Email del cliente»** arriba de los invitados (es el invitado de la inmobiliaria: cambiarlo
-  cambia ese invitado; si la inmobiliaria no tenía email, se le guarda) y una **segunda columna
-  «Registro de actividad»** (`RegistroDeDemoPanel` + `useRegistroDeDemo`): decisor, quién asiste,
-  el texto y «El lead queda en» (obligatoria, sin Descartado). **Es para el equipo, no llega al
-  cliente ni al evento de Google**. Con la reunión guardada deja en el lead un comentario con meta
-  `tipo: 'demo'` (con quién, `decisorApuntado` y el id de la `reunion`), carga al perfil a los
-  escritos a mano y al decisor, y mueve la etapa. La actividad pinta registro y reunión como **un
-  renglón** con el día y la hora de la reunión de hoy (`lineaDeTiempo`). La pestaña del CRM lo ve
-  sin recargar: `useCrmRealtime` invalida el detalle con cada `crm_comments`.
+- **«Agendar demo» se agenda en la ventana de «Registrar actividad» del CRM** (23/10/2026, por
+  pedido; del 22/10 abría la Agenda en otra pestaña): es una pastilla más del registro. Elegida, la
+  ventana se ensancha y muestra el formulario de la reunión de la Agenda (`MeetingFormContent` con
+  `demo`), del responsable del lead, con la inmobiliaria y **siempre `lorenzopiattifadda@gmail.com`
+  (sin punto) e `info@propelia.es`** (`INVITADOS_DE_TODA_DEMO`, 23/10/2026; espejo en
+  `_shared/leadNotifications/supabaseAdapters.ts`, que los cuenta como equipo para que el aviso nunca
+  les vaya a ellos) como invitados (`invitadosDeLaDemo`, `lib/reuniones.ts`). Nace con una
+  **descripción para el cliente** (`DESCRIPCION_DE_DEMO`: va al evento de Google y la ve el invitado)
+  y el **recordatorio a 10 minutos** (`RECORDATORIO_DE_DEMO`). Pasar de una llamada o nota a «Agendar
+  demo» **no pierde lo escrito**: con quién, «¿Es decisor?», decisor apuntado, texto y etapa pasan al registro de la
+  demo (`registroDeDemoDesdeLaActividad`; Descartado no). El
+  horario se escribe a mano o con **«Seleccionar día y hora»**, que abre la semana de la Agenda
+  encima de todo (`SelectorDeHorario`, mismos datos que la página por `useSemanaDeAgenda`): tocar un
+  hueco vuelve al formulario con ese día y hora (`horarioDelSlot`: conserva la duración cargada).
+  Con `demo` el formulario suma el **«Email del cliente»** arriba de los invitados (cambiarlo cambia
+  ese invitado; si la inmobiliaria no tenía email, se le guarda) y una **columna «Registro de
+  actividad»** (`RegistroDeDemoPanel` + `useRegistroDeDemo`). **Desde el 23/10/2026 (por pedido) va a
+  la izquierda** (en el teléfono, arriba) y con **el orden y el diseño del registro de la llamada**,
+  con los mismos renglones (`FilasDelRegistro.tsx`, que usan los dos): «Quién asiste» (doble clic abre
+  la ficha), «¿Es decisor?» (mismas reglas: `decisorSabido`, `campoDelNuevoDecisor`; obligatoria
+  cuando se pregunta), el texto, el «Decisor» apuntado y «El lead queda en» (obligatoria, sin
+  Descartado). Sin «Teléfono contacto»: en una demo no se marcó ningún número. **Es para el equipo,
+  no llega al cliente ni al evento de Google**. Con la reunión guardada deja en el lead un comentario con meta `tipo: 'demo'` (con
+  quién, `decisorApuntado` y el id de la `reunion`), carga al perfil a los escritos a mano y al
+  decisor, y mueve la etapa. La actividad pinta registro y reunión como **un renglón** con el día y
+  la hora de la reunión de hoy (`lineaDeTiempo`). La Agenda ya no lee `demo=1`; `?leadId=&title=`
+  sigue andando. **Guardada la demo, `DemoAgendadaDialog` ofrece «Avisar por WhatsApp»** (23/10/2026,
+  por pedido): abre el chat con `+34 675 24 91 46` (`WHATSAPP_AVISO_DE_DEMO`) y un mensaje festivo con
+  inmobiliaria, día y hora **de España**, responsable, quién la agendó, invitación, asistentes, decisor,
+  etapa y notas (`mensajeDeDemoAgendada`, `lib/avisoDeDemo.ts`). No manda nada solo: lo envía quien agenda.
+- **La demo se cancela desde su renglón de la actividad del lead** (23/10/2026, por pedido): un
+  ícono de calendario tachado, mientras la reunión esté `scheduled` y con permiso de escritura, abre
+  `CancelarDemoDialog`: motivo opcional y **«El lead queda en» obligatorio y vacío**, como al
+  registrar. Cancela con `cancelarReunion` (re-encola: borra el evento de Google y dispara el aviso
+  «Demo cancelada») y recién después mueve la etapa (Descartado abre su dialog de siempre). El
+  renglón queda con «Cancelada · motivo» arriba (`ItemActividad.reunion`, `lineaDeTiempo`).
 - **Avisos a leads** (21/10/2026, copiado de `propelia-frontend`, migración
   `20261021155052_lead_notifications`): Ajustes → «Avisos a leads» (solo SUPERADMIN, el «admin de la
   org» de allá) prende por evento y vía: Demo agendada / reprogramada / cancelada; recordatorios y
@@ -181,6 +231,15 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   abierto en el dialog. El front nunca escribe `gestion_*` ni los historiales.
   Si el lead abierto se va de la lista (se descartó), las flechas ↑/↓ siguen desde donde estaba
   (`vecinosEnRecorrido`, `lib/recorrido.ts`, 17/10/2026): antes se apagaban.
+- **La lista no se mueve debajo de quien la trabaja** (23/10/2026, por pedido): un lead que deja de
+  coincidir con los filtros porque se lo tocó (descartado, otra etapa u otro responsable, una tarea
+  que lo saca de «Pendiente agendar tarea») se queda, con sus datos nuevos y donde lo pone el orden,
+  hasta que se cambian los filtros o se recarga. `fijarLista` (`lib/listaFija.ts`) guarda en un ref
+  los ids vistos por clave de filtros (`claveDeFiltros`: toda la URL menos `?lead=`, así abrir y
+  pasar de lead no la cambia; cambiar orden o vista sí). Lo nuevo que coincide aparece; lo que ya no
+  devuelve la base se va. Los contadores de los chips siguen saliendo de los datos reales; el «N
+  leads» de la tabla y el total del dialog cuentan lo que se ve. En columnas con «Estado» filtrado,
+  el que pasa a una etapa no elegida se va igual: no hay columna donde dibujarlo.
 - **Sin prioridades ni gestión en el front desde el 10/10/2026** (se sacaron para rediseñarlas de
   cero): ni el color de prioridad de la etapa, ni el catálogo `crm_priorities`, ni las columnas de
   prioridad y tiempo de gestión del funnel, ni Pendiente/Gestionado/Pospuesto, ni «Posponer», ni
@@ -282,6 +341,27 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
 - **«Pendiente agendar tarea»** (20/10/2026, por pedido): chip siempre visible, `?agendar=1`.
   Deja los leads en una etapa de «Seguimiento» (`management_type = 'por_tarea'`) sin ninguna tarea
   pendiente (`esPendienteAgendar`, `lib/leadFilters.ts`). Con alguno, el chip va en rojo sutil.
+  Al lado, **«Tareas vencidas»** (23/10/2026, por pedido): chip siempre visible, `?hoy=1`. Deja los
+  leads con alguna tarea pendiente **para hoy o vencida** (`idsConTareasParaHoy`, `lib/tareas.ts`;
+  la de hoy entra, al revés que `estaVencida`), sin descartados. Mismo rojo sutil con alguno. No
+  confundir con el subchip «Vencidas» de «Tareas» (`?overdue=1`), que no cuenta las de hoy.
+- **«¿Se puede agendar tarea?» por etapa** (23/10/2026, por pedido, migración
+  `20261023160156_crm_funnel_stages_allows_tasks`): columna «Tareas» (Sí/No) de la configuración del
+  funnel, `crm_funnel_stages.allows_tasks` (default true). Con No, a un lead en esa etapa no se le
+  crea ninguna tarea; las que ya tiene se siguen editando, tildando y borrando. **La regla es el
+  trigger `crm_tasks_etapa_permite`** (before insert, clave `crm_etapa_sin_tareas`);
+  `permiteAgendarTarea` (`lib/gestionDeEtapa.ts`) es el espejo: el perfil esconde «Añadir tarea» y
+  dice por qué. El alta (`crm_create_lead_with_client`) saltea la tarea inicial «Asesorar cliente»
+  en esas etapas, y «Pendiente agendar tarea» no las cuenta.
+- **«¿Se ve en el Dashboard?» por etapa** (23/10/2026, por pedido, migración
+  `20261023164216_crm_funnel_stages_show_in_dashboard`, que **la aplica Antonio**): columna
+  «Dashboard» (Sí/No) de la configuración del funnel, `crm_funnel_stages.show_in_dashboard`
+  (default **false**: no aparece ninguna hasta elegirla). **Los leads de esas etapas SON los
+  «Leads importantes» del Dashboard** (por pedido, el mismo día: hubo unas horas una caja aparte «Por
+  etapa» y se juntó): `leadsImportantes` (`lib/resumen.ts`) trae los de estrella **o** de etapa
+  marcada, en una sola lista y con el mismo orden. Una etapa borrada no cuenta aunque esté marcada.
+  Solo de pantalla, sin trigger. Sin la migración, `show_in_dashboard` llega undefined (va opcional en
+  `CrmStage`), no se ve ninguna y marcar contesta `FALTA_MIGRACION`.
 - **Una tarea pendiente se edita** (20/10/2026, por pedido): el lápiz de la fila (con permiso de
   escritura) abre la misma ventana de «Nueva tarea», titulada «Editar tarea» y precargada con
   título, día y hora. Se manda solo lo que cambió (`cambiosDeTarea`, `lib/tareas.ts`): `due_time`
@@ -381,7 +461,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   que pide una demo) arranca con el WhatsApp de quien manda y un mensaje en la voz del lead
   (`mensajeDeWhatsapp`: «¡Hola Propelia! Soy Ana, de …»); se rearma con «Nombre» mientras no se
   edite a mano (`whatsappDe`, `predeterminadosPara`). Sin teléfono es un `mailto:` a su email.
-  El botón acepta `http(s)://` o `mailto:`. El envío no queda en la actividad del lead.
+  El botón acepta `http(s)://` o `mailto:`. **Desde el 23/10/2026, después de mandar** (el email ya
+  aceptado por Resend, o el WhatsApp recién abierto) un `AsentarEnvioDialog` modal pregunta
+  «¿Registrar la actividad?»; «Registrar» deja una nota a mano sin meta (`textoDelEnvio`,
+  `lib/envioDeMensaje.ts`), que se edita y se borra como cualquier nota. «No» no deja nada.
   **El «Mail puntual» lleva adjuntos** (20/10/2026, por pedido): `adjuntos: true` en su plantilla;
   `send-email` rechaza archivos en la que no lo diga. Cualquier usuario activo, SDR incluido; mismo
   tope de 10MB que el texto libre. Valen para ese envío y no salen en la vista previa.
@@ -392,6 +475,15 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   botón armado solo (WhatsApp/`mailto:`); un enlace escrito a mano sí (`plantillaGuardable`,
   `conGuardada`). El texto de fábrica de `plantillasEmail.ts` queda solo para la primera vez o
   sin la migración corrida.
+- **El WhatsApp de «Mensajes»** (23/10/2026, por pedido): es un enlace con el texto escrito, **nunca un
+  archivo** (el vídeo nativo pediría la API de WhatsApp Business). En el ordenador abre
+  `web.whatsapp.com/send` directo y en el móvil `wa.me` (`enlaceDeWhatsapp(…, { web })`, `esMovil`):
+  la redirección de `wa.me` rompía los emojis. Variables `{nombre}`, `{empresa}`, `{remitente}` (el nombre
+  de `remitenteDe`, el de la firma del mail) y `{video}`, que apunta a **`public/video.html`** (`/video`,
+  rewrite en `vercel.json` antes del de la SPA) con el dominio donde está abierto el CRM: una página
+  estática con las etiquetas Open Graph de las que WhatsApp arma la miniatura (la imagen es
+  `propelia.es/assets/mail-video.png`) y que reproduce el mismo mp4 del bucket `publico`.
+  `crm.propelia.es/presentacion` (la del mail) es una SPA sin esas etiquetas y no da vista previa.
 - **Los emails que no llegan se avisan** (20/10/2026, migración `20261020171333_crm_emails`):
   `send-email` escribe cada envío en `crm_emails` con el id de Resend (y el lead, si quien manda lo
   lee; el de prueba va sin lead), y la edge function `resend-webhook` le cambia el estado cuando
@@ -413,6 +505,53 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   Reglas en `lib/emails.ts`. Ojo: después de un rebote duro
   Resend suprime la dirección y no le vuelve a mandar («No se envió») hasta sacarla a mano de su
   lista de supresión.
+- **«Ver como»** (23/10/2026, por pedido): botón de la cabecera del CRM (`VerComoButton`,
+  `components/VerComo.tsx`) que abre en **otra ventana** `/crm?como=<id>` (`COMO_PARAM`,
+  `enlaceAlCrm({ como })`). Lista a los activos cuya cartera ves, sin vos (`puedeVerComo`,
+  `lib/permisos.ts`; «solo ver» si es read). **Es solo del front y no es un login**: la sesión es
+  la misma (el `localStorage` de Supabase lo comparten todas las pestañas, así que un login de
+  verdad pisaría la tuya), lo que se escribe sale con tu `created_by` y la RLS recorta con **tus**
+  permisos —hacerse pasar por otro de verdad sería un agujero—. `useVerComo` da `perspectivaId`,
+  el «yo» de pantalla: la cartera de entrada (`useVisibleAgents`), el responsable por defecto de
+  «Nuevo lead» (si podés escribirle), los objetivos semanales, el «es mío» de la lista y la
+  campana de emails. `puedeEscribir`, `visibles` y `conEscritura` siguen siendo los tuyos, y lo
+  montado en `AppLayout` (alarmas, toasts de emails y demos) también. Un `?como=` que no vale
+  (vos, desconocido, inactivo o alguien que no ves: `comoValido`) se ignora. Arriba va el cartel
+  `CartelVerComo` («Viendo el CRM como …», Podés editar / Solo lectura, «Cerrar» = `window.close()`
+  y si no se puede, `/crm`) y la pestaña se titula «Como … ·». El selector de carteras se esconde.
+  Todo lo que escribe la URL adentro del CRM parte de la actual, así que el `?como=` se queda.
+- **Leads importantes y el resumen de `/crm`** (23/10/2026, por pedido): la lista lleva una columna
+  con una estrella (`EstrellaImportante`, después del riel; en el teléfono, al lado del `⋯`) que marca
+  `crm_leads.importante`. **Solo SUPERADMIN la ve y la toca** (`puedeMarcarImportante`,
+  `lib/permisos.ts`): un SDR no ve ni la columna. En la base lo corta el trigger
+  `crm_leads_importante_solo_superadmin` (la RLS deja escribir a cualquiera con write sobre la cartera),
+  con su caso 10 en `crm-permisos.sql`. La marca es **del equipo**: lo que marca uno lo ven todos los
+  SUPERADMIN. Migración `20261023135323_crm_leads_importante`, que **la aplica Antonio**; sin ella la
+  lista anda (lee `*`, `importante` es opcional en `CrmLead`) y marcar contesta `FALTA_MIGRACION`.
+  **Un SUPERADMIN que entra a `/crm` pelado ve primero el «Dashboard»** (`ResumenCrm`; «resumen» en el código): los importantes de
+  todas las carteras (etapa, responsable y próxima tarea; vencidos arriba, descartados al final,
+  `leadsImportantes`) y la agenda de hoy y los 6 días siguientes por día (`reunionesPorDia`; «Mías» por
+  defecto, «Todas» las del equipo). **La agenda suma todo tu Google Calendar** (23/10/2026, por
+  pedido): `eventosDeGoogleSueltos` saca los eventos que ya son una reunión del CRM (por
+  `external_event_id`) y pasa los de todo el día a la medianoche local. Es solo **tu** Google (la
+  conexión es de cada uno), en «Mías» y en «Todas», y no se toca: se edita en Google o en la Agenda. Tocar un lead o una reunión abre el lead en el mismo dialog
+  (`?lead=`), con las flechas recorriendo los importantes. **Sin contadores** (tareas vencidas,
+  pendiente agendar, recontactar), por pedido: son los chips de la lista. La regla es
+  `muestraResumen` (`lib/resumen.ts`): `?resumen=1|0` manda; sin él, resumen solo si la URL no trae
+  lead, filtros, vista, `owners` ni `como`, así los enlaces de Equipo, las alarmas y «Ver como» llegan a
+  la lista. Decidido, se escribe en la URL (`fijarResumenEnLaUrl`): abrir un lead desde el resumen o
+  limpiar filtros no cambian de vista solos. Se alterna con **un solo botón en el mismo lugar de la
+  cabecera**: «Ver lista de leads» en el Dashboard, «Dashboard» en la lista (solo SUPERADMIN, sin «Ver como»). Un SDR (y «Ver como») ve la lista como siempre, aunque ponga `?resumen=1`.
+- **Un SUPERADMIN elimina un lead desde el menú `⋯`** (23/10/2026, por pedido): «Eliminar», directo y
+  sin confirmar, con «Deshacer» en el aviso (`useEliminarLead`). Es soft delete (`deleted_at`) y se
+  lleva sus tareas pendientes, para que no sigan sonando las alarmas (`eliminarLead`, `restaurarLead`
+  en el servicio). **Sin migración**: la RLS ya deja escribir a un SUPERADMIN. Solo el front lo
+  esconde a un SDR: la base le dejaría poner `deleted_at` en su cartera. Las reuniones no se tocan:
+  una futura sigue en el Google del responsable.
+- **La matriz de Visibilidad de `/equipo`** (23/10/2026): los SUPERADMIN no son filas (van en una
+  línea «Ven y editan todo») pero sí columnas; todo por nombre (`matrizVisibilidad`,
+  `pages/equipo/lib/`); la primera columna queda fija al scrollear; cada celda guarda sola, con
+  cambio optimista sobre `CRM_KEYS.accesos` y vuelta atrás si falla.
 - **Qué se copió del producto** (podado de lo inmobiliario):
   De `propelia-frontend/src/pages/leads/lib/`: `discardStage`,
   `leadFilters`, `leadFilterParams`, `computeLeadListCounters`, `reassignCollisions`. De

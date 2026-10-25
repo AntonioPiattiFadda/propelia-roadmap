@@ -8,12 +8,13 @@ import {
 import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
-import { useActualizarLead } from '../hooks/useLeadMutaciones'
+import { useCarteras } from '../hooks/useCarteras'
+import { useActualizarLead, useEliminarLead } from '../hooks/useLeadMutaciones'
 import type { CrmLeadRow } from '../types'
 import { DescartarLeadDialog } from './DescartarLeadDialog'
 
 /* Copiado de propelia-frontend (src/pages/leads/components/LeadRowActions.tsx) sin el segundo
-   funnel, sin eliminar y sin la hoja inferior de móvil; sin «Posponer gestión» desde el 10/10/2026
+   funnel y sin la hoja inferior de móvil; sin «Posponer gestión» desde el 10/10/2026
    (la gestión se sacó del front para rediseñarla). Todo deshabilitado sin write sobre la
    cartera: la base lo rechazaría igual, pero un botón que falla al tocarlo enseña a desconfiar. */
 export function LeadRowActions({ lead, puedeEscribir, onStartReassign, triggerClassName }: {
@@ -25,6 +26,9 @@ export function LeadRowActions({ lead, puedeEscribir, onStartReassign, triggerCl
 }) {
   const { etapasActivas, descartada } = useCrmCatalogos()
   const actualizar = useActualizarLead()
+  const eliminar = useEliminarLead()
+  // Eliminar es solo del SUPERADMIN (23/10/2026, por pedido): directo, sin confirmar, con «Deshacer».
+  const { esSuperadmin } = useCarteras()
   const [confirmDiscard, setConfirmDiscard] = useState(false)
 
   const yaDescartado = !!descartada && lead.funnel_stage_id === descartada.id
@@ -65,6 +69,11 @@ export function LeadRowActions({ lead, puedeEscribir, onStartReassign, triggerCl
           >
             Descartar
           </DropdownMenuItem>
+          {esSuperadmin && (
+            <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={() => eliminar.mutate(lead.id)}>
+              Eliminar
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmTask } from '../types'
 import {
-  cambiosDeTarea, estaVencida, idsConTareasVencidas, ordenarPorEstado, ordenarPorProximaTarea, porVencimiento, proximaTareaPorLead,
+  cambiosDeTarea, estaVencida, idsConTareasParaHoy, idsConTareasVencidas,ordenarPorEstado, ordenarPorProximaTarea, porVencimiento, proximaTareaPorLead,
   tareasVencidasPorLead, type EtapaOrdenable,
 } from './tareas'
 
@@ -34,6 +34,20 @@ describe('idsConTareasVencidas / tareasVencidasPorLead', () => {
   })
   it('agrupadas por lead', () => {
     expect(tareasVencidasPorLead(tareas, HOY).get('l1')?.map(t => t.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('idsConTareasParaHoy', () => {
+  it('las de hoy y las vencidas; no las de mañana, ni las hechas, ni las sueltas', () => {
+    const tareas = [
+      tarea({ id: 'a', lead_id: 'vencida', due_date: '2026-09-01' }),
+      tarea({ id: 'b', lead_id: 'hoy', due_date: HOY }),
+      tarea({ id: 'c', lead_id: 'manana', due_date: '2026-10-01' }),
+      tarea({ id: 'd', lead_id: 'hecha', due_date: '2026-09-01', completed: true }),
+      tarea({ id: 'e', lead_id: 'sinFecha', due_date: null }),
+      tarea({ id: 'f', lead_id: null, due_date: HOY }),
+    ]
+    expect([...idsConTareasParaHoy(tareas, HOY)].sort()).toEqual(['hoy', 'vencida'])
   })
 })
 

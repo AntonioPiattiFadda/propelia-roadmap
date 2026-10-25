@@ -82,7 +82,7 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
   onLimpiar: () => void
 }) {
   const hayFiltros = filtros.q.trim() !== '' || filtros.stageFilter.size > 0 || filtros.sinTareas
-    || filtros.overdueOnly || filtros.conTareas || filtros.paraRecontactar || filtros.pendienteAgendar || filtros.orden !== null
+    || filtros.overdueOnly || filtros.conTareas || filtros.paraRecontactar || filtros.pendienteAgendar || filtros.paraHoy || filtros.orden !== null
     || filtros.objetivo !== null
   const columnas = vista === 'columnas'
   const ordenVigente = filtros.orden ?? (filtros.conTareas ? 'tarea' : null)
@@ -221,6 +221,17 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
             : chip(filtros.pendienteAgendar)}
           onClick={() => onCambiar({ pendienteAgendar: !filtros.pendienteAgendar })}>
           Pendiente agendar tarea <span className="tabular-nums">{contadores.pendienteAgendarCount}</span>
+        </button>
+
+        {/* Lo que hay que hacer hoy (23/10/2026, por pedido): leads con alguna tarea pendiente para hoy
+            o vencida. Va siempre; con alguno, el mismo rojo sutil que «Pendiente agendar tarea». */}
+        <button type="button" aria-pressed={filtros.paraHoy} title="Leads con tareas pendientes para hoy o vencidas"
+          className={contadores.paraHoyCount > 0
+            ? cn(chip(false), 'text-(--danger-fg) bg-(--danger-soft) [border:1px_solid_var(--danger)] hover:text-(--danger-fg) hover:bg-(--danger-soft) hover:[border-color:var(--danger)]',
+              filtros.paraHoy && 'font-semibold shadow-none [border-width:1.5px]')
+            : chip(filtros.paraHoy)}
+          onClick={() => onCambiar({ paraHoy: !filtros.paraHoy })}>
+          Tareas vencidas <span className="tabular-nums">{contadores.paraHoyCount}</span>
         </button>
 
         {hayFiltros && (

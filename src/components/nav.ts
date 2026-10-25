@@ -1,8 +1,14 @@
-import { CalendarCheck, CalendarDays, ListChecks, ListTodo, Settings, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react'
+import { CalendarCheck, CalendarDays, CalendarRange, ListChecks, Settings, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react'
 import type { Database } from '@/types/database.types'
 
 export type Rol = Database['public']['Enums']['user_role']
-export type NavItem = { id: string; icon: LucideIcon; label: string; path: string; roles: readonly Rol[]; hijos?: NavItem[] }
+export type NavItem = {
+  id: string; icon: LucideIcon; label: string; path: string; roles: readonly Rol[]; hijos?: NavItem[]
+  /** Query que se suma al enlace (`?vista=meses`): el guard y la marca de activo siguen mirando `path`. */
+  search?: string
+  /** Se abre en otra pestaña del navegador. */
+  nuevaPestana?: boolean
+}
 
 const TODOS: readonly Rol[] = ['SUPERADMIN', 'SDR']
 const SOLO_SUPERADMIN: readonly Rol[] = ['SUPERADMIN']
@@ -14,17 +20,23 @@ const SOLO_SUPERADMIN: readonly Rol[] = ['SUPERADMIN']
    roadmap y no una página hermana: la barra lateral lo dibuja colgando y la de pestañas, que no
    tiene lugar para niveles, solo muestra el primero. Cada hijo lleva sus propios `roles`. */
 export const NAV: NavItem[] = [
-  {
-    id: 'roadmap', icon: ListChecks, label: 'Roadmap', path: '/roadmap', roles: SOLO_SUPERADMIN,
-    hijos: [{ id: 'backlog', icon: ListTodo, label: 'Backlog', path: '/roadmap/backlog', roles: SOLO_SUPERADMIN }],
-  },
+  // El backlog salió de la barra (23/10/2026, por pedido): `/roadmap/backlog` sigue andando
+  // por URL y entra con los roles del roadmap.
+  { id: 'roadmap', icon: ListChecks, label: 'Roadmap', path: '/roadmap', roles: SOLO_SUPERADMIN },
   { id: 'crm', icon: Users, label: 'CRM', path: '/crm', roles: TODOS },
   // La agenda y Ajustes son de todos (21/10/2026): cada uno conecta su Google y mira su semana.
   // La pestaña del vídeo de Ajustes sigue siendo solo SUPERADMIN, con su gate adentro.
   { id: 'agenda', icon: CalendarDays, label: 'Agenda', path: '/agenda', roles: TODOS },
   { id: 'demos', icon: CalendarCheck, label: 'Demos', path: '/demos', roles: SOLO_SUPERADMIN },
   { id: 'equipo', icon: UsersRound, label: 'Equipo', path: '/equipo', roles: SOLO_SUPERADMIN },
-  { id: 'caja', icon: Wallet, label: 'Caja', path: '/caja', roles: SOLO_SUPERADMIN },
+  // «Caja vista Loro» (25/10/2026, por pedido): la Caja en la vista por mes, en otra pestaña.
+  {
+    id: 'caja', icon: Wallet, label: 'Caja', path: '/caja', roles: SOLO_SUPERADMIN,
+    hijos: [{
+      id: 'caja-loro', icon: CalendarRange, label: 'Caja vista Loro', path: '/caja', search: '?vista=meses',
+      nuevaPestana: true, roles: SOLO_SUPERADMIN,
+    }],
+  },
   { id: 'ajustes', icon: Settings, label: 'Ajustes', path: '/ajustes', roles: TODOS },
 ]
 
@@ -36,9 +48,12 @@ export const soloSuperadmin = (item: NavItem) => !item.roles.some(r => r !== 'SU
 export const estaActivo = (pathname: string, path: string) =>
   pathname === path || pathname.startsWith(path + '/')
 
+export const hrefDe = (item: NavItem) => item.path + (item.search ?? '')
+
 // Parado en un hijo, se marca el hijo y no el padre: dos renglones prendidos no dicen dónde estás.
+// Un hijo que abre otra pestaña no cuenta: esta pestaña nunca está parada ahí.
 export const entradaActiva = (pathname: string, item: NavItem) =>
-  estaActivo(pathname, item.path) && !item.hijos?.some(h => estaActivo(pathname, h.path))
+  estaActivo(pathname, item.path) && !item.hijos?.some(h => !h.nuevaPestana && estaActivo(pathname, h.path))
 
 /** Lo que ve cada rol, con los hijos ya recortados por su propio `roles`. */
 export const navDe = (rol: Rol): NavItem[] =>

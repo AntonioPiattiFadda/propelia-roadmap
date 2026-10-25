@@ -1,6 +1,60 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmMeeting } from '../types'
-import { agruparReuniones, armarReunion, datosDeLaDemo, descripcionDeDemo, enlaceParaAgendarDemo, esEmailValido, INVITADO_DE_TODA_DEMO, leerDescripcionDeDemo } from './reuniones'
+import { agruparReuniones, armarReunion, datosDeLaDemo, descripcionDeDemo, DESCRIPCION_DE_DEMO, esEmailValido, esInvitadoFijo, INVITADOS_DE_TODA_DEMO, invitadosDeLaDemo, leerDescripcionDeDemo, RECORDATORIO_DE_DEMO, registroDeDemoDesdeLaActividad, esTituloDeDemoDeFabrica, tituloDeLaDemo } from './reuniones'
+
+describe('tituloDeLaDemo', () => {
+  it('nombra a Propelia y a la inmobiliaria', () => {
+    expect(tituloDeLaDemo('  Inmo Sol ')).toBe('Demo de Propelia · Inmo Sol')
+  })
+  it('sin inmobiliaria queda solo Propelia', () => {
+    expect(tituloDeLaDemo(null)).toBe('Demo de Propelia')
+    expect(tituloDeLaDemo('  ')).toBe('Demo de Propelia')
+  })
+})
+
+describe('esTituloDeDemoDeFabrica', () => {
+  it('reconoce el viejo «Demo» y el nuevo, con o sin inmobiliaria', () => {
+    expect(esTituloDeDemoDeFabrica('Demo')).toBe(true)
+    expect(esTituloDeDemoDeFabrica('Demo de Propelia')).toBe(true)
+    expect(esTituloDeDemoDeFabrica('Demo de Propelia · Inmo Sol')).toBe(true)
+  })
+  it('lo escrito a mano no es de fábrica', () => {
+    expect(esTituloDeDemoDeFabrica('Segunda demo con el socio')).toBe(false)
+    expect(esTituloDeDemoDeFabrica(null)).toBe(false)
+  })
+})
+
+describe('registroDeDemoDesdeLaActividad', () => {
+  const base = { con: ['Ana'], nuevos: ['Pepe'], decisorApuntado: 'Luis', esDecisor: true, texto: 'Le interesa', etapa: 'e1' }
+
+  it('pasa a la demo lo que ya se escribió en la actividad', () => {
+    expect(registroDeDemoDesdeLaActividad(base, 'desc'))
+      .toEqual({ con: ['Ana'], nuevos: ['Pepe'], decisor: 'Luis', esDecisor: true, texto: 'Le interesa', etapa: 'e1' })
+  })
+
+  it('el «¿Es decisor?» sin contestar pasa sin contestar', () => {
+    expect(registroDeDemoDesdeLaActividad({ ...base, esDecisor: null }, 'desc').esDecisor).toBeNull()
+  })
+
+  it('no lleva Descartado, que la demo no ofrece', () => {
+    expect(registroDeDemoDesdeLaActividad({ ...base, etapa: 'desc' }, 'desc').etapa).toBeNull()
+  })
+
+  it('sin nada escrito arranca vacía', () => {
+    expect(registroDeDemoDesdeLaActividad({ con: [], nuevos: [], decisorApuntado: '', esDecisor: null, texto: '', etapa: null }, undefined))
+      .toEqual({ con: [], nuevos: [], decisor: '', esDecisor: null, texto: '', etapa: null })
+  })
+})
+
+describe('valores de fábrica de la demo', () => {
+  it('trae una descripción para el cliente', () => {
+    expect(DESCRIPCION_DE_DEMO.trim().length).toBeGreaterThan(0)
+  })
+
+  it('suena 10 minutos antes', () => {
+    expect(RECORDATORIO_DE_DEMO).toBe(10)
+  })
+})
 
 const reunion = (id: string, starts: Date, status: CrmMeeting['status'] = 'scheduled'): CrmMeeting => ({
   id, lead_id: 'l', assigned_to: 'u', starts_at: starts.toISOString(), ends_at: new Date(starts.getTime() + 3600_000).toISOString(),
@@ -65,34 +119,30 @@ describe('leerDescripcionDeDemo', () => {
   })
 })
 
-describe('enlaceParaAgendarDemo', () => {
-  const base = { leadId: 'l1', assignedTo: 'u1' }
-  const leer = (url: string) => new URL(url, 'https://x.test')
-  it('va a /agenda con el lead, el responsable, el título y la marca de demo', () => {
-    const u = leer(enlaceParaAgendarDemo({ ...base, email: 'a@b.es' }))
-    expect(u.pathname).toBe('/agenda')
-    expect(u.searchParams.get('leadId')).toBe('l1')
-    expect(u.searchParams.get('assignedTo')).toBe('u1')
-    expect(u.searchParams.get('title')).toBe('Demo')
-    expect(u.searchParams.get('demo')).toBe('1')
-    expect(u.searchParams.has('description')).toBe(false)
+describe('invitadosDeLaDemo', () => {
+  it('los fijos son Lorenzo e info@propelia.es', () => {
+    expect(INVITADOS_DE_TODA_DEMO).toEqual(['lorenzopiattifadda@gmail.com', 'info@propelia.es'])
   })
-  it('invita siempre a la inmobiliaria y a Lorenzo', () => {
-    const u = leer(enlaceParaAgendarDemo({ ...base, email: ' Ana@Inmo.es ' }))
-    expect(u.searchParams.getAll('guestEmail')).toEqual(['ana@inmo.es', INVITADO_DE_TODA_DEMO])
+  it('invita siempre a la inmobiliaria y a los fijos, en minúscula', () => {
+    expect(invitadosDeLaDemo(' Ana@Inmo.es ')).toEqual(['ana@inmo.es', ...INVITADOS_DE_TODA_DEMO])
   })
-  it('sin repetir ni colar un mail inválido; sin mail, solo Lorenzo', () => {
-    expect(leer(enlaceParaAgendarDemo({ ...base, email: null })).searchParams.getAll('guestEmail'))
-      .toEqual([INVITADO_DE_TODA_DEMO])
-    expect(leer(enlaceParaAgendarDemo({ ...base, email: INVITADO_DE_TODA_DEMO })).searchParams.getAll('guestEmail'))
-      .toEqual([INVITADO_DE_TODA_DEMO])
-    expect(leer(enlaceParaAgendarDemo({ ...base, email: 'no-es-mail' })).searchParams.getAll('guestEmail'))
-      .toEqual([INVITADO_DE_TODA_DEMO])
+  it('sin repetir ni colar un mail inválido; sin mail, solo los fijos', () => {
+    expect(invitadosDeLaDemo(null)).toEqual(INVITADOS_DE_TODA_DEMO)
+    expect(invitadosDeLaDemo('INFO@propelia.es')).toEqual(INVITADOS_DE_TODA_DEMO)
+    expect(invitadosDeLaDemo('no-es-mail')).toEqual(INVITADOS_DE_TODA_DEMO)
+  })
+})
+
+describe('esInvitadoFijo', () => {
+  it('reconoce a los fijos sin importar mayúsculas ni espacios', () => {
+    expect(esInvitadoFijo(' Info@Propelia.es ')).toBe(true)
+    expect(esInvitadoFijo('lorenzopiattifadda@gmail.com')).toBe(true)
+    expect(esInvitadoFijo('ana@inmo.es')).toBe(false)
   })
 })
 
 describe('datosDeLaDemo', () => {
-  const reunion = { description: 'Invitación a: vieja@inmo.es\nAsisten: Ana\nNotas viejas', guest_emails: [INVITADO_DE_TODA_DEMO, 'ana@inmo.es'] }
+  const reunion = { description: 'Invitación a: vieja@inmo.es\nAsisten: Ana\nNotas viejas', guest_emails: [...INVITADOS_DE_TODA_DEMO, 'ana@inmo.es'] }
   it('con registro: asistentes y notas del registro, el mail del invitado que no es el fijo', () => {
     expect(datosDeLaDemo(reunion, { con: ['Marta', 'Pere'], decisorApuntado: 'Jordi', texto: 'Quiere ver la importación' }))
       .toEqual({ email: 'ana@inmo.es', asistentes: ['Marta', 'Pere'], notas: 'Decisor: Jordi\nQuiere ver la importación' })

@@ -13,7 +13,7 @@ type DropTarget = { id: string; position: 'before' | 'after' } | null
 
 type Props = {
   stages: CrmStage[]
-  onUpdate: (id: string, payload: { label?: string; management_type?: GestionDeEtapa }) => void
+  onUpdate: (id: string, payload: { label?: string; management_type?: GestionDeEtapa; allows_tasks?: boolean; show_in_dashboard?: boolean }) => void
   onCreate: () => void
   onDelete: (id: string) => void
   onReorder: (items: { id: string; position: number }[]) => void
@@ -153,6 +153,42 @@ export function StagesTable({
           </td>
         )}
         {!compact && (
+          /* «¿Se puede agendar tarea?»: con No, a un lead en esta etapa no se le crean tareas
+             (lo corta el trigger de crm_tasks). Las que ya tiene siguen. */
+          <td className="px-2 py-1">
+            <Select
+              value={stage.allows_tasks ? "si" : "no"}
+              onValueChange={(v) => onUpdate(stage.id, { allows_tasks: v === "si" })}
+            >
+              <SelectTrigger aria-label={`Agendar tarea en «${stage.label}»`} className="h-[26px] w-full bg-card text-[12px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="si">Sí</SelectItem>
+                <SelectItem value="no">No</SelectItem>
+              </SelectContent>
+            </Select>
+          </td>
+        )}
+        {!compact && (
+          /* «¿Se ve en el Dashboard?»: con Sí, el Dashboard del CRM lista los leads de esta etapa.
+             Sin la columna en la base (undefined) se lee No. */
+          <td className="px-2 py-1">
+            <Select
+              value={stage.show_in_dashboard ? "si" : "no"}
+              onValueChange={(v) => onUpdate(stage.id, { show_in_dashboard: v === "si" })}
+            >
+              <SelectTrigger aria-label={`Ver «${stage.label}» en el Dashboard`} className="h-[26px] w-full bg-card text-[12px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="si">Sí</SelectItem>
+                <SelectItem value="no">No</SelectItem>
+              </SelectContent>
+            </Select>
+          </td>
+        )}
+        {!compact && (
           <td className="px-2 py-1 text-right">
             {stage.allow_delete
               ? <InlineDeleteButton
@@ -176,6 +212,8 @@ export function StagesTable({
       <col className="w-12" />
       <col />
       <col className="w-[200px]" />
+      <col className="w-[76px]" />
+      <col className="w-[88px]" />
       <col className="w-11" />
     </colgroup>
   )
@@ -225,6 +263,8 @@ export function StagesTable({
               <th className="text-[10.5px] text-(--fg-2) font-bold uppercase tracking-[0.07em] px-1.5 py-1 border-b border-(--line-strong) text-right">#</th>
               <th className={headCell}>Estado</th>
               <th className={headCell}>Gestión</th>
+              <th className={headCell} title="¿Se puede agendar tarea?">Tareas</th>
+              <th className={headCell} title="¿Se ve en el Dashboard?">Dashboard</th>
               <th className="border-b border-(--line-strong)" />
             </tr>
           </thead>

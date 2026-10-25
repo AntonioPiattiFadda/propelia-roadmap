@@ -139,7 +139,7 @@ export function MeetingGuestsField({ userIds, emails, onUserIdsChange, onEmailsC
                   <CommandGroup>
                     {/* `value` = lo tipeado: así cmdk nunca lo filtra y Enter lo elige. */}
                     <CommandItem value={query} onSelect={() => addEmail(typed)}>
-                      <span className="truncate">Invitar a <span className="font-medium">{typed}</span></span>
+                      <span className="truncate" title={typed}>Invitar a <span className="font-medium">{typed}</span></span>
                     </CommandItem>
                   </CommandGroup>
                 )}
@@ -147,8 +147,8 @@ export function MeetingGuestsField({ userIds, emails, onUserIdsChange, onEmailsC
                   <CommandGroup heading="Inmobiliaria del lead">
                     <CommandItem value={`${clientGuest.name ?? ''} ${clientEmail}`} onSelect={() => addEmail(clientEmail)}>
                       <div className="flex min-w-0 flex-col">
-                        <span className="truncate">{clientGuest.name ?? clientEmail}</span>
-                        {clientGuest.name && <span className="truncate text-xs text-muted-foreground">{clientEmail}</span>}
+                        <span className="truncate" title={clientGuest.name ?? clientEmail}>{clientGuest.name ?? clientEmail}</span>
+                        {clientGuest.name && <span className="truncate text-xs text-muted-foreground" title={clientEmail}>{clientEmail}</span>}
                       </div>
                     </CommandItem>
                   </CommandGroup>
@@ -158,8 +158,8 @@ export function MeetingGuestsField({ userIds, emails, onUserIdsChange, onEmailsC
                     {teammateCandidates.map(u => (
                       <CommandItem key={u.id} value={`${displayName(u)} ${u.email ?? ''}`} onSelect={() => addUser(u.id)}>
                         <div className="flex min-w-0 flex-col">
-                          <span className="truncate">{displayName(u)}</span>
-                          {u.email && <span className="truncate text-xs text-muted-foreground">{u.email}</span>}
+                          <span className="truncate" title={displayName(u)}>{displayName(u)}</span>
+                          {u.email && <span className="truncate text-xs text-muted-foreground" title={u.email}>{u.email}</span>}
                         </div>
                       </CommandItem>
                     ))}
@@ -223,9 +223,11 @@ function GuestRow({
   const BadgeIcon = badge?.icon
   return (
     <div className="flex items-center justify-between gap-2 rounded-md py-0.5 text-sm">
-      <div className="flex min-w-0 items-baseline gap-2">
-        <span className="truncate font-medium">{name}</span>
-        {email && <span className="min-w-0 truncate text-xs text-muted-foreground">{email}</span>}
+      {/* El email en su propio renglón, con todo el ancho: al lado del nombre quedaba cortado. Si igual
+          no entra, el `title` lo muestra entero al pasar el cursor. */}
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate font-medium" title={name}>{name}</span>
+        {email && <span className="truncate text-xs text-muted-foreground" title={email}>{email}</span>}
       </div>
       <div className="flex shrink-0 items-center gap-1.5">
         {/* Mismo alto y ancho aproximado que el badge, para que la fila no salte al llegar. */}

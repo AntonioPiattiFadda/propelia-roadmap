@@ -4,7 +4,7 @@ import { catalogoDeEtapas, etapaDelLead, etapaSiguiente, etapasVivas } from './e
 
 const etapa = (over: Partial<CrmStage>): CrmStage => ({
   id: 's1', label: 'Nuevo', value: 'NEW', position: 1, priority_id: 'p1', is_out_of_funnel: false,
-  allow_delete: false, allow_reorder: false, allow_rename: true, management_tolerance_hours: 24, management_type: null,
+  allow_delete: false, allow_reorder: false, allows_tasks: true, allow_rename: true, management_tolerance_hours: 24, management_type: null,
   created_at: '', updated_at: '', deleted_at: null, ...over,
 })
 

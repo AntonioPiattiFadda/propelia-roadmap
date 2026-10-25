@@ -43,6 +43,15 @@ export function VentanaFlotante({ open, onOpenChange, titulo, descripcion, ancho
   children: ReactNode
 }) {
   const [pos, setPos] = useState(() => posicionInicial(ancho))
+  /* Si cambia el ancho con la ventana abierta (registrar actividad se ensancha con «Agendar demo»),
+     se corre a la izquierda lo justo para que el borde derecho no se salga de la pantalla. Se
+     ajusta en el render y no en un efecto: es estado que se deriva de una prop. */
+  const [anchoPrevio, setAnchoPrevio] = useState(ancho)
+  if (anchoPrevio !== ancho) {
+    setAnchoPrevio(ancho)
+    const w = Math.min(ancho, window.innerWidth - MARGEN * 2)
+    setPos(p => ({ ...p, x: Math.max(MARGEN, Math.min(p.x, window.innerWidth - w - MARGEN)) }))
+  }
   const ventana = useRef<HTMLDivElement>(null)
   const arrastre = useRef<{ dx: number; dy: number } | null>(null)
 

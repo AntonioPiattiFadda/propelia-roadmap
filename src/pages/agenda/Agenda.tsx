@@ -2,19 +2,15 @@ import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { ChevronDown, ChevronLeft, ChevronRight, Menu, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { getWeekRange, toLocalYmd } from '@/lib/time'
+import { toLocalYmd } from '@/lib/time'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { cn } from '@/lib/utils'
-import { useLead } from '@/pages/crm/hooks/useCrmLeads'
-import { nombreDelLead } from '@/pages/crm/lib/clientData'
 import { MeetingFormPopover } from './components/meetings/MeetingFormPopover'
 import type { EditableMeeting } from './components/meetings/MeetingFormContent'
-import { useMeetingsInRange } from './hooks/useMeetings'
-import { useGoogleAgenda } from './hooks/useCalendarConnection'
-import { buildAgendaEvents, groupEventsByDay, type AgendaEvent } from './lib/agendaEvents'
-import type { MeetingStatus } from './lib/meetings.types'
+import { useSemanaDeAgenda, weekTitle } from './hooks/useSemanaDeAgenda'
+import type { AgendaEvent } from './lib/agendaEvents'
 import { WeekGrid } from './components/WeekGrid'
 import { AgendaSidePanel } from './components/AgendaSidePanel'
 
@@ -23,14 +19,6 @@ import { AgendaSidePanel } from './components/AgendaSidePanel'
    tuyas, junto con el resto de tu Google Calendar (solo lectura). Click en la grilla agenda una
    reunión; click en una reunión la edita. Las dos van solas a tu Google (`calendar-sync`). La
    cabecera es la `PageHeader` del producto escrita acá: este repo no tiene una. */
-
-const MONTH_LABEL = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' })
-const MONTH_SHORT = new Intl.DateTimeFormat('es-ES', { month: 'short' })
-
-const weekTitle = (start: Date, end: Date): string => {
-  if (start.getMonth() === end.getMonth()) return MONTH_LABEL.format(start)
-  return `${MONTH_SHORT.format(start)} – ${MONTH_LABEL.format(end)}`
-}
 
 function Encabezado({ title, titleActions, children }: { title: ReactNode; titleActions: ReactNode; children?: ReactNode }) {
   return (
@@ -81,8 +69,7 @@ export function Agenda() {
     setSearchParams(next, { replace: true })
   }
 
-  // Contexto de "vengo a agendar esto de este lead" (el «Agendar demo» del lead, ver
-  // `enlaceParaAgendarDemo`): mientras esté presente, cualquier creación (click en el grid o el
+  // Contexto de "vengo a agendar esto de este lead" (`?leadId=&title=`): mientras esté presente, cualquier creación (click en el grid o el
   // botón +) queda atada a ese lead con el mismo título/descripción/responsable/invitados.
   const schedulingContext = useMemo(() => {
     const leadId = searchParams.get('leadId')
@@ -95,17 +82,12 @@ export function Agenda() {
       description: searchParams.get('description') ?? undefined,
       guests: guest ? [{ label: guest }] : undefined,
       guestEmails: searchParams.getAll('guestEmail'),
-      // `demo=1`: al lado de la reunión va el registro de actividad del lead (`useRegistroDeDemo`).
-      demo: searchParams.get('demo') === '1',
     }
   }, [searchParams])
 
-  // De qué inmobiliaria es la demo, para el banner (la Agenda no tiene la lista del CRM).
-  const { data: leadDeLaDemo } = useLead(schedulingContext?.demo ? schedulingContext.leadId : undefined)
-
   const clearSchedulingContext = () => {
     const next = new URLSearchParams(searchParams)
-    for (const key of ['leadId', 'assignedTo', 'title', 'description', 'guest', 'guestEmail', 'demo']) next.delete(key)
+    for (const key of ['leadId', 'assignedTo', 'title', 'description', 'guest', 'guestEmail']) next.delete(key)
     setSearchParams(next, { replace: true })
   }
 
@@ -119,26 +101,9 @@ export function Agenda() {
     setSearchParams(next, { replace: true })
   }
 
-  const { start, end } = useMemo(() => getWeekRange(referenceDate), [referenceDate])
-  const days = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => toLocalYmd(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i))),
-    [start],
-  )
-  const isCurrentWeek = days.includes(toLocalYmd(new Date()))
+  const { start, end, days, isCurrentWeek, meetings, eventsByDay } =
+    useSemanaDeAgenda(referenceDate, { showMeetings, showGoogleEvents })
   const selectedYmd = toLocalYmd(referenceDate)
-
-  const { data: meetings = [] } = useMeetingsInRange(start.toISOString(), end.toISOString())
-  const { data: googleEvents = [] } = useGoogleAgenda(start.toISOString(), end.toISOString(), true)
-
-  const events = useMemo(
-    () =>
-      buildAgendaEvents(
-        showMeetings ? meetings.map(m => ({ ...m, status: m.status as MeetingStatus })) : [],
-        showGoogleEvents ? googleEvents : [],
-      ),
-    [meetings, googleEvents, showMeetings, showGoogleEvents],
-  )
-  const eventsByDay = useMemo(() => groupEventsByDay(events, days), [events, days])
 
   const shiftWeek = (deltaDays: number) =>
     goToDate(new Date(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate() + deltaDays))
@@ -219,8 +184,7 @@ export function Agenda() {
       {schedulingContext && (
         <div className="flex items-center justify-between gap-3 bg-primary/10 border-b border-primary/20 px-4 py-2 text-sm">
           <span className="min-w-0">
-            Agendando: <strong>{schedulingContext.title}</strong>
-            {leadDeLaDemo && <> · <strong>{nombreDelLead(leadDeLaDemo.client)}</strong></>} —{' '}
+            Agendando: <strong>{schedulingContext.title}</strong> —{' '}
             {isMobile ? 'tocá un horario.' : 'hacé click en la grilla para elegir el horario.'}
           </span>
           <Button size="icon" variant="ghost" onClick={clearSchedulingContext}>
@@ -295,7 +259,6 @@ export function Agenda() {
         defaultTitle={schedulingContext?.title}
         defaultDescription={schedulingContext?.description}
         guests={schedulingContext?.guests}
-        demo={schedulingContext?.demo}
         onTitleChange={title => setSchedulingParam('title', title)}
         onDescriptionChange={description => setSchedulingParam('description', description)}
         onSaved={() => { if (schedulingContext) clearSchedulingContext() }}

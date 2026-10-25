@@ -508,6 +508,7 @@ export type Database = {
           allow_delete: boolean
           allow_rename: boolean
           allow_reorder: boolean
+          allows_tasks: boolean
           created_at: string
           deleted_at: string | null
           id: string
@@ -517,6 +518,7 @@ export type Database = {
           management_type: string | null
           position: number
           priority_id: string | null
+          show_in_dashboard: boolean
           updated_at: string
           value: string
         }
@@ -524,6 +526,7 @@ export type Database = {
           allow_delete?: boolean
           allow_rename?: boolean
           allow_reorder?: boolean
+          allows_tasks?: boolean
           created_at?: string
           deleted_at?: string | null
           id?: string
@@ -533,6 +536,7 @@ export type Database = {
           management_type?: string | null
           position?: number
           priority_id?: string | null
+          show_in_dashboard?: boolean
           updated_at?: string
           value?: string
         }
@@ -540,6 +544,7 @@ export type Database = {
           allow_delete?: boolean
           allow_rename?: boolean
           allow_reorder?: boolean
+          allows_tasks?: boolean
           created_at?: string
           deleted_at?: string | null
           id?: string
@@ -549,6 +554,7 @@ export type Database = {
           management_type?: string | null
           position?: number
           priority_id?: string | null
+          show_in_dashboard?: boolean
           updated_at?: string
           value?: string
         }
@@ -577,6 +583,7 @@ export type Database = {
           gestion_postponed: boolean
           gestion_reference_at: string | null
           id: string
+          importante: boolean
           last_important_event_at: string
           last_opened_at: string | null
           recontact_at: string | null
@@ -596,6 +603,7 @@ export type Database = {
           gestion_postponed?: boolean
           gestion_reference_at?: string | null
           id?: string
+          importante?: boolean
           last_important_event_at?: string
           last_opened_at?: string | null
           recontact_at?: string | null
@@ -615,6 +623,7 @@ export type Database = {
           gestion_postponed?: boolean
           gestion_reference_at?: string | null
           id?: string
+          importante?: boolean
           last_important_event_at?: string
           last_opened_at?: string | null
           recontact_at?: string | null

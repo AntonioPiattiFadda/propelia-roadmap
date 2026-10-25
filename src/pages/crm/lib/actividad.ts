@@ -1,6 +1,7 @@
 import { fmtDayMonth, fmtDueLabel, shiftIsoDate, toIsoDate } from '@/lib/calendarDate'
-import type { LeadDetalle, Usuario } from '../types'
+import type { CrmMeeting, LeadDetalle, Usuario } from '../types'
 import { nombreDe } from './permisos'
+import { esTituloDeDemoDeFabrica } from './reuniones'
 
 /* La actividad del lead en una sola lista: lo que se escribió (comentarios MANUAL), lo que dejó
    el sistema (comentarios SYSTEM) y lo que registran la base y los triggers (gestiones, cambios
@@ -24,6 +25,9 @@ export type ItemActividad = {
   intento?: number
   /** Solo demos registradas: el decisor que se apuntó al agendarla. */
   decisorApuntado?: string
+  /** Solo demos con su reunión viva: cuál es y en qué estado está. Cancelar la demo desde la
+   *  actividad (23/10/2026, por pedido) se ofrece mientras esté `scheduled`. */
+  reunion?: { id: string; estado: CrmMeeting['status'] }
 }
 
 /** Los contactos fallidos seguidos se cuentan sobre este número: «2/10» (17/10/2026, por pedido).
@@ -189,7 +193,9 @@ export function lineaDeTiempo(detalle: LeadDetalle, usuarios: Usuario[]): ItemAc
         return {
           id: c.id, tipo: 'reunion' as const, fecha: c.created_at, autorId: c.created_by, con: meta.con,
           decisorApuntado: meta.decisorApuntado,
+          ...(reunion && { reunion: { id: reunion.id, estado: reunion.status } }),
           texto: [
+            reunion?.status === 'cancelled' && `Cancelada${reunion.cancel_reason ? ` · ${reunion.cancel_reason}` : ''}`,
             reunion && `Para el ${fmtDayMonth(toIsoDate(new Date(reunion.starts_at)))} a las ${horaDe(reunion.starts_at)}`,
             meta.decisorApuntado && `Decisor: ${meta.decisorApuntado}`,
             c.description !== TEXTO_DE_DEMO && c.description,
@@ -225,8 +231,10 @@ export function lineaDeTiempo(detalle: LeadDetalle, usuarios: Usuario[]): ItemAc
        que le pone de fábrica no se repite: diría lo mismo dos veces. */
     ...[...reuniones.values()].filter(m => !conRegistro.has(m.id)).map(m => ({
       id: m.id, tipo: 'reunion' as const, fecha: m.created_at,
+      reunion: { id: m.id, estado: m.status },
       texto: `Se agendó una demo para el ${fmtDayMonth(toIsoDate(new Date(m.starts_at)))} a las ${horaDe(m.starts_at)}`
-        + (m.title && m.title !== 'Demo' ? ` · ${m.title}` : ''),
+        + (m.title && !esTituloDeDemoDeFabrica(m.title) ? ` · ${m.title}` : '')
+        + (m.status === 'cancelled' ? ' · Cancelada' : ''),
       autorId: m.created_by,
     })),
   ]
