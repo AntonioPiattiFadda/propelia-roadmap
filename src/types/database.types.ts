@@ -81,6 +81,117 @@ export type Database = {
           },
         ]
       }
+      client_onboarding_members: {
+        Row: {
+          created_at: string
+          email: string | null
+          first_name: string
+          id: string
+          is_contact: boolean
+          is_owner: boolean
+          last_name: string
+          onboarding_id: string
+          phone: string | null
+          role: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          first_name: string
+          id?: string
+          is_contact?: boolean
+          is_owner?: boolean
+          last_name?: string
+          onboarding_id: string
+          phone?: string | null
+          role?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          first_name?: string
+          id?: string
+          is_contact?: boolean
+          is_owner?: boolean
+          last_name?: string
+          onboarding_id?: string
+          phone?: string | null
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_onboarding_members_onboarding_id_fkey"
+            columns: ["onboarding_id"]
+            isOneToOne: false
+            referencedRelation: "client_onboardings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_onboarding_tasks: {
+        Row: {
+          done_at: string
+          done_by: string | null
+          onboarding_id: string
+          task_id: string
+        }
+        Insert: {
+          done_at?: string
+          done_by?: string | null
+          onboarding_id: string
+          task_id: string
+        }
+        Update: {
+          done_at?: string
+          done_by?: string | null
+          onboarding_id?: string
+          task_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_onboarding_tasks_onboarding_id_fkey"
+            columns: ["onboarding_id"]
+            isOneToOne: false
+            referencedRelation: "client_onboardings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      client_onboardings: {
+        Row: {
+          assigned_to: string | null
+          completed_at: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          lead_id: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id: string
+        }
+        Update: {
+          assigned_to?: string | null
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lead_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "client_onboardings_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: true
+            referencedRelation: "crm_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crm_assignment_history: {
         Row: {
           changed_at: string
@@ -519,6 +630,7 @@ export type Database = {
           position: number
           priority_id: string | null
           show_in_dashboard: boolean
+          starts_onboarding: boolean
           updated_at: string
           value: string
         }
@@ -537,6 +649,7 @@ export type Database = {
           position?: number
           priority_id?: string | null
           show_in_dashboard?: boolean
+          starts_onboarding?: boolean
           updated_at?: string
           value?: string
         }
@@ -555,6 +668,7 @@ export type Database = {
           position?: number
           priority_id?: string | null
           show_in_dashboard?: boolean
+          starts_onboarding?: boolean
           updated_at?: string
           value?: string
         }
@@ -585,7 +699,9 @@ export type Database = {
           id: string
           importante: boolean
           last_important_event_at: string
+          lead_type: Database["public"]["Enums"]["crm_lead_type"]
           last_opened_at: string | null
+          propelia_organization_id: string | null
           recontact_at: string | null
           updated_at: string
         }
@@ -605,7 +721,9 @@ export type Database = {
           id?: string
           importante?: boolean
           last_important_event_at?: string
+          lead_type?: Database["public"]["Enums"]["crm_lead_type"]
           last_opened_at?: string | null
+          propelia_organization_id?: string | null
           recontact_at?: string | null
           updated_at?: string
         }
@@ -625,7 +743,9 @@ export type Database = {
           id?: string
           importante?: boolean
           last_important_event_at?: string
+          lead_type?: Database["public"]["Enums"]["crm_lead_type"]
           last_opened_at?: string | null
+          propelia_organization_id?: string | null
           recontact_at?: string | null
           updated_at?: string
         }
@@ -1266,6 +1386,27 @@ export type Database = {
         }
         Relationships: []
       }
+      onboarding_message_templates: {
+        Row: {
+          body: string
+          id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          body: string
+          id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          body?: string
+          id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       roadmap_notas: {
         Row: {
           id: string
@@ -1433,6 +1574,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      client_onboarding_completar: {
+        Args: { p_onboarding_id: string }
+        Returns: undefined
+      }
+      client_onboarding_importar_equipo: {
+        Args: { p_miembros: Json; p_onboarding_id: string; p_organization_id: string }
+        Returns: undefined
+      }
       crm_create_lead_with_client: {
         Args: {
           p_assigned_to: string
@@ -1497,6 +1646,7 @@ export type Database = {
       es_usuario: { Args: never; Returns: boolean }
     }
     Enums: {
+      crm_lead_type: "LEAD" | "ONBOARDING" | "CLIENT"
       crm_management_action: "MANUAL" | "POSTPONED"
       user_role: "SUPERADMIN" | "SDR"
     }

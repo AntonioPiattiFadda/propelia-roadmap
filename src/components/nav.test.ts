@@ -9,8 +9,8 @@ describe('estaActivo', () => {
 })
 
 describe('NAV', () => {
-  it('son las siete páginas de primer nivel, en este orden', () => {
-    expect(NAV.map(n => n.path)).toEqual(['/roadmap', '/crm', '/agenda', '/demos', '/equipo', '/caja', '/ajustes'])
+  it('son las ocho páginas de primer nivel, en este orden', () => {
+    expect(NAV.map(n => n.path)).toEqual(['/roadmap', '/crm', '/agenda', '/demos', '/clientes', '/equipo', '/caja', '/ajustes'])
   })
   it('el backlog ya no está en la barra', () => {
     const roadmap = NAV.find(n => n.id === 'roadmap')
@@ -38,8 +38,8 @@ describe('entradaActiva', () => {
 })
 
 describe('navDe', () => {
-  it('un SUPERADMIN ve las siete de primer nivel', () =>
-    expect(navDe('SUPERADMIN').map(n => n.path)).toEqual(['/roadmap', '/crm', '/agenda', '/demos', '/equipo', '/caja', '/ajustes']))
+  it('un SUPERADMIN ve las ocho de primer nivel', () =>
+    expect(navDe('SUPERADMIN').map(n => n.path)).toEqual(['/roadmap', '/crm', '/agenda', '/demos', '/clientes', '/equipo', '/caja', '/ajustes']))
   it('un SDR ve el CRM, la Agenda y Ajustes', () => expect(navDe('SDR').map(n => n.path)).toEqual(['/crm', '/agenda', '/ajustes']))
 })
 
@@ -49,7 +49,7 @@ describe('puedeEntrar', () => {
     expect(puedeEntrar('SDR', '/crm/lead/3')).toBe(true)
   })
   it('un SDR NO entra al resto', () => {
-    for (const p of ['/roadmap', '/roadmap/backlog', '/demos', '/equipo', '/caja']) expect(puedeEntrar('SDR', p)).toBe(false)
+    for (const p of ['/roadmap', '/roadmap/backlog', '/demos', '/clientes', '/equipo', '/caja']) expect(puedeEntrar('SDR', p)).toBe(false)
   })
   it('un SDR entra a la Agenda y a Ajustes', () => {
     expect(puedeEntrar('SDR', '/agenda')).toBe(true)

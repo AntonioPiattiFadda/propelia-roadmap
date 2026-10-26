@@ -340,7 +340,7 @@ const ahora = () => new Date().toISOString()
 
 export type EtapaNueva = Pick<TablesInsert<'crm_funnel_stages'>,
   'label' | 'value' | 'position' | 'allow_delete' | 'allow_reorder' | 'allow_rename' | 'is_out_of_funnel'>
-export type EtapaPatch = Pick<TablesUpdate<'crm_funnel_stages'>, 'label' | 'position' | 'management_type' | 'allows_tasks' | 'show_in_dashboard'>
+export type EtapaPatch = Pick<TablesUpdate<'crm_funnel_stages'>, 'label' | 'position' | 'management_type' | 'allows_tasks' | 'show_in_dashboard' | 'starts_onboarding'>
 
 export async function crearEtapa(input: EtapaNueva): Promise<CrmStage> {
   const { data, error } = await supabase.from('crm_funnel_stages').insert(input).select().single()
