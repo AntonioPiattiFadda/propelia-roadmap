@@ -213,8 +213,9 @@ código actual en `referencia/`.
 - Lo que es del producto (orgs, import de la cartera, mails simulados, links de pago) pasa **sólo**
   por la edge function `propelia-bridge` (`docs/onboarding/PUENTE.md`). El front nunca usa la URL
   ni las keys del producto.
-- El puente (`propelia-bridge` acá y `roadmap-bridge` en el producto) lo construye la sesión de
-  `propelia-frontend`; hasta que esté, se mockea con los ejemplos de `PUENTE.md`.
+- El puente está hecho: `supabase/functions/propelia-bridge/` (tests con `deno test` ahí adentro)
+  reenvía a `roadmap-bridge` del producto si quien llama es SUPERADMIN activo. Deploy y secretos
+  en `PUENTE.md` › Deploy; mientras no esté deployado, se mockea con los ejemplos de ese archivo.
 
 ## El CRM (y Equipo) — `/crm` y `/equipo`
 

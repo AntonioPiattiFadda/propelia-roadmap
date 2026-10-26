@@ -13,8 +13,10 @@ navegador (Roadmap) ──invoke──▶ propelia-bridge (Roadmap)
                                   └─ organizations · users · import · send-email · links de pago
 ```
 
-**Estado:** a construir por la sesión de `propelia-frontend`. Hasta que esté deployado, el front
-mockea `invoke` con las respuestas de ejemplo de este archivo.
+**Estado (26/10/2026):** construido y con tests, **sin deployar**. Código:
+`supabase/functions/propelia-bridge/` acá y `supabase/functions/roadmap-bridge/` en
+`propelia-frontend`. Hasta que esté deployado, el front mockea `invoke` con las respuestas de
+ejemplo de este archivo, que son las reales.
 
 ## Cómo se llama
 
@@ -38,12 +40,12 @@ Cualquier error responde con status ≠ 2xx y este cuerpo:
 | `error` | Status | Cuándo |
 |---|---|---|
 | `invalid_session` | 401 | Sin sesión o sesión vencida |
-| `forbidden` | 403 | No es SUPERADMIN activo del Roadmap |
+| `forbidden` | 403 | No es SUPERADMIN activo del Roadmap, o (sólo `create_payment_link`) no tiene cuenta de superadmin en Propelia con el mismo email |
 | `bad_request` | 400 | Falta un parámetro o tiene mal formato; `message` dice cuál |
 | `not_found` | 404 | La org, el plan o el escenario no existen |
 | `not_demo_org` | 409 | Simular un lead fuera de la org demo |
 | `too_many_rows` | 413 | Más filas que el máximo de la acción |
-| `upstream_error` | 502 | El producto o un tercero (Google, Lemon Squeezy, Resend) falló; `message` lo explica |
+| `upstream_error` | 502 | El producto o un tercero (Google, Lemon Squeezy, Resend) falló, o el puente está mal configurado; `message` lo explica |
 
 `message` está en español y se puede mostrar tal cual en un toast.
 
@@ -114,9 +116,12 @@ la española, "Sí/No", tipos y operaciones los parsea el producto.
     { "row_number": 3, "valid": false, "errors": ["Falta el precio de venta"], "warnings": [],
       "existing_property_id": null, "summary": { … } }
 ] }
-// o, si el archivo entero no sirve:
-{ "ok": false, "error": "Falta la columna «Baños»." }
+// o, si el archivo entero no sirve (200 igual: es un resultado, no una falla):
+{ "ok": false, "error": "Faltan columnas: Baños. Descargá la plantilla y usá esos nombres." }
 ```
+
+`summary.operation` es `sale`, `rent` o `sale_rent`; `summary.price` el de venta si hay, si no el
+de alquiler.
 
 `existing_property_id` ≠ null: esa fila ya está en la org (mismo código de Idealista) y se va a
 saltear. Máximo **2000 filas** (`too_many_rows`).
@@ -146,10 +151,13 @@ lote quedó creada y se puede reintentar. Más de 50 filas → `too_many_rows`.
 
 ```json
 { "scenarios": [
-  { "id": "dip-visita", "label": "Diputació 142 · pide visita (sólo teléfono)" },
-  { "id": "dip-info", "label": "…" }
+  { "id": "dip-visita", "label": "Diputació 142 · pide visita (sólo teléfono)", "ad_code": "112086123" },
+  { "id": "dip-info", "label": "…", "ad_code": "…" }
 ] }
 ```
+
+`ad_code` es el código de anuncio de Idealista del mail: el lead se vincula solo si en la org
+demo hay una propiedad con ese código.
 
 ### `send_simulated_inbound`
 
@@ -171,11 +179,12 @@ Planes que se pueden cobrar con un link: los públicos y, con `org_id`, el indiv
 ```json
 // { "action": "list_payment_plans", "org_id": "6f1c…" } →
 { "plans": [
-  { "id": "pro", "name": "Pro", "amount_cents": 19900, "interval": "month", "individual": false }
+  { "id": "9b2e…", "code": "pro_founder_monthly", "name": "Pro", "amount_cents": 19900, "currency": "eur", "individual": false }
 ] }
 ```
 
-Los importes son **con IVA** (lo que paga el cliente).
+Sin `org_id`, sólo los públicos. Se sacan los archivados y los vencidos. Los importes son
+**con IVA** (lo que paga el cliente).
 
 ### `create_payment_link`
 
@@ -184,14 +193,16 @@ producto): checkout de Lemon Squeezy que se paga sin login y vence a los 7 días
 suscripción se vincula sola al pagar.
 
 ```json
-// { "action": "create_payment_link", "plan_id": "pro", "org_id": "6f1c…",
+// { "action": "create_payment_link", "plan_id": "9b2e…", "org_id": "6f1c…",
 //   "amount_cents": null, "customer_email": "marta@fincasribera.es", "note": "Onboarding Fincas Ribera" } →
 { "link": { "id": "l1…", "url": "https://…", "status": "open", "expires_at": "2026-11-02T10:00:00Z",
-            "plan_id": "pro", "amount_cents": 19900 } }
+            "plan_id": "9b2e…", "amount_cents": 19900 } }
 ```
 
-`amount_cents: null` = el importe del plan. Los errores de negocio del producto (org `exempt`,
-org con suscripción viva) vuelven como `bad_request` con el `message` del producto.
+`amount_cents: null` = el importe del plan. El link queda a nombre del **superadmin de Propelia
+con el mismo email** que quien lo pide en el Roadmap; si no hay, `forbidden`. Los errores de
+negocio del producto vuelven con su `message` tal cual: plan inexistente o de otra org →
+`not_found`; org `exempt`, org con suscripción viva, importe inválido → `bad_request` (409 o 400).
 
 ### `list_payment_links`
 
@@ -199,8 +210,12 @@ Para la tarea «Confirmar que pagó».
 
 ```json
 // { "action": "list_payment_links", "org_id": "6f1c…" } →
-{ "links": [ { "id": "l1…", "url": "https://…", "status": "linked", "created_at": "…", "paid_at": "…" } ] }
+{ "links": [ { "id": "l1…", "url": "https://…", "status": "linked", "plan_id": "9b2e…", "amount_cents": 19900,
+               "expires_at": "…", "created_at": "…", "paid_at": "…" } ] }
 ```
+
+Sólo los links generados **con** esa org. Uno de venta en vivo (sin org) aparece recién cuando
+se vincula desde Facturación admin.
 
 `status` es el de `billing_payment_links` del producto: `open` (sin pagar), `paid` (pagado, sin
 vincular a una org) o `linked` (pagado y vinculado). Un `open` con `expires_at` pasado ya no se
@@ -210,9 +225,22 @@ puede pagar.
 
 | Proyecto | Secreto | Para qué |
 |---|---|---|
-| Roadmap | `PROPELIA_BRIDGE_URL` | URL de `roadmap-bridge` en el producto |
+| Roadmap | `PROPELIA_BRIDGE_URL` | `https://gvkdyxhxsnpumxlhvhsm.supabase.co/functions/v1/roadmap-bridge` |
 | Roadmap | `PROPELIA_BRIDGE_SECRET` | Se manda en `x-bridge-secret` |
 | Propelia | `ROADMAP_BRIDGE_SECRET` | El mismo valor; `roadmap-bridge` rechaza cualquier otro |
 
+`roadmap-bridge` va con `verify_jwt = false` (el Roadmap no tiene un JWT de Propelia); la puerta
+es el secreto, comparado en tiempo constante. Sin `ROADMAP_BRIDGE_SECRET` no atiende a nadie.
+
 `propelia-bridge` le pasa al producto el email del usuario del Roadmap que hizo el pedido
-(`actor`), para que quede registrado quién importó o generó un link.
+(`actor`), para que quede registrado quién importó o generó un link. Lo pone el puente: si el
+navegador manda un `actor`, se descarta.
+
+## Deploy
+
+1. Propelia: `supabase db push` (migración `superadmin_import_properties_service_role`: el RPC
+   del import acepta la service role), `supabase secrets set ROADMAP_BRIDGE_SECRET=…` y
+   `supabase functions deploy roadmap-bridge`.
+2. Roadmap: `supabase secrets set PROPELIA_BRIDGE_URL=… PROPELIA_BRIDGE_SECRET=…` (el mismo
+   secreto) y `supabase functions deploy propelia-bridge`.
+3. Probar: `list_organizations` desde la consola del Roadmap logueado como SUPERADMIN.
