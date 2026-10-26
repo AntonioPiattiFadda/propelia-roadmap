@@ -152,6 +152,7 @@ export interface RawGoogleEvent {
   summary?: string
   start?: { dateTime?: string; date?: string }
   end?: { dateTime?: string; date?: string }
+  attendees?: (GoogleAttendee & { self?: boolean })[]
 }
 
 export interface GoogleAgendaItem {
@@ -160,7 +161,13 @@ export interface GoogleAgendaItem {
   start: string
   end: string
   isAllDay: boolean
+  /** Me invitaron y todavía no contesté (26/10/2026): el Dashboard lo dice. Solo va cuando es true. */
+  sinAceptar?: true
 }
+
+// Mi lugar entre los invitados (`self`), si no soy quien organiza, todavía sin contestar.
+const sinAceptar = (event: RawGoogleEvent): boolean =>
+  event.attendees?.some(a => a.self && !a.organizer && a.responseStatus === 'needsAction') ?? false
 
 // Mapea la respuesta de events.list al shape mínimo que necesita la agenda.
 // Descarta instancias sin start/end utilizable (no debería pasar con eventos reales de Google).
@@ -170,6 +177,6 @@ export const mapGoogleEventsToAgenda = (events: RawGoogleEvent[]): GoogleAgendaI
     const start = isAllDay ? event.start?.date : event.start?.dateTime
     const end = isAllDay ? event.end?.date : event.end?.dateTime
     if (!start || !end) return acc
-    acc.push({ id: event.id, summary: event.summary ?? '(Sin título)', start, end, isAllDay })
+    acc.push({ id: event.id, summary: event.summary ?? '(Sin título)', start, end, isAllDay, ...(sinAceptar(event) ? { sinAceptar: true as const } : {}) })
     return acc
   }, [])

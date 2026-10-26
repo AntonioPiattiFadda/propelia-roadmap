@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CrmLeadRow, CrmMeeting, CrmStage } from '../types'
 import {
   RESUMEN_PARAM, escribirResumen, fijarResumenEnLaUrl, hayEtapasEnElDashboard,
-  eventosDeGoogleSueltos, leadsImportantes, muestraResumen, reunionesPorDia,
+  eventosDeGoogleSueltos, invitacionesSinAceptar, leadsImportantes, muestraResumen, reunionesMias, reunionesPorDia,
 } from './resumen'
 import type { ProximaTarea } from './tareas'
 
@@ -144,8 +144,36 @@ describe('reunionesPorDia', () => {
   })
 })
 
+const google = (id: string, start: string, isAllDay = false) => ({ id, summary: `Evento ${id}`, start, end: start, isAllDay })
+
+describe('reunionesMias', () => {
+  it('las que tengo de responsable y las de otro a las que me invitaron (están en mi Google)', () => {
+    const r = reunionesMias([
+      reunion('mia', a(23, 9), { assigned_to: 'yo' }),
+      reunion('invitado', a(24, 10), { assigned_to: 'otra', external_event_id: 'g1' }),
+      reunion('ajena', a(24, 11), { assigned_to: 'otra', external_event_id: 'g2' }),
+    ], [google('g1', a(24, 10).toISOString())], 'yo')
+    expect(r.map(x => x.id)).toEqual(['mia', 'invitado'])
+  })
+  it('y la invitada no sale además como evento suelto de Google', () => {
+    const reuniones = [reunion('invitado', a(24, 10), { assigned_to: 'otra', external_event_id: 'g1' })]
+    const g = [google('g1', a(24, 10).toISOString())]
+    const todo = [...reunionesMias(reuniones, g, 'yo'), ...eventosDeGoogleSueltos(g, reuniones)]
+    expect(todo.map(x => x.id)).toEqual(['invitado'])
+  })
+})
+
+describe('invitacionesSinAceptar', () => {
+  it('los ids de Google de lo que todavía no acepté: sirve para el evento suelto y para la reunión del CRM', () => {
+    const r = invitacionesSinAceptar([
+      { ...google('g1', a(24, 10).toISOString()), sinAceptar: true },
+      google('g2', a(24, 11).toISOString()),
+    ])
+    expect([...r]).toEqual(['g1'])
+  })
+})
+
 describe('eventosDeGoogleSueltos', () => {
-  const google = (id: string, start: string, isAllDay = false) => ({ id, summary: `Evento ${id}`, start, end: start, isAllDay })
 
   it('saca los eventos que ya son una reunión del CRM (de cualquiera, cancelada incluida)', () => {
     const r = eventosDeGoogleSueltos(

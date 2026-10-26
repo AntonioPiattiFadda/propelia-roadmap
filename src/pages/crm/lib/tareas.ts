@@ -36,13 +36,16 @@ export function idsConTareasVencidas(tasks: Array<TareaVencible & Pick<CrmTask, 
   return ids
 }
 
-/** Los leads con alguna tarea pendiente para hoy o vencida (23/10/2026): lo que hay que hacer hoy.
- *  A diferencia de `estaVencida`, la de hoy entra. */
+/** Pendiente y para hoy o vencida: lo que hay que hacer hoy. A diferencia de `estaVencida`, la de
+ *  hoy entra. */
+export function tocaHoyOVencida(t: TareaVencible, today: string): boolean {
+  return !t.completed && t.deleted_at == null && t.due_date != null && t.due_date.slice(0, 10) <= today
+}
+
+/** Los leads con alguna tarea pendiente para hoy o vencida (23/10/2026). */
 export function idsConTareasParaHoy(tasks: Array<TareaVencible & Pick<CrmTask, 'lead_id'>>, today: string): Set<string> {
   const ids = new Set<string>()
-  for (const t of tasks) {
-    if (t.lead_id && !t.completed && t.deleted_at == null && t.due_date != null && t.due_date.slice(0, 10) <= today) ids.add(t.lead_id)
-  }
+  for (const t of tasks) if (t.lead_id && tocaHoyOVencida(t, today)) ids.add(t.lead_id)
   return ids
 }
 

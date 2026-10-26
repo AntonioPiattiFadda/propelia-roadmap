@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CrmTask } from '../types'
 import {
   cambiosDeTarea, estaVencida, idsConTareasParaHoy, idsConTareasVencidas,ordenarPorEstado, ordenarPorProximaTarea, porVencimiento, proximaTareaPorLead,
-  tareasVencidasPorLead, type EtapaOrdenable,
+  tareasVencidasPorLead, tocaHoyOVencida, type EtapaOrdenable,
 } from './tareas'
 
 const tarea = (over: Partial<CrmTask>): CrmTask => ({
@@ -48,6 +48,16 @@ describe('idsConTareasParaHoy', () => {
       tarea({ id: 'f', lead_id: null, due_date: HOY }),
     ]
     expect([...idsConTareasParaHoy(tareas, HOY)].sort()).toEqual(['hoy', 'vencida'])
+  })
+})
+
+describe('tocaHoyOVencida', () => {
+  it('la de hoy y la vencida sí; la de mañana, la hecha y la sin fecha no', () => {
+    expect(tocaHoyOVencida(tarea({ due_date: HOY }), HOY)).toBe(true)
+    expect(tocaHoyOVencida(tarea({ due_date: '2026-09-01' }), HOY)).toBe(true)
+    expect(tocaHoyOVencida(tarea({ due_date: '2026-10-01' }), HOY)).toBe(false)
+    expect(tocaHoyOVencida(tarea({ due_date: '2026-09-01', completed: true }), HOY)).toBe(false)
+    expect(tocaHoyOVencida(tarea({ due_date: null }), HOY)).toBe(false)
   })
 })
 

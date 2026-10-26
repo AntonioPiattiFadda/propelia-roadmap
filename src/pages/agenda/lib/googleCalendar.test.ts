@@ -233,4 +233,15 @@ describe('mapGoogleEventsToAgenda', () => {
   it('lista vacía da lista vacía', () => {
     expect(mapGoogleEventsToAgenda([])).toEqual([])
   })
+
+  it('marca sinAceptar la invitación que todavía no contesté; aceptada, propia o sin invitados no', () => {
+    const horario = { start: { dateTime: '2026-08-03T10:00:00Z' }, end: { dateTime: '2026-08-03T11:00:00Z' } }
+    const events = mapGoogleEventsToAgenda([
+      { id: 'pendiente', ...horario, attendees: [{ email: 'otra@x.es', organizer: true, responseStatus: 'accepted' }, { email: 'yo@x.es', self: true, responseStatus: 'needsAction' }] },
+      { id: 'aceptada', ...horario, attendees: [{ email: 'yo@x.es', self: true, responseStatus: 'accepted' }] },
+      { id: 'mia', ...horario, attendees: [{ email: 'yo@x.es', self: true, organizer: true, responseStatus: 'needsAction' }] },
+      { id: 'sola', ...horario },
+    ])
+    expect(events.filter(e => e.sinAceptar).map(e => e.id)).toEqual(['pendiente'])
+  })
 })

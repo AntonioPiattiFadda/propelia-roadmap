@@ -12,6 +12,7 @@ import {
   updateMeeting,
   type CreateMeetingPayload,
 } from '../service/meetings.service'
+import { instanteDelFormulario } from '../lib/horaDeEspana'
 import type { MeetingChanges } from '../lib/meetingPatch'
 import type { Meeting } from '../lib/meetings.types'
 
@@ -104,12 +105,13 @@ export const useRetryMeetingSync = () => {
   })
 }
 
-export const useFreeBusy = (dateYmd: string, enabled: boolean) =>
+/** Con `enEspana`, el día es el de España (el formulario de la demo). */
+export const useFreeBusy = (dateYmd: string, enabled: boolean, enEspana = false) =>
   useQuery({
-    queryKey: ['freebusy', dateYmd],
+    queryKey: ['freebusy', dateYmd, enEspana],
     queryFn: () => {
-      const from = new Date(`${dateYmd}T00:00:00`)
-      const to = new Date(`${dateYmd}T23:59:59`)
+      const from = instanteDelFormulario(dateYmd, '00:00', enEspana)
+      const to = new Date(instanteDelFormulario(dateYmd, '23:59', enEspana).getTime() + 59_000)
       return getFreeBusy(from.toISOString(), to.toISOString())
     },
     enabled: enabled && dateYmd !== '',

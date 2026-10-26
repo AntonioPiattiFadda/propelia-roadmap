@@ -21,10 +21,13 @@ import { nombreDelLead, type CampoDecisor } from '@/pages/crm/lib/clientData'
 import { esEmailValido, esInvitadoFijo, type RegistroInicialDeDemo } from '@/pages/crm/lib/reuniones'
 import { useCreateMeeting, useFreeBusy, useUpdateMeeting } from '../../hooks/useMeetings'
 import { useGoogleConnection } from '../../hooks/useCalendarConnection'
+import { ZONA_ESPANA } from '@/pages/crm/lib/alarmas'
 import { formatBusyRanges } from '../../lib/busyRanges'
+import { horaEnTuZona, instanteDelFormulario } from '../../lib/horaDeEspana'
 import { finConLaMismaDuracion, horarioDelSlot } from '../../lib/selectorDeHorario'
 import { GOOGLE_EVENT_COLORS } from '../../lib/googleEventColors'
 import type { Meeting } from '../../lib/meetings.types'
+import { HoraDeEspana } from '../BanderaEspana'
 import { SelectorDeHorario } from '../SelectorDeHorario'
 import { CancelMeetingDialog } from './CancelMeetingDialog'
 import { MeetingGuestsField } from './MeetingGuestsField'
@@ -167,7 +170,10 @@ export function MeetingFormContent({
   const { data: currentUser } = useYo(userSession?.user.id)
   const { data: connection, isPending: connectionPending } = useGoogleConnection()
   const isGoogleConnected = connection?.status === 'active'
-  const { data: busy = [] } = useFreeBusy(date, isGoogleConnected)
+  // La demo va en hora de España (26/10/2026, por pedido): las 10:00 elegidas son las de Madrid.
+  const enEspana = demo
+  const { data: busy = [] } = useFreeBusy(date, isGoogleConnected, enEspana)
+  const horaLocal = enEspana && date && time ? horaEnTuZona(instanteDelFormulario(date, time, true), date) : null
   const agentName = currentUser
     ? [currentUser.nombre, currentUser.last_name].filter(Boolean).join(' ') || currentUser.email || null
     : null
@@ -244,8 +250,8 @@ export function MeetingFormContent({
       setShowErrors(true)
       return
     }
-    const starts = new Date(`${date}T${time}`)
-    const ends = new Date(`${date}T${endTime}`)
+    const starts = instanteDelFormulario(date, time, enEspana)
+    const ends = instanteDelFormulario(date, endTime, enEspana)
     const reminderMinutes = REMINDER_OPTIONS.find(o => o.value === reminderValue)?.minutes ?? null
     const trimmedTitle = title.trim() === '' ? null : title.trim()
     const trimmedDescription = description.trim() === '' ? null : description.trim()
@@ -387,8 +393,15 @@ export function MeetingFormContent({
               Seleccionar día y hora
             </Button>
           )}
+          {enEspana && (
+            <HoraDeEspana className="ml-7 text-xs font-medium text-(--fg-2)">
+              {horaLocal && <span className="font-normal text-muted-foreground">{` · ${horaLocal} en tu hora`}</span>}
+            </HoraDeEspana>
+          )}
           {busy.length > 0 && (
-            <p className="ml-7 text-xs text-muted-foreground">Ocupado: {formatBusyRanges(busy)}</p>
+            <p className="ml-7 text-xs text-muted-foreground">
+              Ocupado: {formatBusyRanges(busy, enEspana ? ZONA_ESPANA : undefined)}
+            </p>
           )}
         </div>
         {demo && (
@@ -536,6 +549,7 @@ export function MeetingFormContent({
         <SelectorDeHorario
           fecha={date}
           titulo="Elegí día y hora de la demo"
+          horaDeEspana={enEspana}
           onElegir={slot => {
             const elegido = horarioDelSlot(slot, { time, endTime })
             setDate(elegido.date)

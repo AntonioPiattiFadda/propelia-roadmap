@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { esTelefonoDeOficina, telefonosDelCliente } from './clientData'
 import {
   campoDelNuevoDecisor, casilleroDelTelefonoNuevo, casilleroParaTelefonoDeGoogle, contactoDelCliente, contactosConDecisor, contactosDelCliente, decisorDelContactoNuevo, decisorSabido, decisoresDeLaLlamada, EMPTY_CLIENT, esTelefonoDeIdealista, copiasDelTelefonoDeIdealista,
-  conDecisorApuntado, decisoresQueSeMarcaron, inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, patchDeContactosNuevos, tieneDecisor, validateClientData,
+  conDecisorApuntado, decisoresQueSeMarcaron, inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, nombresDeDecisores, patchDeContactosNuevos, tieneDecisor, validateClientData,
 } from './clientData'
 
 describe('validateClientData', () => {
@@ -224,6 +224,24 @@ describe('tieneDecisor', () => {
   })
   it('una marca en un casillero sin nadie no cuenta', () => {
     expect(tieneDecisor({ ...vacio, alternative_phone_2_is_decision_maker: true })).toBe(false)
+  })
+})
+
+describe('nombresDeDecisores', () => {
+  const vacio = {
+    first_name: null, last_name: null, phone: null,
+    alternative_phone_1: null, alternative_phone_1_note: null, alternative_phone_2: null, alternative_phone_2_note: null,
+  }
+  it('los contactos marcados como decisores, por nombre', () => {
+    expect(nombresDeDecisores({
+      ...vacio, first_name: 'Laura', last_name: 'Gil', contact_is_decision_maker: true,
+      alternative_phone_1_note: 'Marc', alternative_phone_1_is_decision_maker: true,
+      alternative_phone_2_note: 'Ana', alternative_phone_2_is_decision_maker: false,
+    })).toEqual(['Laura Gil', 'Marc'])
+  })
+  it('sin nadie marcado, ninguno', () => {
+    expect(nombresDeDecisores({ ...vacio, first_name: 'Laura' })).toEqual([])
+    expect(nombresDeDecisores(null)).toEqual([])
   })
 })
 

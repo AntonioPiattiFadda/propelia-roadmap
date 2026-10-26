@@ -150,6 +150,13 @@ acá son las reuniones del CRM (`crm_meetings`, las demos incluidas). Migración
   horario se escribe a mano o con **«Seleccionar día y hora»**, que abre la semana de la Agenda
   encima de todo (`SelectorDeHorario`, mismos datos que la página por `useSemanaDeAgenda`): tocar un
   hueco vuelve al formulario con ese día y hora (`horarioDelSlot`: conserva la duración cargada).
+  **La demo se agenda en hora de España** (26/10/2026, por pedido): las 10:00 elegidas son las 10:00
+  de Madrid, esté quien agenda donde esté (`instanteDelFormulario`, `lib/horaDeEspana.ts`, sobre
+  `momentoDeLaTarea`). El formulario lo dice debajo del horario («Hora de España · 05:00 en tu hora»,
+  `horaEnTuZona`; en España no agrega nada) y el «Ocupado» también va en hora de allá. El selector
+  dibuja la semana del reloj de España (`horaDeEspana` en `useSemanaDeAgenda` y `WeekGrid`): los
+  eventos se reescriben sin zona con `eventosEnHoraDeEspana`, así la grilla no sabe de zonas. **Solo
+  la demo**: la página /agenda y editar una reunión siguen en la hora de cada uno.
   Con `demo` el formulario suma el **«Email del cliente»** arriba de los invitados (cambiarlo cambia
   ese invitado; si la inmobiliaria no tenía email, se le guarda) y una **columna «Registro de
   actividad»** (`RegistroDeDemoPanel` + `useRegistroDeDemo`). **Desde el 23/10/2026 (por pedido) va a
@@ -529,12 +536,24 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   SUPERADMIN. Migración `20261023135323_crm_leads_importante`, que **la aplica Antonio**; sin ella la
   lista anda (lee `*`, `importante` es opcional en `CrmLead`) y marcar contesta `FALTA_MIGRACION`.
   **Un SUPERADMIN que entra a `/crm` pelado ve primero el «Dashboard»** (`ResumenCrm`; «resumen» en el código): los importantes de
-  todas las carteras (etapa, responsable y próxima tarea; vencidos arriba, descartados al final,
-  `leadsImportantes`) y la agenda de hoy y los 6 días siguientes por día (`reunionesPorDia`; «Mías» por
+  todas las carteras (vencidos arriba, descartados al final, `leadsImportantes`), **en columnas desde
+  el 26/10/2026, por pedido**: Inmobiliaria, Decisor (`nombresDeDecisores`: los contactos marcados
+  como decisores), Estado y Tarea agendada («No hay tarea» si no tiene ninguna pendiente). Sin
+  responsable a la vista. **Va en rojo** (fondo y riel) el que no tiene tarea y el que tiene la
+  próxima para hoy o vencida (`tocaHoyOVencida`, `lib/tareas.ts`, la misma regla de «Tareas
+  vencidas»), salvo el descartado, que no se sigue. y la agenda de hoy y los 6 días siguientes por día (`reunionesPorDia`; «Mías» por
   defecto, «Todas» las del equipo). **La agenda suma todo tu Google Calendar** (23/10/2026, por
   pedido): `eventosDeGoogleSueltos` saca los eventos que ya son una reunión del CRM (por
   `external_event_id`) y pasa los de todo el día a la medianoche local. Es solo **tu** Google (la
-  conexión es de cada uno), en «Mías» y en «Todas», y no se toca: se edita en Google o en la Agenda. Tocar un lead o una reunión abre el lead en el mismo dialog
+  conexión es de cada uno), en «Mías» y en «Todas», y no se toca: se edita en Google o en la Agenda.
+  **«Mías» también trae la reunión de otro que está en tu Google** (26/10/2026: una demo que agendó
+  una compañera y te invitó), con `reunionesMias`: sin eso no salía en ningún lado, porque no era
+  tuya por `assigned_to` y `eventosDeGoogleSueltos` la sacaba de tu Google por ser ya del CRM.
+  **Lo que te invitaron y todavía no aceptaste se ve igual, con «Pendiente aceptar»** (26/10/2026,
+  por pedido): `mapGoogleEventsToAgenda` (edge `calendar-sync`, acción `agenda`) marca `sinAceptar`
+  cuando tu lugar en `attendees` (`self`, sin ser organizador) está en `needsAction`, e
+  `invitacionesSinAceptar` (`lib/resumen.ts`) lo cruza con el evento suelto y con la reunión del CRM.
+  Sin la edge function desplegada no llega la marca y no se ve el rótulo; el evento sí. Tocar un lead o una reunión abre el lead en el mismo dialog
   (`?lead=`), con las flechas recorriendo los importantes. **Sin contadores** (tareas vencidas,
   pendiente agendar, recontactar), por pedido: son los chips de la lista. La regla es
   `muestraResumen` (`lib/resumen.ts`): `?resumen=1|0` manda; sin él, resumen solo si la URL no trae

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useSemanaDeAgenda, weekTitle } from '../hooks/useSemanaDeAgenda'
 import { fechaParaAbrir } from '../lib/selectorDeHorario'
+import { HoraDeEspana } from './BanderaEspana'
 import { WeekGrid } from './WeekGrid'
 
 export type HorarioElegido = { ymd: string; startTime: string; endTime: string }
@@ -18,16 +19,18 @@ export type HorarioElegido = { ymd: string; startTime: string; endTime: string }
    en z 400: por encima de la ventana flotante (z 50), del popover de la Agenda (z 250) y de los
    menús (z 300). No lleva `.ui-scale`: está portaleada a `body` como el formulario que la abre, y
    `slotAtPointer` mide el zoom real de la columna, así que el horario sale bien con o sin él. */
-export function SelectorDeHorario({ fecha, titulo = 'Elegí día y hora', onElegir, onCerrar }: {
+export function SelectorDeHorario({ fecha, titulo = 'Elegí día y hora', horaDeEspana = false, onElegir, onCerrar }: {
   /** El día ya elegido en el formulario (`YYYY-MM-DD`), o vacío. */
   fecha: string
   titulo?: string
+  /** La semana en el reloj de España (la demo, 26/10/2026): el horario que vuelve es de allá. */
+  horaDeEspana?: boolean
   onElegir: (horario: HorarioElegido) => void
   onCerrar: () => void
 }) {
   const isMobile = useIsMobile()
   const [referencia, setReferencia] = useState(() => fechaParaAbrir(fecha, new Date()))
-  const { start, end, days, isCurrentWeek, eventsByDay } = useSemanaDeAgenda(referencia)
+  const { start, end, days, isCurrentWeek, eventsByDay } = useSemanaDeAgenda(referencia, { horaDeEspana })
   const correr = (dias: number) =>
     setReferencia(r => new Date(r.getFullYear(), r.getMonth(), r.getDate() + dias, 12))
 
@@ -55,6 +58,9 @@ export function SelectorDeHorario({ fecha, titulo = 'Elegí día y hora', onEleg
               </Button>
               <span className="text-[14px] font-semibold capitalize">{weekTitle(start, end)}</span>
             </div>
+            {horaDeEspana && (
+              <HoraDeEspana className="rounded-full bg-(--surface-2) px-2.5 py-1 text-[12.5px] font-semibold text-(--fg-2)" />
+            )}
             <DialogPrimitive.Close aria-label="Cerrar"
               className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-md text-(--fg-2) hover:bg-(--surface-2)">
               <XIcon size={16} />
@@ -66,6 +72,7 @@ export function SelectorDeHorario({ fecha, titulo = 'Elegí día y hora', onEleg
               days={days}
               eventsByDay={eventsByDay}
               selectedYmd={fecha}
+              horaDeEspana={horaDeEspana}
               onCreateAt={({ ymd, startTime, endTime }) => {
                 onElegir({ ymd, startTime, endTime })
                 onCerrar()

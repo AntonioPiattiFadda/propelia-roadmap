@@ -179,6 +179,11 @@ export function tieneDecisor(client: ClienteConDecisor | null | undefined): bool
   return contactosConDecisor(client).some(c => c.decisor === true)
 }
 
+/** Los nombres de los contactos marcados como decisores (la columna «Decisor» del Dashboard). */
+export function nombresDeDecisores(client: ClienteConDecisor | null | undefined): string[] {
+  return contactosConDecisor(client).filter(c => c.decisor === true).map(c => c.nombre)
+}
+
 /**
  * El decisor apuntado al registrar una actividad (17/10/2026, por pedido): el doorkeeper dio su
  * nombre y queda en el perfil aunque no se haya hablado con él. Se suma al `patch` de los nuevos de

@@ -4,6 +4,7 @@ import { toLocalYmd } from '@/lib/time'
 import { minutesToPx, layoutOverlappingEvents, minutesToHHMM, type TimedEvent } from '../lib/weekGridLayout'
 import { DAY_COLUMN_ATTR, slotAtPointer } from '../lib/gridPointer'
 import type { AgendaEvent } from '../lib/agendaEvents'
+import { relojDeEspana } from '../lib/horaDeEspana'
 import { AgendaEventBlock } from './AgendaEventBlock'
 import { GridSlotTooltip } from './GridSlotTooltip'
 
@@ -42,28 +43,30 @@ type Props = {
   onEditMeeting: (event: AgendaEvent, clientX: number, clientY: number) => void
   /** Teléfono: columna de horas más angosta, para dejarle el ancho a los 7 días. */
   compact?: boolean
+  /** Los eventos ya vienen en el reloj de España (`eventosEnHoraDeEspana`): el «hoy» y la línea de
+   *  la hora actual también. */
+  horaDeEspana?: boolean
 }
 
-export function WeekGrid({ days, eventsByDay, selectedYmd, onCreateAt, onEditMeeting, compact = false }: Props) {
+const minutosDeAhora = (horaDeEspana: boolean): number => {
+  const now = new Date()
+  return horaDeEspana ? relojDeEspana(now).minutos : now.getHours() * 60 + now.getMinutes()
+}
+
+export function WeekGrid({ days, eventsByDay, selectedYmd, onCreateAt, onEditMeeting, compact = false, horaDeEspana = false }: Props) {
   const TIME_GUTTER_PX = compact ? COMPACT_TIME_GUTTER_PX : DEFAULT_TIME_GUTTER_PX
   const scrollRef = useRef<HTMLDivElement>(null)
-  const todayYmd = toLocalYmd(new Date())
-  const [nowMinutes, setNowMinutes] = useState(() => {
-    const now = new Date()
-    return now.getHours() * 60 + now.getMinutes()
-  })
+  const todayYmd = horaDeEspana ? relojDeEspana(new Date()).ymd : toLocalYmd(new Date())
+  const [nowMinutes, setNowMinutes] = useState(() => minutosDeAhora(horaDeEspana))
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = minutesToPx(SCROLL_TO_HOUR * 60)
   }, [])
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      const now = new Date()
-      setNowMinutes(now.getHours() * 60 + now.getMinutes())
-    }, 30_000)
+    const interval = setInterval(() => setNowMinutes(minutosDeAhora(horaDeEspana)), 30_000)
     return () => clearInterval(interval)
-  }, [])
+  }, [horaDeEspana])
 
   const dayColumns = useMemo(
     () =>

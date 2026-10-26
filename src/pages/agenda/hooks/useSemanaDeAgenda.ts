@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { getWeekRange, toLocalYmd } from '@/lib/time'
 import { buildAgendaEvents, groupEventsByDay } from '../lib/agendaEvents'
+import { eventosEnHoraDeEspana, relojDeEspana } from '../lib/horaDeEspana'
 import type { MeetingStatus } from '../lib/meetings.types'
 import { diasDeLaSemana } from '../lib/selectorDeHorario'
 import { useMeetingsInRange } from './useMeetings'
@@ -20,23 +21,32 @@ export const weekTitle = (start: Date, end: Date): string => {
    formulario de la reunión (`SelectorDeHorario`): un solo camino de datos para las dos. */
 export function useSemanaDeAgenda(
   referenceDate: Date,
-  { showMeetings = true, showGoogleEvents = true }: { showMeetings?: boolean; showGoogleEvents?: boolean } = {},
+  { showMeetings = true, showGoogleEvents = true, horaDeEspana = false }: {
+    showMeetings?: boolean
+    showGoogleEvents?: boolean
+    /** La semana del reloj de España (el selector de la demo): cada evento cae en su día y hora de allá. */
+    horaDeEspana?: boolean
+  } = {},
 ) {
   const { start, end } = useMemo(() => getWeekRange(referenceDate), [referenceDate])
   const days = useMemo(() => diasDeLaSemana(start), [start])
-  const isCurrentWeek = days.includes(toLocalYmd(new Date()))
+  const isCurrentWeek = days.includes(horaDeEspana ? relojDeEspana(new Date()).ymd : toLocalYmd(new Date()))
 
-  const { data: meetings = [] } = useMeetingsInRange(start.toISOString(), end.toISOString())
-  const { data: googleEvents = [] } = useGoogleAgenda(start.toISOString(), end.toISOString(), true)
+  // En hora de España la semana de allá no calza con la local: se trae un día de más de cada lado
+  // y `groupEventsByDay` deja afuera lo que no cae en estos siete días.
+  const margen = horaDeEspana ? 86_400_000 : 0
+  const desde = new Date(start.getTime() - margen).toISOString()
+  const hasta = new Date(end.getTime() + margen).toISOString()
+  const { data: meetings = [] } = useMeetingsInRange(desde, hasta)
+  const { data: googleEvents = [] } = useGoogleAgenda(desde, hasta, true)
 
-  const events = useMemo(
-    () =>
-      buildAgendaEvents(
-        showMeetings ? meetings.map(m => ({ ...m, status: m.status as MeetingStatus })) : [],
-        showGoogleEvents ? googleEvents : [],
-      ),
-    [meetings, googleEvents, showMeetings, showGoogleEvents],
-  )
+  const events = useMemo(() => {
+    const todos = buildAgendaEvents(
+      showMeetings ? meetings.map(m => ({ ...m, status: m.status as MeetingStatus })) : [],
+      showGoogleEvents ? googleEvents : [],
+    )
+    return horaDeEspana ? eventosEnHoraDeEspana(todos) : todos
+  }, [meetings, googleEvents, showMeetings, showGoogleEvents, horaDeEspana])
   const eventsByDay = useMemo(() => groupEventsByDay(events, days), [events, days])
 
   return { start, end, days, isCurrentWeek, meetings, eventsByDay }

@@ -4,6 +4,8 @@ export interface GoogleAgendaItem {
   start: string
   end: string
   isAllDay: boolean
+  /** Me invitaron y todavía no contesté. Solo va cuando es true (y sin la edge function nueva, nunca). */
+  sinAceptar?: true
 }
 
 // Agrupa eventos ya traídos contra una lista fija de días (yyyy-mm-dd, ver getWeekRange/toLocalYmd en @/lib/time).

@@ -100,6 +100,28 @@ export function reunionesPorDia<T extends Pick<CrmMeeting, 'starts_at' | 'status
   return [...porDia.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([dia, rs]) => ({ dia, reuniones: rs }))
 }
 
+/**
+ * Las reuniones de «Mías» en la agenda del Dashboard: las que tengo de responsable y las de otro
+ * que están en mi Google (26/10/2026: una demo que agendó una compañera y me invitó). Sin lo
+ * segundo, esa demo no salía en ningún lado: no es mía por `assigned_to` y `eventosDeGoogleSueltos`
+ * la saca de mi Google por ser ya una reunión del CRM.
+ */
+export function reunionesMias<T extends Pick<CrmMeeting, 'assigned_to' | 'external_event_id'>>(
+  reuniones: readonly T[], google: readonly Pick<GoogleAgendaItem, 'id'>[], myId: string | null,
+): T[] {
+  const enMiGoogle = new Set(google.map(e => e.id))
+  return reuniones.filter(r => r.assigned_to === myId || (r.external_event_id != null && enMiGoogle.has(r.external_event_id)))
+}
+
+/**
+ * Los ids de Google de lo que me invitaron y todavía no acepté (26/10/2026, por pedido): el Dashboard
+ * lo muestra igual, con «Pendiente aceptar». Vale para el evento suelto (`id`) y para la reunión del
+ * CRM (`external_event_id`), que en el Google del invitado lleva el mismo id.
+ */
+export function invitacionesSinAceptar(google: readonly GoogleAgendaItem[]): Set<string> {
+  return new Set(google.filter(e => e.sinAceptar).map(e => e.id))
+}
+
 /** Un evento del Google de quien mira, con la forma que entiende `reunionesPorDia`. */
 export type EventoDeGoogle = Pick<CrmMeeting, 'id' | 'title' | 'starts_at' | 'status' | 'deleted_at'> & {
   deGoogle: true
