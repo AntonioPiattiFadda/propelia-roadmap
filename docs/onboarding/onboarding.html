@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Onboarding de clientes</title>
+<style>
+/* Prototipo de la pantalla superadmin /onboarding-admin. Datos de ejemplo: el estado vive en memoria. */
+:root {
+  --brand: #3644F2;
+  --brand-soft: #eceefe;
+  --brand-soft-fg: #2630b8;
+  --bg-page: #f4f5fa;
+  --surface: #ffffff;
+  --surface-2: #f8f9fc;
+  --fg: #080D41;
+  --muted: #8992AA;
+  --faint: #B6BECF;
+  --line: #e4e7f0;
+  --line-soft: #eef0f6;
+  --success: #17a05d;
+  --success-soft: #e2f5eb;
+  --success-strong: #0f7a45;
+  --warning: #9a5b00;
+  --warning-soft: #fdf0d8;
+  --danger: #c5283d;
+  --danger-soft: #fde7ea;
+  --fg-inverse: #ffffff;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --brand: #6f7bff; --brand-soft: #222866; --brand-soft-fg: #c5caff;
+    --bg-page: #0e1022; --surface: #171a30; --surface-2: #1c2038; --fg: #eceefa; --muted: #9298b6; --faint: #5b6182;
+    --line: #2a2e4a; --line-soft: #22263f;
+    --success: #3fcf8a; --success-soft: #133426; --success-strong: #6fe3aa;
+    --warning: #f0b860; --warning-soft: #3a2a10; --danger: #ff7a8a; --danger-soft: #3d1820;
+    --fg-inverse: #0e1022;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --brand: #6f7bff; --brand-soft: #222866; --brand-soft-fg: #c5caff;
+  --bg-page: #0e1022; --surface: #171a30; --surface-2: #1c2038; --fg: #eceefa; --muted: #9298b6; --faint: #5b6182;
+  --line: #2a2e4a; --line-soft: #22263f;
+  --success: #3fcf8a; --success-soft: #133426; --success-strong: #6fe3aa;
+  --warning: #f0b860; --warning-soft: #3a2a10; --danger: #ff7a8a; --danger-soft: #3d1820;
+  --fg-inverse: #0e1022;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg-page); color: var(--fg); font-family: var(--sans); font-size: 14px; line-height: 1.5;
+  padding: 28px 16px 72px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; gap: 20px; }
+button, select, input { font: inherit; color: inherit; }
+
+/* ---------- cabecera ---------- */
+.head { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; justify-content: space-between; }
+.head h1 { margin: 0; font-size: 24px; letter-spacing: -0.015em; }
+.head p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.org-picker { display: grid; gap: 4px; min-width: 280px; flex: 0 1 340px; }
+.org-picker label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); }
+.org-picker select {
+  width: 100%; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface);
+  font-weight: 600; cursor: pointer;
+}
+.org-picker select:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; }
+
+/* ---------- resumen de la organización ---------- */
+.summary { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 24px; align-items: center; }
+.summary h2 { margin: 0; font-size: 18px; }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 18px; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.meta b { color: var(--fg); font-weight: 600; }
+.progress { grid-column: 1 / -1; display: grid; gap: 6px; }
+.progress .bar { height: 8px; border-radius: 99px; background: var(--line-soft); overflow: hidden; }
+.progress .bar i { display: block; height: 100%; background: var(--brand); border-radius: inherit; transition: width .25s ease; }
+.progress .lbl { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+.now { text-align: right; }
+.now small { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; font-weight: 600; }
+.now strong { font-size: 15px; }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.pill.done { background: var(--success-soft); color: var(--success-strong); }
+.pill.doing { background: var(--brand-soft); color: var(--brand-soft-fg); }
+.pill.todo { background: var(--line-soft); color: var(--muted); }
+.pill.blocked { background: var(--warning-soft); color: var(--warning); }
+
+/* ---------- layout pasos ---------- */
+.body { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .body { grid-template-columns: minmax(0, 1fr); } .summary { grid-template-columns: minmax(0, 1fr); } .now { text-align: left; } }
+
+.steps { list-style: none; margin: 0; padding: 8px; display: grid; gap: 2px; }
+.steps button {
+  width: 100%; display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: center;
+  text-align: left; padding: 10px; border: 0; background: none; border-radius: 10px; cursor: pointer;
+}
+.steps button:hover:not(:disabled) { background: var(--surface-2); }
+.steps button[aria-current="step"] { background: var(--brand-soft); }
+.steps button:disabled { cursor: default; opacity: .6; }
+.dot {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  border: 1.5px solid var(--faint); color: var(--muted); background: var(--surface);
+}
+.dot.done { background: var(--success); border-color: var(--success); color: var(--fg-inverse); }
+.dot.doing { border-color: var(--brand); color: var(--brand); }
+.steps .t { font-weight: 600; font-size: 13px; }
+.steps .s { font-size: 11px; color: var(--muted); }
+
+/* ---------- detalle del paso ---------- */
+.detail { display: grid; gap: 16px; }
+.detail-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.detail-head h3 { margin: 0; font-size: 17px; }
+.detail-head p { margin: 0; flex-basis: 100%; color: var(--muted); font-size: 13px; }
+
+.tasks { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.task { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.task.is-done { border-color: color-mix(in oklab, var(--success) 35%, var(--line)); }
+.task-row { display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 14px; }
+.task-row input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--success); cursor: pointer; }
+.task-row .tt { font-weight: 600; }
+.task.is-done .tt { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); }
+.task-row .td { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.task-extra { border-top: 1px solid var(--line-soft); background: var(--surface-2); padding: 12px 14px; display: grid; gap: 10px; font-size: 13px; }
+.task-extra p { margin: 0; }
+
+.alert { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--warning-soft); color: var(--warning); font-size: 12px; }
+.alert b { display: block; font-size: 13px; }
+.alert svg { margin-top: 2px; }
+
+.tmpl { position: relative; }
+.tmpl pre { margin: 0; padding: 10px 12px; border-radius: 10px; background: var(--surface); border: 1px solid var(--line); font-family: var(--mono); font-size: 12px; white-space: pre-wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.btn:hover { border-color: var(--brand); color: var(--brand); }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn.primary:hover { color: #fff; filter: brightness(1.08); }
+a.btn { text-decoration: none; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.field { display: grid; gap: 4px; max-width: 260px; }
+.field label { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.field input, .field select { padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); }
+
+/* ---------- tabla del equipo ---------- */
+.team-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 620px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+th { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; background: var(--surface-2); }
+tr:last-child td { border-bottom: 0; }
+td code { font-family: var(--mono); font-size: 11px; background: var(--line-soft); padding: 1px 5px; border-radius: 4px; }
+.warn { color: var(--danger); font-weight: 600; margin: 0; font-size: 12px; }
+
+.empty { text-align: center; padding: 36px 20px; color: var(--muted); }
+.empty strong { display: block; color: var(--fg); font-size: 15px; margin-bottom: 4px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 12px); opacity: 0; pointer-events: none;
+  background: var(--fg); color: var(--bg-page); padding: 8px 14px; border-radius: 10px; font-size: 13px; transition: .2s ease;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="head">
+    <div>
+      <h1>Onboarding</h1>
+      <p>Paso a paso del alta de cada inmobiliaria nueva. Sólo superadmin.</p>
+    </div>
+    <div class="org-picker">
+      <label for="org">Organización</label>
+      <select id="org"></select>
+    </div>
+  </header>
+
+  <section class="card summary" id="summary" aria-live="polite"></section>
+
+  <div class="body">
+    <nav class="card" style="padding:0" aria-label="Pasos del onboarding">
+      <ol class="steps" id="steps"></ol>
+    </nav>
+    <section class="card detail" id="detail"></section>
+  </div>
+
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+// Réplica de /onboarding-admin con datos de ejemplo. En la app los pasos salen de
+// src/pages/onboarding-admin/onboardingCatalog.ts y lo hecho, el equipo y los mensajes de la base.
+// Acá el estado vive en memoria: al recargar vuelve al inicio.
+const STEPS = [
+  {
+    id: 'contacto',
+    title: 'Contacto inicial',
+    summary: 'Presentarse y pedir contacto y equipo',
+    tasks: [
+      { id: 'enviar', title: 'Enviar el mensaje de presentación', desc: 'Un solo WhatsApp al responsable: saludo, que nombren a una persona de contacto y los datos de cada persona del equipo.', extra: 'message', template: 'contacto_inicial' },
+      { id: 'respuesta', title: 'Confirmar que respondió', desc: 'Su respuesta confirma que el número es el correcto y que el canal funciona.' },
+      { id: 'persona-contacto', title: 'Definir la persona de contacto', desc: 'Una sola persona habla con nosotros y con su equipo, configura la organización y conecta los portales. Desde acá, los mensajes le salen a ella.', extra: 'contact' },
+      { id: 'cargar-equipo', title: 'Cargar el equipo que pasaron', desc: 'Por persona: nombre, apellido, email, teléfono (+34) y rol. Con esto se crean las cuentas en el paso 2.', extra: 'team' },
+    ],
+  },
+  {
+    id: 'usuarios',
+    title: 'Usuarios y cuentas',
+    summary: 'Crear las cuentas',
+    tasks: [
+      { id: 'responsable', title: 'Crear la cuenta del responsable', desc: 'Desde /sign-up con la contraseña nombre.apellido. Eso crea la organización: vinculala acá.', extra: 'organization' },
+      { id: 'equipo', title: 'Crear al resto del equipo', desc: 'Equipo → Crear usuario, dentro de la organización del cliente.', extra: 'team', blocked: 'Desde la app, el responsable no puede crear usuarios y soporte los crearía en la organización de Propelia. Hoy necesita a un programador.' },
+      { id: 'verificar', title: 'Verificar accesos y enviar credenciales', desc: 'Entrar con el responsable y un agente, revisar Equipo y avisarles que cambien la contraseña.' },
+    ],
+  },
+  {
+    id: 'organizacion',
+    title: 'Configurar la organización',
+    summary: 'Datos, logo y colores',
+    tasks: [
+      { id: 'avisar', title: 'Decirles qué configurar', desc: 'Ajustes → Organización (nombre y web) y Ajustes → Marca (logo y colores).', extra: 'message', template: 'configurar_organizacion' },
+      { id: 'datos', title: 'Nombre y web cargados', desc: 'Ajustes → Organización: el nombre como quieren que aparezca y la web de la inmobiliaria.' },
+      { id: 'logo', title: 'Logo cargado', desc: 'Ajustes → Marca.' },
+      { id: 'colores', title: 'Colores de marca cargados', desc: 'Ajustes → Marca.' },
+    ],
+  },
+  {
+    id: 'portales',
+    title: 'Integrar los portales',
+    summary: 'Idealista y Fotocasa',
+    tasks: [
+      { id: 'avisar', title: 'Pedirles que conecten los portales', desc: 'Lo hace la persona de contacto, en Ajustes → Integraciones.', extra: 'message', template: 'integrar_portales' },
+      { id: 'idealista', title: 'Idealista conectado', desc: 'Ajustes → Integraciones → Idealista.' },
+      { id: 'fotocasa', title: 'Fotocasa conectado', desc: 'Ajustes → Integraciones → Fotocasa.' },
+    ],
+  },
+];
+
+// Mensajes: en la app están en onboarding_message_templates y se editan desde la pantalla.
+// {nombre} = persona de contacto, {soporte} = quien envía, {inmobiliaria}.
+const TEMPLATES = {
+  contacto_inicial: `¡Hola {nombre}! Soy {soporte}, del equipo de Propelia 👋
+
+Bienvenidos. A partir de ahora voy a ser vuestra persona de contacto para poner en marcha la cuenta de {inmobiliaria}, y os voy a ir guiando paso a paso por aquí.
+
+Para empezar necesito dos cosas:
+
+1. Una persona de contacto de vuestro lado, que hable con nosotros y con el resto del equipo, para que todo vaya por un solo canal. Se encargará también de configurar la organización y de conectar los portales. Si eres tú, perfecto; si no, pásame su nombre y su teléfono.
+
+2. Las personas del equipo que van a usar Propelia. Por cada una:
+- Nombre y apellido:
+- Email:
+- Teléfono (con +34):
+- Rol (Administrador / Agente):
+
+Con eso os creo los accesos y os paso a cada uno su usuario y contraseña. Cualquier duda, escribidme por aquí.`,
+  configurar_organizacion: `{nombre}, el siguiente paso es dejar lista la organización de {inmobiliaria}. En Propelia, entrad a Ajustes:
+
+- Organización: el nombre de la inmobiliaria y vuestra web.
+- Marca: el logo y los colores de la inmobiliaria.
+
+Cuando lo tengáis, avisadme por aquí y lo reviso.`,
+  integrar_portales: `{nombre}, ahora toca conectar los portales de {inmobiliaria}. En Propelia, entrad a Ajustes → Integraciones y conectad Idealista y Fotocasa.
+
+Si en algún paso os pide algo que no tenéis a mano, escribidme por aquí y lo vemos juntos.`,
+};
+
+// En la app sale precargado con el nombre del usuario logueado.
+let signer = 'Antonio';
+
+// Organizaciones ya creadas, para vincular en "Crear la cuenta del responsable".
+const ORGANIZATIONS = ['Casas del Norte', 'Fincas Mediterráneo', 'Inmobiliaria Ejemplo'];
+
+const ONBOARDINGS = [
+  {
+    id: 'o1', name: 'Inmobiliaria Sol Levante', since: '21 oct 2026', organization: null,
+    done: { contacto: ['enviar'] },
+    team: [
+      { id: 'm1', first: 'Marta', last: 'Ruiz', email: '', phone: '+34 611 223 344', role: 'Administrador', owner: true, contact: true },
+    ],
+  },
+  {
+    id: 'o2', name: 'Casas del Norte', since: '18 oct 2026', organization: 'Casas del Norte',
+    done: { contacto: ['enviar', 'respuesta', 'persona-contacto', 'cargar-equipo'], usuarios: ['responsable'] },
+    team: [
+      { id: 'm2', first: 'Íñigo', last: 'Peña', email: 'inigo@casasnorte.es', phone: '+34 644 556 677', role: 'Administrador', owner: true },
+      { id: 'm3', first: 'María José', last: 'Fernández', email: 'mj@casasnorte.es', phone: '+34 655 667 788', role: 'Administrador', contact: true },
+      { id: 'm4', first: 'Li', last: 'Wu', email: 'li@casasnorte.es', phone: '+34 633 445 566', role: 'Agente' },
+    ],
+  },
+  {
+    id: 'o3', name: 'Fincas Mediterráneo', since: '9 oct 2026', organization: 'Fincas Mediterráneo',
+    done: {
+      contacto: ['enviar', 'respuesta', 'persona-contacto', 'cargar-equipo'],
+      usuarios: ['responsable', 'equipo', 'verificar'],
+      organizacion: ['avisar', 'datos', 'logo', 'colores'],
+      portales: ['avisar', 'idealista'],
+    },
+    team: [
+      { id: 'm5', first: 'Laura', last: 'Gil', email: 'laura@fincasmed.es', phone: '+34 666 778 899', role: 'Administrador', owner: true, contact: true },
+      { id: 'm6', first: 'Pablo', last: 'Soto', email: 'pablo@fincasmed.es', phone: '+34 677 889 900', role: 'Agente' },
+    ],
+  },
+];
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fullName = (p) => `${p.first} ${p.last}`.trim();
+
+// nombre.apellido en minúsculas, sin tildes ni espacios.
+function initialPassword(first, last) {
+  const clean = (s) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^a-z]/g, '');
+  return `${clean(first)}.${clean(last)}`;
+}
+
+let onbId = ONBOARDINGS[0].id;
+let openStepId = null;
+
+const onb = () => ONBOARDINGS.find((o) => o.id === onbId);
+const doneIn = (o, step) => o.done[step.id] ?? [];
+const contactOf = (o) => o.team.find((p) => p.contact) ?? o.team.find((p) => p.owner) ?? null;
+const ownerOf = (o) => o.team.find((p) => p.owner) ?? null;
+const TOTAL = STEPS.reduce((n, s) => n + s.tasks.length, 0);
+
+function stepStatus(o, step) {
+  const n = doneIn(o, step).length;
+  if (n === step.tasks.length) return 'done';
+  return n > 0 ? 'doing' : 'todo';
+}
+
+function currentStep(o) {
+  return STEPS.find((s) => stepStatus(o, s) !== 'done') ?? STEPS[STEPS.length - 1];
+}
+
+function message(o, templateId) {
+  const c = contactOf(o);
+  return TEMPLATES[templateId]
+    .replaceAll('{nombre}', c ? c.first : '')
+    .replaceAll('{soporte}', signer.trim() || '[tu nombre]')
+    .replaceAll('{inmobiliaria}', o.name);
+}
+const waLink = (o, templateId) => `https://wa.me/${(contactOf(o)?.phone ?? '').replace(/\D/g, '')}?text=${encodeURIComponent(message(o, templateId))}`;
+
+function stepLabel(o) {
+  const cur = currentStep(o);
+  return stepStatus(o, cur) === 'done' ? 'completado' : `paso ${STEPS.indexOf(cur) + 1} · ${cur.title}`;
+}
+
+function renderSelect() {
+  $('org').innerHTML = ONBOARDINGS.map((o) =>
+    `<option value="${o.id}" ${o.id === onbId ? 'selected' : ''}>${esc(o.name)} — ${esc(stepLabel(o))}</option>`).join('');
+}
+
+function renderSummary() {
+  const o = onb();
+  const done = STEPS.reduce((n, s) => n + doneIn(o, s).length, 0);
+  const pct = Math.round((done / TOTAL) * 100);
+  const cur = currentStep(o);
+  const finished = stepStatus(o, cur) === 'done';
+  const owner = ownerOf(o);
+  const contact = contactOf(o);
+  $('summary').innerHTML = `
+    <div>
+      <h2>${esc(o.name)}</h2>
+      <div class="meta">
+        <span>Alta: <b>${esc(o.since)}</b></span>
+        <span>Responsable: <b>${owner ? esc(fullName(owner)) : '—'}</b></span>
+        <span>Contacto: <b>${contact ? esc(fullName(contact)) : '—'}</b></span>
+        <span>Equipo: <b>${o.team.length} personas</b></span>
+        <span>Cuenta: <b>${o.organization ? 'creada' : 'todavía no'}</b></span>
+      </div>
+    </div>
+    <div class="now">
+      <small>Estamos en</small>
+      <strong>${finished ? 'Onboarding completado' : `Paso ${STEPS.indexOf(cur) + 1} · ${esc(cur.title)}`}</strong>
+    </div>
+    <div class="progress">
+      <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Progreso del onboarding"><i style="width:${pct}%"></i></div>
+      <div class="lbl"><span>${done} de ${TOTAL} tareas</span><span>${pct}%</span></div>
+    </div>`;
+}
+
+function renderSteps() {
+  const o = onb();
+  $('steps').innerHTML = STEPS.map((s, i) => {
+    const st = stepStatus(o, s);
+    const sub = st === 'done' ? 'Completado' : `${doneIn(o, s).length} de ${s.tasks.length} · ${s.summary}`;
+    return `<li><button type="button" data-step="${s.id}" ${s.id === openStepId ? 'aria-current="step"' : ''}>
+      <span class="dot ${st}">${st === 'done' ? '✓' : i + 1}</span>
+      <span><span class="t">${esc(s.title)}</span><br><span class="s">${esc(sub)}</span></span>
+    </button></li>`;
+  }).join('');
+}
+
+const PILL = { done: ['done', 'Completado'], doing: ['doing', 'En curso'], todo: ['todo', 'Sin empezar'] };
+
+function renderTeam(o) {
+  const rows = o.team.map((p) => {
+    const pwd = initialPassword(p.first, p.last);
+    const missing = '<span class="warn">falta</span>';
+    return `<tr>
+      <td>${esc(fullName(p))}${p.owner ? ' <span class="pill doing">Responsable</span>' : ''}${p.contact ? ' <span class="pill done">Contacto</span>' : ''}</td>
+      <td>${p.email ? esc(p.email) : missing}</td>
+      <td>${p.phone ? esc(p.phone) : missing}</td>
+      <td>${esc(p.role)}</td>
+      <td><code>${esc(pwd)}</code>${pwd.length < 6 ? ' <span class="warn" title="La app pide mínimo 6 caracteres">· menos de 6, agregar año</span>' : ''}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="team-wrap"><table>
+    <thead><tr><th>Persona</th><th>Email</th><th>Teléfono</th><th>Rol</th><th>Contraseña inicial</th></tr></thead>
+    <tbody>${rows}</tbody></table></div>
+    <div><button type="button" class="btn" data-add-member>+ Agregar persona</button></div>`;
+}
+
+function renderMessage(o, t) {
+  const c = contactOf(o);
+  return `<div class="field">
+      <label for="signer">Firmas como</label>
+      <input id="signer" data-signer type="text" placeholder="Tu nombre" value="${esc(signer)}">
+    </div>
+    <p>Para ${c ? esc(fullName(c)) : 'la persona de contacto'} · ${c?.phone ? esc(c.phone) : 'sin teléfono'}</p>
+    <div class="tmpl"><pre data-wa-text="${t.template}">${esc(message(o, t.template))}</pre></div>
+    <div class="actions">
+      <a class="btn primary" data-wa-link="${t.template}" href="${esc(waLink(o, t.template))}" target="_blank" rel="noopener">Abrir en WhatsApp</a>
+      <button type="button" class="btn" data-copy="${t.template}">Copiar mensaje</button>
+      <button type="button" class="btn" data-edit-hint>Editar mensaje</button>
+    </div>`;
+}
+
+function renderContactPicker(o) {
+  const c = contactOf(o);
+  return `<div class="field" style="max-width:320px">
+      <label for="contact">Persona de contacto</label>
+      <select id="contact" data-contact>
+        ${o.team.map((p) => `<option value="${p.id}" ${p === c ? 'selected' : ''}>${esc(fullName(p))}${p.owner ? ' · responsable' : ''}</option>`).join('')}
+      </select>
+    </div>
+    <div><button type="button" class="btn" data-add-member>+ Es otra persona</button></div>
+    ${c && !c.phone ? '<p class="warn">Falta su teléfono: sin él no se le pueden abrir los mensajes en WhatsApp.</p>' : ''}`;
+}
+
+function renderOrganization(o) {
+  return `<div class="field" style="max-width:320px">
+      <label for="orglink">Organización creada</label>
+      <select id="orglink" data-orglink>
+        <option value="" ${o.organization ? '' : 'selected'} disabled>Elegí la organización del cliente</option>
+        ${ORGANIZATIONS.map((n) => `<option ${n === o.organization ? 'selected' : ''}>${esc(n)}</option>`).join('')}
+      </select>
+    </div>`;
+}
+
+const ALERT_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
+
+function renderDetail() {
+  const o = onb();
+  const step = STEPS.find((s) => s.id === openStepId);
+  const done = doneIn(o, step);
+  const [cls, label] = PILL[stepStatus(o, step)];
+
+  const tasks = step.tasks.map((t) => {
+    const checked = done.includes(t.id);
+    let body = '';
+    if (t.extra === 'message') body = renderMessage(o, t);
+    else if (t.extra === 'contact') body = renderContactPicker(o);
+    else if (t.extra === 'organization') body = renderOrganization(o);
+    else if (t.extra === 'team') body = renderTeam(o);
+    const alert = t.blocked ? `<div class="alert" role="note">${ALERT_ICON}<span><b>Hoy necesita a un programador</b>${esc(t.blocked)}</span></div>` : '';
+    return `<li class="task ${checked ? 'is-done' : ''}">
+      <label class="task-row">
+        <input type="checkbox" data-task="${t.id}" ${checked ? 'checked' : ''}>
+        <span><span class="tt">${esc(t.title)}</span><div class="td">${esc(t.desc)}</div></span>
+        ${t.blocked && !checked ? '<span class="pill blocked">Bloqueado</span>' : ''}
+      </label>
+      ${body || alert ? `<div class="task-extra">${alert}${body}</div>` : ''}
+    </li>`;
+  }).join('');
+
+  $('detail').innerHTML = `
+    <div class="detail-head">
+      <h3>Paso ${STEPS.indexOf(step) + 1} · ${esc(step.title)}</h3>
+      <span class="pill ${cls}">${label}</span>
+      <p>${done.length} de ${step.tasks.length} tareas hechas para ${esc(o.name)}.</p>
+    </div>
+    <ol class="tasks">${tasks}</ol>`;
+}
+
+function render() {
+  renderSelect();
+  renderSummary();
+  renderSteps();
+  renderDetail();
+}
+
+function selectOnboarding(id) {
+  onbId = id;
+  openStepId = currentStep(onb()).id;
+  render();
+}
+
+function toast(msg) {
+  const el = $('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => el.classList.remove('show'), 1800);
+}
+
+$('org').addEventListener('change', (e) => selectOnboarding(e.target.value));
+
+$('steps').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-step]');
+  if (!btn) return;
+  openStepId = btn.dataset.step;
+  renderSteps();
+  renderDetail();
+});
+
+$('detail').addEventListener('change', (e) => {
+  const o = onb();
+  if (e.target.matches('input[data-task]')) {
+    const step = STEPS.find((s) => s.id === openStepId);
+    const set = new Set(o.done[step.id] ?? []);
+    e.target.checked ? set.add(e.target.dataset.task) : set.delete(e.target.dataset.task);
+    o.done[step.id] = step.tasks.map((t) => t.id).filter((id) => set.has(id));
+    render();
+  } else if (e.target.matches('[data-contact]')) {
+    o.team.forEach((p) => { p.contact = p.id === e.target.value; });
+    render();
+  } else if (e.target.matches('[data-orglink]')) {
+    o.organization = e.target.value;
+    render();
+  }
+});
+
+// Sin re-render: escribir el nombre no le saca el foco al input.
+$('detail').addEventListener('input', (e) => {
+  if (!e.target.matches('[data-signer]')) return;
+  signer = e.target.value;
+  document.querySelectorAll('[data-wa-text]').forEach((el) => { el.textContent = message(onb(), el.dataset.waText); });
+  document.querySelectorAll('[data-wa-link]').forEach((el) => { el.href = waLink(onb(), el.dataset.waLink); });
+});
+
+$('detail').addEventListener('click', async (e) => {
+  const copy = e.target.closest('[data-copy]');
+  if (copy) {
+    try { await navigator.clipboard.writeText(message(onb(), copy.dataset.copy)); toast('Mensaje copiado'); }
+    catch { toast('No se pudo copiar'); }
+    return;
+  }
+  if (e.target.closest('[data-add-member]')) toast('En la app abre el formulario para agregar a la persona');
+  if (e.target.closest('[data-edit-hint]')) toast('En la app se edita y vale para todos los onboardings');
+});
+
+selectOnboarding(onbId);
+</script>
+</body>
+</html>

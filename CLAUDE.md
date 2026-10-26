@@ -209,6 +209,21 @@ acá son las reuniones del CRM (`crm_meetings`, las demos incluidas). Migración
 - Código en `src/pages/agenda/` (libs puras con sus tests, copiados del producto) y
   `supabase/functions/_shared/{googleCalendar,webhookSync,googleOAuth,googleTokens,oauthState,tokenCrypto}.ts`.
 
+## Onboarding de clientes — `/onboarding` (a construir)
+
+Desde el 26/10/2026 el alta de clientes nuevos se muda de `propelia-frontend` (`/onboarding-admin`)
+acá: arranca desde el lead que firmó y el lead queda atado a su organización en Propelia
+(`crm_leads.propelia_organization_id`, sin FK). **Todo está en `docs/onboarding/`** (empezar por
+el `README.md`): el flow de 7 pasos, el modelo de datos, el contrato del puente y una copia del
+código actual en `referencia/`.
+
+- Lo que es del producto (orgs, import de la cartera, mails simulados, links de pago) pasa **sólo**
+  por la edge function `propelia-bridge` (`docs/onboarding/PUENTE.md`). El front nunca usa la URL
+  ni las keys del producto.
+- El puente está hecho: `supabase/functions/propelia-bridge/` (tests con `deno test` ahí adentro)
+  reenvía a `roadmap-bridge` del producto si quien llama es SUPERADMIN activo. Deploy y secretos
+  en `PUENTE.md` › Deploy; mientras no esté deployado, se mockea con los ejemplos de ese archivo.
+
 ## El CRM (y Equipo) — `/crm` y `/equipo`
 
 Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
