@@ -1,4 +1,4 @@
-import { CalendarCheck, CalendarDays, CalendarRange, ListChecks, Settings, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react'
+import { Building2, CalendarCheck, CalendarDays, CalendarRange, ListChecks, Settings, Users, UsersRound, Wallet, type LucideIcon } from 'lucide-react'
 import type { Database } from '@/types/database.types'
 
 export type Rol = Database['public']['Enums']['user_role']
@@ -28,6 +28,8 @@ export const NAV: NavItem[] = [
   // La pestaña del vídeo de Ajustes sigue siendo solo SUPERADMIN, con su gate adentro.
   { id: 'agenda', icon: CalendarDays, label: 'Agenda', path: '/agenda', roles: TODOS },
   { id: 'demos', icon: CalendarCheck, label: 'Demos', path: '/demos', roles: SOLO_SUPERADMIN },
+  // Las inmobiliarias que firmaron y su onboarding (26/10/2026, por pedido).
+  { id: 'clientes', icon: Building2, label: 'Clientes', path: '/clientes', roles: SOLO_SUPERADMIN },
   { id: 'equipo', icon: UsersRound, label: 'Equipo', path: '/equipo', roles: SOLO_SUPERADMIN },
   // «Caja vista Loro» (25/10/2026, por pedido): la Caja en la vista por mes, en otra pestaña.
   {

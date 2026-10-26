@@ -224,6 +224,35 @@ código actual en `referencia/`.
   reenvía a `roadmap-bridge` del producto si quien llama es SUPERADMIN activo. Deploy y secretos
   en `PUENTE.md` › Deploy; mientras no esté deployado, se mockea con los ejemplos de ese archivo.
 
+## Clientes y su onboarding — `/clientes`
+
+Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el mock) y el resto de
+`docs/onboarding/`; migración `20261026184212_clientes_onboarding`, que **la aplica Antonio**.
+
+- **`crm_leads.lead_type`** (`LEAD` / `ONBOARDING` / `CLIENT`) dice qué es el lead, aparte de la
+  etapa. Un lead pasa a `ONBOARDING` **solo**, cuando el comercial lo mueve a una etapa con
+  `starts_onboarding` (columna «Onboarding» de la configuración del funnel; arranca marcada
+  «Contratado»): el trigger `crm_leads_lead_type` lo pasa y `crm_leads_crear_onboarding` le crea su
+  `client_onboardings` con el responsable del cliente del CRM. Solo desde `LEAD`: un `CLIENT` que
+  vuelve a pasar por la etapa no reabre nada. **El front nunca escribe `lead_type`**: el trigger
+  rechaza el cambio a mano (`crm_lead_type_solo_rpc`), y `client_onboarding_completar` lo pasa a
+  `CLIENT`. Pruebas en `supabase/tests/clientes-onboarding.sql` (como `crm-permisos.sql`).
+- **La página** (solo SUPERADMIN: `NAV` y gate adentro, como Demos) lista los `ONBOARDING` y abre
+  cada alta en un dialog con `?lead=<id>`. Siete pasos (`lib/pasos.ts`, en el código como en el
+  producto; en la base solo las tareas hechas); **los pasos 4 a 7 están en «Próximamente»** y no
+  cuentan para el avance ni para «Marcar completo». Cada tarea lleva sus acciones al lado: copiar y
+  abrir WhatsApp (plantillas de `onboarding_message_templates`), bajar el Excel, importar, etc.
+- **El equipo entra por Excel** (`lib/usuariosExcel.ts`, columnas en
+  `docs/onboarding/EXCEL_IMPORT_USUARIOS.md`): todo o nada, sin contraseña en el archivo (es
+  `nombre.apellido`, con el año si no llega a 6). Importar crea la org y las cuentas por el puente y
+  después `client_onboarding_importar_equipo` guarda el equipo, deja `propelia_organization_id` y
+  tilda las dos tareas. **«Enviar mails» de accesos no se tilda a mano**: pide confirmar «Verifiqué
+  que todas las cuentas entran correctamente» y manda uno por persona por `send-email`.
+- **El puente con Propelia está simulado** (`PUENTE_SIMULADO` en `service/puente.ts`, respuestas de
+  `docs/onboarding/PUENTE.md`, lo creado se recuerda en el `localStorage`): no se crea nada en el
+  producto y los mails de accesos no salen. Cuando `propelia-bridge` esté deployado (falta además
+  `create_org_with_users`), se pone en false.
+
 ## El CRM (y Equipo) — `/crm` y `/equipo`
 
 Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en

@@ -145,18 +145,16 @@ desde la pantalla.
 
   Bienvenidos. A partir de ahora voy a ser vuestra persona de contacto para poner en marcha la cuenta de {inmobiliaria}, y os voy a ir guiando paso a paso por aquí.
 
-  Para crear vuestra cuenta necesito:
+  Para crear vuestra cuenta necesito dos cosas:
 
   1. El nombre de la inmobiliaria tal como queréis que aparezca en Propelia.
 
-  2. Las personas del equipo que van a usar Propelia. Por cada una:
-  - Nombre y apellido:
-  - Email:
-  - Teléfono (con +34):
-  - Rol (Administrador / Agente):
+  2. Que rellenéis el Excel que os adjunto con las personas del equipo que van a usar Propelia: una fila por persona, con nombre, apellido, email, teléfono (con +34) y rol (Administrador o Agente). Marcad con «Sí» en la columna Responsable a quien va a llevar la cuenta.
 
-  Con eso os creo los accesos y os paso a cada uno su usuario y contraseña. Cualquier duda, escribidme por aquí.
+  Cuando me lo devolváis, os creo todos los accesos y os paso a cada uno su usuario y contraseña. Cualquier duda, escribidme por aquí.
   ```
+  El Excel (`usuarios-<inmobiliaria>.xlsx`, columnas en `EXCEL_IMPORT_USUARIOS.md`) no viaja en el
+  enlace de WhatsApp: se descarga desde el paso 1 y se adjunta a mano en el chat.
 - **`link_de_pago`**:
   ```
   {nombre}, os dejo el enlace para activar la suscripción de {inmobiliaria}:

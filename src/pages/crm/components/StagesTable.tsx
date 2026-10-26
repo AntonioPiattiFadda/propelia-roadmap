@@ -13,7 +13,7 @@ type DropTarget = { id: string; position: 'before' | 'after' } | null
 
 type Props = {
   stages: CrmStage[]
-  onUpdate: (id: string, payload: { label?: string; management_type?: GestionDeEtapa; allows_tasks?: boolean; show_in_dashboard?: boolean }) => void
+  onUpdate: (id: string, payload: { label?: string; management_type?: GestionDeEtapa; allows_tasks?: boolean; show_in_dashboard?: boolean; starts_onboarding?: boolean }) => void
   onCreate: () => void
   onDelete: (id: string) => void
   onReorder: (items: { id: string; position: number }[]) => void
@@ -189,6 +189,24 @@ export function StagesTable({
           </td>
         )}
         {!compact && (
+          /* «¿Arranca el onboarding?»: con Sí, el lead que entra a esta etapa pasa a ONBOARDING y
+             aparece en /clientes (trigger `crm_leads_lead_type`). Sin la columna en la base, No. */
+          <td className="px-2 py-1">
+            <Select
+              value={stage.starts_onboarding ? "si" : "no"}
+              onValueChange={(v) => onUpdate(stage.id, { starts_onboarding: v === "si" })}
+            >
+              <SelectTrigger aria-label={`«${stage.label}» arranca el onboarding`} className="h-[26px] w-full bg-card text-[12px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="si">Sí</SelectItem>
+                <SelectItem value="no">No</SelectItem>
+              </SelectContent>
+            </Select>
+          </td>
+        )}
+        {!compact && (
           <td className="px-2 py-1 text-right">
             {stage.allow_delete
               ? <InlineDeleteButton
@@ -214,6 +232,7 @@ export function StagesTable({
       <col className="w-[200px]" />
       <col className="w-[76px]" />
       <col className="w-[88px]" />
+      <col className="w-[96px]" />
       <col className="w-11" />
     </colgroup>
   )
@@ -265,6 +284,7 @@ export function StagesTable({
               <th className={headCell}>Gestión</th>
               <th className={headCell} title="¿Se puede agendar tarea?">Tareas</th>
               <th className={headCell} title="¿Se ve en el Dashboard?">Dashboard</th>
+              <th className={headCell} title="¿El lead que entra a esta etapa arranca el onboarding (/clientes)?">Onboarding</th>
               <th className="border-b border-(--line-strong)" />
             </tr>
           </thead>

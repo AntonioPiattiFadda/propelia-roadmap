@@ -1,0 +1,577 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Clientes y onboarding</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Propuesta de la página /clientes del Roadmap. El mock de arriba es interactivo con datos de ejemplo en memoria. */
+:root {
+  --bg: #f6f7fb; --surface: #ffffff; --surface-2: #f9fafd; --fg: #171a2b; --muted: #5d6280; --faint: #a3a8c3; --line: #dfe2ee;
+  --brand: #3644f2; --brand-soft: #e8eaff; --on-brand: #ffffff;
+  --ok: #0f8a6a; --ok-soft: #dcf3ec; --warn: #a86400; --warn-soft: #fdf0d8; --danger: #b4233a; --danger-soft: #fbe3e7;
+  --sa: #7a3cf0; --sa-soft: #efe6ff;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1120; --surface: #171a2e; --surface-2: #1b1f36; --fg: #e8eaf6; --muted: #9ba0c0; --faint: #5b6182; --line: #2a2e4a;
+    --brand: #8f98ff; --brand-soft: #23285a; --on-brand: #0f1120;
+    --ok: #4fd1aa; --ok-soft: #10392f; --warn: #f0b552; --warn-soft: #3b2c0e; --danger: #ff8597; --danger-soft: #401822;
+    --sa: #b794ff; --sa-soft: #2d2052;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1120; --surface: #171a2e; --surface-2: #1b1f36; --fg: #e8eaf6; --muted: #9ba0c0; --faint: #5b6182; --line: #2a2e4a;
+  --brand: #8f98ff; --brand-soft: #23285a; --on-brand: #0f1120;
+  --ok: #4fd1aa; --ok-soft: #10392f; --warn: #f0b552; --warn-soft: #3b2c0e; --danger: #ff8597; --danger-soft: #401822;
+  --sa: #b794ff; --sa-soft: #2d2052;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 var(--f-body);
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 64px max(16px, env(safe-area-inset-left, 0px));
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 16px; font-weight: 700; }
+p { margin: 0; }
+code { font-family: var(--f-mono); font-size: 0.86em; background: var(--brand-soft); padding: 1px 5px; border-radius: 4px; }
+.eyebrow { font: 500 12px/1 var(--f-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.lede { color: var(--muted); max-width: 70ch; font-size: 16px; }
+section { display: flex; flex-direction: column; gap: 18px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* ---------- mock de la app ---------- */
+.app { display: grid; grid-template-columns: 200px minmax(0, 1fr); background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; min-height: 560px; box-shadow: 0 1px 3px rgb(0 0 0 / .05); }
+.side { border-right: 1px solid var(--line); background: var(--surface-2); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; font-size: 13.5px; }
+.side .logo { font: 700 15px/1 var(--f-display); padding: 4px 10px 14px; }
+.nav { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; color: var(--muted); }
+.nav.on { background: var(--brand-soft); color: var(--fg); font-weight: 600; }
+.nav .ic { width: 16px; text-align: center; }
+.sa { margin-left: auto; font: 600 9.5px/1 var(--f-mono); padding: 3px 5px; border-radius: 4px; background: var(--sa-soft); color: var(--sa); }
+.main { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.main-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.main-head h3 { font-size: 20px; }
+.main-head .sp { flex: 1; }
+.search { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--surface); min-width: 180px; font-size: 13px; color: var(--fg); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 11px; font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; }
+.chip b { font-weight: 600; }
+.chip.on { background: var(--fg); color: var(--surface); border-color: var(--fg); }
+.chip.alert:not(.on) { border-color: var(--warn); color: var(--warn); background: var(--warn-soft); }
+
+.list { border: 1px solid var(--line); border-radius: 10px; overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 760px; font-size: 13px; }
+th { font: 500 10.5px/1.2 var(--f-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+tbody tr { cursor: pointer; }
+tbody tr:hover td { background: var(--surface-2); }
+tbody tr.sel td { background: var(--brand-soft); }
+.agency { font-weight: 600; }
+.sub { font-size: 11.5px; color: var(--muted); }
+.segs { display: flex; gap: 2px; width: 112px; }
+.segs i { flex: 1; height: 6px; border-radius: 2px; background: var(--line); }
+.segs i.d { background: var(--ok); }
+.segs i.c { background: var(--brand); }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.doing { background: var(--brand-soft); color: var(--brand); }
+.pill.todo { background: var(--warn-soft); color: var(--warn); }
+.pill.gray { background: var(--surface-2); color: var(--muted); border: 1px dashed var(--line); }
+.btn { border: 0; background: var(--brand); color: var(--on-brand); border-radius: 7px; padding: 5px 11px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.btn.ghost { background: transparent; color: var(--brand); border: 1px solid var(--line); }
+.empty { padding: 28px; text-align: center; color: var(--muted); font-size: 13px; }
+
+/* detalle */
+.obdlg { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--fg); padding: 0; width: min(1000px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; }
+.obdlg::backdrop { background: rgb(10 12 30 / .45); }
+.detail { display: grid; grid-template-columns: 230px minmax(0, 1fr); min-height: 460px; }
+.dhead { position: sticky; top: 0; z-index: 1; }
+.x { border: 0; background: none; color: var(--muted); font-size: 18px; line-height: 1; padding: 4px 6px; border-radius: 6px; }
+.x:hover { background: var(--line); color: var(--fg); }
+.dhead { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.dhead h4 { margin: 0; font: 700 16px/1.2 var(--f-display); }
+.dhead .meta { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.dhead .meta b { color: var(--fg); font-weight: 600; }
+.dhead .sp { flex: 1; }
+.steps { list-style: none; margin: 0; padding: 8px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.steps button { width: 100%; display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 8px; align-items: center; text-align: left; padding: 7px 8px; border: 0; background: none; border-radius: 8px; font-size: 12.5px; }
+.steps button:hover { background: var(--surface-2); }
+.steps button[aria-current="step"] { background: var(--brand-soft); font-weight: 600; }
+.dot { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font: 600 11px/1 var(--f-mono); border: 1.5px solid var(--faint); color: var(--muted); background: var(--surface); }
+.dot.d { background: var(--ok); border-color: var(--ok); color: var(--on-brand); }
+.dot.c { border-color: var(--brand); color: var(--brand); }
+.stepbody { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+/* la tarea: tilde + texto a la izquierda, sus acciones a la derecha y el mensaje plegado abajo */
+.task { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; font-size: 13.5px; padding: 6px 8px; margin: 0 -8px; border-radius: 8px; }
+.task:hover { background: var(--surface-2); }
+.task > label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.task input { margin-top: 3px; accent-color: var(--ok); width: 15px; height: 15px; flex: none; }
+.task.done label span { color: var(--muted); text-decoration: line-through; }
+.acc { display: flex; gap: 4px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.ico { width: 30px; height: 30px; display: grid; place-items: center; border: 1px solid var(--line); background: var(--surface); color: var(--muted); border-radius: 7px; }
+.ico:hover { color: var(--brand); border-color: var(--brand); }
+.acc-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; }
+.msg { grid-column: 1 / -1; margin-left: 25px; }
+.msg summary { font-size: 12px; color: var(--muted); cursor: pointer; width: max-content; }
+.msg .wa { margin-top: 6px; }
+.wa { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface-2); font-size: 12.5px; color: var(--muted); white-space: pre-line; }
+.toast { position: sticky; bottom: 12px; grid-column: 1 / -1; justify-self: center; margin: 0 auto 12px; background: var(--fg); color: var(--surface); font-size: 13px; padding: 8px 14px; border-radius: 8px; opacity: 0; transform: translateY(6px); transition: opacity .15s, transform .15s; pointer-events: none; }
+.toast.on { opacity: 1; transform: none; }
+@media (max-width: 760px) { .task { grid-template-columns: minmax(0, 1fr); } .acc { justify-content: flex-start; margin-left: 25px; } }
+.imp { border-top: 1px dashed var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+.imp-head { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; font-size: 13px; }
+.imp-head .sp { flex: 1; }
+.dlg { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); color: var(--fg); padding: 20px; width: min(460px, calc(100vw - 32px)); display: none; flex-direction: column; gap: 12px; }
+.dlg[open] { display: flex; }
+.dlg::backdrop { background: rgb(10 12 30 / .45); }
+.dlg-lista { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; max-height: 200px; overflow-y: auto; }
+.dlg-lista li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--line); font-size: 13px; }
+.dlg-lista li:last-child { border-bottom: 0; }
+.dlg-lista li > span { display: flex; flex-direction: column; min-width: 0; }
+.dlg-check { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 8px; background: var(--warn-soft); font-size: 13px; cursor: pointer; }
+.dlg-check input { margin-top: 3px; width: 15px; height: 15px; accent-color: var(--ok); flex: none; }
+.dlg-check > span { display: flex; flex-direction: column; }
+.dlg-acc { display: flex; justify-content: flex-end; gap: 8px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.callout { border-left: 3px solid var(--warn); background: var(--warn-soft); color: var(--fg); padding: 8px 12px; border-radius: 0 6px 6px 0; font-size: 12.5px; }
+.note { font-size: 12.5px; color: var(--muted); }
+
+@media (max-width: 760px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .side { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .side .logo { display: none; }
+  .nav { white-space: nowrap; }
+  .detail { grid-template-columns: minmax(0, 1fr); }
+  .steps { border-right: 0; border-bottom: 1px solid var(--line); flex-direction: row; overflow-x: auto; }
+  .steps button { grid-template-columns: 24px; }
+  .steps button .t { display: none; }
+}
+
+/* ---------- flujo ---------- */
+.flow { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; align-items: stretch; }
+.st { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 6px; position: relative; }
+.st + .st { margin-left: 22px; }
+.st + .st::before { content: "→"; position: absolute; left: -18px; top: 50%; transform: translateY(-50%); color: var(--faint); font-size: 15px; }
+.st .where { font: 500 10.5px/1 var(--f-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.st p { font-size: 13px; color: var(--muted); }
+.st.hl { border-color: var(--brand); box-shadow: inset 0 0 0 1px var(--brand); }
+@media (max-width: 900px) {
+  .flow { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .st + .st { margin-left: 0; }
+  .st + .st::before { content: "↓"; left: 50%; top: -20px; transform: translateX(-50%); }
+}
+.rules { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.rule { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.rule p { color: var(--muted); font-size: 14px; }
+@media (max-width: 760px) { .rules { grid-template-columns: minmax(0, 1fr); } }
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.tbl-wrap table { min-width: 620px; font-size: 14px; }
+.tbl-wrap td { vertical-align: top; }
+.q { border-left: 3px solid var(--warn); padding: 4px 0 4px 14px; display: flex; flex-direction: column; gap: 4px; }
+.q p { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:14px">
+  <span class="eyebrow">Propuesta · 26 oct 2026 · versión simple</span>
+  <h1>Clientes</h1>
+  <p class="lede">Una página nueva del Roadmap, solo para SUPERADMIN, con las inmobiliarias que se están dando de alta. Por ahora lista una sola cosa: los leads con <code>crm_leads.lead_type = 'ONBOARDING'</code>. Un lead pasa a <code>ONBOARDING</code> solo, cuando el comercial lo mueve a la etapa <b>«Contratado»</b> del CRM. Cada alta lleva su onboarding de 7 pasos (los de <code>onboarding-roadmap-flow.html</code>). Reemplaza a la <code>/onboarding</code> que proponía el README.</p>
+</header>
+
+<!-- ============ MOCK ============ -->
+<section>
+  <span class="eyebrow">La página · mock interactivo</span>
+  <h2>Así se vería <code>/clientes</code></h2>
+  <p class="lede">Tocá una fila para abrir su onboarding y tildá tareas. Con los 7 pasos hechos aparece «Marcar completo». «Simular: pasa a Contratado» hace lo que haría el comercial desde el CRM. Datos de ejemplo.</p>
+
+  <div class="app">
+    <nav class="side" aria-label="Barra lateral">
+      <div class="logo">Propelia · Roadmap</div>
+      <span class="nav"><span class="ic">▤</span>Roadmap<span class="sa">SA</span></span>
+      <span class="nav"><span class="ic">☎</span>CRM</span>
+      <span class="nav"><span class="ic">◷</span>Agenda</span>
+      <span class="nav on"><span class="ic">★</span>Clientes<span class="sa">SA</span></span>
+      <span class="nav"><span class="ic">€</span>Caja<span class="sa">SA</span></span>
+      <span class="nav"><span class="ic">⚙</span>Ajustes</span>
+    </nav>
+    <div class="main">
+      <div class="main-head">
+        <h3>Clientes</h3>
+        <span class="sub" id="total"></span>
+        <span class="sp"></span>
+        <button class="btn ghost" id="simular" title="Solo del mock: lo que pasa cuando el comercial mueve un lead a Contratado">Simular: pasa a Contratado</button>
+        <input class="search" id="q" type="search" placeholder="Buscar inmobiliaria…" aria-label="Buscar inmobiliaria">
+      </div>
+      <div class="list"><table>
+        <thead><tr>
+          <th>Inmobiliaria</th><th>Firmó</th><th>Avance</th><th>Paso actual</th><th>Org en Propelia</th><th>Lleva el alta</th><th></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+      <dialog class="obdlg" id="dlg-ob" aria-label="Onboarding"><div class="detail" id="detail"></div></dialog>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FLUJO ============ -->
+<section>
+  <span class="eyebrow">El flujo</span>
+  <h2>Del lead que firma al cliente andando</h2>
+  <p class="lede">El comercial no hace nada distinto: mueve la etapa como siempre. Lo demás pasa solo o desde esta página.</p>
+  <div class="flow" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+    <div class="st"><span class="where">CRM · comercial</span><h3>Pasa a «Contratado»</h3><p>Mueve la etapa del lead, como cualquier otra. La fecha del pase es «Firmó».</p></div>
+    <div class="st hl"><span class="where">Base · trigger</span><h3>Pasa a <code>ONBOARDING</code></h3><p>Al entrar a la etapa, la base pone <code>lead_type = 'ONBOARDING'</code> y crea su <code>client_onboardings</code> con el responsable del cliente del CRM.</p></div>
+    <div class="st hl"><span class="where">Clientes</span><h3>Los 7 pasos</h3><p>Aparece en la lista, sin nadie que lo lleve. Un SUPERADMIN lo toma y va tildando; en el paso 1 se vincula la org de Propelia.</p></div>
+    <div class="st"><span class="where">Clientes</span><h3>Marcar completo</h3><p>Escribe <code>completed_at</code>, pone <code>CLIENT</code> y el lead sale de la lista. La página de clientes activos viene después.</p></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Reglas</span>
+  <h2>Cómo se gestiona</h2>
+  <div class="rules">
+    <div class="rule"><h3>Quién está en la lista</h3><p>Los leads vivos con <code>lead_type = 'ONBOARDING'</code>. Nada más: ni chips ni estados. Lo que pase después con la etapa en el CRM no lo saca de la lista.</p></div>
+    <div class="rule"><h3>Qué etapa lo dispara</h3><p>Una columna más en la configuración del funnel, «Onboarding» (Sí/No), como «Dashboard» y «Tareas»: <code>crm_funnel_stages.starts_onboarding</code>, default false, y se marca «Contratado». No se busca por nombre: las etapas se renombran.</p></div>
+    <div class="rule"><h3>Solo la base escribe <code>lead_type</code></h3><p>El trigger de la etapa (→ <code>ONBOARDING</code>) y la RPC <code>client_onboarding_complete</code> (→ <code>CLIENT</code>). Otro trigger rechaza cualquier <code>update</code> a mano de la columna, como <code>importante</code>. Solo dispara desde <code>LEAD</code>: un <code>CLIENT</code> que vuelve a pasar por Contratado no reabre nada.</p></div>
+    <div class="rule"><h3>Quién lleva el alta</h3><p>Nace sin nadie (el trigger no sabe quién va a hacerla). «Tomar» la asigna a quien toca; se puede cambiar. No es el responsable del lead en el CRM: el comercial vende, soporte da de alta.</p></div>
+    <div class="rule"><h3>Paso actual</h3><p>Es el primer paso con alguna tarea sin hacer. Se puede tildar fuera de orden (a veces el cliente paga antes de importar): el orden guía, no bloquea.</p></div>
+    <div class="rule"><h3>Solo SUPERADMIN</h3><p>En el front: <code>NAV</code> con <code>roles: ['SUPERADMIN']</code> y el badge SA. En la base: las tablas de onboarding con RLS <code>crm_es_superadmin()</code> (ver <code>MODELO_DATOS.md</code>). El trigger es <code>security definer</code>: lo dispara el comercial, que no ve esas tablas.</p></div>
+  </div>
+</section>
+
+<section>
+  <span class="eyebrow">Qué se construye</span>
+  <h2>Piezas</h2>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Pieza</th><th>Qué es</th></tr></thead>
+    <tbody>
+      <tr><td>Migración</td><td>Enum <code>lead_type</code> (<code>LEAD</code>, <code>ONBOARDING</code>, <code>CLIENT</code>) y <code>crm_leads.lead_type</code> <code>not null default 'LEAD'</code>; <code>crm_funnel_stages.starts_onboarding</code>; el trigger de la etapa y el que protege la columna; <code>client_onboardings.assigned_to</code>. Más lo de <code>MODELO_DATOS.md</code> (vínculo a la org, las 4 tablas de onboarding y plantillas). La crea Claude, la aplica Antonio con <code>supabase db push</code>.</td></tr>
+      <tr><td>Funnel</td><td>Columna «Onboarding» (Sí/No) en la configuración de etapas.</td></tr>
+      <tr><td><code>/clientes</code></td><td>La lista y la búsqueda. Reglas puras en <code>pages/clientes/lib/</code> con tests (paso actual, avance).</td></tr>
+      <tr><td>Dialog del onboarding</td><td>Se abre encima de la lista, como el detalle de <code>propelia-frontend</code> y el <code>?lead=</code> del CRM: <code>/clientes?lead=&lt;id&gt;</code>, así se comparte el enlace y Escape vuelve a la lista. Adentro: los 7 pasos, WhatsApp, equipo, selector de org, import, link de pago y simulador (vía <code>propelia-bridge</code>, mockeado hasta que exista).</td></tr>
+      <tr><td>Ficha del lead</td><td>Si es <code>ONBOARDING</code>: pastilla «Onboarding 3 de 7» con enlace a su página.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section>
+  <span class="eyebrow">Por decidir</span>
+  <h2>Preguntas abiertas</h2>
+  <div class="q"><h3>¿Y si se movió a Contratado por error?</h3><p>El trigger ya lo pasó a <code>ONBOARDING</code>. Propuesta: «Quitar del onboarding» en el detalle, que lo vuelve a <code>LEAD</code> y borra el onboarding si no tiene nada tildado. Sacarlo de Contratado en el CRM no alcanza.</p></div>
+  <div class="q"><h3>¿Avisar cuando entra un alta nueva?</h3><p>Un toast a los SUPERADMIN como el de demo nueva (<code>useAvisosDeDemos</code>). Barato y en el mismo patrón.</p></div>
+  <div class="q"><h3>¿Qué se ve de los <code>CLIENT</code>?</h3><p>Por ahora nada: salen de la lista. Cuando haga falta (plan, uso, bajas), Clientes gana chips o una segunda página.</p></div>
+</section>
+
+</div>
+
+<input type="file" id="archivo-usuarios" accept=".xlsx" hidden>
+
+<dialog class="dlg" id="dlg-credenciales" aria-labelledby="dlg-titulo">
+  <h3 id="dlg-titulo">¿Enviar los accesos por mail?</h3>
+  <p class="note">A cada persona le llega un mail desde <code>info@propelia.es</code> con su usuario, su contraseña y el enlace para entrar a Propelia. Se envían <b data-n></b> mails y no se pueden deshacer.</p>
+  <ul class="dlg-lista" data-lista></ul>
+  <label class="dlg-check"><input type="checkbox" id="verifique"><span><b>Verifiqué que todas las cuentas entran correctamente</b><span class="sub">Probé el acceso con el email y la contraseña de cada una.</span></span></label>
+  <div class="dlg-acc"><button class="btn ghost" data-cancelar>Cancelar</button><button class="btn" data-enviar disabled>Enviar mails</button></div>
+</dialog>
+
+<script>
+// [id, texto, acciones]. 'wa:<plantilla>' dibuja copiar + enviar por WhatsApp Web.
+const PASOS = [
+  { id: 'contacto', t: 'Contacto y cuentas', tareas: [
+    ['enviar', 'Enviar el saludo con el Excel de usuarios para completar', ['wa:contacto_inicial', 'excel-usuarios']],
+    ['excel-recibido', 'Recibir el Excel completado y el nombre de la inmobiliaria'],
+    ['importar-usuarios', 'Importar el Excel: crea la organización y todas las cuentas', ['importar-usuarios']],
+    ['credenciales', 'Verificar accesos y enviar a cada uno su usuario y clave por mail', ['mails']] ] },
+  { id: 'cartera-org-pago', t: 'Cartera, org y pago', tareas: [
+    ['excel', 'Armar el Excel de propiedades', ['plantilla-cartera']],
+    ['importar', 'Importar la cartera a su organización', ['importar-cartera']],
+    ['llamada-org', 'Configurar la organización con ellos', ['wa:configurar_organizacion']],
+    ['link-pago', 'Generar y enviar el link de pago', ['link-pago']],
+    ['pago', 'Confirmar que pagó'] ] },
+  { id: 'asignar-mails', t: 'Asignar y mails Idealista', tareas: [
+    ['asignar', 'Que asignen las propiedades a cada agente', ['wa:asignar_y_mails']],
+    ['mails-idealista', 'Que configuren los mails de cada agente en Idealista', ['copiar-direcciones']],
+    ['lead-prueba', 'Probar que un lead llega', ['simular-lead']] ] },
+  { id: 'portales', t: 'Integrar los portales', tareas: [
+    ['avisar', 'Pedirles que conecten Idealista y Fotocasa', ['wa:integrar_portales']],
+    ['idealista', 'Idealista conectado'], ['fotocasa', 'Fotocasa conectado'] ] },
+  { id: 'sincronizar', t: 'Sincronizar las keys', tareas: [
+    ['idealista', 'Keys de Idealista sincronizadas'],
+    ['revisar-fotocasa', 'Revisar el flow de Fotocasa antes de sincronizar'],
+    ['fotocasa', 'Keys de Fotocasa sincronizadas'] ] },
+  { id: 'funnel', t: 'Capacitación: funnel', tareas: [
+    ['explicar', 'Explicar el funnel de leads'], ['highlight', 'Crear el highlight flow'] ] },
+  { id: 'visitas-mails', t: 'Capacitación: visitas y mails', tareas: [
+    ['visitas', 'Explicar cómo agendar visitas'], ['mails', 'Explicar el sistema de mails'] ] },
+];
+const hastaPaso = n => PASOS.slice(0, n).flatMap(p => p.tareas.map(([id]) => p.id + '.' + id));
+const YO = 'Antonio';
+
+// tipo = crm_leads.lead_type. La lista muestra solo ONBOARDING.
+const leads = [
+  { id: 1, nombre: 'Habitat Gràcia', resp: 'Núria Puig', tel: '+34 600 111 222', desde: 'hoy', vendio: 'Lorenzo', tipo: 'ONBOARDING', ob: { lleva: null, org: null, hechas: new Set() } },
+  { id: 2, nombre: 'Fincas Ribera', resp: 'Marta Gil', tel: '+34 611 222 333', desde: 'hace 9 d', vendio: 'Lorenzo', tipo: 'ONBOARDING', ob: { lleva: 'Antonio', org: 'Fincas Ribera', hechas: new Set([...hastaPaso(2), 'asignar-mails.asignar']) } },
+  { id: 3, nombre: 'Inmobiliaria Sol', resp: 'Carmen Ortega', tel: '+34 622 333 444', desde: 'hace 3 sem', vendio: 'Antonio', tipo: 'ONBOARDING', ob: { lleva: 'Lorenzo', org: 'Inmobiliaria Sol', hechas: new Set([...hastaPaso(6), 'visitas-mails.visitas']) } },
+];
+// Los que el botón «Simular» va pasando a Contratado.
+const enElCrm = [
+  { id: 4, nombre: 'Casas del Turia', resp: 'Javier Soler', tel: '+34 633 444 555', vendio: 'Antonio' },
+  { id: 5, nombre: 'Gestión Levante', resp: 'Raúl Navarro', tel: '+34 644 555 666', vendio: 'Lorenzo' },
+];
+
+let sel = null, pasoAbierto = 0, busca = '', aviso = '';
+const pasoHecho = (c, p) => p.tareas.every(([id]) => c.ob.hechas.has(p.id + '.' + id));
+const pasoActual = c => { const i = PASOS.findIndex(p => !pasoHecho(c, p)); return i < 0 ? PASOS.length : i; };
+const nHechos = c => PASOS.filter(p => pasoHecho(c, p)).length;
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+const llevaHTML = c => c.ob.lleva ? esc(c.ob.lleva) : `<span class="pill todo">Sin asignar</span> <button class="btn ghost" data-tomar="${c.id}">Tomar</button>`;
+
+function pintar() {
+  const enCurso = leads.filter(c => c.tipo === 'ONBOARDING');
+  document.getElementById('total').textContent = enCurso.length + ' en onboarding' + (aviso ? ' · ' + aviso : '');
+  document.getElementById('simular').disabled = !enElCrm.length;
+  const vis = enCurso.filter(c => c.nombre.toLowerCase().includes(busca));
+  document.getElementById('rows').innerHTML = vis.length ? vis.map(c => {
+    const pa = pasoActual(c);
+    const avance = `<div class="segs" title="${nHechos(c)} de 7 pasos">${PASOS.map((p, i) => `<i class="${pasoHecho(c, p) ? 'd' : i === pa ? 'c' : ''}"></i>`).join('')}</div><div class="sub">${nHechos(c)} de 7</div>`;
+    const paso = pa === PASOS.length ? '<span class="pill ok">✓ Listo para completar</span>' : `<span class="pill doing">${pa + 1} · ${PASOS[pa].t}</span>`;
+    const org = c.ob.org ? esc(c.ob.org) : '<span class="pill gray">Sin vincular</span>';
+    return `<tr data-fila="${c.id}" class="${sel === c.id ? 'sel' : ''}"><td><div class="agency">${esc(c.nombre)}</div><div class="sub">${esc(c.resp)} · vendió ${esc(c.vendio)}</div></td><td>${c.desde}</td><td>${avance}</td><td>${paso}</td><td>${org}</td><td>${llevaHTML(c)}</td><td><button class="btn ghost" data-fila="${c.id}">Abrir</button></td></tr>`;
+  }).join('') : `<tr><td colspan="7" class="empty">No hay altas en curso.</td></tr>`;
+  pintarDetalle();
+}
+
+const slug = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+// La contraseña no va en el Excel: siempre nombre.apellido, y si no llega a 6 se le suma el año.
+const clave = (n, a) => { const k = slug(n).replace(/-/g, '') + '.' + slug(a).replace(/-/g, ''); return k.length < 6 ? k + new Date().getFullYear() : k; };
+
+// Las plantillas de WhatsApp (onboarding_message_templates). Las tres últimas son borradores de ejemplo.
+function mensaje(plantilla, c) {
+  const nombre = c.resp.split(' ')[0], soporte = c.ob.lleva || YO, inmo = c.nombre;
+  return {
+    contacto_inicial: `¡Hola ${nombre}! Soy ${soporte}, del equipo de Propelia 👋
+
+Bienvenidos. A partir de ahora voy a ser vuestra persona de contacto para poner en marcha la cuenta de ${inmo}, y os voy a ir guiando paso a paso por aquí.
+
+Para crear vuestra cuenta necesito dos cosas:
+
+1. El nombre de la inmobiliaria tal como queréis que aparezca en Propelia.
+
+2. Que rellenéis el Excel que os adjunto con las personas del equipo que van a usar Propelia: una fila por persona, con nombre, apellido, email, teléfono (con +34) y rol (Administrador o Agente). Marcad con «Sí» en la columna Responsable a quien va a llevar la cuenta.
+
+Cuando me lo devolváis, os creo todos los accesos y os paso a cada uno su usuario y contraseña. Cualquier duda, escribidme por aquí.`,
+    configurar_organizacion: `${nombre}, ya tenéis la cuenta de ${inmo} creada 🎉 ¿Os viene bien una llamada de 20 minutos para dejar la organización configurada juntos (nombre, web, logo y colores)? Decidme día y hora.`,
+    asignar_y_mails: `${nombre}, ya tenéis la cartera de ${inmo} cargada en Propelia. Dos cosas para empezar a recibir los leads:
+
+1. En Propiedades, asignad cada inmueble al agente que lo lleva.
+2. En Idealista, configurad que los mensajes de cada agente se reenvíen a su dirección de Propelia. Os paso las direcciones por aquí.
+
+Cuando lo tengáis, hacemos una prueba juntos.`,
+    integrar_portales: `${nombre}, siguiente paso: conectar Idealista y Fotocasa. Entrad en Propelia › Ajustes › Integraciones y seguid los pasos de cada portal. Si os pide algo que no tenéis a mano, avisadme.`,
+  }[plantilla];
+}
+// En el ordenador, web.whatsapp.com directo (wa.me rompe los emojis al redirigir), como «Mensajes» del CRM.
+const enlaceWhatsapp = (tel, texto) => `https://web.whatsapp.com/send?phone=${tel.replace(/\D/g, '')}&text=${encodeURIComponent(texto)}`;
+
+const ICONO = {
+  copiar: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>',
+  enviar: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>',
+  bajar: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>',
+  subir: '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>',
+};
+const ico = (icono, titulo, data) => `<button class="ico" title="${titulo}" aria-label="${titulo}" ${data}>${ICONO[icono]}</button>`;
+const accion = (texto, icono, data) => `<button class="btn ghost acc-btn" ${data}>${icono ? ICONO[icono] : ''}${texto}</button>`;
+
+// Lo que va al lado de cada tarea.
+function accionesHTML(c, acciones = []) {
+  return acciones.map(a => {
+    if (a.startsWith('wa:')) {
+      const p = a.slice(3);
+      return ico('copiar', 'Copiar mensaje', `data-copiar="${p}"`) + ico('enviar', 'Copiar y abrir WhatsApp Web', `data-wa="${p}"`);
+    }
+    return {
+      'excel-usuarios': ico('bajar', `Descargar usuarios-${slug(c.nombre)}.xlsx`, 'data-demo="Plantilla descargada: adjuntala en el chat"'),
+      'importar-usuarios': c.ob.importados ? `<span class="pill ok">${equipoDe(c).length} cuentas creadas</span>` : accion('Importar', 'subir', 'data-importar-usuarios'),
+      mails: accion('Enviar mails', 'enviar', 'data-mails'),
+      'plantilla-cartera': ico('bajar', 'Descargar plantilla de la cartera', 'data-demo="Plantilla de la cartera descargada"'),
+      'importar-cartera': accion('Importar', 'subir', 'data-demo="Acá se abre el import de la cartera (check_properties)"'),
+      'link-pago': accion('Generar link', '', 'data-demo="Link de pago generado y copiado"'),
+      'copiar-direcciones': ico('copiar', 'Copiar las direcciones de cada agente', 'data-demo="Direcciones copiadas"'),
+      'simular-lead': accion('Simular lead', '', 'data-demo="Lead simulado enviado a la org demo"'),
+    }[a] || '';
+  }).join('');
+}
+
+// Vista previa del Excel que devolvió el cliente (check_users del puente, sin escribir nada).
+function filasDelExcel(c) {
+  const [n, ...ap] = c.resp.split(' ');
+  const dominio = slug(c.nombre).replace(/-/g, '') + '.es';
+  return [
+    [n, ap.join(' '), `${slug(n)}@${dominio}`, c.tel, 'Administrador', 'Sí'],
+    ['Pablo', 'Ruiz', `pablo@${dominio}`, '+34 600 333 444', 'Agente', ''],
+    ['Li', 'Wu', `li@${dominio}`, '+34 600 555 666', 'Agente', ''],
+  ];
+}
+const equipoDe = filasDelExcel;
+
+function importUsuarios(c) {
+  const filas = filasDelExcel(c);
+  return `
+    <div class="imp">
+      <div class="imp-head"><b>Vista previa</b><span class="sub">${esc(c.ob.excelUsuarios)} · ${filas.length} filas</span><span class="sp"></span>
+        <label class="sub">Nombre de la inmobiliaria <input class="search" id="nombre-org" value="${esc(c.nombre)}" style="min-width:150px"></label></div>
+      <div class="list"><table style="min-width:600px">
+        <thead><tr><th>Nombre</th><th>Email</th><th>Teléfono</th><th>Rol</th><th>Contraseña (automática)</th><th></th></tr></thead>
+        <tbody>${filas.map(([fn, la, em, tel, rol, resp]) => `<tr>
+          <td>${esc(fn + ' ' + la)}${resp ? ' <span class="pill doing">Responsable</span>' : ''}</td><td>${esc(em)}</td><td>${esc(tel)}</td><td>${rol}</td>
+          <td><code>${clave(fn, la)}</code></td><td><span class="pill ok">Lista</span></td></tr>`).join('')}</tbody>
+      </table></div>
+      <div><button class="btn" data-confirmar-import>Crear organización y ${filas.length} cuentas</button> <button class="btn ghost" data-cancelar-import>Cancelar</button>
+        <span class="sub">Todo o nada: con una fila con error no se crea ninguna cuenta.</span></div>
+    </div>`;
+}
+
+function pintarDetalle() {
+  const d = document.getElementById('detail'), dlgOb = document.getElementById('dlg-ob');
+  const c = leads.find(x => x.id === sel && x.tipo === 'ONBOARDING');
+  if (!c) { if (dlgOb.open) dlgOb.close(); return; }
+  if (!dlgOb.open) dlgOb.showModal();
+  const p = PASOS[pasoAbierto];
+  const extraPaso = {
+    contacto: (c.ob.excelUsuarios && !c.ob.importados ? importUsuarios(c) : '')
+      + '<p class="note">WhatsApp no recibe archivos por enlace: el Excel se descarga con ⤓ y se arrastra al chat. Columnas en <code>EXCEL_IMPORT_USUARIOS.md</code>.</p>',
+    sincronizar: '<div class="callout">Antes de sincronizar Fotocasa, revisar el flow: la sincronización borra todo lo que tienen publicado.</div>',
+  }[p.id] || '';
+  d.innerHTML = `
+    <div class="dhead">
+      <h4>${esc(c.nombre)}</h4>
+      <div class="meta"><span>Responsable <b>${esc(c.resp)}</b> · ${esc(c.tel)}</span><span>Org <b>${c.ob.org ? esc(c.ob.org) : 'sin vincular'}</b></span><span>Firmó <b>${c.desde}</b></span></div>
+      <span class="sp"></span>
+      <span class="meta">Lleva&nbsp;${llevaHTML(c)}</span>
+      <button class="btn ghost">Ver lead en CRM ↗</button>
+      ${nHechos(c) === 7 ? `<button class="btn" data-completar="${c.id}">Marcar completo</button>` : ''}
+      <button class="x" data-cerrar aria-label="Cerrar">✕</button>
+    </div>
+    <ol class="steps">${PASOS.map((s, i) => `<li><button data-paso="${i}" ${i === pasoAbierto ? 'aria-current="step"' : ''}><span class="dot ${pasoHecho(c, s) ? 'd' : i === pasoActual(c) ? 'c' : ''}">${pasoHecho(c, s) ? '✓' : i + 1}</span><span class="t">${s.t}</span></button></li>`).join('')}</ol>
+    <div class="stepbody">
+      <h3>${pasoAbierto + 1} · ${p.t}</h3>
+      ${p.tareas.map(([id, txt, acciones]) => { const k = p.id + '.' + id, on = c.ob.hechas.has(k);
+        const wa = (acciones || []).find(a => a.startsWith('wa:'));
+        return `<div class="task ${on ? 'done' : ''}">
+          <label><input type="checkbox" data-tarea="${k}" ${on ? 'checked' : ''}><span>${esc(txt)}</span></label>
+          <span class="acc">${accionesHTML(c, acciones)}</span>
+          ${wa ? `<details class="msg"><summary>Ver mensaje</summary><div class="wa">${esc(mensaje(wa.slice(3), c))}</div></details>` : ''}
+        </div>`; }).join('')}
+      ${extraPaso}
+    </div>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>`;
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast'); if (!el) return;
+  el.textContent = msg; el.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('on'), 2400);
+}
+async function copiar(texto) {
+  try { await navigator.clipboard.writeText(texto); return true; }
+  catch { return false; }
+}
+
+// Las acciones de cada tarea. No repintan: copiar o abrir WhatsApp no cambia nada de la pantalla.
+const archivoUsuarios = document.getElementById('archivo-usuarios');
+document.addEventListener('click', async ev => {
+  const t = ev.target.closest('[data-copiar],[data-wa],[data-demo],[data-importar-usuarios],[data-confirmar-import],[data-cancelar-import],[data-mails]');
+  if (!t) return;
+  const c = leads.find(x => x.id === sel);
+  if (t.dataset.copiar) toast(await copiar(mensaje(t.dataset.copiar, c)) ? 'Mensaje copiado' : 'No se pudo copiar');
+  else if (t.dataset.wa) {
+    // Copia también: si WhatsApp Web corta el texto o abre otro chat, queda para pegar.
+    await copiar(mensaje(t.dataset.wa, c));
+    window.open(enlaceWhatsapp(c.tel, mensaje(t.dataset.wa, c)), '_blank', 'noopener');
+    toast('Mensaje copiado · abriendo WhatsApp Web');
+  }
+  else if (t.dataset.demo) toast(t.dataset.demo);
+  else if ('importarUsuarios' in t.dataset) { archivoUsuarios.value = ''; archivoUsuarios.click(); }
+  else if ('cancelarImport' in t.dataset) { c.ob.excelUsuarios = null; pintar(); }
+  else if ('confirmarImport' in t.dataset) {
+    // create_org_with_users: crea la org, las cuentas y vincula la org al lead.
+    c.ob.org = document.getElementById('nombre-org').value.trim() || c.nombre;
+    c.ob.importados = true;
+    c.ob.hechas.add('contacto.excel-recibido'); c.ob.hechas.add('contacto.importar-usuarios');
+    pintar(); toast(`${c.ob.org}: organización y ${equipoDe(c).length} cuentas creadas`);
+  }
+  else if ('mails' in t.dataset) abrirConfirmacion(c);
+});
+archivoUsuarios.addEventListener('change', () => {
+  const f = archivoUsuarios.files[0], c = leads.find(x => x.id === sel);
+  if (!f || !c) return;
+  // En el mock no se lee el archivo: la vista previa usa filas de ejemplo con su nombre.
+  c.ob.excelUsuarios = f.name; pintar();
+});
+
+document.addEventListener('click', ev => {
+  const t = ev.target.closest('[data-fila],[data-paso],[data-completar],[data-tomar],[data-cerrar],#simular');
+  if (!t) return;
+  aviso = '';
+  if (t.id === 'simular') {
+    // Lo que hace el trigger cuando el comercial mueve el lead a Contratado.
+    const n = enElCrm.shift();
+    leads.unshift({ ...n, desde: 'hoy', tipo: 'ONBOARDING', ob: { lleva: null, org: null, hechas: new Set() } });
+    aviso = n.nombre + ' pasó a Contratado';
+  }
+  else if ('cerrar' in t.dataset) { sel = null; }
+  else if (t.dataset.tomar) { leads.find(x => x.id == t.dataset.tomar).ob.lleva = YO; }
+  else if (t.dataset.paso) { pasoAbierto = +t.dataset.paso; }
+  else if (t.dataset.completar) {
+    // client_onboarding_complete: completed_at + lead_type CLIENT. Sale de la lista.
+    const c = leads.find(x => x.id == t.dataset.completar);
+    c.tipo = 'CLIENT'; sel = null; aviso = c.nombre + ' completó el onboarding';
+  }
+  else { const c = leads.find(x => x.id == t.dataset.fila); sel = c.id; pasoAbierto = Math.min(pasoActual(c), 6); }
+  pintar();
+});
+// Enviar los accesos manda mails de verdad: no se tilda sin pasar por la confirmación.
+const TAREA_CREDENCIALES = 'contacto.credenciales';
+const dlg = document.getElementById('dlg-credenciales');
+function abrirConfirmacion(c) {
+  const equipo = equipoDe(c);
+  dlg.querySelector('[data-lista]').innerHTML = equipo.map(([fn, la, em]) =>
+    `<li><span><b>${esc(fn + ' ' + la)}</b><span class="sub">${esc(em)}</span></span><code>${clave(fn, la)}</code></li>`).join('');
+  dlg.querySelector('[data-n]').textContent = equipo.length;
+  const chk = dlg.querySelector('#verifique'), ok = dlg.querySelector('[data-enviar]');
+  chk.checked = false; ok.disabled = true;
+  chk.onchange = () => { ok.disabled = !chk.checked; };
+  ok.onclick = () => { c.ob.hechas.add(TAREA_CREDENCIALES); aviso = `${equipo.length} mails de acceso enviados`; dlg.close(); pintar(); };
+  dlg.showModal();
+}
+dlg.querySelector('[data-cancelar]').onclick = () => dlg.close();
+
+document.addEventListener('change', ev => {
+  const k = ev.target.dataset.tarea; if (!k) return;
+  const c = leads.find(x => x.id === sel);
+  if (k === TAREA_CREDENCIALES && ev.target.checked) { ev.target.checked = false; abrirConfirmacion(c); return; }
+  ev.target.checked ? c.ob.hechas.add(k) : c.ob.hechas.delete(k);
+  pintar();
+});
+// Escape o el ✕ cierran el dialog: equivale a sacar el ?lead= de la URL.
+document.getElementById('dlg-ob').addEventListener('close', () => { if (sel !== null) { sel = null; pintar(); } });
+document.getElementById('q').addEventListener('input', ev => { busca = ev.target.value.trim().toLowerCase(); pintar(); });
+pintar();
+</script>
+</body>
+</html>

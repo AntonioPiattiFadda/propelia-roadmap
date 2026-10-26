@@ -11,8 +11,10 @@ parte del Roadmap.
 | Archivo | Qué es |
 |---|---|
 | [`onboarding-roadmap-flow.html`](onboarding-roadmap-flow.html) | El flow vigente, para abrir en el navegador |
+| [`clientes.html`](clientes.html) | Propuesta de la página `/clientes` (SUPERADMIN): los leads con `lead_type = 'ONBOARDING'`, que entran solos al pasar a «Contratado». Mock interactivo |
 | [`MODELO_DATOS.md`](MODELO_DATOS.md) | Tablas, RPCs y RLS a crear en la base del Roadmap |
 | [`PUENTE.md`](PUENTE.md) | Contrato de `propelia-bridge`: todo lo que se le pide al producto |
+| [`EXCEL_IMPORT_USUARIOS.md`](EXCEL_IMPORT_USUARIOS.md) | Cómo se arma el Excel del equipo (paso 1) |
 | [`EXCEL_IMPORT_PROPIEDADES.md`](EXCEL_IMPORT_PROPIEDADES.md) | Cómo se arma el Excel de la cartera (paso 2) |
 | [`ONBOARDING_CLIENTES.md`](ONBOARDING_CLIENTES.md) | Guía de soporte de la versión vieja (5 pasos). Sirve para los textos y las razones; **el orden vigente es el de abajo** |
 | [`onboarding.html`](onboarding.html) | Presentación de la versión vieja |
@@ -41,16 +43,22 @@ la tarea pendiente para todos.
 ### 1 · Contacto y cuentas (`contacto`)
 | id | Tarea | Extra |
 |---|---|---|
-| `enviar` | Enviar el saludo: pedir **nombre de la organización** y los usuarios (nombre, email, teléfono, rol) | WhatsApp `contacto_inicial` |
-| `respuesta` | Confirmar que respondió | |
-| `cargar-equipo` | Cargar el equipo que pasaron | lista de miembros |
-| `cuenta-responsable` | Crear la cuenta del responsable (`/sign-up` en Propelia, clave `nombre.apellido`) | |
-| `vincular-org` | Elegir la organización que creó esa alta | selector · `list_organizations` |
-| `cuentas-equipo` | Crear al resto del equipo, clave `nombre.apellido` | hoy necesita un programador (ver pregunta abierta) |
-| `credenciales` | Verificar accesos y enviar a cada uno su usuario y clave | |
+| `enviar` | Enviar el saludo con el **Excel de usuarios** para completar y pedir el nombre de la organización | WhatsApp `contacto_inicial` + plantilla `.xlsx` |
+| `excel-recibido` | Recibir el Excel completado y el nombre de la inmobiliaria | |
+| `importar-usuarios` | Importar el Excel: crea la organización y todas las cuentas, y vincula la org al lead | `check_users` + `create_org_with_users` (a construir) |
+| `credenciales` | Verificar accesos y enviar a cada uno su usuario y clave **por mail** | confirmación obligatoria · `_shared/email.ts` |
 
-La clave inicial es `nombre.apellido` en minúsculas y sin acentos (ver `initialPassword` y
-`MIN_PASSWORD_LENGTH = 6` en `referencia/src/pages/onboarding-admin/onboardingCatalog.ts`).
+**`credenciales` no se tilda directo**: abre un diálogo con la lista de destinatarios (nombre, email
+y contraseña) y un casillero obligatorio, «Verifiqué que todas las cuentas entran correctamente».
+Sin tildarlo, «Enviar mails» no se habilita; al confirmar sale un mail por persona desde
+`info@propelia.es` (el `_shared/email.ts` del Roadmap, sin pasar por el producto) y recién ahí la
+tarea queda hecha. Los mails no se deshacen: por eso la pregunta va antes, no después.
+
+Las columnas del Excel están en [`EXCEL_IMPORT_USUARIOS.md`](EXCEL_IMPORT_USUARIOS.md). **La
+contraseña no va en el Excel**: se crea sola como `nombre.apellido` en minúsculas y sin acentos, con
+el año sumado si no llega a 6 caracteres (ver `initialPassword` y `MIN_PASSWORD_LENGTH = 6` en
+`referencia/src/pages/onboarding-admin/onboardingCatalog.ts`). Reemplaza a las tareas
+`cargar-equipo`, `cuenta-responsable`, `vincular-org` y `cuentas-equipo`.
 
 ### 2 · Cartera, organización y link de pago (`cartera-org-pago`)
 | id | Tarea | Extra |
@@ -96,9 +104,14 @@ La clave inicial es `nombre.apellido` en minúsculas y sin acentos (ver `initial
 
 ## La pantalla
 
-- **`/onboarding`** (SOLO_SUPERADMIN en `src/components/nav.ts`): lista de altas en curso, cada
+**Construida el 26/10/2026 hasta el paso 3** (`src/pages/clientes/`; los pasos 4 a 7 en
+«Próximamente», con el puente simulado). Ver la sección de Clientes en `CLAUDE.md`.
+
+- **`/clientes`** (SOLO_SUPERADMIN en `src/components/nav.ts`; propuesta en
+  [`clientes.html`](clientes.html)): lista de altas en curso (`lead_type = 'ONBOARDING'`), cada
   una con la inmobiliaria, su avance (`n de 7` y barra por paso) y link a su lead.
-- **`/onboarding/:leadId`**: los 7 pasos con sus tareas tildables, los mensajes con «Abrir
+- **El detalle es un dialog** encima de la lista, como en `propelia-frontend` y el `?lead=` del
+  CRM: `/clientes?lead=<id>`. Adentro, los 7 pasos con sus tareas tildables, los mensajes con «Abrir
   WhatsApp» (al teléfono de la persona de contacto, `buildWhatsAppLink` en
   `referencia/`), el equipo, el selector de org, el import, el simulador y el link de pago.
 - **Ficha del lead** (`/crm`): botón «Iniciar onboarding» si no tiene; si tiene, link a él y la org

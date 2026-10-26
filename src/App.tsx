@@ -10,6 +10,7 @@ import { Backlog } from '@/pages/roadmap/Backlog'
 import { Ajustes } from '@/pages/ajustes/Ajustes'
 import { Agenda } from '@/pages/agenda/Agenda'
 import { Demos } from '@/pages/demos/Demos'
+import { Clientes } from '@/pages/clientes/Clientes'
 import { Crm } from '@/pages/crm/Crm'
 import { Equipo } from '@/pages/equipo/Equipo'
 import { Caja } from '@/pages/caja/Caja'
@@ -48,6 +49,7 @@ const App = () => (
                 <Route path="/crm" element={<Crm />} />
                 <Route path="/agenda" element={<Agenda />} />
                 <Route path="/demos" element={<Demos />} />
+                <Route path="/clientes" element={<Clientes />} />
                 <Route path="/equipo" element={<Equipo />} />
                 <Route path="/caja" element={<Caja />} />
                 <Route path="/ajustes" element={<Ajustes />} />
