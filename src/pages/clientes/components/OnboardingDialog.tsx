@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, ExternalLink, X } from 'lucide-react'
+import { Check, ExternalLink, MessageCircle, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { enlaceAlCrm } from '@/pages/crm/lib/leadFilterParams'
+import { enlaceDeWhatsapp, esMovil } from '@/pages/crm/lib/whatsapp'
 import type { Usuario } from '@/pages/crm/types'
 import { useAsignarOnboarding, useCompletarOnboarding } from '../hooks/useClientes'
 import { listoParaCompletar, PASOS, pasoActual, pasoHecho } from '../lib/pasos'
@@ -39,13 +40,22 @@ function Cuerpo({ datos, lleva, yo, onCerrar }: { datos: DatosDelAlta; lleva: Us
   const asignar = useAsignarOnboarding()
   const completar = useCompletarOnboarding()
   const paso = PASOS[abierto]
+  // El chat vacío con el responsable; sin número válido no hay botón.
+  const whatsapp = datos.telefono ? enlaceDeWhatsapp(datos.telefono, '', { web: !esMovil() }) : null
 
   return (
     <>
       <header className="flex flex-wrap items-center gap-x-5 gap-y-2 border-b border-(--line) bg-(--surface-2) px-5 py-3">
         <h2 className="text-[17px] font-semibold">{datos.inmobiliaria}</h2>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] text-(--fg-2)">
-          <span>Responsable <b className="text-foreground">{datos.nombreResponsable || '—'}</b>{datos.telefono && ` · ${datos.telefono}`}</span>
+          <span>Responsable <b className="text-foreground">{datos.nombreResponsable || '—'}</b>{datos.telefono && ` · ${datos.telefono}`}
+            {whatsapp && (
+              <a href={whatsapp} target="_blank" rel="noopener noreferrer" title="Abrir WhatsApp" aria-label="Abrir WhatsApp"
+                className="ml-1.5 inline-flex size-5 items-center justify-center rounded-full align-middle text-success hover:bg-success/15">
+                <MessageCircle className="size-3.5" />
+              </a>
+            )}
+          </span>
           <span>Org <b className="text-foreground">{datos.orgId ? 'vinculada' : 'sin crear'}</b></span>
           <span>Firmó <b className="text-foreground">{fmtFecha.format(new Date(datos.o.created_at))}</b></span>
           <span>Lleva <b className="text-foreground">{lleva?.nombre ?? 'nadie'}</b>
