@@ -4,8 +4,9 @@ import { altaPublica, type AltaPublica, type AltaPublicaDb } from './altaPublica
 
 /* La puerta de la página pública de alta (crm.propelia.es/alta/<token>, en propelia-frontend).
    Sin JWT (`verify_jwt = false`): quien la abre es el cliente, que no tiene cuenta. La llave es el
-   token, y las dos funciones de la base solo las puede correr el service_role.
-   Body: { accion: 'leer', token } | { accion: 'enviar', token, inmobiliaria, web, miembros }. */
+   token, y las funciones de la base solo las puede correr el service_role.
+   Body: { accion: 'leer', token } | { accion: 'enviar', token, inmobiliaria, web, miembros }
+       | { accion: 'reabrir', token }. */
 
 const cors = {
   'Access-Control-Allow-Origin': '*',
@@ -23,6 +24,10 @@ function dbDe(admin: SupabaseClient): AltaPublicaDb {
       const { error } = await admin.rpc('onboarding_alta_enviar', {
         p_token: token, p_company_name: inmobiliaria, p_website: web, p_miembros: miembros,
       })
+      return error ? { error: error.message } : {}
+    },
+    async reabrir(token) {
+      const { error } = await admin.rpc('onboarding_alta_reabrir', { p_token: token })
       return error ? { error: error.message } : {}
     },
   }

@@ -26,6 +26,7 @@ export type AltaPublica = {
 export type AltaPublicaDb = {
   leer(token: string): Promise<{ data: AltaPublica | null; error?: string }>
   enviar(token: string, inmobiliaria: string, web: string, miembros: unknown[]): Promise<{ error?: string }>
+  reabrir(token: string): Promise<{ error?: string }>
 }
 
 export type AltaPublicaResult =
@@ -39,12 +40,13 @@ const falla = (status: number, error: string): AltaPublicaResult => ({ ok: false
 const ERRORES_DE_LA_BASE = [
   'alta_no_existe', 'alta_ya_enviada', 'alta_falta_inmobiliaria', 'alta_sin_miembros', 'alta_demasiados_miembros',
   'alta_un_responsable', 'alta_responsable_admin', 'alta_miembro_invalido', 'alta_email_repetido',
+  'alta_ya_importada',
 ] as const
 
 function deLaBase(error: string): AltaPublicaResult {
   const clave = ERRORES_DE_LA_BASE.find(c => error.includes(c))
   if (!clave) return falla(500, 'alta_error')
-  return falla(clave === 'alta_no_existe' ? 404 : clave === 'alta_ya_enviada' ? 409 : 400, clave)
+  return falla(clave === 'alta_no_existe' ? 404 : clave === 'alta_ya_enviada' || clave === 'alta_ya_importada' ? 409 : 400, clave)
 }
 
 export async function altaPublica(body: Record<string, unknown>, db: AltaPublicaDb): Promise<AltaPublicaResult> {
@@ -65,6 +67,13 @@ export async function altaPublica(body: Record<string, unknown>, db: AltaPublica
     if (!inmobiliaria.trim()) return falla(400, 'alta_falta_inmobiliaria')
     if (!Array.isArray(body.miembros) || body.miembros.length === 0) return falla(400, 'alta_sin_miembros')
     const r = await db.enviar(token, inmobiliaria, web, body.miembros)
+    if (r.error) return deLaBase(r.error)
+    return { ok: true, status: 200, body: { ok: true } }
+  }
+
+  // «Quiero editar»: vuelve a abrir lo enviado, salvo que Propelia ya haya importado el equipo.
+  if (body.accion === 'reabrir') {
+    const r = await db.reabrir(token)
     if (r.error) return deLaBase(r.error)
     return { ok: true, status: 200, body: { ok: true } }
   }

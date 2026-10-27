@@ -10,6 +10,7 @@ function db(over: Partial<AltaPublicaDb> = {}) {
   const base: AltaPublicaDb = {
     leer: async token => { llamadas.push(['leer', token]); return { data: ALTA } },
     enviar: async (...args) => { llamadas.push(['enviar', ...args]); return {} },
+    reabrir: async token => { llamadas.push(['reabrir', token]); return {} },
   }
   return { db: { ...base, ...over }, llamadas }
 }
@@ -52,6 +53,17 @@ Deno.test('las claves de la base se traducen a un status', async () => {
   assertEquals(await enviar('alta_no_existe'), { ok: false, status: 404, error: 'alta_no_existe' })
   // Lo que no es una clave nuestra no se le muestra al cliente.
   assertEquals(await enviar('connection refused'), { ok: false, status: 500, error: 'alta_error' })
+})
+
+Deno.test('reabrir pasa a la base', async () => {
+  const { db: d, llamadas } = db()
+  assertEquals(await altaPublica({ accion: 'reabrir', token: TOKEN }, d), { ok: true, status: 200, body: { ok: true } })
+  assertEquals(llamadas, [['reabrir', TOKEN]])
+})
+
+Deno.test('reabrir lo ya importado es 409 con su clave', async () => {
+  const d = db({ reabrir: async () => ({ error: 'alta_ya_importada' }) }).db
+  assertEquals(await altaPublica({ accion: 'reabrir', token: TOKEN }, d), { ok: false, status: 409, error: 'alta_ya_importada' })
 })
 
 Deno.test('una acción desconocida es 400', async () => {

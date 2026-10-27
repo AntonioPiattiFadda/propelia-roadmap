@@ -274,6 +274,10 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   una tarea del CRM en el lead, «Revisar e importar el equipo de …», para quien tomó el alta (o, si
   nadie, el responsable del lead), con hora dentro de 5 minutos para que suene ya la alarma. No la
   crea si la etapa no deja agendar tareas ni si ya hay una igual pendiente.
+  **«Quiero editar»** (en la pantalla final de la página): el cliente reabre lo enviado él solo por
+  `onboarding_alta_reabrir` (acción `reabrir` de `onboarding-alta`, migración
+  `20261027150225_onboarding_alta_reabrir`), igual que «Reabrir» de /clientes, salvo que el lead ya
+  tenga org en Propelia: ahí contesta `alta_ya_importada` y la página avisa que ya se crearon las cuentas.
 - **Todo lo del producto va por el puente de verdad** desde el 27/10/2026 (`PUENTE_SIMULADO = false`
   en `service/puente.ts`): `create_org_with_users` (paso 1) se sumó a `propelia-bridge` y a
   `roadmap-bridge`, contrato en `docs/onboarding/PUENTE.md`. En true responde con los ejemplos de
