@@ -241,10 +241,10 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   cada alta en un dialog con `?lead=<id>`. Siete pasos (`lib/pasos.ts`, en el código como en el
   producto; en la base solo las tareas hechas); **los pasos 4 a 7 están en «Próximamente»** y no
   cuentan para el avance ni para «Marcar completo». Cada tarea lleva sus acciones al lado: copiar y
-  abrir WhatsApp (plantillas de `onboarding_message_templates`), bajar el Excel, importar, etc.
-- **El equipo entra por Excel** (`lib/usuariosExcel.ts`, columnas en
-  `docs/onboarding/EXCEL_IMPORT_USUARIOS.md`): todo o nada, sin contraseña en el archivo (es
-  `nombre.apellido`, con el año si no llega a 6). Importar crea la org y las cuentas por el puente y
+  abrir WhatsApp (plantillas de `onboarding_message_templates`), copiar el enlace de alta, importar, etc.
+- **El equipo lo carga el cliente** (ver el punto de la página pública, abajo; hasta el 27/10/2026
+  era un Excel): sin contraseña (es `nombre.apellido`, con el año si no llega a 6, `contrasenaInicial`
+  en `lib/equipo.ts`). Importar crea la org y las cuentas por el puente y
   después `client_onboarding_importar_equipo` guarda el equipo, deja `propelia_organization_id` y
   tilda las dos tareas. **«Enviar mails» de accesos no se tilda a mano**: pide confirmar «Verifiqué
   que todas las cuentas entran correctamente» y manda uno por persona por `send-email` con `acceso`
@@ -254,6 +254,22 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   baja»: es de servicio. «Ver cómo les llega» lo muestra en el diálogo; `docs/onboarding/mail-de-acceso.html`
   es una copia generada con datos de ejemplo. Va a `crm_emails` con `plantilla = 'acceso'`, así los
   rebotes se avisan como los demás.
+- **El Excel de usuarios se reemplaza por una página pública** (27/10/2026, por pedido; mock en
+  `docs/onboarding/alta-publica.html`, migración `20261027133921_onboarding_alta_publica`, que **la
+  aplica Antonio**). La página va en **propelia-frontend** (`crm.propelia.es/alta/<token>`) y los
+  datos acá, atados al lead por su `client_onboardings`: el cliente confirma nombre y web
+  (`company_name`/`website`, no pisan `crm_clients`) y carga a su equipo en
+  `client_onboarding_members`, con **un** responsable que es Administrador. Sin sesión: la llave es
+  `client_onboardings.public_token` y la puerta, la edge function `onboarding-alta`
+  (`verify_jwt = false`), que corre `onboarding_alta_leer` / `onboarding_alta_enviar` con el
+  service_role (nadie más puede). Enviar cierra el enlace (`submitted_at`) y tilda
+  `contacto.excel-recibido`; **no crea cuentas**: «Importar» sigue en `/clientes`, que lo lee
+  de la base (`ImportarUsuariosPanel`) y se habilita con `submitted_at`. El WhatsApp
+  `contacto_inicial` lleva `{link}` = `linkDeAlta(public_token)` (migración
+  `20261027134956_onboarding_mensaje_con_link_de_alta`) y la tarea, un botón que copia el enlace.
+  «Recibir el equipo» dice cuándo lo envió y, mientras no se importó, lo reabre (`reabrirAlta`: borra
+  `submitted_at` y destilda). Los `task_id` siguen siendo los del Excel (`excel-recibido`) para no
+  destildar nada. La página es `src/pages/alta/` de propelia-frontend (rama `feat/alta-publica`).
 - **Todo lo del producto va por el puente de verdad** desde el 27/10/2026 (`PUENTE_SIMULADO = false`
   en `service/puente.ts`): `create_org_with_users` (paso 1) se sumó a `propelia-bridge` y a
   `roadmap-bridge`, contrato en `docs/onboarding/PUENTE.md`. En true responde con los ejemplos de
@@ -450,6 +466,11 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
 - **«Objetivos semanales»** (17/10/2026; fue «Objetivos hoy»): el contador de la cabecera y su filtro
   `?objetivo=` cuentan desde el lunes (`startOfWeekIso`) y vuelven a cero al terminar el domingo.
   El diálogo sigue mostrando hoy, semana y mes. «No respondidas» es la primera columna.
+- **Las etapas que había el 27/10/2026 están fijas** (por pedido, migración
+  `20261027131725_crm_funnel_stages_bloqueadas`, que **la aplica Antonio**): `allow_rename`,
+  `allow_reorder` y `allow_delete` en false, así la configuración del funnel las muestra con candado.
+  Gestión, Tareas, Dashboard y Onboarding se siguen eligiendo, y una etapa nueva nace editable.
+  Sin trigger: es el front el que respeta las banderas.
 - **El catálogo se borra con soft delete**: un lead en una etapa borrada la sigue leyendo por
   nombre (`catalogoDeEtapas` trae también las borradas); los menús ofrecen solo las vivas.
   Las vivas van por `position`, salvo Descartado, que va siempre última (`etapasVivas`, 17/10/2026):

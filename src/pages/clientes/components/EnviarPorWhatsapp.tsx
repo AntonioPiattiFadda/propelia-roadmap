@@ -17,7 +17,7 @@ export async function copiarTexto(texto: string, aviso = 'Copiado'): Promise<boo
 /* Copiar y enviar un WhatsApp: los dos íconos que van al lado de la tarea. Enviar también copia,
    por si WhatsApp Web corta el texto o abre otro chat. En el ordenador va directo a WhatsApp Web
    (wa.me rompe los emojis), en el teléfono a la app: `enlaceDeWhatsapp`, como «Mensajes» del CRM.
-   Nunca lleva un archivo: el Excel se adjunta a mano en el chat. */
+   Nunca lleva un archivo: lo que haga falta va como enlace en el texto. */
 export function EnviarPorWhatsapp({ texto, telefono }: { texto: string | null; telefono: string | null }) {
   const enviar = async () => {
     if (!texto) return

@@ -37,7 +37,9 @@ export function FunnelConfigDialog() {
           Funnel
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[calc(100%-2rem)] p-4 sm:max-w-[760px]">
+      <DialogContent className="w-[calc(100%-2rem)] p-4 sm:max-w-[1040px]">
+        {/* 1040 y no los 760 de antes: con Tareas, Dashboard y Onboarding la tabla ya no entraba
+            y se cortaba a la derecha. */}
         <DialogHeader className="sr-only">
           <DialogTitle>Configuración del funnel</DialogTitle>
           <DialogDescription>Los estados por los que pasa un lead, en orden. Los cambios se guardan solos.</DialogDescription>

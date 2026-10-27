@@ -95,7 +95,7 @@ function Cuerpo({ datos, lleva, yo, onCerrar }: { datos: DatosDelAlta; lleva: Us
           {paso.tareas.map(t => <TareaDelOnboarding key={t.id} datos={datos} paso={paso} tarea={t} />)}
           {paso.id === 'contacto' && (
             <p className="mt-2 text-[12px] text-(--fg-muted)">
-              WhatsApp no recibe archivos por enlace: el Excel se descarga con ⤓ y se arrastra al chat. Columnas en docs/onboarding/EXCEL_IMPORT_USUARIOS.md.
+              El cliente carga su equipo en la página de alta (el enlace va en el WhatsApp y se copia con 🔗). Lo que envía se ve en «Importar».
             </p>
           )}
         </section>

@@ -260,7 +260,9 @@ export function StagesTable({
        diálogo entra sin scroll. Debajo de lg vuelven a apilarse, que es lo único que
        entra en una pantalla angosta. */
     <div className="grid gap-3 items-start lg:grid-cols-[minmax(0,1fr)_minmax(0,260px)]">
-      <div className={cardClass}>
+      {/* `overflow-x-auto` y no el `overflow-hidden` de la caja: en una pantalla angosta la tabla
+          scrollea en vez de perder las últimas columnas. */}
+      <div className={cardClass.replace('overflow-hidden', 'overflow-x-auto')}>
         {/* Una sola línea: el título y el botón. La bajada explicativa se sacó — lo que
             hace cada columna ya lo dice su rótulo. */}
         <div className={cardHeaderClass}>
@@ -275,7 +277,7 @@ export function StagesTable({
             Añadir estado
           </button>
         </div>
-        <table className="w-full border-collapse">
+        <table className="w-full min-w-[760px] border-collapse">
           {columns}
           <thead>
             <tr className="bg-(--surface-2)">

@@ -426,3 +426,8 @@ verify_jwt = false
 # autentica comparando el header `x-goog-channel-token` contra `calendar_connections.watch_token`.
 [functions.calendar-webhook]
 verify_jwt = false
+
+# La página pública de alta del cliente (crm.propelia.es/alta/<token>): el cliente no tiene
+# cuenta, así que no hay JWT. La llave es el token del enlace (`client_onboardings.public_token`).
+[functions.onboarding-alta]
+verify_jwt = false

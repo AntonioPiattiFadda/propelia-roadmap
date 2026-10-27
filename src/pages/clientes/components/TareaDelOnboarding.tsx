@@ -1,18 +1,18 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { ChevronRight, CreditCard, Download, FlaskConical, Inbox, Link2, Loader2, Mail, Upload } from 'lucide-react'
+import { ChevronRight, CreditCard, Download, FlaskConical, Inbox, Link, Link2, Loader2, Mail, RotateCcw, Upload, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { leerPrimeraHoja } from '@/pages/crm/service/excel'
-import { useMarcarTarea } from '../hooks/useClientes'
-import { nombreDelExcelDeUsuarios } from '../lib/mensajes'
+import type { Celda } from '@/pages/crm/lib/importarLote'
+import { useMarcarTarea, useReabrirAlta } from '../hooks/useClientes'
+import { estadoDelAlta } from '../lib/equipo'
 import { claveDeTarea, TAREA_CREDENCIALES, type Accion, type Paso, type PlantillaId, type Tarea } from '../lib/pasos'
-import { filasDeLaPlantilla, leerExcelDeUsuarios, type Celda, type ExcelDeUsuarios } from '../lib/usuariosExcel'
 import { descargarExcel } from '../service/excel'
 import { enviarLeadDePrueba, getColumnasDeCartera, PUENTE_SIMULADO } from '../service/puente'
 import { ConfirmarAccesosDialog } from './ConfirmarAccesosDialog'
-import { EnviarPorWhatsapp } from './EnviarPorWhatsapp'
+import { copiarTexto, EnviarPorWhatsapp } from './EnviarPorWhatsapp'
 import { ImportarCarteraPanel } from './ImportarCarteraPanel'
 import { ImportarUsuariosPanel } from './ImportarUsuariosPanel'
 import { DireccionesPanel, LinkDePagoPanel, PagoPanel } from './PanelesDelPuente'
@@ -20,22 +20,26 @@ import type { DatosDelAlta } from './datosDelAlta'
 
 /** Lo que cuelga debajo de la tarea mientras se usa una acción. */
 type Panel =
-  | { tipo: 'usuarios'; archivo: string; excel: ExcelDeUsuarios }
+  | { tipo: 'usuarios' }
   | { tipo: 'cartera'; archivo: string; hoja: string[][] }
   | { tipo: 'link' } | { tipo: 'pago' } | { tipo: 'direcciones' }
 
-const SIN_ORG = 'Primero importá el Excel de usuarios: crea la organización en Propelia'
+const SIN_ORG = 'Primero importá el equipo: crea la organización en Propelia'
+const SIN_ENVIAR = 'Todavía no lo envió: el cliente carga su equipo en la página de alta'
+const fecha = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const celdaATexto = (c: Celda) => (c == null ? '' : c instanceof Date ? c.toISOString().slice(0, 10) : String(c))
 const slug = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 
 /* Un renglón del paso: el tilde y el texto a la izquierda, sus acciones a la derecha y, debajo, el
    mensaje plegado (si es un WhatsApp) o el panel de la acción que se está usando. Las acciones
-   hacen el trabajo; tildar sigue siendo a mano, salvo los dos imports y el envío de accesos, que
-   tildan solos (y este último no se tilda a mano: abre la confirmación). */
+   hacen el trabajo; tildar sigue siendo a mano, salvo «Recibir el equipo» (lo tilda la base cuando
+   el cliente envía la página de alta), los dos imports y el envío de accesos, que tildan solos (y
+   este último no se tilda a mano: abre la confirmación). */
 export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta; paso: Paso; tarea: Tarea }) {
   const clave = claveDeTarea(paso.id, tarea.id)
   const hecha = datos.o.tareas.some(t => t.task_id === clave)
   const marcar = useMarcarTarea()
+  const reabrir = useReabrirAlta()
   const [panel, setPanel] = useState<Panel | null>(null)
   const [confirmando, setConfirmando] = useState(false)
   const [ocupado, setOcupado] = useState<Accion | null>(null)
@@ -68,21 +72,39 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
       </Button>
     )
     switch (a) {
-      case 'excel-usuarios':
+      case 'link-alta':
         return (
-          <Button key={a} size="icon" variant="outline" className="size-8" title={`Descargar ${nombreDelExcelDeUsuarios(datos.inmobiliaria)}`}
-            aria-label="Descargar el Excel de usuarios" disabled={ocupado === a}
-            onClick={() => void ocupar(a, () => descargarExcel(nombreDelExcelDeUsuarios(datos.inmobiliaria), filasDeLaPlantilla(datos.responsable ? {
-              nombre: datos.responsable.first_name, apellido: datos.responsable.last_name, email: datos.responsable.email, telefono: datos.responsable.phone,
-            } : undefined)))}>
-            {ocupado === a ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+          <Button key={a} size="icon" variant="outline" className="size-8" title={`Copiar el enlace: ${datos.linkAlta}`}
+            aria-label="Copiar el enlace de la página de alta" onClick={() => void copiarTexto(datos.linkAlta, 'Enlace copiado')}>
+            <Link className="size-4" />
           </Button>
         )
-      case 'importar-usuarios':
+      case 'equipo-recibido': {
+        const e = estadoDelAlta(datos.o, datos.o.miembros)
+        if (!e.enviado) return <span key={a} className="text-[12px] text-(--fg-muted)">Esperando que lo envíe</span>
+        return (
+          <span key={a} className="flex items-center gap-1.5">
+            <span className="text-[12px] font-medium text-success">Enviado el {fecha(e.el)} · {e.personas} {e.personas === 1 ? 'persona' : 'personas'}</span>
+            {/* Una vez importado, el equipo ya son cuentas en Propelia: corregirlo ahí, no acá. */}
+            {!datos.orgId && (
+              <Button size="icon" variant="ghost" className="size-7" title="Reabrir el enlace para que lo corrijan" aria-label="Reabrir el enlace"
+                disabled={reabrir.isPending} onClick={() => reabrir.mutate(datos.o.id)}>
+                {reabrir.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
+              </Button>
+            )}
+          </span>
+        )
+      }
+      case 'importar-usuarios': {
         if (datos.orgId) return <span key={a} className="text-[12px] font-medium text-success">{datos.o.miembros.length} cuentas · org vinculada</span>
-        return boton(<Upload className="size-4" />, 'Importar', () => elegirArchivo(f => void ocupar(a, async () => {
-          setPanel({ tipo: 'usuarios', archivo: f.name, excel: leerExcelDeUsuarios(await leerPrimeraHoja(f)) })
-        })))
+        const enviado = !!datos.o.submitted_at
+        return (
+          <Button key={a} size="sm" variant={panel?.tipo === 'usuarios' ? 'secondary' : 'outline'} className="h-8"
+            disabled={!enviado} title={enviado ? undefined : SIN_ENVIAR} onClick={() => alternar({ tipo: 'usuarios' })}>
+            <Users className="size-4" /> Importar
+          </Button>
+        )
+      }
       case 'mails':
         return boton(<Mail className="size-4" />, 'Enviar mails', () => setConfirmando(true), { requiereOrg: true })
       case 'plantilla-cartera':
@@ -139,7 +161,7 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
       )}
       {panel && (
         <div className="ml-6.5">
-          {panel.tipo === 'usuarios' && <ImportarUsuariosPanel datos={datos} archivo={panel.archivo} excel={panel.excel} onCerrar={() => setPanel(null)} />}
+          {panel.tipo === 'usuarios' && <ImportarUsuariosPanel datos={datos} onCerrar={() => setPanel(null)} />}
           {panel.tipo === 'cartera' && <ImportarCarteraPanel datos={datos} archivo={panel.archivo} hoja={panel.hoja} onCerrar={() => setPanel(null)} />}
           {panel.tipo === 'link' && <LinkDePagoPanel datos={datos} />}
           {panel.tipo === 'pago' && <PagoPanel datos={datos} />}

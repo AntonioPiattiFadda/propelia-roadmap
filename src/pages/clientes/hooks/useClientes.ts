@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase'
 import {
-  asignarOnboarding, completarOnboarding, getOnboardings, getPlantillas, importarEquipo, marcarTarea,
+  asignarOnboarding, completarOnboarding, getOnboardings, getPlantillas, importarEquipo, marcarTarea, reabrirAlta,
 } from '../service/clientes.service'
 import { getLinksDePago, getOrganizacion, getPlanes } from '../service/puente'
 import type { Onboarding } from '../types'
@@ -86,6 +86,15 @@ export function useImportarEquipo() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: importarEquipo,
+    onSettled: () => qc.invalidateQueries({ queryKey: CLIENTES_KEYS.onboardings }),
+  })
+}
+
+export function useReabrirAlta() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: reabrirAlta,
+    onError: e => toast.error('No se pudo reabrir el enlace', { description: mensajeDeError(e) }),
     onSettled: () => qc.invalidateQueries({ queryKey: CLIENTES_KEYS.onboardings }),
   })
 }

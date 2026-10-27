@@ -8,7 +8,7 @@
 /** Lo que va al lado de cada tarea. `wa:<plantilla>` es copiar + enviar por WhatsApp Web. */
 export type Accion =
   | `wa:${PlantillaId}`
-  | 'excel-usuarios' | 'importar-usuarios' | 'mails'
+  | 'link-alta' | 'equipo-recibido' | 'importar-usuarios' | 'mails'
   | 'plantilla-cartera' | 'importar-cartera' | 'link-pago' | 'ver-pago'
   | 'direcciones' | 'simular-lead'
 
@@ -22,9 +22,10 @@ export const PASOS: Paso[] = [
   {
     id: 'contacto', titulo: 'Contacto y cuentas',
     tareas: [
-      { id: 'enviar', texto: 'Enviar el saludo con el Excel de usuarios para completar', acciones: ['wa:contacto_inicial', 'excel-usuarios'] },
-      { id: 'excel-recibido', texto: 'Recibir el Excel completado y el nombre de la inmobiliaria' },
-      { id: 'importar-usuarios', texto: 'Importar el Excel: crea la organización y todas las cuentas', acciones: ['importar-usuarios'] },
+      // Los ids son de cuando el equipo llegaba por Excel: cambiarlos destildaría lo hecho.
+      { id: 'enviar', texto: 'Enviar el saludo con el enlace para que carguen su equipo', acciones: ['wa:contacto_inicial', 'link-alta'] },
+      { id: 'excel-recibido', texto: 'Recibir el equipo y el nombre de la inmobiliaria', acciones: ['equipo-recibido'] },
+      { id: 'importar-usuarios', texto: 'Importar el equipo: crea la organización y todas las cuentas', acciones: ['importar-usuarios'] },
       { id: 'credenciales', texto: 'Verificar accesos y enviar a cada uno su usuario y clave por mail', acciones: ['mails'] },
     ],
   },
@@ -80,6 +81,9 @@ export const PASOS: Paso[] = [
 
 /** Clave de la tarea en `client_onboarding_tasks.task_id`. */
 export const claveDeTarea = (pasoId: string, tareaId: string) => `${pasoId}.${tareaId}`
+
+/** La tilda la base cuando el cliente envía la página de alta (`onboarding_alta_enviar`). */
+export const TAREA_EQUIPO_RECIBIDO = claveDeTarea('contacto', 'excel-recibido')
 
 /** La tarea que no se tilda a mano: manda mails, pasa por `ConfirmarAccesosDialog`. */
 export const TAREA_CREDENCIALES = claveDeTarea('contacto', 'credenciales')

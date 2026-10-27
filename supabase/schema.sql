@@ -1529,15 +1529,15 @@ insert into public.crm_funnel_stages
    is_out_of_funnel, allow_delete, allow_reorder, allow_rename)
 select * from (values
   ('Intentando contactar',                   'NEW',       1, (select id from public.crm_priorities where name = 'Verde'), 24,
-   false, false, false, true),
+   false, false, false, false),
   ('Intentando contactar decisor',           'CUSTOM',    2, (select id from public.crm_priorities where name = 'Verde'), 24,
-   false, true,  true,  true),
+   false, false, false, false),
   ('Contactado (decisor o influencer)',      'CUSTOM',    3, (select id from public.crm_priorities where name = 'Verde'), 24,
-   false, true,  true,  true),
+   false, false, false, false),
   ('Seguimiento (le interesa más adelante)', 'CUSTOM',    4, (select id from public.crm_priorities where name = 'Verde'), 24,
-   false, true,  true,  true),
+   false, false, false, false),
   ('Meeting booked',                         'CUSTOM',    5, (select id from public.crm_priorities where name = 'Verde'), 24,
-   false, true,  true,  true),
+   false, false, false, false),
   ('Descartado',                             'DISCARDED', 6, null::uuid, null::integer,
    true,  false, false, false)
 ) v(label, value, position, priority_id, management_tolerance_hours,
@@ -2146,11 +2146,21 @@ create table if not exists public.client_onboardings (
   created_by   uuid references public.users (id) on delete set null default auth.uid(),
   created_at   timestamptz not null default now(),
   -- null = en curso. Lo escribe `client_onboarding_completar`.
-  completed_at timestamptz
+  completed_at timestamptz,
+  -- La llave del enlace de la página pública de alta (crm.propelia.es/alta/<token>).
+  public_token uuid not null default gen_random_uuid(),
+  -- El nombre y la web que confirmó el cliente en esa página. No pisan crm_clients: son para crear su org.
+  company_name text,
+  website      text,
+  -- Cuándo lo envió. Con esto el enlace queda cerrado.
+  submitted_at timestamptz
 );
+create unique index if not exists client_onboardings_public_token
+  on public.client_onboardings (public_token);
 
--- El equipo del cliente: lo carga el Excel de usuarios (paso 1). El responsable nace con el
--- onboarding, con los datos del cliente del CRM, para la plantilla del Excel y el WhatsApp.
+-- El equipo del cliente: lo carga el propio cliente en la página pública de alta (paso 1,
+-- `onboarding_alta_enviar`; hasta el 27/10/2026 era un Excel). El responsable nace con el
+-- onboarding, con los datos del cliente del CRM, para precargar esa página y el WhatsApp.
 create table if not exists public.client_onboarding_members (
   id            uuid primary key default gen_random_uuid(),
   onboarding_id uuid not null references public.client_onboardings (id) on delete cascade,
@@ -2181,7 +2191,7 @@ create table if not exists public.client_onboarding_tasks (
 );
 
 -- Los WhatsApp del onboarding. Variables: {nombre} (el responsable), {soporte} (quien envía),
--- {inmobiliaria} y, en link_de_pago, {link}.
+-- {inmobiliaria} y {link}: el de pago en link_de_pago, el de la página de alta en contacto_inicial.
 create table if not exists public.onboarding_message_templates (
   id         text primary key,
   body       text not null check (btrim(body) <> ''),
@@ -2192,13 +2202,13 @@ create table if not exists public.onboarding_message_templates (
 insert into public.onboarding_message_templates (id, body) values
 (
   'contacto_inicial',
-  E'¡Hola {nombre}! Soy {soporte}, del equipo de Propelia 👋\n\n'
-  'Bienvenidos. A partir de ahora voy a ser vuestra persona de contacto para poner en marcha la cuenta de {inmobiliaria}, y os voy a ir guiando paso a paso por aquí.\n\n'
-  'Para crear vuestra cuenta necesito dos cosas:\n\n'
-  '1. Que me confirméis el nombre de la inmobiliaria tal como queréis que aparezca en Propelia (¿lo dejamos como «{inmobiliaria}»?).\n\n'
-  '2. Que rellenéis el Excel que os adjunto con las personas del equipo que van a usar Propelia: una fila por persona, con nombre, apellido, email, teléfono (con +34) y rol (Administrador o Agente).\n\n'
-  'En la columna Responsable, marcad con «Sí» a una sola persona (con rol Administrador): quien se va a encargar de implementar Propelia en la inmobiliaria. Será con quien hable siempre, así la comunicación va por una sola vía y es más ágil.\n\n'
-  'Cuando me lo devolváis, os creo todos los accesos y os paso a cada uno su usuario y contraseña. Cualquier duda, escribidme por aquí.'
+  E'¡Hola {nombre}! Soy {soporte}, de Propelia 👋\n\n'
+  '¡Bienvenidos al primer paso del onboarding! Gracias por sumaros a Propelia: nos hace mucha ilusión empezar este viaje con {inmobiliaria} 🚀\n\n'
+  'A partir de ahora voy a ser vuestra persona de contacto y os voy a ir guiando paso a paso por aquí, para que en pocos días estéis trabajando vuestros leads desde Propelia.\n\n'
+  'Para arrancar, entrad a este enlace (son 5 minutos):\n'
+  '{link}\n\n'
+  'Os va a preguntar dos cosas: el nombre de la inmobiliaria y quiénes del equipo van a usar Propelia, marcando al responsable (la persona que implementa Propelia en la inmobiliaria y con quien hablaré siempre).\n\n'
+  'En cuanto lo enviéis, creo todos los accesos y os paso a cada uno su usuario y contraseña. ¡Cualquier duda, escribidme por aquí!'
 ), (
   'configurar_organizacion',
   E'{nombre}, el siguiente paso es dejar lista la organización de {inmobiliaria}. En Propelia, entrad a Ajustes:\n\n'
@@ -2330,8 +2340,8 @@ create trigger crm_leads_crear_onboarding after insert or update of lead_type, f
   for each row execute function public.crm_leads_crear_onboarding();
 
 -- ---------- RPCs de la página ----------
--- El import del Excel de usuarios (paso 1): reemplaza el equipo por el del Excel, deja la org de
--- Propelia que creó el puente en el lead y tilda «Recibir el Excel» e «Importar el Excel». Todo o
+-- El import del equipo (paso 1): reemplaza el equipo por el importado, deja la org de Propelia que
+-- creó el puente en el lead y tilda «Recibir el equipo» e «Importar el equipo». Todo o
 -- nada. `p_miembros`: [{first_name, last_name, email, phone, role, is_owner}], uno con is_owner.
 create or replace function public.client_onboarding_importar_equipo(
   p_onboarding_id uuid, p_organization_id uuid, p_miembros jsonb
@@ -2395,6 +2405,103 @@ revoke execute on function public.client_onboarding_importar_equipo(uuid, uuid, 
 revoke execute on function public.client_onboarding_completar(uuid) from public, anon;
 grant execute on function public.client_onboarding_importar_equipo(uuid, uuid, jsonb) to authenticated;
 grant execute on function public.client_onboarding_completar(uuid) to authenticated;
+
+-- La página pública de alta (reemplaza al Excel de usuarios): la llama la edge function
+-- `onboarding-alta` con el service_role. Mock en docs/onboarding/alta-publica.html.
+-- Lo que la página precarga. null si el token no existe o el alta ya terminó.
+create or replace function public.onboarding_alta_leer(p_token uuid)
+returns jsonb language sql stable security definer set search_path to 'public' as $$
+  select jsonb_build_object(
+    'inmobiliaria', coalesce(o.company_name, nullif(btrim(c.company_name), ''),
+                             nullif(btrim(concat_ws(' ', c.first_name, c.last_name)), '')),
+    'web', o.website,
+    'enviado', o.submitted_at is not null,
+    'miembros', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'first_name', m.first_name, 'last_name', m.last_name, 'email', m.email,
+               'phone', m.phone, 'role', m.role, 'is_owner', m.is_owner)
+             order by m.is_owner desc, m.created_at)
+      from public.client_onboarding_members m where m.onboarding_id = o.id), '[]'::jsonb)
+  )
+  from public.client_onboardings o
+  join public.crm_leads l on l.id = o.lead_id and l.deleted_at is null
+  left join public.crm_clients c on c.id = l.client_id
+  where o.public_token = p_token and o.completed_at is null;
+$$;
+
+-- Lo que envía el cliente: valida todo de nuevo (las mismas que tenía el Excel), reemplaza el
+-- equipo, guarda nombre y web, cierra el enlace y tilda «Recibir los datos». No crea cuentas: eso
+-- sigue siendo «Importar» en /clientes. Errores como claves, igual que el resto del CRM.
+create or replace function public.onboarding_alta_enviar(
+  p_token uuid, p_company_name text, p_website text, p_miembros jsonb
+) returns void language plpgsql security definer set search_path to 'public' as $$
+declare
+  v_id uuid;
+  v_enviado timestamptz;
+begin
+  select o.id, o.submitted_at into v_id, v_enviado
+  from public.client_onboardings o
+  join public.crm_leads l on l.id = o.lead_id and l.deleted_at is null
+  where o.public_token = p_token and o.completed_at is null
+  for update of o;
+  if v_id is null then
+    raise exception 'alta_no_existe' using errcode = 'P0002';
+  end if;
+  if v_enviado is not null then
+    raise exception 'alta_ya_enviada' using errcode = '22023';
+  end if;
+  if nullif(btrim(p_company_name), '') is null then
+    raise exception 'alta_falta_inmobiliaria' using errcode = '22023';
+  end if;
+  if jsonb_typeof(p_miembros) <> 'array' or jsonb_array_length(p_miembros) = 0 then
+    raise exception 'alta_sin_miembros' using errcode = '22023';
+  end if;
+  if jsonb_array_length(p_miembros) > 100 then
+    raise exception 'alta_demasiados_miembros' using errcode = '22023';
+  end if;
+  if (select count(*) from jsonb_array_elements(p_miembros) m
+      where coalesce((m->>'is_owner')::boolean, false)) <> 1 then
+    raise exception 'alta_un_responsable' using errcode = '22023';
+  end if;
+  if exists (select 1 from jsonb_array_elements(p_miembros) m
+             where coalesce((m->>'is_owner')::boolean, false) and m->>'role' is distinct from 'admin') then
+    raise exception 'alta_responsable_admin' using errcode = '22023';
+  end if;
+  if exists (select 1 from jsonb_array_elements(p_miembros) m
+             where nullif(btrim(m->>'first_name'), '') is null
+                or nullif(btrim(m->>'last_name'), '') is null
+                or coalesce(m->>'role', '') not in ('admin', 'agent')
+                or coalesce(btrim(m->>'email'), '') !~ '^[^\s@]+@[^\s@]+\.[^\s@]+$'
+                or coalesce(m->>'phone', '') !~ '^\+[1-9][0-9]{7,14}$') then
+    raise exception 'alta_miembro_invalido' using errcode = '22023';
+  end if;
+  if (select count(distinct lower(btrim(m->>'email'))) from jsonb_array_elements(p_miembros) m)
+     <> jsonb_array_length(p_miembros) then
+    raise exception 'alta_email_repetido' using errcode = '22023';
+  end if;
+
+  delete from public.client_onboarding_members where onboarding_id = v_id;
+  insert into public.client_onboarding_members
+    (onboarding_id, first_name, last_name, email, phone, role, is_owner, is_contact)
+  select v_id, btrim(m->>'first_name'), btrim(m->>'last_name'), lower(btrim(m->>'email')),
+         m->>'phone', m->>'role',
+         coalesce((m->>'is_owner')::boolean, false), coalesce((m->>'is_owner')::boolean, false)
+  from jsonb_array_elements(p_miembros) m;
+
+  update public.client_onboardings
+  set company_name = btrim(p_company_name), website = nullif(btrim(p_website), ''), submitted_at = now()
+  where id = v_id;
+
+  insert into public.client_onboarding_tasks (onboarding_id, task_id, done_by)
+  values (v_id, 'contacto.excel-recibido', null)
+  on conflict do nothing;
+end;
+$$;
+
+revoke execute on function public.onboarding_alta_leer(uuid) from public, anon, authenticated;
+revoke execute on function public.onboarding_alta_enviar(uuid, text, text, jsonb) from public, anon, authenticated;
+grant execute on function public.onboarding_alta_leer(uuid) to service_role;
+grant execute on function public.onboarding_alta_enviar(uuid, text, text, jsonb) to service_role;
 
 -- ---------- Realtime ----------
 -- Que dos SUPERADMIN vean lo mismo sin recargar: la página invalida al recibir cualquier cambio.

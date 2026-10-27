@@ -44,9 +44,9 @@ la tarea pendiente para todos.
 ### 1 · Contacto y cuentas (`contacto`)
 | id | Tarea | Extra |
 |---|---|---|
-| `enviar` | Enviar el saludo con el **Excel de usuarios** para completar y pedir el nombre de la organización | WhatsApp `contacto_inicial` + plantilla `.xlsx` |
-| `excel-recibido` | Recibir el Excel completado y el nombre de la inmobiliaria | |
-| `importar-usuarios` | Importar el Excel: crea la organización y todas las cuentas, y vincula la org al lead | `check_users` + `create_org_with_users` (a construir) |
+| `enviar` | Enviar el saludo con el **enlace a la página de alta** | WhatsApp `contacto_inicial` con `{link}` |
+| `excel-recibido` | Recibir el equipo y el nombre de la inmobiliaria | la tilda la base al enviar la página |
+| `importar-usuarios` | Importar el equipo: crea la organización y todas las cuentas, y vincula la org al lead | `create_org_with_users` |
 | `credenciales` | Verificar accesos y enviar a cada uno su usuario y clave **por mail** | confirmación obligatoria · `_shared/email.ts` |
 
 **`credenciales` no se tilda directo**: abre un diálogo con la lista de destinatarios (nombre, email
@@ -55,8 +55,12 @@ Sin tildarlo, «Enviar mails» no se habilita; al confirmar sale un mail por per
 `info@propelia.es` (el `_shared/email.ts` del Roadmap, sin pasar por el producto) y recién ahí la
 tarea queda hecha. Los mails no se deshacen: por eso la pregunta va antes, no después.
 
-Las columnas del Excel están en [`EXCEL_IMPORT_USUARIOS.md`](EXCEL_IMPORT_USUARIOS.md). **La
-contraseña no va en el Excel**: se crea sola como `nombre.apellido` en minúsculas y sin acentos, con
+**Desde el 27/10/2026 el equipo no llega por Excel**: el cliente lo carga en una página pública
+(`crm.propelia.es/alta/<token>`, en propelia-frontend; mock en [`alta-publica.html`](alta-publica.html)),
+con un responsable que es Administrador. Los datos van a `client_onboarding_members` por la edge
+function `onboarding-alta`. Los `id` de las tareas quedaron los del Excel para no destildar nada.
+[`EXCEL_IMPORT_USUARIOS.md`](EXCEL_IMPORT_USUARIOS.md) queda como historia. **La contraseña no la
+elige nadie**: se crea sola como `nombre.apellido` en minúsculas y sin acentos, con
 el año sumado si no llega a 6 caracteres (ver `initialPassword` y `MIN_PASSWORD_LENGTH = 6` en
 `referencia/src/pages/onboarding-admin/onboardingCatalog.ts`). Reemplaza a las tareas
 `cargar-equipo`, `cuenta-responsable`, `vincular-org` y `cuentas-equipo`.

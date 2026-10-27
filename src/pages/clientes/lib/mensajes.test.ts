@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { llenarPlantilla, nombreDePila, nombreDelExcelDeUsuarios } from './mensajes'
+import { llenarPlantilla, nombreDePila } from './mensajes'
 
 describe('llenarPlantilla', () => {
   const v = { nombre: 'Marta', soporte: 'Antonio', inmobiliaria: 'Fincas Ribera' }
@@ -15,9 +15,4 @@ describe('llenarPlantilla', () => {
 
 describe('nombreDePila', () => {
   it('la primera palabra', () => expect(nombreDePila(' María José Fernández')).toBe('María'))
-})
-
-describe('nombreDelExcelDeUsuarios', () => {
-  it('slug sin tildes', () => expect(nombreDelExcelDeUsuarios('Habitat Gràcia, S.L.')).toBe('usuarios-habitat-gracia-s-l.xlsx'))
-  it('sin nombre', () => expect(nombreDelExcelDeUsuarios('  ')).toBe('usuarios-inmobiliaria.xlsx'))
 })

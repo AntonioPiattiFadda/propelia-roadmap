@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import type { Json } from '@/types/database.types'
+import { TAREA_EQUIPO_RECIBIDO } from '../lib/pasos'
 import type { Onboarding, PlantillaDeMensaje } from '../types'
 
 /* La base de /clientes (migración `20261026184212_clientes_onboarding`). Todo es solo SUPERADMIN
@@ -36,9 +37,19 @@ export async function asignarOnboarding({ onboardingId, userId }: { onboardingId
   if (error) throw error
 }
 
+/** Vuelve a abrir la página de alta para que el cliente corrija lo enviado: borra `submitted_at`
+ *  y destilda «Recibir el equipo», que la base vuelve a tildar cuando lo reenvíe. */
+export async function reabrirAlta(onboardingId: string) {
+  const { error } = await supabase.from('client_onboardings').update({ submitted_at: null }).eq('id', onboardingId)
+  if (error) throw error
+  const { error: e2 } = await supabase.from('client_onboarding_tasks').delete()
+    .eq('onboarding_id', onboardingId).eq('task_id', TAREA_EQUIPO_RECIBIDO)
+  if (e2) throw e2
+}
+
 export type MiembroAImportar = { first_name: string; last_name: string; email: string; phone: string; role: 'admin' | 'agent'; is_owner: boolean }
 
-/** Guarda el equipo del Excel, vincula la org al lead y tilda las dos tareas del import. Todo o nada. */
+/** Guarda el equipo importado, vincula la org al lead y tilda las dos tareas del import. Todo o nada. */
 export async function importarEquipo(p: { onboardingId: string; organizationId: string; miembros: MiembroAImportar[] }) {
   const { error } = await supabase.rpc('client_onboarding_importar_equipo', {
     p_onboarding_id: p.onboardingId, p_organization_id: p.organizationId, p_miembros: p.miembros as unknown as Json,

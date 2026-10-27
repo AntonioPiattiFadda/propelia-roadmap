@@ -1,5 +1,9 @@
 # Excel para importar los usuarios
 
+> **Historia (27/10/2026)**: el equipo ya no llega por Excel. Lo carga el cliente en la página
+> pública de alta (`alta-publica.html`, edge function `onboarding-alta`). Las reglas (un responsable
+> que es Administrador, emails sin repetir, teléfono con prefijo) siguen siendo las mismas.
+
 El Excel con el equipo del cliente: se le manda en el saludo del **paso 1 · Contacto y cuentas**,
 lo devuelve completado y se sube en la tarea **«Importar el Excel de usuarios»**. Reemplaza a
 cargar el equipo a mano, al `/sign-up` del responsable y a crear al resto desde Equipo.

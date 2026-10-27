@@ -75,12 +75,17 @@ button { cursor: pointer; }
 .pp-head .para { margin-left: auto; font-size: 13px; color: var(--muted); }
 
 .pasos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; list-style: none; padding: 0; margin: 0; }
-.pasos li { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--faint); }
+.pasos li { position: relative; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--faint); transition: color .3s; }
 .pasos li::before { content: ""; height: 4px; border-radius: 4px; background: var(--line); }
+/* El relleno es un elemento que sobrevive al repintado: así el ancho se anima al cambiar de paso. */
+.pasos li i { position: absolute; top: 0; left: 0; height: 4px; width: 0; border-radius: 4px; background: var(--brand); transition: width .55s cubic-bezier(.4, 0, .2, 1); overflow: hidden; }
+.pasos li.hecho i { width: 100%; }
+.pasos li.ahora i { width: 50%; }
+.pasos li.ahora i::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgb(255 255 255 / .55), transparent); transform: translateX(-100%); animation: brillo 1.8s ease-in-out infinite; }
+@keyframes brillo { to { transform: translateX(100%); } }
 .pasos li.hecho, .pasos li.ahora { color: var(--fg); }
-.pasos li.hecho::before { background: var(--brand); }
-.pasos li.ahora::before { background: linear-gradient(90deg, var(--brand) 50%, var(--line) 50%); }
 .pasos li.ahora { font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .pasos li i { transition: none; } .pasos li.ahora i::after { animation: none; } }
 
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px; display: flex; flex-direction: column; gap: 18px; }
 .card h2 { font-size: 24px; }
@@ -104,12 +109,37 @@ button { cursor: pointer; }
 
 /* El equipo: una tabla en el ordenador, tarjetas en el teléfono. */
 .equipo { display: flex; flex-direction: column; gap: 8px; }
-.fila { display: grid; grid-template-columns: 1fr 1fr 1.5fr 1.2fr 128px 34px; gap: 8px; align-items: start; }
+.fila { display: grid; grid-template-columns: 1fr 1fr 1.5fr 1.3fr 128px 104px 34px; gap: 8px; align-items: start; }
 .fila.cab { font: 500 10.5px/1.2 var(--f-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0 2px; }
 .fila .err { grid-column: 1 / -1; margin-top: -2px; }
-.fila.fija { background: var(--surface-2); border: 1px dashed var(--line); border-radius: 10px; padding: 10px; font-size: 14px; align-items: center; }
-.fila.fija span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chip { display: inline-block; font: 600 11px/1 var(--f-mono); padding: 5px 7px; border-radius: 6px; background: var(--brand-soft); color: var(--brand); }
+.fila.es-resp { background: var(--brand-soft); border-radius: 10px; padding: 8px; margin: 0 -8px; }
+.fila select:disabled { opacity: 1; background: var(--surface-2); color: var(--muted); }
+/* La columna Responsable: un radio por fila, así solo se puede marcar uno. */
+.resp { display: flex; align-items: center; gap: 6px; height: 40px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.resp input { width: 18px; height: 18px; margin: 0; accent-color: var(--brand); cursor: pointer; }
+.resp .rot { display: none; }
+.es-resp .resp { color: var(--brand); font-weight: 600; }
+
+/* El ⓘ del Rol: el texto aparece al pasar o al enfocar, sin esperar al title. */
+.info { position: relative; width: 16px; height: 16px; margin-left: 4px; padding: 0; border: 1px solid currentColor; border-radius: 50%; background: none; color: var(--brand); font: 600 10px/14px var(--f-body); text-transform: none; vertical-align: 1px; }
+.info::after { content: attr(data-tip); position: absolute; z-index: 5; top: calc(100% + 8px); right: -8px; width: 260px; padding: 10px 12px; border-radius: 8px; background: var(--fg); color: var(--surface); font: 400 13px/1.45 var(--f-body); letter-spacing: 0; text-align: left; box-shadow: 0 6px 20px rgb(0 0 0 / .18); opacity: 0; pointer-events: none; transform: translateY(-4px); transition: opacity .15s, transform .15s; }
+.info:hover::after, .info:focus-visible::after { opacity: 1; transform: none; }
+
+/* Copia del PhoneInput del sistema (src/components/ui/phone-input.tsx): ▾ para buscar país,
+   bandera, el «+» fijo afuera y el número. */
+.phone { position: relative; display: flex; min-width: 0; }
+.phone .pais { flex: none; width: 28px; border: 1px solid var(--line); border-right: 0; border-radius: 8px 0 0 8px; background: none; color: var(--muted); font-size: 11px; }
+.phone .caja { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 0 8px 8px 0; padding: 0 10px; background: var(--surface); }
+.phone .caja:focus-within { outline: 2px solid var(--brand); outline-offset: -1px; }
+.phone .caja:has(input[aria-invalid="true"]) { border-color: var(--danger); background: var(--danger-soft); }
+.phone .caja img { width: 18px; height: 12px; border-radius: 2px; object-fit: cover; flex: none; }
+.phone .caja .mas-signo { color: var(--muted); font-size: 14px; }
+.fila .phone .caja input { border: 0; padding: 9px 0; background: none; outline: none; }
+.paises { position: absolute; z-index: 6; top: calc(100% + 4px); left: 0; width: 240px; max-height: 240px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgb(0 0 0 / .12); }
+.paises button { width: 100%; display: flex; align-items: center; gap: 8px; border: 0; background: none; border-radius: 6px; padding: 7px 8px; font-size: 14px; text-align: left; }
+.paises button:hover, .paises button.on { background: var(--brand-soft); }
+.paises img { width: 18px; height: 12px; border-radius: 2px; object-fit: cover; }
+.paises small { margin-left: auto; color: var(--muted); }
 .quitar { border: 0; background: none; color: var(--muted); border-radius: 8px; height: 40px; font-size: 18px; }
 .quitar:hover { background: var(--danger-soft); color: var(--danger); }
 .mas { align-self: flex-start; border: 1px dashed var(--line); background: none; border-radius: 8px; padding: 8px 14px; color: var(--brand); font-weight: 600; }
@@ -143,7 +173,7 @@ button { cursor: pointer; }
   .fila { grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
   .fila .email, .fila .tel { grid-column: 1 / -1; }
   .fila .quitar { justify-self: end; }
-  .fila.fija span { white-space: normal; }
+  .resp .rot { display: inline; }
   .pasos li span { display: none; }
   .pasos li.ahora span { display: inline; }
 }
@@ -204,26 +234,51 @@ En cuanto lo enviéis, creo todos los accesos y os paso a cada uno su usuario y 
 </div>
 
 <script>
-const PASOS = ['Inmobiliaria', 'Responsable', 'Equipo', 'Revisar']
+const PASOS = ['Inmobiliaria', 'Equipo', 'Revisar']
+const LISTO = PASOS.length
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const TEL = /^(\+|00)\d[\d\s]{7,}$/
+// Unos pocos países para el mock; el PhoneInput de verdad trae todos (getCountryOptions).
+const PAISES = [
+  ['ES', 'España', '34'], ['PT', 'Portugal', '351'], ['FR', 'Francia', '33'], ['IT', 'Italia', '39'],
+  ['DE', 'Alemania', '49'], ['GB', 'Reino Unido', '44'], ['AR', 'Argentina', '54'], ['VE', 'Venezuela', '58'],
+  ['MX', 'México', '52'], ['CO', 'Colombia', '57'], ['US', 'Estados Unidos', '1'],
+]
+const bandera = pais => `https://flagcdn.com/w20/${pais.toLowerCase()}.png`
+const prefijoDe = pais => PAISES.find(p => p[0] === pais)[2]
+// Como guessCountryFromLeadingDigits: el país sale de los primeros dígitos, del prefijo más largo al más corto.
+function paisPorDigitos(digitos) {
+  for (const largo of [3, 2, 1]) {
+    const p = PAISES.find(([, , pre]) => pre === digitos.slice(0, largo))
+    if (p) return p[0]
+  }
+}
+// El teléfono se guarda sin el «+» (va fijo afuera del campo): «34 612 34 56 78».
+const telValido = p => p.tel.replace(/\D/g, '').length >= prefijoDe(p.pais).length + 6
+const INFO_RESPONSABLE = 'El responsable es quien se encarga de implementar Propelia en la inmobiliaria y con quien vamos a hablar siempre: así la comunicación va por una sola vía. Tiene que ser Administrador.'
 
-// Lo que ya se sabe del CRM llega precargado.
+// Lo que ya se sabe del CRM llega precargado: el contacto del lead entra como responsable.
+// El responsable es una columna aparte, con un radio: se marca uno solo, y quien lo es queda Administrador.
 const s = {
   paso: -1, intentado: false,
   inmo: { nombre: 'Fincas Ribera', web: '' },
-  resp: { nombre: 'Marta', apellido: 'Gil', email: 'marta@fincasribera.es', tel: '+34 612 34 56 78' },
-  equipo: [{ nombre: '', apellido: '', email: '', tel: '', rol: 'agente' }],
+  equipo: [
+    { nombre: 'Marta', apellido: 'Gil', email: 'marta@fincasribera.es', pais: 'ES', tel: '34 612 34 56 78', rol: 'admin', responsable: true },
+    personaNueva(),
+  ],
+  paisesDe: null, // la fila con la lista de países abierta
 }
+function personaNueva() { return { nombre: '', apellido: '', email: '', pais: 'ES', tel: '34 ', rol: 'agente' } }
+const responsable = () => s.equipo.find(p => p.responsable)
+const ROLES = { admin: 'Administrador', agente: 'Agente' }
 const app = document.getElementById('app')
 const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 
 function erroresDe(paso) {
   const e = {}
   if (paso === 0 && !s.inmo.nombre.trim()) e['inmo.nombre'] = 'Escribid el nombre de la inmobiliaria.'
-  if (paso === 1) Object.assign(e, erroresDePersona(s.resp, 'resp'))
-  if (paso === 2) {
-    const vistos = new Set([s.resp.email.trim().toLowerCase()])
+  if (paso === 1) {
+    if (!responsable()) e.responsable = 'Marcad a una persona en la columna Responsable.'
+    const vistos = new Set()
     s.equipo.forEach((p, i) => {
       Object.assign(e, erroresDePersona(p, `eq.${i}`))
       const m = p.email.trim().toLowerCase()
@@ -238,7 +293,7 @@ function erroresDePersona(p, k) {
   if (!p.nombre.trim()) e[`${k}.nombre`] = 'Falta el nombre.'
   if (!p.apellido.trim()) e[`${k}.apellido`] = 'Falta el apellido.'
   if (!EMAIL.test(p.email.trim())) e[`${k}.email`] = 'Email no válido.'
-  if (!TEL.test(p.tel.trim())) e[`${k}.tel`] = 'Con prefijo: +34 …'
+  if (!telValido(p)) e[`${k}.tel`] = 'Falta el teléfono.'
   return e
 }
 
@@ -250,11 +305,19 @@ function campo(k, label, valor, attrs = '', ancho = false) {
   return `<div class="campo${ancho ? ' ancho' : ''}"><label for="${k}">${label}</label>${input(k, valor, `id="${k}" ${attrs}`)}</div>`
 }
 
+// Cabecera y barra se arman una vez; render() solo les cambia las clases, y la tarjeta se repinta entera.
+app.innerHTML = `<div class="pp-head"><span class="logo"><b>P</b>Propelia</span><span class="para"></span></div>
+  <ol class="pasos">${PASOS.map((p, i) => `<li><i></i><span>${i + 1}. ${p}</span></li>`).join('')}</ol>
+  <div class="card"></div>`
+const barra = app.querySelector('.pasos')
+const tarjeta = app.querySelector('.card')
+
 function render() {
-  const cab = `<div class="pp-head"><span class="logo"><b>P</b>Propelia</span><span class="para">Alta de ${esc(s.inmo.nombre || 'vuestra inmobiliaria')}</span></div>`
-  const barra = s.paso >= 0 && s.paso < 4 ? `<ol class="pasos">${PASOS.map((p, i) =>
-    `<li class="${i < s.paso ? 'hecho' : i === s.paso ? 'ahora' : ''}"><span>${i + 1}. ${p}</span></li>`).join('')}</ol>` : ''
-  app.innerHTML = cab + barra + `<div class="card ${s.paso === -1 ? 'bienvenida' : s.paso === 4 ? 'listo' : ''}">${cuerpo()}</div>`
+  app.querySelector('.para').textContent = `Alta de ${s.inmo.nombre || 'vuestra inmobiliaria'}`
+  // En la bienvenida la barra está vacía; terminado, llena. No se esconde: así se ve avanzar.
+  barra.querySelectorAll('li').forEach((li, i) => li.className = i < s.paso ? 'hecho' : i === s.paso ? 'ahora' : '')
+  tarjeta.className = `card ${s.paso === -1 ? 'bienvenida' : s.paso === LISTO ? 'listo' : ''}`
+  tarjeta.innerHTML = cuerpo()
 }
 
 function acciones(siguiente = 'Siguiente') {
@@ -266,11 +329,10 @@ function cuerpo() {
     case -1: return `
       <span class="tiempo">5 minutos</span>
       <h2>¡Bienvenidos a Propelia, ${esc(s.inmo.nombre)}!</h2>
-      <p class="sub">Este es el primer paso para poner en marcha vuestra cuenta. Os vamos a preguntar tres cosas y, con eso, os creamos los accesos de todo el equipo.</p>
+      <p class="sub">Este es el primer paso para poner en marcha vuestra cuenta. Os vamos a preguntar dos cosas y, con eso, os creamos los accesos de todo el equipo.</p>
       <ol class="que-viene">
         <li>Cómo se llama la inmobiliaria en Propelia.</li>
-        <li>Quién va a ser el responsable de la cuenta.</li>
-        <li>Quiénes del equipo van a usar Propelia.</li>
+        <li>Quiénes del equipo van a usar Propelia, y quién es el responsable.</li>
       </ol>
       <div class="acciones"><button class="btn prim" data-a="sig">Empezar →</button></div>`
     case 0: return `
@@ -280,53 +342,56 @@ function cuerpo() {
         ${campo('inmo.nombre', 'Nombre de la inmobiliaria', s.inmo.nombre, '', true)}
         ${campo('inmo.web', 'Web <small>(opcional)</small>', s.inmo.web, 'placeholder="https://"', true)}
       </div>${acciones()}`
-    case 1: return `
-      <h2>El responsable</h2>
-      <div class="aviso"><span>👤</span><span><strong>Es la persona que implementa Propelia en la inmobiliaria</strong> y con quien vamos a hablar siempre: así la comunicación va por una sola vía y todo avanza más rápido. Va a ser Administrador.</span></div>
-      <div class="campos">
-        ${campo('resp.nombre', 'Nombre', s.resp.nombre)}
-        ${campo('resp.apellido', 'Apellido', s.resp.apellido)}
-        ${campo('resp.email', 'Email', s.resp.email, 'type="email"')}
-        ${campo('resp.tel', 'Teléfono', s.resp.tel, 'type="tel" placeholder="+34 …"')}
-      </div>${acciones()}`
-    case 2: {
-      const errs = s.intentado ? erroresDe(2) : {}
+    case 1: {
+      const errs = s.intentado ? erroresDe(1) : {}
       const filas = s.equipo.map((p, i) => {
         const msgs = ['nombre', 'apellido', 'email', 'tel'].map(c => errs[`eq.${i}.${c}`]).filter(Boolean)
         const inp = (c, extra = '') => `<input data-k="eq.${i}.${c}" value="${esc(p[c])}" aria-label="${c}" aria-invalid="${!!errs[`eq.${i}.${c}`]}" ${extra}>`
-        return `<div class="fila">
+        const esResp = !!p.responsable
+        // El responsable no se quita: primero se elige otro.
+        const quitar = esResp ? '<span></span>'
+          : `<button class="quitar" data-a="quitar" data-i="${i}" aria-label="Quitar a esta persona" title="Quitar">×</button>`
+        return `<div class="fila${esResp ? ' es-resp' : ''}">
           ${inp('nombre', 'placeholder="Nombre"')}${inp('apellido', 'placeholder="Apellido"')}
           <span class="email">${inp('email', 'type="email" placeholder="Email"')}</span>
-          <span class="tel">${inp('tel', 'type="tel" placeholder="+34 …"')}</span>
-          <select data-k="eq.${i}.rol" aria-label="Rol"><option value="agente"${p.rol === 'agente' ? ' selected' : ''}>Agente</option><option value="admin"${p.rol === 'admin' ? ' selected' : ''}>Administrador</option></select>
-          <button class="quitar" data-a="quitar" data-i="${i}" aria-label="Quitar a esta persona" title="Quitar">×</button>
+          <span class="tel phone">
+            <button class="pais" type="button" data-a="paises" data-i="${i}" aria-label="Buscar país" aria-expanded="${s.paisesDe === i}">▾</button>
+            <span class="caja"><img src="${bandera(p.pais)}" alt="${p.pais}"><span class="mas-signo">+</span>${inp('tel', 'type="tel" placeholder="661 28 68 71"')}</span>
+            ${s.paisesDe === i ? `<ul class="paises">${PAISES.map(([c, n, pre]) =>
+              `<li><button type="button" class="${c === p.pais ? 'on' : ''}" data-a="pais" data-i="${i}" data-pais="${c}"><img src="${bandera(c)}" alt="">${n}<small>+${pre}</small></button></li>`).join('')}</ul>` : ''}
+          </span>
+          <select data-k="eq.${i}.rol" aria-label="Rol"${esResp ? ' disabled title="El responsable es Administrador"' : ''}>${Object.entries(ROLES).map(([v, l]) => `<option value="${v}"${p.rol === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+          <label class="resp"><input type="radio" name="responsable" data-k="eq.${i}.responsable"${esResp ? ' checked' : ''}><span class="rot">Responsable</span></label>
+          ${quitar}
           ${msgs.length ? `<span class="error err">${[...new Set(msgs)].join(' · ')}</span>` : ''}
         </div>`
       }).join('')
       return `
       <h2>El equipo</h2>
-      <p class="sub">Todas las personas que van a usar Propelia, una por fila. <b>Administrador</b> ve y configura toda la cuenta; <b>Agente</b> trabaja sus leads y sus inmuebles.</p>
+      <p class="sub">Todas las personas que van a usar Propelia, una por fila. <b>Administrador</b> ve y configura toda la cuenta; <b>Agente</b> trabaja sus leads y sus inmuebles. No os preocupéis: los roles se pueden cambiar más adelante desde Propelia.</p>
+      <div class="aviso"><span>👤</span><span>Una persona es la <strong>Responsable</strong>: quien se encarga de implementar Propelia en la inmobiliaria y con quien vamos a hablar siempre. Marcadla en la columna Responsable; tiene que ser Administrador.</span></div>
       <div class="equipo">
-        <div class="fila cab"><span>Nombre</span><span>Apellido</span><span>Email</span><span>Teléfono</span><span>Rol</span><span></span></div>
-        <div class="fila fija"><span>${esc(s.resp.nombre)}</span><span>${esc(s.resp.apellido)}</span><span class="email">${esc(s.resp.email)}</span><span class="tel">${esc(s.resp.tel)}</span><span class="chip">Responsable</span><span></span></div>
+        <div class="fila cab"><span>Nombre</span><span>Apellido</span><span>Email</span><span>Teléfono</span><span>Rol</span><span>Responsable <button class="info" type="button" data-tip="${INFO_RESPONSABLE}" aria-label="${INFO_RESPONSABLE}">i</button></span><span></span></div>
         ${filas}
+        ${errs.responsable ? `<span class="error">${errs.responsable}</span>` : ''}
         <button class="mas" data-a="mas">+ Añadir persona</button>
       </div>${acciones()}`
     }
-    case 3: {
-      const gente = s.equipo.map(p => `<li>${esc(p.nombre)} ${esc(p.apellido)} · ${p.rol === 'admin' ? 'Administrador' : 'Agente'} · ${esc(p.email)}</li>`).join('')
+    case 2: {
+      const r = responsable()
+      const gente = s.equipo.filter(p => p !== r).map(p => `<li>${esc(p.nombre)} ${esc(p.apellido)} · ${ROLES[p.rol]} · ${esc(p.email)}</li>`).join('')
       return `
       <h2>¿Está todo bien?</h2>
       <p class="sub">Revisadlo antes de enviar. Con esto creamos las cuentas: cada persona recibe su usuario y contraseña por email.</p>
       <div class="resumen">
         <div class="bloque"><div><div class="t">Inmobiliaria</div>${esc(s.inmo.nombre)}${s.inmo.web ? ` · ${esc(s.inmo.web)}` : ''}</div><button class="editar" data-ir="0">Editar</button></div>
-        <div class="bloque"><div><div class="t">Responsable</div>${esc(s.resp.nombre)} ${esc(s.resp.apellido)} · ${esc(s.resp.email)} · ${esc(s.resp.tel)}</div><button class="editar" data-ir="1">Editar</button></div>
-        <div class="bloque"><div><div class="t">Equipo · ${s.equipo.length + 1} personas</div>${gente ? `<ul>${gente}</ul>` : 'Solo el responsable.'}</div><button class="editar" data-ir="2">Editar</button></div>
+        <div class="bloque"><div><div class="t">Responsable</div>${esc(r.nombre)} ${esc(r.apellido)} · ${esc(r.email)} · ${esc(r.tel)}</div><button class="editar" data-ir="1">Editar</button></div>
+        <div class="bloque"><div><div class="t">Equipo · ${s.equipo.length} personas</div>${gente ? `<ul>${gente}</ul>` : 'Solo el responsable.'}</div><button class="editar" data-ir="1">Editar</button></div>
       </div>${acciones('Enviar')}`
     }
-    case 4: return `
+    case LISTO: return `
       <div class="ok">✓</div>
-      <h2>¡Gracias, ${esc(s.resp.nombre)}!</h2>
+      <h2>¡Gracias, ${esc(responsable().nombre)}!</h2>
       <p>Ya tenemos todo. En breve creamos los accesos y cada persona del equipo recibe su usuario y contraseña por email. Seguimos hablando por WhatsApp.</p>`
   }
 }
@@ -335,17 +400,42 @@ app.addEventListener('input', ev => {
   const k = ev.target.dataset.k
   if (!k) return
   const [a, b, c] = k.split('.')
+  if (a === 'eq' && c === 'responsable') {
+    // Uno solo (es un radio) y Administrador: marcar a un agente lo sube. Cambian dos filas, así que se repinta.
+    s.equipo.forEach((p, i) => { p.responsable = i === +b })
+    s.equipo[+b].rol = 'admin'
+    render()
+    return
+  }
+  if (a === 'eq' && c === 'tel') {
+    // Sin «+» propio (va fijo afuera) y la bandera sigue a los primeros dígitos, como el PhoneInput.
+    const p = s.equipo[+b]
+    p.tel = ev.target.value.replace(/^\++/, '')
+    if (ev.target.value !== p.tel) ev.target.value = p.tel
+    const pais = paisPorDigitos(p.tel.replace(/\D/g, ''))
+    if (pais && pais !== p.pais) { p.pais = pais; ev.target.closest('.caja').querySelector('img').src = bandera(pais) }
+    return
+  }
   if (a === 'eq') s.equipo[+b][c] = ev.target.value
   else s[a][b] = ev.target.value
   if (a === 'inmo' && b === 'nombre') app.querySelector('.para').textContent = `Alta de ${ev.target.value || 'vuestra inmobiliaria'}`
 })
 app.addEventListener('click', ev => {
   const btn = ev.target.closest('button')
+  const a = btn?.dataset.a
+  // Cualquier clic fuera de la lista de países la cierra.
+  if (s.paisesDe !== null && a !== 'paises' && a !== 'pais') { s.paisesDe = null; render(); if (!btn) return }
   if (!btn) return
-  const a = btn.dataset.a
-  if (btn.dataset.ir) { s.paso = +btn.dataset.ir; s.intentado = false }
+  if (a === 'paises') { const i = +btn.dataset.i; s.paisesDe = s.paisesDe === i ? null : i }
+  else if (a === 'pais') {
+    // Elegir país deja su prefijo y nada más, como handleCountrySelect.
+    const p = s.equipo[+btn.dataset.i]
+    p.pais = btn.dataset.pais; p.tel = `${prefijoDe(p.pais)} `; s.paisesDe = null
+    render(); const campo = app.querySelector(`[data-k="eq.${btn.dataset.i}.tel"]`); campo.focus(); campo.setSelectionRange(99, 99); return
+  }
+  else if (btn.dataset.ir) { s.paso = +btn.dataset.ir; s.intentado = false }
   else if (a === 'atras') { s.paso--; s.intentado = false }
-  else if (a === 'mas') { s.equipo.push({ nombre: '', apellido: '', email: '', tel: '', rol: 'agente' }); render(); app.querySelector(`[data-k="eq.${s.equipo.length - 1}.nombre"]`).focus(); return }
+  else if (a === 'mas') { s.equipo.push(personaNueva()); render(); app.querySelector(`[data-k="eq.${s.equipo.length - 1}.nombre"]`).focus(); return }
   else if (a === 'quitar') s.equipo.splice(+btn.dataset.i, 1)
   else if (a === 'sig') {
     if (Object.keys(erroresDe(s.paso)).length) { s.intentado = true; render(); app.querySelector('[aria-invalid="true"]')?.focus(); return }

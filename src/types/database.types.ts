@@ -160,27 +160,39 @@ export type Database = {
       client_onboardings: {
         Row: {
           assigned_to: string | null
+          company_name: string | null
           completed_at: string | null
           created_at: string
           created_by: string | null
           id: string
           lead_id: string
+          public_token: string
+          submitted_at: string | null
+          website: string | null
         }
         Insert: {
           assigned_to?: string | null
+          company_name?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           lead_id: string
+          public_token?: string
+          submitted_at?: string | null
+          website?: string | null
         }
         Update: {
           assigned_to?: string | null
+          company_name?: string | null
           completed_at?: string | null
           created_at?: string
           created_by?: string | null
           id?: string
           lead_id?: string
+          public_token?: string
+          submitted_at?: string | null
+          website?: string | null
         }
         Relationships: [
           {
@@ -1582,6 +1594,11 @@ export type Database = {
         Args: { p_miembros: Json; p_onboarding_id: string; p_organization_id: string }
         Returns: undefined
       }
+      onboarding_alta_enviar: {
+        Args: { p_company_name: string; p_miembros: Json; p_token: string; p_website: string }
+        Returns: undefined
+      }
+      onboarding_alta_leer: { Args: { p_token: string }; Returns: Json }
       crm_create_lead_with_client: {
         Args: {
           p_assigned_to: string

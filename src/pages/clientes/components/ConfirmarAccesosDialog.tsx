@@ -10,7 +10,7 @@ import { sendEmail } from '@/pages/crm/service/email.service'
 import { remitenteDe, renderEmailDeAcceso } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 import { useMarcarTarea } from '../hooks/useClientes'
 import { TAREA_CREDENCIALES } from '../lib/pasos'
-import { contrasenaInicial } from '../lib/usuariosExcel'
+import { contrasenaInicial } from '../lib/equipo'
 import { PUENTE_SIMULADO } from '../service/puente'
 import type { DatosDelAlta } from './datosDelAlta'
 
