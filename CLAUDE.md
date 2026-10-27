@@ -269,7 +269,11 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   `20261027134956_onboarding_mensaje_con_link_de_alta`) y la tarea, un botón que copia el enlace.
   «Recibir el equipo» dice cuándo lo envió y, mientras no se importó, lo reabre (`reabrirAlta`: borra
   `submitted_at` y destilda). Los `task_id` siguen siendo los del Excel (`excel-recibido`) para no
-  destildar nada. La página es `src/pages/alta/` de propelia-frontend (rama `feat/alta-publica`).
+  destildar nada. La página es `src/pages/alta/` de propelia-frontend. **Al enviarla avisa**
+  (trigger `client_onboardings_alta_recibida`, migración `20261027144517_onboarding_alta_recibida_tarea`):
+  una tarea del CRM en el lead, «Revisar e importar el equipo de …», para quien tomó el alta (o, si
+  nadie, el responsable del lead), con hora dentro de 5 minutos para que suene ya la alarma. No la
+  crea si la etapa no deja agendar tareas ni si ya hay una igual pendiente.
 - **Todo lo del producto va por el puente de verdad** desde el 27/10/2026 (`PUENTE_SIMULADO = false`
   en `service/puente.ts`): `create_org_with_users` (paso 1) se sumó a `propelia-bridge` y a
   `roadmap-bridge`, contrato en `docs/onboarding/PUENTE.md`. En true responde con los ejemplos de
