@@ -2479,6 +2479,10 @@ begin
      <> jsonb_array_length(p_miembros) then
     raise exception 'alta_email_repetido' using errcode = '22023';
   end if;
+  if (select count(distinct m->>'phone') from jsonb_array_elements(p_miembros) m)
+     <> jsonb_array_length(p_miembros) then
+    raise exception 'alta_telefono_repetido' using errcode = '22023';
+  end if;
 
   delete from public.client_onboarding_members where onboarding_id = v_id;
   insert into public.client_onboarding_members

@@ -40,6 +40,7 @@ const falla = (status: number, error: string): AltaPublicaResult => ({ ok: false
 const ERRORES_DE_LA_BASE = [
   'alta_no_existe', 'alta_ya_enviada', 'alta_falta_inmobiliaria', 'alta_sin_miembros', 'alta_demasiados_miembros',
   'alta_un_responsable', 'alta_responsable_admin', 'alta_miembro_invalido', 'alta_email_repetido',
+  'alta_telefono_repetido',
   'alta_ya_importada',
 ] as const
 
