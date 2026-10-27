@@ -231,8 +231,8 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
 
 - **`crm_leads.lead_type`** (`LEAD` / `ONBOARDING` / `CLIENT`) dice qué es el lead, aparte de la
   etapa. Un lead pasa a `ONBOARDING` **solo**, cuando el comercial lo mueve a una etapa con
-  `starts_onboarding` (columna «Onboarding» de la configuración del funnel; arranca marcada
-  «Contratado»): el trigger `crm_leads_lead_type` lo pasa y `crm_leads_crear_onboarding` le crea su
+  `starts_onboarding` (columna «Onboarding» de la configuración del funnel; desde el 27/10/2026,
+  por pedido, marcadas «En prueba mes gratis», «Contratado 1er mes» y «Contratado», desde la pantalla): el trigger `crm_leads_lead_type` lo pasa y `crm_leads_crear_onboarding` le crea su
   `client_onboardings` con el responsable del cliente del CRM. Solo desde `LEAD`: un `CLIENT` que
   vuelve a pasar por la etapa no reabre nada. **El front nunca escribe `lead_type`**: el trigger
   rechaza el cambio a mano (`crm_lead_type_solo_rpc`), y `client_onboarding_completar` lo pasa a
