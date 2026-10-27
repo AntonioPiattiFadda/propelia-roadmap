@@ -247,11 +247,19 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   `nombre.apellido`, con el año si no llega a 6). Importar crea la org y las cuentas por el puente y
   después `client_onboarding_importar_equipo` guarda el equipo, deja `propelia_organization_id` y
   tilda las dos tareas. **«Enviar mails» de accesos no se tilda a mano**: pide confirmar «Verifiqué
-  que todas las cuentas entran correctamente» y manda uno por persona por `send-email`.
-- **El puente con Propelia está simulado** (`PUENTE_SIMULADO` en `service/puente.ts`, respuestas de
-  `docs/onboarding/PUENTE.md`, lo creado se recuerda en el `localStorage`): no se crea nada en el
-  producto y los mails de accesos no salen. Cuando `propelia-bridge` esté deployado (falta además
-  `create_org_with_users`), se pone en false.
+  que todas las cuentas entran correctamente» y manda uno por persona por `send-email` con `acceso`
+  (solo SUPERADMIN, siempre al email de la cuenta): HTML con la marca armado en el servidor por
+  `renderEmailDeAcceso` (`_shared/plantillasEmail.ts`), con usuario y contraseña cada uno en su caja
+  para copiar y el aviso de que es temporal y se cambia al terminar el onboarding. Sin «Darse de
+  baja»: es de servicio. «Ver cómo les llega» lo muestra en el diálogo; `docs/onboarding/mail-de-acceso.html`
+  es una copia generada con datos de ejemplo. Va a `crm_emails` con `plantilla = 'acceso'`, así los
+  rebotes se avisan como los demás.
+- **Todo lo del producto va por el puente de verdad** desde el 27/10/2026 (`PUENTE_SIMULADO = false`
+  en `service/puente.ts`): `create_org_with_users` (paso 1) se sumó a `propelia-bridge` y a
+  `roadmap-bridge`, contrato en `docs/onboarding/PUENTE.md`. En true responde con los ejemplos de
+  ese archivo sin salir del navegador (no crea nada y los mails de accesos no salen). El lead de
+  prueba del paso 3 solo anda contra la org `propelia-demo` (`not_demo_org` en las demás), y el
+  link de pago pide un superadmin de Propelia con tu mismo email.
 
 ## El CRM (y Equipo) — `/crm` y `/equipo`
 

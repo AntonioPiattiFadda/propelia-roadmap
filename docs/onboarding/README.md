@@ -15,6 +15,7 @@ parte del Roadmap.
 | [`MODELO_DATOS.md`](MODELO_DATOS.md) | Tablas, RPCs y RLS a crear en la base del Roadmap |
 | [`PUENTE.md`](PUENTE.md) | Contrato de `propelia-bridge`: todo lo que se le pide al producto |
 | [`EXCEL_IMPORT_USUARIOS.md`](EXCEL_IMPORT_USUARIOS.md) | Cómo se arma el Excel del equipo (paso 1) |
+| [`mail-de-acceso.html`](mail-de-acceso.html) | El mail con usuario y contraseña temporal que le llega a cada persona del equipo (paso 1). Generado con `renderEmailDeAcceso`, datos de ejemplo |
 | [`EXCEL_IMPORT_PROPIEDADES.md`](EXCEL_IMPORT_PROPIEDADES.md) | Cómo se arma el Excel de la cartera (paso 2) |
 | [`ONBOARDING_CLIENTES.md`](ONBOARDING_CLIENTES.md) | Guía de soporte de la versión vieja (5 pasos). Sirve para los textos y las razones; **el orden vigente es el de abajo** |
 | [`onboarding.html`](onboarding.html) | Presentación de la versión vieja |

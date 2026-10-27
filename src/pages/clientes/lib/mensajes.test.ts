@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { llenarPlantilla, mailDeAcceso, nombreDePila, nombreDelExcelDeUsuarios } from './mensajes'
+import { llenarPlantilla, nombreDePila, nombreDelExcelDeUsuarios } from './mensajes'
 
 describe('llenarPlantilla', () => {
   const v = { nombre: 'Marta', soporte: 'Antonio', inmobiliaria: 'Fincas Ribera' }
@@ -15,17 +15,6 @@ describe('llenarPlantilla', () => {
 
 describe('nombreDePila', () => {
   it('la primera palabra', () => expect(nombreDePila(' María José Fernández')).toBe('María'))
-})
-
-describe('mailDeAcceso', () => {
-  it('lleva usuario, contraseña y web, y saluda por el nombre de pila', () => {
-    const m = mailDeAcceso({ nombre: 'Marta Gil', email: 'marta@f.es', contrasena: 'marta.gil', inmobiliaria: 'Fincas Ribera', soporte: 'Antonio' })
-    expect(m.subject).toBe('Tu acceso a Propelia · Fincas Ribera')
-    expect(m.text).toContain('¡Hola Marta!')
-    expect(m.text).toContain('Usuario: marta@f.es')
-    expect(m.text).toContain('Contraseña: marta.gil')
-    expect(m.text).toContain('Web: https://crm.propelia.es')
-  })
 })
 
 describe('nombreDelExcelDeUsuarios', () => {

@@ -1,4 +1,4 @@
-import { assertEquals } from 'jsr:@std/assert@1'
+import { assert, assertEquals } from 'jsr:@std/assert@1'
 import type { EmailMessage } from '../_shared/email.ts'
 import { handleSendEmail, MAX_ATTACHMENTS_BYTES, parseAttachments, type SendEmailDeps, type SendEmailInput } from './handler.ts'
 
@@ -129,5 +129,36 @@ Deno.test('plantilla: adjuntos en la que no los lleva, inválidos o de más de 1
   assertEquals((await handleSendEmail('me', { ...PUNTUAL, attachments: 'x' }, deps)).ok, false)
   const big = [{ filename: 'big.bin', content: 'A'.repeat(MAX_ATTACHMENTS_BYTES + 4) }]
   assertEquals((await handleSendEmail('me', { ...PUNTUAL, attachments: big }, deps)) as unknown, { ok: false, status: 413, error: 'Los adjuntos pasan los 10MB' })
+  assertEquals(sent.length, 0)
+})
+
+// --- El mail de accesos del onboarding ---
+
+const ACCESO = { nombre: 'Marta Gil', email: ' marta@fincas.es ', contrasena: 'marta.gil', inmobiliaria: 'Fincas <Ribera>' }
+const conAcceso = (acceso: unknown): SendEmailInput => ({ to: 'otra@casilla.es', subject: '', text: '', attachments: undefined, acceso })
+
+Deno.test('acceso: sale al email de la cuenta, nunca al `to`, con el HTML armado acá', async () => {
+  const { deps, sent } = fakeDeps()
+  const r = await handleSendEmail('me', conAcceso(ACCESO), deps)
+  assertEquals(r, { ok: true, id: 'email_1', to: 'marta@fincas.es', subject: 'Tu acceso a Propelia · Fincas <Ribera>', plantilla: 'acceso' })
+  assertEquals(sent[0].to, 'marta@fincas.es')
+  assert(sent[0].html!.includes('marta.gil'))
+  // Lo que llega se escapa.
+  assert(sent[0].html!.includes('Fincas &lt;Ribera&gt;'))
+  assert(!sent[0].html!.includes('Darse de baja'))
+  assert(sent[0].text!.includes('Contraseña temporal: marta.gil'))
+})
+
+Deno.test('acceso: solo un SUPERADMIN activo', async () => {
+  const { deps, sent } = fakeDeps({ getCaller: async () => ({ rol: 'SDR', activo: true }) })
+  assertEquals(await handleSendEmail('me', conAcceso(ACCESO), deps), { ok: false, status: 403, error: 'No autorizado' })
+  assertEquals(sent.length, 0)
+})
+
+Deno.test('acceso: datos que no sirven → 400 sin mandar', async () => {
+  const { deps, sent } = fakeDeps()
+  assertEquals((await handleSendEmail('me', conAcceso('x'), deps)), { ok: false, status: 400, error: 'Datos de acceso inválidos' })
+  assertEquals((await handleSendEmail('me', conAcceso({ ...ACCESO, contrasena: 'corta' }), deps)), { ok: false, status: 400, error: 'La contraseña tiene menos de 6 caracteres' })
+  assertEquals((await handleSendEmail('me', conAcceso({ ...ACCESO, email: 'no' }), deps)), { ok: false, status: 400, error: 'El email no es válido' })
   assertEquals(sent.length, 0)
 })

@@ -5,20 +5,22 @@ import { supabase } from '@/lib/supabase'
    `propelia-bridge` del Roadmap (contrato en docs/onboarding/PUENTE.md). El front nunca le habla
    directo al producto.
 
-   **Hoy está simulado** (`PUENTE_SIMULADO`): el puente lo construye la sesión de propelia-frontend
-   y todavía no está deployado. Las respuestas son las de ejemplo de PUENTE.md y no se crea nada en
-   Propelia. Cuando esté, se pone en false y nada más cambia. `create_org_with_users` no está en
-   PUENTE.md: es la acción nueva que pide docs/onboarding/EXCEL_IMPORT_USUARIOS.md. */
-export const PUENTE_SIMULADO = true
+   `PUENTE_SIMULADO` en true responde con los ejemplos de PUENTE.md sin salir del navegador (lo
+   creado se recuerda en el localStorage) y no crea nada en Propelia: sirve para probar la página
+   sin el puente. Desde el 27/10/2026 las diez acciones más `create_org_with_users` existen de los
+   dos lados (`propelia-bridge` acá, `roadmap-bridge` en propelia-frontend), así que va en false:
+   todo pega contra Propelia de verdad. */
+export const PUENTE_SIMULADO = false
 
 export type OrgDePropelia = { id: string; name: string }
-export type AgenteDePropelia = { id: string; name: string; email: string; role: 'admin' | 'agent'; inbound_address: string | null }
+export type AgenteDePropelia = { id: string; name: string; email: string | null; role: string; slug: string | null; inbound_address: string | null }
 export type OrgConAgentes = OrgDePropelia & { agents: AgenteDePropelia[]; org_inbound_address: string | null; properties_count: number }
 export type UsuarioParaCrear = { first_name: string; last_name: string; email: string; phone: string; role: 'admin' | 'agent'; is_owner: boolean; password: string }
-export type ColumnaDeCartera = { key: string; header: string; example: string }
+export type ColumnaDeCartera = { key: string; header: string; example: string | number }
 export type FilaRevisada = { row_number: number; valid: boolean; errors: string[]; warnings: string[]; existing_property_id: string | null; summary: Record<string, unknown> }
 export type ResultadoDeFila = { row_number: number; status: 'created' | 'skipped_existing' | 'invalid'; property_id?: string; errors?: string[] }
-export type PlanDePago = { id: string; name: string; amount_cents: number; interval: string; individual: boolean }
+/** Sin período: los planes de Propelia son mensuales (`roadmap-bridge` › `listPaymentPlans`). */
+export type PlanDePago = { id: string; code?: string; name: string; amount_cents: number; currency?: string; individual: boolean }
 export type LinkDePago = { id: string; url: string; status: 'open' | 'paid' | 'linked'; created_at?: string; expires_at?: string; paid_at?: string | null; amount_cents?: number }
 
 /** Máximo de filas por llamada a `import_properties` (PUENTE.md). */
@@ -87,7 +89,7 @@ async function simular(action: string, p: Record<string, unknown>): Promise<unkn
       m.orgs[id] = {
         id, name, properties_count: 0, org_inbound_address: `leads.${slug(name)}@${DOMINIO}`,
         agents: users.map(u => ({
-          id: crypto.randomUUID(), name: `${u.first_name} ${u.last_name}`.trim(), email: u.email, role: u.role,
+          id: crypto.randomUUID(), name: `${u.first_name} ${u.last_name}`.trim(), email: u.email, role: u.role, slug: slug(u.first_name),
           inbound_address: `leads.${slug(name)}.${slug(u.first_name)}@${DOMINIO}`,
         })),
       }
@@ -118,7 +120,7 @@ async function simular(action: string, p: Record<string, unknown>): Promise<unkn
       return { results: rows.map(r => ({ row_number: r.row_number, status: 'created', property_id: crypto.randomUUID() })) }
     }
     case 'list_payment_plans':
-      return { plans: [{ id: 'pro', name: 'Pro', amount_cents: 19900, interval: 'month', individual: false }, { id: 'basic', name: 'Básico', amount_cents: 9900, interval: 'month', individual: false }] }
+      return { plans: [{ id: 'pro', name: 'Pro', amount_cents: 19900, individual: false }, { id: 'basic', name: 'Básico', amount_cents: 9900, individual: false }] }
     case 'create_payment_link': {
       const org = String(p.org_id)
       const link: LinkDePago = {

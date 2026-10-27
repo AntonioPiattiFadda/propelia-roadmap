@@ -13,32 +13,6 @@ export function llenarPlantilla(cuerpo: string, v: VariablesDeMensaje): string {
 /** El nombre de pila: el saludo es «¡Hola Marta!», no «¡Hola Marta Gil!». */
 export const nombreDePila = (nombre: string) => nombre.trim().split(/\s+/)[0] ?? ''
 
-/** Donde entra el cliente: el producto. */
-export const URL_DE_PROPELIA = 'https://crm.propelia.es'
-
-/** El mail con el usuario y la contraseña de cada uno (paso 1, «Enviar mails»). Texto plano: lo
- *  manda `send-email` desde info@propelia.es. */
-export function mailDeAcceso(p: { nombre: string; email: string; contrasena: string; inmobiliaria: string; soporte: string }) {
-  return {
-    subject: `Tu acceso a Propelia · ${p.inmobiliaria}`,
-    text: [
-      `¡Hola ${nombreDePila(p.nombre)}!`,
-      '',
-      `Ya tienes tu cuenta de Propelia en ${p.inmobiliaria}. Para entrar:`,
-      '',
-      `Web: ${URL_DE_PROPELIA}`,
-      `Usuario: ${p.email}`,
-      `Contraseña: ${p.contrasena}`,
-      '',
-      'Es una contraseña provisional: cámbiala la primera vez que entres desde «¿Olvidaste tu contraseña?» en la pantalla de acceso.',
-      '',
-      'Cualquier duda, respóndeme a este correo.',
-      '',
-      `${p.soporte}, del equipo de Propelia`,
-    ].join('\n'),
-  }
-}
-
 /** El nombre del archivo de la plantilla de usuarios: `usuarios-fincas-ribera.xlsx`. */
 export function nombreDelExcelDeUsuarios(inmobiliaria: string): string {
   const slug = inmobiliaria.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()

@@ -64,6 +64,32 @@ Para el selector del paso 1 y para mostrar el nombre de la org vinculada a un le
 
 Orgs no borradas, ordenadas por nombre. La demo incluida.
 
+### `create_org_with_users`
+
+El paso 1: crea la organización del cliente y las cuentas de todo su equipo, con lo que trajo el
+Excel de usuarios ([`EXCEL_IMPORT_USUARIOS.md`](EXCEL_IMPORT_USUARIOS.md)). Reemplaza al
+`/sign-up` del responsable y a Equipo › Crear usuario, que no podía crear en otra org. Las
+contraseñas las arma el Roadmap (`nombre.apellido`); el producto no las guarda en ningún otro
+lado que auth.
+
+```json
+// { "action": "create_org_with_users", "organization_name": "Fincas Ribera",
+//   "users": [ { "first_name": "Marta", "last_name": "Gil", "email": "marta@fincasribera.es",
+//                "phone": "+34600111222", "role": "admin", "is_owner": true, "password": "marta.gil" }, … ] } →
+{ "organization": { "id": "6f1c…", "name": "Fincas Ribera", "slug": "fincas-ribera" },
+  "users": [ { "id": "a1…", "email": "marta@fincasribera.es" } ] }
+```
+
+- **Todo o nada.** Valida a todos antes de crear nada: nombre y apellido, email, teléfono válido
+  (se guarda en E.164), `role` `admin` o `agent`, contraseña de 6 o más, **un `is_owner` y solo
+  uno, y `admin`**, sin emails ni teléfonos repetidos → `bad_request`. Un email que ya tiene
+  cuenta en Propelia → `conflict` (409) con la lista. Si una cuenta falla a mitad de camino, se
+  borran las creadas y la org → `upstream_error`.
+- La org nace con su slug (con sufijo corto si está tomado) y sus seeds de siempre (embudos,
+  canales, facturación `provider`: **sin plan hasta que paguen el link del paso 2**). Máximo 50
+  personas (`too_many_rows`).
+- Las cuentas quedan con el email confirmado y sin términos aceptados: los aceptan al entrar.
+
 ### `get_organization`
 
 ```json

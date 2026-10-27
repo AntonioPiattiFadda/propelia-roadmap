@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { ChevronRight, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -7,8 +7,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { sendEmail } from '@/pages/crm/service/email.service'
+import { remitenteDe, renderEmailDeAcceso } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 import { useMarcarTarea } from '../hooks/useClientes'
-import { mailDeAcceso } from '../lib/mensajes'
 import { TAREA_CREDENCIALES } from '../lib/pasos'
 import { contrasenaInicial } from '../lib/usuariosExcel'
 import { PUENTE_SIMULADO } from '../service/puente'
@@ -17,9 +17,11 @@ import type { DatosDelAlta } from './datosDelAlta'
 /* «Verificar accesos y enviar a cada uno su usuario y clave por mail» no se tilda a mano: pasa por
    acá. Los mails no se deshacen, así que la pregunta va antes: sin tildar «Verifiqué que todas las
    cuentas entran correctamente» no se habilita «Enviar». Sale uno por persona desde
-   info@propelia.es por `send-email` (texto libre: solo SUPERADMIN) y recién con todos enviados se
-   tilda la tarea. La contraseña no se guarda en ningún lado: se vuelve a armar igual que al crear
-   la cuenta, con el año de cuando se cargó el miembro.
+   info@propelia.es por `send-email` con `acceso` (solo SUPERADMIN): el HTML lo arma el servidor con
+   `renderEmailDeAcceso` (`_shared/plantillasEmail.ts`), el mismo que pinta «Ver cómo les llega», y
+   va siempre al email de la cuenta. Recién con todos enviados se tilda la tarea. La contraseña no
+   se guarda en ningún lado: se vuelve a armar igual que al crear la cuenta, con el año de cuando se
+   cargó el miembro.
 
    Con el puente simulado las cuentas no existen en Propelia: no se manda nada, solo se tilda. */
 export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: DatosDelAlta; abierto: boolean; onCerrar: () => void }) {
@@ -29,6 +31,15 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
   const miembros = datos.o.miembros
     .filter(m => m.email)
     .map(m => ({ ...m, contrasena: contrasenaInicial(m.first_name, m.last_name, new Date(m.created_at).getFullYear()) }))
+  const accesoDe = (m: (typeof miembros)[number]) =>
+    ({ nombre: `${m.first_name} ${m.last_name}`.trim(), email: m.email!, contrasena: m.contrasena, inmobiliaria: datos.inmobiliaria })
+
+  /* La vista previa, con la primera persona. La firma real la pone el servidor con la fila de
+     `users` de quien manda (cargo y teléfono incluidos); acá va solo el nombre de quien lleva el alta. */
+  const primero = miembros[0]
+  const vistaPrevia = primero
+    ? renderEmailDeAcceso(accesoDe(primero), remitenteDe({ nombre: datos.soporte }), { assets: `${window.location.origin}/email` }).html
+    : null
 
   const cerrar = () => { setVerifique(false); onCerrar() }
 
@@ -37,8 +48,7 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
     const fallaron: string[] = []
     if (!PUENTE_SIMULADO) {
       for (const m of miembros) {
-        const mail = mailDeAcceso({ nombre: `${m.first_name} ${m.last_name}`, email: m.email!, contrasena: m.contrasena, inmobiliaria: datos.inmobiliaria, soporte: datos.soporte })
-        try { await sendEmail({ to: m.email!, ...mail }) } catch { fallaron.push(m.email!) }
+        try { await sendEmail({ acceso: accesoDe(m) }) } catch { fallaron.push(m.email!) }
       }
     }
     setEnCurso(false)
@@ -53,12 +63,12 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
 
   return (
     <AlertDialog open={abierto} onOpenChange={o => { if (!o && !enCurso) cerrar() }}>
-      <AlertDialogContent className="ui-scale sm:max-w-lg">
+      <AlertDialogContent className="ui-scale max-h-[90vh] overflow-y-auto sm:max-w-xl">
         <AlertDialogHeader>
           <AlertDialogTitle>¿Enviar los accesos por mail?</AlertDialogTitle>
           <AlertDialogDescription>
-            A cada persona le llega un mail desde info@propelia.es con su usuario, su contraseña y el enlace para entrar a
-            Propelia. Se envían {miembros.length} mails y no se pueden deshacer.
+            A cada persona le llega un mail desde info@propelia.es con su usuario, su contraseña temporal y el enlace para
+            entrar a Propelia. Se envían {miembros.length} mails y no se pueden deshacer.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <ul className="max-h-56 overflow-y-auto rounded-md border border-(--line) text-[13px]">
@@ -69,6 +79,16 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
             </li>
           ))}
         </ul>
+        {vistaPrevia && (
+          <details className="group text-[13px]">
+            <summary className="flex w-max cursor-pointer list-none items-center gap-1 text-(--fg-2) hover:text-foreground">
+              <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" /> Ver cómo les llega
+            </summary>
+            {/* Sin `allow-scripts`: es el HTML del mail, no tiene nada que correr. */}
+            <iframe title="Vista previa del mail de accesos" srcDoc={vistaPrevia} sandbox=""
+              className="mt-2 h-[460px] w-full rounded-md border border-(--line) bg-white" />
+          </details>
+        )}
         {PUENTE_SIMULADO && <p className="text-[12.5px] text-(--fg-muted)">Puente simulado: las cuentas todavía no existen en Propelia, así que no se manda ningún mail.</p>}
         <label className="flex cursor-pointer items-start gap-3 rounded-md bg-warning/10 p-3 text-[13px]">
           <Checkbox className="mt-0.5" checked={verifique} onCheckedChange={v => setVerifique(v === true)} />

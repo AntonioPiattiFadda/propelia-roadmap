@@ -92,3 +92,11 @@ Deno.test('Propelia caído o respondiendo algo que no es JSON: 502', async () =>
   const html = deps({ responde: () => new Response('<html>', { status: 500 }) })
   assertEquals((await reenviar('u1', { action: 'list_organizations' }, html.d)).status, 502)
 })
+
+Deno.test('create_org_with_users pasa (el paso 1 del onboarding)', async () => {
+  const { d, llamadas } = deps()
+  const r = await reenviar('u1', { action: 'create_org_with_users', organization_name: 'Fincas', users: [] }, d)
+  assertEquals(r.status, 200)
+  assertEquals(llamadas[0].body.action, 'create_org_with_users')
+  assertEquals(llamadas[0].body.organization_name, 'Fincas')
+})

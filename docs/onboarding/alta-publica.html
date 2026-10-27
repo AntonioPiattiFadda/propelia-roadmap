@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Alta del equipo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Propuesta: reemplazar el Excel de usuarios del paso 1 por una página pública de propelia-frontend
+   (/alta/<token>) que el cliente completa paso a paso. El mock es interactivo, con datos de ejemplo
+   en memoria: no guarda nada. */
+:root {
+  --bg: #f6f7fb; --surface: #ffffff; --surface-2: #f9fafd; --fg: #171a2b; --muted: #5d6280; --faint: #a3a8c3; --line: #dfe2ee;
+  --brand: #0147fe; --brand-soft: #e6edff; --on-brand: #ffffff;
+  --ok: #0f8a6a; --ok-soft: #dcf3ec; --danger: #b4233a; --danger-soft: #fbe3e7;
+  --wa: #e7f8dc; --wa-bg: #efeae2;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1120; --surface: #171a2e; --surface-2: #1b1f36; --fg: #e8eaf6; --muted: #9ba0c0; --faint: #5b6182; --line: #2a2e4a;
+    --brand: #7c9dff; --brand-soft: #1d2a5c; --on-brand: #0f1120;
+    --ok: #4fd1aa; --ok-soft: #10392f; --danger: #ff8597; --danger-soft: #401822;
+    --wa: #1f3b2c; --wa-bg: #141a22;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1120; --surface: #171a2e; --surface-2: #1b1f36; --fg: #e8eaf6; --muted: #9ba0c0; --faint: #5b6182; --line: #2a2e4a;
+  --brand: #7c9dff; --brand-soft: #1d2a5c; --on-brand: #0f1120;
+  --ok: #4fd1aa; --ok-soft: #10392f; --danger: #ff8597; --danger-soft: #401822;
+  --wa: #1f3b2c; --wa-bg: #141a22;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.6 var(--f-body);
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 64px max(16px, env(safe-area-inset-left, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(30px, 5vw, 42px); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+p { margin: 0; }
+code { font-family: var(--f-mono); font-size: 0.86em; background: var(--brand-soft); padding: 1px 5px; border-radius: 4px; }
+.eyebrow { font: 500 12px/1 var(--f-mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+.lede { color: var(--muted); max-width: 70ch; font-size: 16px; }
+section { display: flex; flex-direction: column; gap: 16px; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* ---------- el WhatsApp ---------- */
+.wa { background: var(--wa-bg); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+.burbuja { background: var(--wa); border-radius: 10px 10px 2px 10px; padding: 10px 14px; max-width: 560px; margin-left: auto; white-space: pre-wrap; font-size: 14.5px; box-shadow: 0 1px 1px rgb(0 0 0 / .08); }
+.burbuja .link { color: #027eb5; text-decoration: underline; }
+.var { font-family: var(--f-mono); font-size: 0.85em; background: rgb(1 71 254 / .12); color: var(--brand); padding: 0 4px; border-radius: 4px; }
+.notas { color: var(--muted); font-size: 14px; display: grid; gap: 6px; padding-left: 18px; margin: 0; }
+
+/* ---------- el navegador ---------- */
+.nav-frame { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); box-shadow: 0 8px 30px rgb(0 0 0 / .06); }
+.nav-bar { display: flex; align-items: center; gap: 8px; padding: 9px 14px; background: var(--surface-2); border-bottom: 1px solid var(--line); }
+.nav-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.url { flex: 1; min-width: 0; margin-left: 8px; font: 12.5px/1 var(--f-mono); color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- la página pública ---------- */
+.pp { background: var(--bg); min-height: 620px; padding: 28px 16px 40px; }
+.pp-in { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+.pp-head { display: flex; align-items: center; gap: 10px; }
+.logo { display: inline-flex; align-items: center; gap: 8px; font: 700 18px/1 var(--f-display); }
+.logo b { width: 26px; height: 26px; border-radius: 7px; background: var(--brand); color: var(--on-brand); display: grid; place-items: center; font-size: 15px; }
+.pp-head .para { margin-left: auto; font-size: 13px; color: var(--muted); }
+
+.pasos { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; list-style: none; padding: 0; margin: 0; }
+.pasos li { display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; color: var(--faint); }
+.pasos li::before { content: ""; height: 4px; border-radius: 4px; background: var(--line); }
+.pasos li.hecho, .pasos li.ahora { color: var(--fg); }
+.pasos li.hecho::before { background: var(--brand); }
+.pasos li.ahora::before { background: linear-gradient(90deg, var(--brand) 50%, var(--line) 50%); }
+.pasos li.ahora { font-weight: 600; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px; display: flex; flex-direction: column; gap: 18px; }
+.card h2 { font-size: 24px; }
+.card .sub { color: var(--muted); }
+.bienvenida h2 { font-size: clamp(26px, 4vw, 32px); }
+.que-viene { display: grid; gap: 10px; padding: 0; margin: 0; list-style: none; counter-reset: q; }
+.que-viene li { display: flex; gap: 12px; align-items: baseline; counter-increment: q; }
+.que-viene li::before { content: counter(q); flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--brand-soft); color: var(--brand); font: 600 12.5px/24px var(--f-mono); text-align: center; }
+.tiempo { font: 500 12.5px/1 var(--f-mono); color: var(--muted); }
+
+.campos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.campo { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.campo.ancho { grid-column: 1 / -1; }
+.campo label { font-size: 13px; font-weight: 600; }
+.campo label small { font-weight: 400; color: var(--muted); }
+.campo input, .campo select, .fila input, .fila select { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: var(--surface); font-size: 15px; }
+.campo input[aria-invalid="true"], .fila input[aria-invalid="true"] { border-color: var(--danger); background: var(--danger-soft); }
+.error { color: var(--danger); font-size: 12.5px; }
+.aviso { background: var(--brand-soft); border-radius: 10px; padding: 12px 14px; font-size: 14px; display: flex; gap: 10px; }
+.aviso strong { color: var(--brand); }
+
+/* El equipo: una tabla en el ordenador, tarjetas en el teléfono. */
+.equipo { display: flex; flex-direction: column; gap: 8px; }
+.fila { display: grid; grid-template-columns: 1fr 1fr 1.5fr 1.2fr 128px 34px; gap: 8px; align-items: start; }
+.fila.cab { font: 500 10.5px/1.2 var(--f-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0 2px; }
+.fila .err { grid-column: 1 / -1; margin-top: -2px; }
+.fila.fija { background: var(--surface-2); border: 1px dashed var(--line); border-radius: 10px; padding: 10px; font-size: 14px; align-items: center; }
+.fila.fija span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip { display: inline-block; font: 600 11px/1 var(--f-mono); padding: 5px 7px; border-radius: 6px; background: var(--brand-soft); color: var(--brand); }
+.quitar { border: 0; background: none; color: var(--muted); border-radius: 8px; height: 40px; font-size: 18px; }
+.quitar:hover { background: var(--danger-soft); color: var(--danger); }
+.mas { align-self: flex-start; border: 1px dashed var(--line); background: none; border-radius: 8px; padding: 8px 14px; color: var(--brand); font-weight: 600; }
+.mas:hover { background: var(--brand-soft); }
+
+.resumen { display: grid; gap: 10px; }
+.resumen .bloque { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; gap: 12px; align-items: flex-start; }
+.resumen .bloque > div { flex: 1; min-width: 0; }
+.resumen .t { font: 500 11px/1 var(--f-mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; }
+.resumen ul { margin: 0; padding-left: 18px; }
+.editar { border: 0; background: none; color: var(--brand); font-size: 13px; font-weight: 600; padding: 2px 4px; }
+
+.acciones { display: flex; gap: 10px; justify-content: space-between; align-items: center; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 9px; padding: 10px 18px; font-weight: 600; }
+.btn.prim { background: var(--brand); border-color: var(--brand); color: var(--on-brand); margin-left: auto; }
+.btn.prim:hover { filter: brightness(1.08); }
+
+.listo { text-align: center; align-items: center; padding: 44px 26px; }
+.listo .ok { width: 56px; height: 56px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); display: grid; place-items: center; font-size: 28px; }
+.listo p { max-width: 46ch; color: var(--muted); }
+
+.decisiones { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.decisiones div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; font-size: 14px; }
+.decisiones b { display: block; font-family: var(--f-display); font-size: 15px; margin-bottom: 4px; }
+.decisiones p { color: var(--muted); }
+
+@media (max-width: 680px) {
+  .campos { grid-template-columns: 1fr; }
+  .card { padding: 20px 16px; }
+  .fila.cab { display: none; }
+  .fila { grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  .fila .email, .fila .tel { grid-column: 1 / -1; }
+  .fila .quitar { justify-self: end; }
+  .fila.fija span { white-space: normal; }
+  .pasos li span { display: none; }
+  .pasos li.ahora span { display: inline; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:12px">
+  <span class="eyebrow">Onboarding · paso 1 · propuesta</span>
+  <h1>El equipo del cliente se carga en una página, no en un Excel</h1>
+  <p class="lede">El primer WhatsApp lleva un enlace a una página pública de <code>propelia-frontend</code>
+  (<code>/alta/&lt;token&gt;</code>). Ahí el cliente confirma el nombre de la inmobiliaria, dice quién es el
+  responsable y carga a su equipo, paso a paso. Lo que envía llega a <code>/clientes</code> como hoy llega el Excel.</p>
+</header>
+
+<section>
+  <h2>El mensaje</h2>
+  <div class="wa">
+    <div class="burbuja">¡Hola <span class="var">{nombre}</span>! Soy <span class="var">{soporte}</span>, de Propelia 👋
+
+¡Bienvenidos al primer paso del onboarding! Gracias por sumaros a Propelia: nos hace mucha ilusión empezar este viaje con <span class="var">{inmobiliaria}</span> 🚀
+
+A partir de ahora voy a ser vuestra persona de contacto y os voy a ir guiando paso a paso por aquí, para que en pocos días estéis trabajando vuestros leads desde Propelia.
+
+Para arrancar, entrad a este enlace (son 5 minutos):
+<span class="link"><span class="var">{link}</span></span>
+
+Os va a preguntar tres cosas: el nombre de la inmobiliaria, quién va a ser el responsable (la persona que implementa Propelia en la inmobiliaria y con quien hablaré siempre) y quiénes del equipo lo van a usar.
+
+En cuanto lo enviéis, creo todos los accesos y os paso a cada uno su usuario y contraseña. ¡Cualquier duda, escribidme por aquí!</div>
+  </div>
+  <ul class="notas">
+    <li><span class="var">{link}</span> ya es una variable de las plantillas (la usa el link de pago): acá sería el enlace de la página de alta de ese cliente.</li>
+    <li>El mensaje deja de llevar adjunto: el botón de bajar el Excel de la tarea sobra.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>La página que abre el cliente</h2>
+  <p class="lede">Probala: es interactiva. Datos de ejemplo de «Fincas Ribera»; lo que ya sabemos del CRM llega precargado.</p>
+  <div class="nav-frame">
+    <div class="nav-bar"><i></i><i></i><i></i><div class="url">crm.propelia.es/alta/7f3a9c2e-b41d-4e8a-9d5f-2c6b1a0e8f73</div></div>
+    <div class="pp"><div class="pp-in" id="app"></div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Qué decide esto</h2>
+  <div class="decisiones">
+    <div><b>Pública, por token</b><p>Sin login: el enlace es la llave. Una RPC <code>security definer</code> lee y guarda solo esa alta; el token vence o se cierra al enviar.</p></div>
+    <div><b>Las mismas reglas que el Excel</b><p>Un solo responsable y Administrador, email válido y sin repetir, teléfono con prefijo. Se validan en la página y otra vez en la base.</p></div>
+    <div><b>Sin contraseñas</b><p>Como con el Excel: la arma <code>contrasenaInicial</code> al importar y viaja en el mail de accesos.</p></div>
+    <div><b>Importar sigue siendo nuestro</b><p>Enviar no crea cuentas: llena el equipo del alta y tilda «Recibir los datos». «Importar» sigue en <code>/clientes</code>, después de revisar.</p></div>
+  </div>
+</section>
+
+</div>
+
+<script>
+const PASOS = ['Inmobiliaria', 'Responsable', 'Equipo', 'Revisar']
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const TEL = /^(\+|00)\d[\d\s]{7,}$/
+
+// Lo que ya se sabe del CRM llega precargado.
+const s = {
+  paso: -1, intentado: false,
+  inmo: { nombre: 'Fincas Ribera', web: '' },
+  resp: { nombre: 'Marta', apellido: 'Gil', email: 'marta@fincasribera.es', tel: '+34 612 34 56 78' },
+  equipo: [{ nombre: '', apellido: '', email: '', tel: '', rol: 'agente' }],
+}
+const app = document.getElementById('app')
+const esc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
+
+function erroresDe(paso) {
+  const e = {}
+  if (paso === 0 && !s.inmo.nombre.trim()) e['inmo.nombre'] = 'Escribid el nombre de la inmobiliaria.'
+  if (paso === 1) Object.assign(e, erroresDePersona(s.resp, 'resp'))
+  if (paso === 2) {
+    const vistos = new Set([s.resp.email.trim().toLowerCase()])
+    s.equipo.forEach((p, i) => {
+      Object.assign(e, erroresDePersona(p, `eq.${i}`))
+      const m = p.email.trim().toLowerCase()
+      if (m && vistos.has(m)) e[`eq.${i}.email`] = 'Ese email ya está en la lista.'
+      vistos.add(m)
+    })
+  }
+  return e
+}
+function erroresDePersona(p, k) {
+  const e = {}
+  if (!p.nombre.trim()) e[`${k}.nombre`] = 'Falta el nombre.'
+  if (!p.apellido.trim()) e[`${k}.apellido`] = 'Falta el apellido.'
+  if (!EMAIL.test(p.email.trim())) e[`${k}.email`] = 'Email no válido.'
+  if (!TEL.test(p.tel.trim())) e[`${k}.tel`] = 'Con prefijo: +34 …'
+  return e
+}
+
+function input(k, valor, attrs = '') {
+  const err = s.intentado && erroresDe(s.paso)[k]
+  return `<input data-k="${k}" value="${esc(valor)}" ${attrs} aria-invalid="${!!err}">${err ? `<span class="error">${err}</span>` : ''}`
+}
+function campo(k, label, valor, attrs = '', ancho = false) {
+  return `<div class="campo${ancho ? ' ancho' : ''}"><label for="${k}">${label}</label>${input(k, valor, `id="${k}" ${attrs}`)}</div>`
+}
+
+function render() {
+  const cab = `<div class="pp-head"><span class="logo"><b>P</b>Propelia</span><span class="para">Alta de ${esc(s.inmo.nombre || 'vuestra inmobiliaria')}</span></div>`
+  const barra = s.paso >= 0 && s.paso < 4 ? `<ol class="pasos">${PASOS.map((p, i) =>
+    `<li class="${i < s.paso ? 'hecho' : i === s.paso ? 'ahora' : ''}"><span>${i + 1}. ${p}</span></li>`).join('')}</ol>` : ''
+  app.innerHTML = cab + barra + `<div class="card ${s.paso === -1 ? 'bienvenida' : s.paso === 4 ? 'listo' : ''}">${cuerpo()}</div>`
+}
+
+function acciones(siguiente = 'Siguiente') {
+  return `<div class="acciones">${s.paso > 0 ? '<button class="btn" data-a="atras">← Atrás</button>' : ''}<button class="btn prim" data-a="sig">${siguiente}</button></div>`
+}
+
+function cuerpo() {
+  switch (s.paso) {
+    case -1: return `
+      <span class="tiempo">5 minutos</span>
+      <h2>¡Bienvenidos a Propelia, ${esc(s.inmo.nombre)}!</h2>
+      <p class="sub">Este es el primer paso para poner en marcha vuestra cuenta. Os vamos a preguntar tres cosas y, con eso, os creamos los accesos de todo el equipo.</p>
+      <ol class="que-viene">
+        <li>Cómo se llama la inmobiliaria en Propelia.</li>
+        <li>Quién va a ser el responsable de la cuenta.</li>
+        <li>Quiénes del equipo van a usar Propelia.</li>
+      </ol>
+      <div class="acciones"><button class="btn prim" data-a="sig">Empezar →</button></div>`
+    case 0: return `
+      <h2>La inmobiliaria</h2>
+      <p class="sub">Así va a aparecer en Propelia, para vosotros y para vuestros clientes. Si está bien, seguid.</p>
+      <div class="campos">
+        ${campo('inmo.nombre', 'Nombre de la inmobiliaria', s.inmo.nombre, '', true)}
+        ${campo('inmo.web', 'Web <small>(opcional)</small>', s.inmo.web, 'placeholder="https://"', true)}
+      </div>${acciones()}`
+    case 1: return `
+      <h2>El responsable</h2>
+      <div class="aviso"><span>👤</span><span><strong>Es la persona que implementa Propelia en la inmobiliaria</strong> y con quien vamos a hablar siempre: así la comunicación va por una sola vía y todo avanza más rápido. Va a ser Administrador.</span></div>
+      <div class="campos">
+        ${campo('resp.nombre', 'Nombre', s.resp.nombre)}
+        ${campo('resp.apellido', 'Apellido', s.resp.apellido)}
+        ${campo('resp.email', 'Email', s.resp.email, 'type="email"')}
+        ${campo('resp.tel', 'Teléfono', s.resp.tel, 'type="tel" placeholder="+34 …"')}
+      </div>${acciones()}`
+    case 2: {
+      const errs = s.intentado ? erroresDe(2) : {}
+      const filas = s.equipo.map((p, i) => {
+        const msgs = ['nombre', 'apellido', 'email', 'tel'].map(c => errs[`eq.${i}.${c}`]).filter(Boolean)
+        const inp = (c, extra = '') => `<input data-k="eq.${i}.${c}" value="${esc(p[c])}" aria-label="${c}" aria-invalid="${!!errs[`eq.${i}.${c}`]}" ${extra}>`
+        return `<div class="fila">
+          ${inp('nombre', 'placeholder="Nombre"')}${inp('apellido', 'placeholder="Apellido"')}
+          <span class="email">${inp('email', 'type="email" placeholder="Email"')}</span>
+          <span class="tel">${inp('tel', 'type="tel" placeholder="+34 …"')}</span>
+          <select data-k="eq.${i}.rol" aria-label="Rol"><option value="agente"${p.rol === 'agente' ? ' selected' : ''}>Agente</option><option value="admin"${p.rol === 'admin' ? ' selected' : ''}>Administrador</option></select>
+          <button class="quitar" data-a="quitar" data-i="${i}" aria-label="Quitar a esta persona" title="Quitar">×</button>
+          ${msgs.length ? `<span class="error err">${[...new Set(msgs)].join(' · ')}</span>` : ''}
+        </div>`
+      }).join('')
+      return `
+      <h2>El equipo</h2>
+      <p class="sub">Todas las personas que van a usar Propelia, una por fila. <b>Administrador</b> ve y configura toda la cuenta; <b>Agente</b> trabaja sus leads y sus inmuebles.</p>
+      <div class="equipo">
+        <div class="fila cab"><span>Nombre</span><span>Apellido</span><span>Email</span><span>Teléfono</span><span>Rol</span><span></span></div>
+        <div class="fila fija"><span>${esc(s.resp.nombre)}</span><span>${esc(s.resp.apellido)}</span><span class="email">${esc(s.resp.email)}</span><span class="tel">${esc(s.resp.tel)}</span><span class="chip">Responsable</span><span></span></div>
+        ${filas}
+        <button class="mas" data-a="mas">+ Añadir persona</button>
+      </div>${acciones()}`
+    }
+    case 3: {
+      const gente = s.equipo.map(p => `<li>${esc(p.nombre)} ${esc(p.apellido)} · ${p.rol === 'admin' ? 'Administrador' : 'Agente'} · ${esc(p.email)}</li>`).join('')
+      return `
+      <h2>¿Está todo bien?</h2>
+      <p class="sub">Revisadlo antes de enviar. Con esto creamos las cuentas: cada persona recibe su usuario y contraseña por email.</p>
+      <div class="resumen">
+        <div class="bloque"><div><div class="t">Inmobiliaria</div>${esc(s.inmo.nombre)}${s.inmo.web ? ` · ${esc(s.inmo.web)}` : ''}</div><button class="editar" data-ir="0">Editar</button></div>
+        <div class="bloque"><div><div class="t">Responsable</div>${esc(s.resp.nombre)} ${esc(s.resp.apellido)} · ${esc(s.resp.email)} · ${esc(s.resp.tel)}</div><button class="editar" data-ir="1">Editar</button></div>
+        <div class="bloque"><div><div class="t">Equipo · ${s.equipo.length + 1} personas</div>${gente ? `<ul>${gente}</ul>` : 'Solo el responsable.'}</div><button class="editar" data-ir="2">Editar</button></div>
+      </div>${acciones('Enviar')}`
+    }
+    case 4: return `
+      <div class="ok">✓</div>
+      <h2>¡Gracias, ${esc(s.resp.nombre)}!</h2>
+      <p>Ya tenemos todo. En breve creamos los accesos y cada persona del equipo recibe su usuario y contraseña por email. Seguimos hablando por WhatsApp.</p>`
+  }
+}
+
+app.addEventListener('input', ev => {
+  const k = ev.target.dataset.k
+  if (!k) return
+  const [a, b, c] = k.split('.')
+  if (a === 'eq') s.equipo[+b][c] = ev.target.value
+  else s[a][b] = ev.target.value
+  if (a === 'inmo' && b === 'nombre') app.querySelector('.para').textContent = `Alta de ${ev.target.value || 'vuestra inmobiliaria'}`
+})
+app.addEventListener('click', ev => {
+  const btn = ev.target.closest('button')
+  if (!btn) return
+  const a = btn.dataset.a
+  if (btn.dataset.ir) { s.paso = +btn.dataset.ir; s.intentado = false }
+  else if (a === 'atras') { s.paso--; s.intentado = false }
+  else if (a === 'mas') { s.equipo.push({ nombre: '', apellido: '', email: '', tel: '', rol: 'agente' }); render(); app.querySelector(`[data-k="eq.${s.equipo.length - 1}.nombre"]`).focus(); return }
+  else if (a === 'quitar') s.equipo.splice(+btn.dataset.i, 1)
+  else if (a === 'sig') {
+    if (Object.keys(erroresDe(s.paso)).length) { s.intentado = true; render(); app.querySelector('[aria-invalid="true"]')?.focus(); return }
+    s.paso++; s.intentado = false
+  }
+  render()
+})
+render()
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import type { CamposEmail, PlantillaEmailId } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
+import type { CamposEmail, DatosDeAcceso, PlantillaEmailId } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 import { ESTADOS_QUE_NO_LLEGARON } from '../lib/emails'
 import type { CrmEmail } from '../types'
 
@@ -35,7 +35,10 @@ export type OutgoingTemplateEmail = {
 /* Va por la edge function `send-email`: la API key de Resend no puede ir al navegador, y el
    remitente (`info@propelia.es`) lo pone el servidor, no quien llama. Con una plantilla manda solo
    los campos: el HTML lo arma la función, con el mismo `renderEmail` que pinta la vista previa. */
-export async function sendEmail(payload: OutgoingEmail | OutgoingTemplateEmail): Promise<{ id: string }> {
+/** El mail de accesos del onboarding (/clientes): sale al email de `acceso`, lo arma el servidor. */
+export type OutgoingAccesoEmail = { acceso: DatosDeAcceso }
+
+export async function sendEmail(payload: OutgoingEmail | OutgoingTemplateEmail | OutgoingAccesoEmail): Promise<{ id: string }> {
   const { data, error } = await supabase.functions.invoke<{ id: string }>('send-email', { body: payload })
   if (error) {
     if (error instanceof FunctionsHttpError) {

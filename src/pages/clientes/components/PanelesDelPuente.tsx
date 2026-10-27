@@ -47,7 +47,7 @@ export function LinkDePagoPanel({ datos }: { datos: DatosDelAlta }) {
         <Select value={elegido} onValueChange={setPlan}>
           <SelectTrigger className="h-8 w-56 bg-card"><SelectValue placeholder="Plan" /></SelectTrigger>
           <SelectContent>
-            {planes.data?.map(p => <SelectItem key={p.id} value={p.id}>{p.name} · {euros(p.amount_cents)}/{p.interval === 'year' ? 'año' : 'mes'}</SelectItem>)}
+            {planes.data?.map(p => <SelectItem key={p.id} value={p.id}>{p.name} · {euros(p.amount_cents)}/mes{p.individual ? ' · individual' : ''}</SelectItem>)}
           </SelectContent>
         </Select>
         <Button size="sm" disabled={!elegido || enCurso} onClick={() => void generar()}>

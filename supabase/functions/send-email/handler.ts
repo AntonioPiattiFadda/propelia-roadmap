@@ -5,7 +5,10 @@
    a `_shared/email.ts` desde el servidor. */
 
 import type { EmailAttachment, EmailMessage } from '../_shared/email.ts'
-import { camposDesde, nombreEnBandeja, plantillaEmail, problemaDeCampos, remitenteDe, renderEmail, replyToDe } from '../_shared/plantillasEmail.ts'
+import {
+  camposDesde, datosDeAccesoDesde, nombreEnBandeja, plantillaEmail, problemaDeAcceso, problemaDeCampos, remitenteDe, renderEmail,
+  renderEmailDeAcceso, replyToDe,
+} from '../_shared/plantillasEmail.ts'
 
 /* Dos formas de llamarla. Con `plantilla` y `campos` el HTML lo arma el servidor
    (`_shared/plantillasEmail.ts`) y de lo que llega solo entra texto escapado: por eso alcanza con
@@ -14,6 +17,8 @@ import { camposDesde, nombreEnBandeja, plantillaEmail, problemaDeCampos, remiten
 export type SendEmailInput = {
   to: string; subject: string; text: string; attachments: unknown
   plantilla?: string; campos?: unknown
+  /** El mail de accesos del onboarding (/clientes, 27/10/2026): `{ nombre, email, contrasena, inmobiliaria }`. */
+  acceso?: unknown
 }
 
 export type SendEmailDeps = {
@@ -65,6 +70,7 @@ function adjuntosDe(value: unknown): EmailAttachment[] | SendEmailResult {
 export async function handleSendEmail(callerId: string, input: SendEmailInput, deps: SendEmailDeps): Promise<SendEmailResult> {
   const caller = await deps.getCaller(callerId)
   if (input.plantilla !== undefined) return handlePlantilla(caller, input, deps)
+  if (input.acceso !== undefined) return handleAcceso(caller, input, deps)
   // La misma regla que `es_superadmin()`: rol y fila activa.
   if (!caller || !caller.activo || caller.rol !== 'SUPERADMIN') return fail(403, 'No autorizado')
 
@@ -109,4 +115,23 @@ async function handlePlantilla(
     fromName, to, subject, html, text, ...(replyTo ? { replyTo } : {}), ...(attachments.length ? { attachments } : {}),
   })
   return { ok: true, id, to, subject, plantilla: plantilla.id }
+}
+
+/* El mail de accesos del paso 1 de /clientes: usuario y contraseña temporal de una persona del
+   equipo del cliente. SUPERADMIN, como el texto libre: lleva una contraseña. Sale siempre al email
+   de la cuenta (`acceso.email`), nunca a otro `to`: no hay cómo mandarle la clave de alguien a
+   otra casilla. El HTML lo arma `renderEmailDeAcceso`. */
+async function handleAcceso(caller: Caller | null, input: SendEmailInput, deps: SendEmailDeps): Promise<SendEmailResult> {
+  if (!caller || !caller.activo || caller.rol !== 'SUPERADMIN') return fail(403, 'No autorizado')
+  const datos = datosDeAccesoDesde(input.acceso)
+  if (!datos) return fail(400, 'Datos de acceso inválidos')
+  const problema = problemaDeAcceso(datos)
+  if (problema) return fail(400, problema)
+
+  const remitente = remitenteDe(caller)
+  const to = datos.email.trim()
+  const { subject, html, text } = renderEmailDeAcceso(datos, remitente)
+  const replyTo = replyToDe(remitente)
+  const { id } = await deps.send({ fromName: nombreEnBandeja(remitente), to, subject, html, text, ...(replyTo ? { replyTo } : {}) })
+  return { ok: true, id, to, subject, plantilla: 'acceso' }
 }

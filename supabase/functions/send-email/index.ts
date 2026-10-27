@@ -52,6 +52,7 @@ Deno.serve(async req => {
       {
         to: str(body.to), subject: str(body.subject), text: str(body.text), attachments: body.attachments,
         ...(typeof body.plantilla === 'string' ? { plantilla: body.plantilla, campos: body.campos } : {}),
+        ...(body.acceso !== undefined ? { acceso: body.acceso } : {}),
       },
       {
         async getCaller(id) {

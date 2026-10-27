@@ -372,7 +372,8 @@ function firma(r: Remitente): string {
               ${contacto}`
 }
 
-function documento(preencabezado: string, contenido: string, motivoPie: string, r: Remitente): string {
+/** `baja: false` saca «Darse de baja» del pie: un mail de servicio (el de accesos) no es comercial. */
+function documento(preencabezado: string, contenido: string, motivoPie: string, r: Remitente, { baja = true } = {}): string {
   return `<!doctype html>
 <html lang="es" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
@@ -438,8 +439,8 @@ ${contenido}
         <p style="margin:0;${FUENTE}font-size:12px;line-height:18px;color:#8390AE;text-align:center;">
           Propelia · Barcelona, España · ${escapar(r.email)}<br>${motivoPie ? `
           ${motivoPie}<br>` : ''}
-          <a href="mailto:${escapar(r.email)}?subject=Baja" style="color:#8390AE;text-decoration:underline;">Darse de baja</a> ·
-          <a href="${PRIVACIDAD}" style="color:#8390AE;text-decoration:underline;">Política de privacidad</a>
+          ${baja ? `<a href="mailto:${escapar(r.email)}?subject=Baja" style="color:#8390AE;text-decoration:underline;">Darse de baja</a> ·
+          ` : ''}<a href="${PRIVACIDAD}" style="color:#8390AE;text-decoration:underline;">Política de privacidad</a>
         </p>
       </td>
     </tr>
@@ -466,6 +467,113 @@ function textoPlano(id: PlantillaEmailId, c: CamposEmail, r: Remitente): string 
   if (id === 'presentacion-video' && c.notaBoton.trim()) partes.push(c.notaBoton.trim())
   partes.push(['Un saludo,', r.nombre, r.cargo, [r.email, r.telefono, 'propelia.es'].filter(Boolean).join(' · ')].filter(Boolean).join('\n'))
   return partes.filter(Boolean).join('\n\n') + '\n'
+}
+
+/* ---------- El mail de accesos del onboarding (27/10/2026) ----------
+   Lo manda «Enviar mails» del paso 1 de /clientes, uno por persona del equipo del cliente, con su
+   usuario y su contraseña temporal. No es una plantilla editable de «Mensajes»: el texto es fijo
+   y solo cambian los datos, que llegan como texto y se escapan. Lo arma el servidor (`send-email`
+   con `acceso`), solo SUPERADMIN, y sale siempre al email de la cuenta: no se puede mandar la
+   contraseña de alguien a otra casilla. */
+
+/** Donde entra el cliente: el producto. */
+export const URL_DE_PROPELIA = 'https://crm.propelia.es'
+
+export type DatosDeAcceso = { nombre: string; email: string; contrasena: string; inmobiliaria: string }
+
+/** El primer dato que falta, o `null`. */
+export function problemaDeAcceso(d: DatosDeAcceso): string | null {
+  if (!d.nombre.trim()) return 'Falta el nombre'
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) return 'El email no es válido'
+  if (d.contrasena.length < 6) return 'La contraseña tiene menos de 6 caracteres'
+  if (!d.inmobiliaria.trim()) return 'Falta la inmobiliaria'
+  return null
+}
+
+/** Lo que llega del front, recortado a los cuatro datos y siempre como texto. `null` si no es un objeto. */
+export function datosDeAccesoDesde(valor: unknown): DatosDeAcceso | null {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null
+  const v = valor as Record<string, unknown>
+  const t = (k: string) => (typeof v[k] === 'string' ? (v[k] as string) : '')
+  return { nombre: t('nombre'), email: t('email'), contrasena: t('contrasena'), inmobiliaria: t('inmobiliaria') }
+}
+
+const pila = (nombre: string) => nombre.trim().split(/\s+/)[0] ?? ''
+
+/* El dato en una caja propia, en monoespaciada y grande: se copia de un toque. `user-select:all`
+   hace que tocarlo seleccione el valor entero donde el cliente de correo lo respeta (Apple Mail,
+   Gmail web); en el resto se selecciona como cualquier texto. Un botón «Copiar» de verdad no
+   existe en un mail: los clientes de correo no corren JavaScript. */
+function cajaParaCopiar(rotulo: string, valor: string): string {
+  return `
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 12px 0;">
+          <tr><td style="padding:0 0 6px 2px;${FUENTE}font-size:11px;line-height:15px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:#8390AE;">
+            ${escapar(rotulo)}
+          </td></tr>
+          <tr><td style="background-color:#F4F7FD;border:1px solid #DCE5F4;border-radius:10px;padding:14px 16px;">
+            <span style="font-family:'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace;font-size:18px;line-height:24px;font-weight:600;color:#07123A;word-break:break-all;-webkit-user-select:all;user-select:all;">${escapar(valor)}</span>
+          </td></tr>
+        </table>`
+}
+
+function contenidoAcceso(d: DatosDeAcceso): string {
+  const p = `margin:0 0 16px 0;`
+  return `
+    <tr>
+      <td class="pad" style="padding:36px 40px 0 40px;">
+        <h1 class="h1" style="margin:0 0 18px 0;${FUENTE}font-size:26px;line-height:33px;font-weight:700;color:#07123A;letter-spacing:-0.5px;">
+          Ya tienes tu cuenta de Propelia
+        </h1>
+        <div style="${FUENTE}font-size:17px;line-height:27px;color:#4A5776;">
+          <p style="${p}">${escapar(saludo(pila(d.nombre)))}</p>
+          <p style="${p}">Ya está creada tu cuenta en Propelia para <strong style="color:#07123A;">${escapar(d.inmobiliaria.trim())}</strong>. Estos son tus datos para entrar:</p>
+        </div>
+      </td>
+    </tr>
+
+    <tr>
+      <td class="pad" style="padding:6px 40px 0 40px;">${cajaParaCopiar('Usuario (email)', d.email.trim())}${cajaParaCopiar('Contraseña temporal', d.contrasena)}
+      </td>
+    </tr>
+
+    <tr>
+      <td class="pad" style="padding:8px 40px 0 40px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#FFF8E8;border-radius:10px;border-left:3px solid #D99A24;">
+          <tr><td style="padding:15px 18px;${FUENTE}font-size:15px;line-height:23px;color:#4A5776;">
+            <strong style="color:#07123A;">Es una contraseña temporal.</strong> Úsala mientras te ayudamos a poner en marcha la cuenta. Cuando terminemos el proceso de onboarding, te pediremos que la cambies por una tuya. Mientras tanto, no la compartas con nadie de fuera de tu equipo.
+          </td></tr>
+        </table>
+      </td>
+    </tr>
+${boton({ ...VACIOS, textoBoton: 'Entrar a Propelia', urlBoton: URL_DE_PROPELIA }, 26, 16)}
+
+    <tr>
+      <td class="pad" style="padding:22px 40px 0 40px;${FUENTE}font-size:15px;line-height:23px;color:#4A5776;">
+        Si algo no te funciona, contesta a este correo y lo vemos juntos.
+      </td>
+    </tr>`
+}
+
+/** El mail de accesos: HTML con la marca, su texto plano y el asunto. */
+export function renderEmailDeAcceso(
+  d: DatosDeAcceso, r: Remitente, { assets = ASSETS }: { assets?: string } = {},
+): { subject: string; html: string; text: string } {
+  const inmo = d.inmobiliaria.trim()
+  const html = documento(
+    'Tu usuario y tu contraseña temporal para entrar a Propelia.', contenidoAcceso(d),
+    `Recibes este correo porque ${escapar(inmo)} se está dando de alta en Propelia.`, r, { baja: false },
+  ).replaceAll(`${ASSETS}/`, `${assets}/`)
+  const text = [
+    'Ya tienes tu cuenta de Propelia',
+    saludo(pila(d.nombre)),
+    `Ya está creada tu cuenta en Propelia para ${inmo}. Estos son tus datos para entrar:`,
+    `Usuario (email): ${d.email.trim()}\nContraseña temporal: ${d.contrasena}`,
+    `Entrar a Propelia: ${URL_DE_PROPELIA}`,
+    'Es una contraseña temporal. Úsala mientras te ayudamos a poner en marcha la cuenta. Cuando terminemos el proceso de onboarding, te pediremos que la cambies por una tuya. Mientras tanto, no la compartas con nadie de fuera de tu equipo.',
+    'Si algo no te funciona, contesta a este correo y lo vemos juntos.',
+    ['Un saludo,', r.nombre, r.cargo, [r.email, r.telefono, 'propelia.es'].filter(Boolean).join(' · ')].filter(Boolean).join('\n'),
+  ].join('\n\n') + '\n'
+  return { subject: `Tu acceso a Propelia · ${inmo}`, html, text }
 }
 
 /** `assets` cambia de dónde salen las imágenes: solo para la vista previa, que las sirve la app

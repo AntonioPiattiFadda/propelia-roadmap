@@ -90,7 +90,7 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
           <Button key={a} size="icon" variant="outline" className="size-8" title="Descargar la plantilla de la cartera" aria-label="Descargar la plantilla de la cartera"
             disabled={ocupado === a} onClick={() => void ocupar(a, async () => {
               const cols = await getColumnasDeCartera()
-              await descargarExcel(`cartera-${slug(datos.inmobiliaria) || 'inmobiliaria'}.xlsx`, [cols.map(c => c.header), cols.map(c => c.example)])
+              await descargarExcel(`cartera-${slug(datos.inmobiliaria) || 'inmobiliaria'}.xlsx`, [cols.map(c => c.header), cols.map(c => String(c.example))])
             })}>
             {ocupado === a ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
           </Button>
