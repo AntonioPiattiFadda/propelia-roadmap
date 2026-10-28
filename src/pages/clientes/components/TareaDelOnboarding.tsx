@@ -5,10 +5,13 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { leerPrimeraHoja } from '@/pages/crm/service/excel'
+import { useEmailsQueNoLlegaron } from '@/pages/crm/hooks/useEmails'
+import { motivoLegible, noLlegaronDelLead, rotuloDelEstado } from '@/pages/crm/lib/emails'
 import type { Celda } from '@/pages/crm/lib/importarLote'
 import { useMarcarTarea, useReabrirAlta } from '../hooks/useClientes'
 import { estadoDelAlta } from '../lib/equipo'
-import { claveDeTarea, TAREA_CREDENCIALES, type Accion, type Paso, type PlantillaId, type Tarea } from '../lib/pasos'
+import { listaDeMailsQueNoLlegaron } from '../lib/mensajes'
+import { claveDeTarea, TAREA_CORREGIR_MAILS, TAREA_CREDENCIALES, type Accion, type Paso, type PlantillaId, type Tarea } from '../lib/pasos'
 import { descargarExcel } from '../service/excel'
 import { enviarLeadDePrueba, getColumnasDeCartera, PUENTE_SIMULADO } from '../service/puente'
 import { ConfirmarAccesosDialog } from './ConfirmarAccesosDialog'
@@ -47,7 +50,19 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
   const archivo = useRef<HTMLInputElement>(null)
   const alElegir = useRef<(f: File) => void>(() => {})
   const wa = tarea.acciones?.find(a => a.startsWith('wa:'))
+  /* Los mails de accesos que no llegaron: los trae el webhook de Resend a `crm_emails` (la misma
+     query de la campana, que `useAvisosDeEmails` refresca cada 30 s). La tarea del CRM la crea la base. */
+  const emails = useEmailsQueNoLlegaron({ enabled: clave === TAREA_CREDENCIALES })
+  const accesosQueNoLlegaron = clave === TAREA_CREDENCIALES
+    ? noLlegaronDelLead(emails.data ?? [], datos.o.lead.id).filter(e => e.plantilla === 'acceso')
+    : []
+  /* El WhatsApp de los accesos es UNO (28/10/2026, por pedido): «ya tenéis los accesos» y, si algún
+     mail no llegó, debajo el pedido de los emails bien escritos (`corregir_mails`). */
   const texto = wa ? datos.mensaje(wa.slice(3) as PlantillaId) : null
+  const pedidoDeMails = accesosQueNoLlegaron.length
+    ? datos.mensaje('corregir_mails', { mails: listaDeMailsQueNoLlegaron(accesosQueNoLlegaron.map(e => e.to_email), datos.o.miembros) })
+    : null
+  const mensaje = texto && pedidoDeMails ? `${texto}\n\n${pedidoDeMails}` : texto
 
   const tildar = (v: boolean) => {
     if (clave === TAREA_CREDENCIALES && v) { setConfirmando(true); return }
@@ -147,22 +162,38 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
         </label>
         {!!tarea.acciones?.length && (
           <div className="flex flex-wrap items-center gap-1.5 max-md:ml-6.5">
-            {wa && <EnviarPorWhatsapp texto={texto} telefono={datos.telefono} />}
+            {wa && <EnviarPorWhatsapp texto={mensaje} telefono={datos.telefono} />}
             {tarea.acciones.filter(a => !a.startsWith('wa:')).map(accion)}
           </div>
         )}
       </div>
-      {wa && texto && (
-        <details className="group ml-6.5 text-[12.5px]">
-          <summary className="flex w-max cursor-pointer list-none items-center gap-1 text-(--fg-muted) hover:text-foreground">
-            <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" /> Ver mensaje
-          </summary>
-          <p className="mt-1.5 whitespace-pre-line rounded-md border border-(--line) bg-(--surface-2) p-3 text-(--fg-2)">{texto}</p>
-        </details>
-      )}
+      {wa && mensaje && <VerMensaje texto={mensaje} />}
       {tarea.acciones?.includes('importar-usuarios') && datos.orgId && datos.o.miembros.length > 0 && (
-        <CuentasCreadas miembros={datos.o.miembros} />
+        <CuentasCreadas datos={datos} />
       )}
+      {accesosQueNoLlegaron.length > 0 && (
+        <ul className="ml-6.5 flex flex-col gap-1 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12.5px]">
+          {accesosQueNoLlegaron.map(e => (
+            <li key={e.id} title={e.status_detail ?? undefined}>
+              <b className="text-destructive">{rotuloDelEstado(e.status)}</b> el mail a <b>{e.to_email}</b>
+              {motivoLegible(e) && <span className="text-(--fg-muted)"> · {motivoLegible(e)}</span>}
+            </li>
+          ))}
+          <li className="text-(--fg-muted)">Quedó una tarea «Revisar el mail de acceso…» en el lead.</li>
+        </ul>
+      )}
+      {accesosQueNoLlegaron.length > 0 && (() => {
+        const corregido = datos.o.tareas.some(t => t.task_id === TAREA_CORREGIR_MAILS)
+        return (
+          <label className="flex cursor-pointer items-start gap-2.5 text-[13.5px]">
+            <Checkbox className="mt-0.5" checked={corregido}
+              onCheckedChange={v => marcar.mutate({ onboardingId: datos.o.id, taskId: TAREA_CORREGIR_MAILS, hecha: v === true })} />
+            <span className={cn(corregido && 'text-(--fg-muted) line-through')}>
+              Pedirle al cliente los mails que están mal <span className="text-(--fg-muted)">(va en el mismo WhatsApp de arriba)</span>
+            </span>
+          </label>
+        )
+      })()}
       {panel && (
         <div className="ml-6.5">
           {panel.tipo === 'usuarios' && <ImportarUsuariosPanel datos={datos} onCerrar={() => setPanel(null)} />}
@@ -175,5 +206,17 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
       <input ref={archivo} type="file" accept=".xlsx" hidden onChange={e => { const f = e.target.files?.[0]; if (f) alElegir.current(f) }} />
       {clave === TAREA_CREDENCIALES && <ConfirmarAccesosDialog datos={datos} abierto={confirmando} onCerrar={() => setConfirmando(false)} />}
     </div>
+  )
+}
+
+/** El WhatsApp completo, plegado debajo de la tarea. */
+function VerMensaje({ texto }: { texto: string }) {
+  return (
+    <details className="group ml-6.5 text-[12.5px]">
+      <summary className="flex w-max cursor-pointer list-none items-center gap-1 text-(--fg-muted) hover:text-foreground">
+        <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" /> Ver mensaje
+      </summary>
+      <p className="mt-1.5 whitespace-pre-line rounded-md border border-(--line) bg-(--surface-2) p-3 text-(--fg-2)">{texto}</p>
+    </details>
   )
 }

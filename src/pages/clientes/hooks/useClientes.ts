@@ -38,7 +38,8 @@ export function useClientesRealtime(activo: boolean) {
   useEffect(() => {
     if (!activo) return
     const canal = supabase.channel(`clientes-${crypto.randomUUID()}`)
-    for (const tabla of ['client_onboardings', 'client_onboarding_members', 'client_onboarding_tasks']) {
+    // crm_tasks: la columna «Tareas» (la tarea que crea el envío del alta aparece sola).
+    for (const tabla of ['client_onboardings', 'client_onboarding_members', 'client_onboarding_tasks', 'crm_tasks']) {
       canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla },
         () => { void qc.invalidateQueries({ queryKey: CLIENTES_KEYS.onboardings }) })
     }

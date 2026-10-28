@@ -113,6 +113,12 @@ lado que auth.
 `inbound_address` es la dirección a la que Idealista reenvía los leads de ese agente (paso 3);
 `null` si el agente no tiene `slug`. `properties_count` sirve para ver el import reflejado.
 
+Desde el 28/10/2026 cada agente trae además `first_sign_in_at` y `last_sign_in_at` (null = todavía
+no entró): el primero es `users.terms_accepted_at` (los términos se aceptan al entrar la primera
+vez) o, si falta, el último; el último es `last_sign_in_at` de auth (Admin API, uno por agente).
+/clientes los muestra en la columna «Entró» de las cuentas creadas. Un `roadmap-bridge` anterior no
+los manda y el front no dice nada.
+
 ### `import_template`
 
 Las columnas del Excel de la cartera. El Roadmap arma la plantilla `.xlsx` con esto (cabecera +

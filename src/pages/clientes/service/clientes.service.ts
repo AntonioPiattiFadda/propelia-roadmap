@@ -13,7 +13,9 @@ export async function getOnboardings(): Promise<Onboarding[]> {
     .from('client_onboardings')
     .select(`*,
       lead:crm_leads!inner(id, assigned_to, propelia_organization_id, lead_type,
-        client:crm_clients(company_name, first_name, last_name, email, phone)),
+        client:crm_clients(company_name, first_name, last_name, email, phone, alternative_phone_1, alternative_phone_2,
+          alternative_phone_1_is_decision_maker, alternative_phone_2_is_decision_maker, google_maps_phone),
+        tareas_crm:crm_tasks(*)),
       miembros:client_onboarding_members(*),
       tareas:client_onboarding_tasks(task_id, done_at, done_by)`)
     .is('completed_at', null)
@@ -28,6 +30,21 @@ export async function marcarTarea({ onboardingId, taskId, hecha }: { onboardingI
   const { error } = hecha
     ? await supabase.from('client_onboarding_tasks').upsert({ onboarding_id: onboardingId, task_id: taskId }, { ignoreDuplicates: true })
     : await supabase.from('client_onboarding_tasks').delete().eq('onboarding_id', onboardingId).eq('task_id', taskId)
+  if (error) throw error
+}
+
+/** El título de la tarea del CRM que crea el trigger `client_onboardings_alta_recibida` («Revisar e
+ *  importar el equipo de …»). Si cambia allá, cambia acá. */
+export const PREFIJO_TAREA_REVISAR_EQUIPO = 'Revisar e importar el equipo de '
+
+/** Con los accesos enviados, la tarea del CRM que avisó que llegó el equipo ya está hecha: se
+ *  completan todas las pendientes del lead con ese título (por prefijo: el nombre de la
+ *  inmobiliaria puede haber cambiado desde que se creó). */
+export async function completarTareasDeRevisarEquipo(leadId: string) {
+  const { error } = await supabase.from('crm_tasks')
+    .update({ completed: true, completed_at: new Date().toISOString() })
+    .eq('lead_id', leadId).eq('completed', false).is('deleted_at', null)
+    .like('title', `${PREFIJO_TAREA_REVISAR_EQUIPO}%`)
   if (error) throw error
 }
 

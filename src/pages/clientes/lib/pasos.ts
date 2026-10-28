@@ -12,7 +12,7 @@ export type Accion =
   | 'plantilla-cartera' | 'importar-cartera' | 'link-pago' | 'ver-pago'
   | 'direcciones' | 'simular-lead'
 
-export const PLANTILLAS = ['contacto_inicial', 'configurar_organizacion', 'link_de_pago', 'asignar_y_mails', 'integrar_portales'] as const
+export const PLANTILLAS = ['contacto_inicial', 'accesos_enviados', 'corregir_mails', 'configurar_organizacion', 'link_de_pago', 'asignar_y_mails', 'integrar_portales'] as const
 export type PlantillaId = (typeof PLANTILLAS)[number]
 
 export type Tarea = { id: string; texto: string; acciones?: Accion[] }
@@ -26,7 +26,7 @@ export const PASOS: Paso[] = [
       { id: 'enviar', texto: 'Enviar el saludo con el enlace para que carguen su equipo', acciones: ['wa:contacto_inicial', 'link-alta'] },
       { id: 'excel-recibido', texto: 'Recibir el equipo y el nombre de la inmobiliaria', acciones: ['equipo-recibido'] },
       { id: 'importar-usuarios', texto: 'Importar el equipo: crea la organización y todas las cuentas', acciones: ['importar-usuarios'] },
-      { id: 'credenciales', texto: 'Verificar accesos y enviar a cada uno su usuario y clave por mail', acciones: ['mails'] },
+      { id: 'credenciales', texto: 'Verificar accesos y enviar a cada uno su usuario y clave por mail', acciones: ['mails', 'wa:accesos_enviados'] },
     ],
   },
   {
@@ -87,6 +87,16 @@ export const TAREA_EQUIPO_RECIBIDO = claveDeTarea('contacto', 'excel-recibido')
 
 /** La tarea que no se tilda a mano: manda mails, pasa por `ConfirmarAccesosDialog`. */
 export const TAREA_CREDENCIALES = claveDeTarea('contacto', 'credenciales')
+
+/** Aparece debajo de `TAREA_CREDENCIALES` solo si algún mail de accesos no llegó (27/10/2026, por
+ *  pedido). No está en `PASOS`: no cuenta para el avance ni para «Marcar completo». Se tilda a mano;
+ *  al lado lleva el WhatsApp `corregir_mails` con los mails que no llegaron (28/10/2026). */
+export const TAREA_CORREGIR_MAILS = claveDeTarea('contacto', 'corregir-mails')
+
+/** «Probé que entra» de cada cuenta creada, en la tabla de «Ver cuentas y contraseñas» (28/10/2026,
+ *  por pedido). Una fila de `client_onboarding_tasks` por miembro, sin migración: no está en `PASOS`
+ *  y no cuenta para el avance. */
+export const tareaCuentaProbada = (miembroId: string) => claveDeTarea('contacto', `probada.${miembroId}`)
 
 /** Los pasos que hoy se trabajan: los de «Próximamente» no cuentan. */
 export const PASOS_ABIERTOS = PASOS.filter(p => !p.proximamente)

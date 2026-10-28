@@ -43,7 +43,9 @@ const segmento = (activo: boolean) => cn(
   activo ? 'bg-card text-foreground font-semibold shadow-(--shadow-sm)' : 'text-(--fg-muted) hover:text-foreground',
 )
 
-function ProximaTareaDelLead({ proxima, hoy }: { proxima: ProximaTarea | undefined; hoy: string }) {
+/** La próxima tarea pendiente de un lead, con su día y hora; en rojo si toca hoy o venció. La usa
+ *  también la columna «Tareas» de /clientes. */
+export function ProximaTareaDelLead({ proxima, hoy }: { proxima: ProximaTarea | undefined; hoy: string }) {
   if (!proxima) return <span className="whitespace-nowrap text-[12.5px] font-semibold text-(--danger-fg)">No hay tarea</span>
   const t = proxima.tarea
   const vencida = estaVencida(t, hoy)

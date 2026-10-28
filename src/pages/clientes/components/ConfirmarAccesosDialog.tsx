@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { ChevronRight, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -8,7 +9,9 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { sendEmail } from '@/pages/crm/service/email.service'
 import { remitenteDe, renderEmailDeAcceso } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
-import { useMarcarTarea } from '../hooks/useClientes'
+import { CRM_KEYS } from '@/pages/crm/hooks/keys'
+import { CLIENTES_KEYS, useMarcarTarea } from '../hooks/useClientes'
+import { completarTareasDeRevisarEquipo } from '../service/clientes.service'
 import { TAREA_CREDENCIALES } from '../lib/pasos'
 import { contrasenaInicial } from '../lib/equipo'
 import { PUENTE_SIMULADO } from '../service/puente'
@@ -19,7 +22,8 @@ import type { DatosDelAlta } from './datosDelAlta'
    cuentas entran correctamente» no se habilita «Enviar». Sale uno por persona desde
    info@propelia.es por `send-email` con `acceso` (solo SUPERADMIN): el HTML lo arma el servidor con
    `renderEmailDeAcceso` (`_shared/plantillasEmail.ts`), el mismo que pinta «Ver cómo les llega», y
-   va siempre al email de la cuenta. Recién con todos enviados se tilda la tarea. La contraseña no
+   va siempre al email de la cuenta. Recién con todos enviados se tilda la tarea y se completa la
+   del CRM «Revisar e importar el equipo de …» (27/10/2026, por pedido). La contraseña no
    se guarda en ningún lado: se vuelve a armar igual que al crear la cuenta, con el año de cuando se
    cargó el miembro.
 
@@ -28,6 +32,7 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
   const [verifique, setVerifique] = useState(false)
   const [enCurso, setEnCurso] = useState(false)
   const marcar = useMarcarTarea()
+  const qc = useQueryClient()
   const miembros = datos.o.miembros
     .filter(m => m.email)
     .map(m => ({ ...m, contrasena: contrasenaInicial(m.first_name, m.last_name, new Date(m.created_at).getFullYear()) }))
@@ -48,7 +53,9 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
     const fallaron: string[] = []
     if (!PUENTE_SIMULADO) {
       for (const m of miembros) {
-        try { await sendEmail({ acceso: accesoDe(m) }) } catch { fallaron.push(m.email!) }
+        // Con el lead, un rebote se ve en el renglón de la tarea y en el lead, y crea la tarea del
+        // CRM «Revisar el mail de acceso que no llegó a …» (trigger `crm_emails_acceso_no_llego`).
+        try { await sendEmail({ acceso: accesoDe(m), leadId: datos.o.lead.id }) } catch { fallaron.push(m.email!) }
       }
     }
     setEnCurso(false)
@@ -57,6 +64,13 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
       return
     }
     marcar.mutate({ onboardingId: datos.o.id, taskId: TAREA_CREDENCIALES, hecha: true })
+    completarTareasDeRevisarEquipo(datos.o.lead.id)
+      .then(() => Promise.all([
+        qc.invalidateQueries({ queryKey: CLIENTES_KEYS.onboardings }),
+        qc.invalidateQueries({ queryKey: CRM_KEYS.tareasPendientes }),
+        qc.invalidateQueries({ queryKey: CRM_KEYS.detalle(datos.o.lead.id) }),
+      ]))
+      .catch(() => toast.warning('Los mails salieron, pero no se completó la tarea «Revisar e importar el equipo» del CRM'))
     toast.success(PUENTE_SIMULADO ? 'Tarea hecha (puente simulado: no se mandó ningún mail)' : `${miembros.length} mails de acceso enviados`)
     cerrar()
   }

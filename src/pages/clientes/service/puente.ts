@@ -13,7 +13,12 @@ import { supabase } from '@/lib/supabase'
 export const PUENTE_SIMULADO = false
 
 export type OrgDePropelia = { id: string; name: string; website?: string | null }
-export type AgenteDePropelia = { id: string; name: string; email: string | null; role: string; slug: string | null; inbound_address: string | null }
+export type AgenteDePropelia = {
+  id: string; name: string; email: string | null; role: string; slug: string | null; inbound_address: string | null
+  /** Cuándo entró a su cuenta por primera y por última vez; null = todavía no entró. Opcionales: un
+   *  `roadmap-bridge` de antes del 28/10/2026 no los manda. */
+  first_sign_in_at?: string | null; last_sign_in_at?: string | null
+}
 export type OrgConAgentes = OrgDePropelia & { agents: AgenteDePropelia[]; org_inbound_address: string | null; properties_count: number }
 export type UsuarioParaCrear = { first_name: string; last_name: string; email: string; phone: string; role: 'admin' | 'agent'; is_owner: boolean; password: string }
 export type ColumnaDeCartera = { key: string; header: string; example: string | number }

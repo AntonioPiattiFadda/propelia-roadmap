@@ -36,7 +36,7 @@ export type OutgoingTemplateEmail = {
    remitente (`info@propelia.es`) lo pone el servidor, no quien llama. Con una plantilla manda solo
    los campos: el HTML lo arma la función, con el mismo `renderEmail` que pinta la vista previa. */
 /** El mail de accesos del onboarding (/clientes): sale al email de `acceso`, lo arma el servidor. */
-export type OutgoingAccesoEmail = { acceso: DatosDeAcceso }
+export type OutgoingAccesoEmail = { acceso: DatosDeAcceso; leadId?: string }
 
 export async function sendEmail(payload: OutgoingEmail | OutgoingTemplateEmail | OutgoingAccesoEmail): Promise<{ id: string }> {
   const { data, error } = await supabase.functions.invoke<{ id: string }>('send-email', { body: payload })

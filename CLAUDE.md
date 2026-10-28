@@ -233,14 +233,20 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   etapa. Un lead pasa a `ONBOARDING` **solo**, cuando el comercial lo mueve a una etapa con
   `starts_onboarding` (columna «Onboarding» de la configuración del funnel; desde el 27/10/2026,
   por pedido, marcadas «En prueba mes gratis», «Contratado 1er mes» y «Contratado», desde la pantalla): el trigger `crm_leads_lead_type` lo pasa y `crm_leads_crear_onboarding` le crea su
-  `client_onboardings` con el responsable del cliente del CRM. Solo desde `LEAD`: un `CLIENT` que
+  `client_onboardings` con el responsable del cliente del CRM. **Marcar una etapa «Onboarding» también
+  pasa los leads que ya estaban en ella** (trigger `crm_funnel_stages_arranca_onboarding`, migración
+  `20261027152708_onboarding_etapa_marcada_arrastra_leads`, que **la aplica Antonio**): antes solo
+  contaba entrar, y un lead movido antes de marcar la etapa no llegaba nunca. Solo desde `LEAD`: un `CLIENT` que
   vuelve a pasar por la etapa no reabre nada. **El front nunca escribe `lead_type`**: el trigger
   rechaza el cambio a mano (`crm_lead_type_solo_rpc`), y `client_onboarding_completar` lo pasa a
   `CLIENT`. Pruebas en `supabase/tests/clientes-onboarding.sql` (como `crm-permisos.sql`).
 - **La página** (solo SUPERADMIN: `NAV` y gate adentro, como Demos) lista los `ONBOARDING` y abre
   cada alta en un dialog con `?lead=<id>`. Siete pasos (`lib/pasos.ts`, en el código como en el
   producto; en la base solo las tareas hechas); **los pasos 4 a 7 están en «Próximamente»** y no
-  cuentan para el avance ni para «Marcar completo». Cada tarea lleva sus acciones al lado: copiar y
+  cuentan para el avance ni para «Marcar completo». **Dos pestañas** (27/10/2026, por pedido,
+  `?tab=mias`): «Sin asignar» (nadie lleva el alta, de cualquier cartera del CRM) y «Asignadas a
+  mí»; «Tomar» la pasa de una a otra. Tomar escribe solo `client_onboardings.assigned_to`: el lead
+  no cambia de responsable y sigue en la lista del CRM de quien lo pasó a la etapa. Cada tarea lleva sus acciones al lado: copiar y
   abrir WhatsApp (plantillas de `onboarding_message_templates`), copiar el enlace de alta, importar, etc.
 - **El equipo lo carga el cliente** (ver el punto de la página pública, abajo; hasta el 27/10/2026
   era un Excel): sin contraseña (es `nombre.apellido`, con el año si no llega a 6, `contrasenaInicial`
@@ -253,7 +259,30 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   para copiar y el aviso de que es temporal y se cambia al terminar el onboarding. Sin «Darse de
   baja»: es de servicio. «Ver cómo les llega» lo muestra en el diálogo; `docs/onboarding/mail-de-acceso.html`
   es una copia generada con datos de ejemplo. Va a `crm_emails` con `plantilla = 'acceso'`, así los
-  rebotes se avisan como los demás.
+  rebotes se avisan como los demás. Con todos enviados, además completa la tarea del CRM «Revisar e
+  importar el equipo de …» del lead (`completarTareasDeRevisarEquipo`, por prefijo del título;
+  27/10/2026, por pedido).
+  **Un mail de accesos que no llega se avisa y deja tarea** (27/10/2026, por pedido): cada envío va
+  con el `leadId`, así que un rebote (o «no se pudo enviar» / «no se envió») se ve debajo del renglón
+  de la tarea en /clientes, en el lead y en la campana, y el trigger `crm_emails_acceso_no_llego`
+  (migración `20261027154657_onboarding_mail_de_acceso_no_llego`, que **la aplica Antonio**) crea en
+  el lead la tarea del CRM «Revisar el mail de acceso que no llegó a …», con alarma en 5 minutos,
+  para quien lleva el alta (o el responsable del lead). Los envíos de antes van sin lead: no la crean.
+  Con alguno que no llegó, debajo aparece además el tilde «Enviar mensaje al cliente para que corrija
+  los mails que están mal» (`TAREA_CORREGIR_MAILS`, `contacto.corregir-mails`, a mano).
+  **Un solo WhatsApp avisa todo** (28/10/2026, por pedido, migración
+  `20261028115945_onboarding_mensajes_de_accesos`, que **la aplica Antonio**): al lado de «Enviar
+  mails», `accesos_enviados` (cada uno recibió usuario y contraseña temporal, mirar spam) y, si algún
+  mail no llegó, pegado debajo `corregir_mails`, con `{mails}` = un renglón por mail que no llegó y el
+  nombre de quien es (`listaDeMailsQueNoLlegaron`, `lib/mensajes.ts`), pidiendo el email bien escrito
+  por WhatsApp. El renglón de corregir no tiene WhatsApp propio. Sin la migración corrida, los
+  botones quedan apagados («Falta la plantilla en la base»).
+  **«Ver cuentas y contraseñas» dice quién probaste y quién entró** (28/10/2026, por pedido):
+  columna «Probé», un tilde a mano por cuenta (`tareaCuentaProbada` = `contacto.probada.<miembro>` en
+  `client_onboarding_tasks`, sin migración, fuera de `PASOS`), y columna «Entró», con la fecha del
+  primer login que trae `get_organization` del puente (`first_sign_in_at`/`last_sign_in_at`, ver
+  `PUENTE.md`; hace falta deployar `roadmap-bridge` en el producto). Ojo: probar una cuenta es entrar
+  con ella, así que cuenta como su primer login. No está en `PASOS`: no cuenta para el avance ni para «Marcar completo».
 - **El Excel de usuarios se reemplaza por una página pública** (27/10/2026, por pedido; mock en
   `docs/onboarding/alta-publica.html`, migración `20261027133921_onboarding_alta_publica`, que **la
   aplica Antonio**). La página va en **propelia-frontend** (`crm.propelia.es/alta/<token>`) y los
