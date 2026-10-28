@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contrasenaInicial, estadoDelAlta, linkDeAlta } from './equipo'
+import { contrasenaInicial, estadoDelAlta, linkDeAlta, normalizarWeb } from './equipo'
 
 describe('contrasenaInicial', () => {
   it('nombre.apellido sin tildes ni espacios', () =>
@@ -17,4 +17,15 @@ describe('estadoDelAlta', () => {
   it('sin enviar', () => expect(estadoDelAlta({ submitted_at: null }, [{}])).toEqual({ enviado: false }))
   it('enviado: cuándo y cuántas personas', () =>
     expect(estadoDelAlta({ submitted_at: '2026-10-27T10:00:00Z' }, [{}, {}, {}])).toEqual({ enviado: true, el: '2026-10-27T10:00:00Z', personas: 3 }))
+})
+
+describe('normalizarWeb', () => {
+  it('vacía es null', () => expect(normalizarWeb('  ')).toBeNull())
+  it('sin esquema le suma https', () => expect(normalizarWeb(' fincasribera.es ')).toBe('https://fincasribera.es'))
+  it('con esquema queda como está, sin barra final', () => expect(normalizarWeb('http://fincas.es/pisos')).toBe('http://fincas.es/pisos'))
+  it('sin dominio, con espacios o con otro esquema no vale', () => {
+    expect(normalizarWeb('fincasribera')).toBeUndefined()
+    expect(normalizarWeb('fincas ribera.es')).toBeUndefined()
+    expect(normalizarWeb('javascript:alert(1)')).toBeUndefined()
+  })
 })

@@ -73,10 +73,10 @@ contraseñas las arma el Roadmap (`nombre.apellido`); el producto no las guarda 
 lado que auth.
 
 ```json
-// { "action": "create_org_with_users", "organization_name": "Fincas Ribera",
+// { "action": "create_org_with_users", "organization_name": "Fincas Ribera", "website": "fincasribera.es",
 //   "users": [ { "first_name": "Marta", "last_name": "Gil", "email": "marta@fincasribera.es",
 //                "phone": "+34600111222", "role": "admin", "is_owner": true, "password": "marta.gil" }, … ] } →
-{ "organization": { "id": "6f1c…", "name": "Fincas Ribera", "slug": "fincas-ribera" },
+{ "organization": { "id": "6f1c…", "name": "Fincas Ribera", "slug": "fincas-ribera", "website": "https://fincasribera.es" },
   "users": [ { "id": "a1…", "email": "marta@fincasribera.es" } ] }
 ```
 
@@ -89,6 +89,11 @@ lado que auth.
   canales, facturación `provider`: **sin plan hasta que paguen el link del paso 2**). Máximo 50
   personas (`too_many_rows`).
 - Las cuentas quedan con el email confirmado y sin términos aceptados: los aceptan al entrar.
+- **`website` es opcional** (28/10/2026): la web que el cliente cargó en la página de alta. Se
+  normaliza como en Ajustes › Marca (`normalizeWebsite`: sin esquema va `https://`, solo http(s),
+  con un punto en el dominio); una que no vale → `bad_request` antes de crear nada. Se guarda en
+  `organization_settings.website` **después** de las cuentas y no deshace nada si falla: la
+  respuesta trae `website: null` y el Roadmap avisa que se cargue a mano.
 
 ### `get_organization`
 

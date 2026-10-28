@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabase'
    todo pega contra Propelia de verdad. */
 export const PUENTE_SIMULADO = false
 
-export type OrgDePropelia = { id: string; name: string }
+export type OrgDePropelia = { id: string; name: string; website?: string | null }
 export type AgenteDePropelia = { id: string; name: string; email: string | null; role: string; slug: string | null; inbound_address: string | null }
 export type OrgConAgentes = OrgDePropelia & { agents: AgenteDePropelia[]; org_inbound_address: string | null; properties_count: number }
 export type UsuarioParaCrear = { first_name: string; last_name: string; email: string; phone: string; role: 'admin' | 'agent'; is_owner: boolean; password: string }
@@ -40,8 +40,9 @@ async function invocar<T>(action: string, params: Record<string, unknown> = {}):
   return data
 }
 
-export const crearOrgConUsuarios = (organization_name: string, users: UsuarioParaCrear[]) =>
-  invocar<{ organization: OrgDePropelia }>('create_org_with_users', { organization_name, users })
+/** `website` (opcional) queda en la configuración de la org en Propelia (Ajustes › Marca). */
+export const crearOrgConUsuarios = (organization_name: string, users: UsuarioParaCrear[], website: string | null = null) =>
+  invocar<{ organization: OrgDePropelia }>('create_org_with_users', { organization_name, users, ...(website ? { website } : {}) })
 export const getOrganizacion = (org_id: string) =>
   invocar<{ organization: OrgConAgentes }>('get_organization', { org_id }).then(r => r.organization)
 export const getColumnasDeCartera = () =>
@@ -94,7 +95,7 @@ async function simular(action: string, p: Record<string, unknown>): Promise<unkn
         })),
       }
       guardar(m)
-      return { organization: { id, name } }
+      return { organization: { id, name, website: (p.website as string | undefined) ?? null } }
     }
     case 'get_organization': {
       const org = m.orgs[String(p.org_id)]

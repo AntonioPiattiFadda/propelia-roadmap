@@ -269,7 +269,10 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   `20261027134956_onboarding_mensaje_con_link_de_alta`) y la tarea, un botón que copia el enlace.
   «Recibir el equipo» dice cuándo lo envió y, mientras no se importó, lo reabre (`reabrirAlta`: borra
   `submitted_at` y destilda). Los `task_id` siguen siendo los del Excel (`excel-recibido`) para no
-  destildar nada. La página es `src/pages/alta/` de propelia-frontend. **Al enviarla avisa**
+  destildar nada. **La web que cargó el cliente va con la org** (28/10/2026, por pedido):
+  «Importar» la muestra editable al lado del nombre (`normalizarWeb`, `lib/equipo.ts`, la regla de
+  Ajustes › Marca) y `create_org_with_users` la guarda en `organization_settings.website` del
+  producto; si eso falla, la org se crea igual y el toast lo avisa. La página es `src/pages/alta/` de propelia-frontend. **Al enviarla avisa**
   (trigger `client_onboardings_alta_recibida`, migración `20261027144517_onboarding_alta_recibida_tarea`):
   una tarea del CRM en el lead, «Revisar e importar el equipo de …», para quien tomó el alta (o, si
   nadie, el responsable del lead), con hora dentro de 5 minutos para que suene ya la alarma. No la
@@ -278,6 +281,10 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   `onboarding_alta_reabrir` (acción `reabrir` de `onboarding-alta`, migración
   `20261027150225_onboarding_alta_reabrir`), igual que «Reabrir» de /clientes, salvo que el lead ya
   tenga org en Propelia: ahí contesta `alta_ya_importada` y la página avisa que ya se crearon las cuentas.
+- **Comentarios del lead al costado del alta** (28/10/2026, por pedido): una tercera columna del
+  dialog (`ComentariosDelLead`; en pantallas angostas, abajo) lista las notas a mano del lead y deja
+  escribir una (Enter comenta, Shift+Enter otra línea). Es una nota `MANUAL` sin meta en
+  `crm_comments`, la misma de la actividad del CRM: ahí se ve, se edita y se borra. Sin migración.
 - **Todo lo del producto va por el puente de verdad** desde el 27/10/2026 (`PUENTE_SIMULADO = false`
   en `service/puente.ts`): `create_org_with_users` (paso 1) se sumó a `propelia-bridge` y a
   `roadmap-bridge`, contrato en `docs/onboarding/PUENTE.md`. En true responde con los ejemplos de

@@ -27,3 +27,18 @@ export type EstadoDelAlta = { enviado: false } | { enviado: true; el: string; pe
 export function estadoDelAlta(o: { submitted_at: string | null }, miembros: readonly unknown[]): EstadoDelAlta {
   return o.submitted_at ? { enviado: true, el: o.submitted_at, personas: miembros.length } : { enviado: false }
 }
+
+const CON_ESQUEMA = /^[a-z][a-z0-9+.-]*:/i
+
+/** La web como la guarda Propelia (Ajustes › Marca, `normalizeWebsite`; espejo en `roadmap-bridge`):
+ *  vacía es `null`, sin esquema va `https://`, solo http(s) y con un punto en el dominio. `undefined`
+ *  = no vale: el puente la rechazaría y no crearía la org. */
+export function normalizarWeb(texto: string): string | null | undefined {
+  const t = texto.trim()
+  if (!t) return null
+  const candidata = CON_ESQUEMA.test(t) ? t : `https://${t}`
+  let url: URL
+  try { url = new URL(candidata) } catch { return undefined }
+  const http = url.protocol === 'http:' || url.protocol === 'https:'
+  return http && url.hostname.includes('.') && !/\s/.test(candidata) ? candidata : undefined
+}
