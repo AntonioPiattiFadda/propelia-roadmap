@@ -12,6 +12,7 @@ import { claveDeTarea, TAREA_CREDENCIALES, type Accion, type Paso, type Plantill
 import { descargarExcel } from '../service/excel'
 import { enviarLeadDePrueba, getColumnasDeCartera, PUENTE_SIMULADO } from '../service/puente'
 import { ConfirmarAccesosDialog } from './ConfirmarAccesosDialog'
+import { CuentasCreadas } from './CuentasCreadas'
 import { copiarTexto, EnviarPorWhatsapp } from './EnviarPorWhatsapp'
 import { ImportarCarteraPanel } from './ImportarCarteraPanel'
 import { ImportarUsuariosPanel } from './ImportarUsuariosPanel'
@@ -158,6 +159,9 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
           </summary>
           <p className="mt-1.5 whitespace-pre-line rounded-md border border-(--line) bg-(--surface-2) p-3 text-(--fg-2)">{texto}</p>
         </details>
+      )}
+      {tarea.acciones?.includes('importar-usuarios') && datos.orgId && datos.o.miembros.length > 0 && (
+        <CuentasCreadas miembros={datos.o.miembros} />
       )}
       {panel && (
         <div className="ml-6.5">
