@@ -18,8 +18,14 @@ export type AgenteDePropelia = {
   /** Cuándo entró a su cuenta por primera y por última vez; null = todavía no entró. Opcionales: un
    *  `roadmap-bridge` de antes del 28/10/2026 no los manda. */
   first_sign_in_at?: string | null; last_sign_in_at?: string | null
+  /** Tiene algún calendario conectado en Propelia. Opcional: desde el 29/10/2026. */
+  calendar_connected?: boolean
 }
-export type OrgConAgentes = OrgDePropelia & { agents: AgenteDePropelia[]; org_inbound_address: string | null; properties_count: number }
+/** Lo obligatorio de Ajustes › Organización y marca en Propelia (lo que pide su guía). Desde el 29/10/2026. */
+export type ConfiguracionDeLaOrg = { name: boolean; website: boolean; logo: boolean; colors: boolean; done: boolean }
+export type OrgConAgentes = OrgDePropelia & {
+  agents: AgenteDePropelia[]; org_inbound_address: string | null; properties_count: number; setup?: ConfiguracionDeLaOrg
+}
 export type UsuarioParaCrear = { first_name: string; last_name: string; email: string; phone: string; role: 'admin' | 'agent'; is_owner: boolean; password: string }
 export type ColumnaDeCartera = { key: string; header: string; example: string | number }
 export type FilaRevisada = { row_number: number; valid: boolean; errors: string[]; warnings: string[]; existing_property_id: string | null; summary: Record<string, unknown> }

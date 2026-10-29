@@ -26,7 +26,12 @@ export async function getOnboardings(): Promise<Onboarding[]> {
   return (data ?? []) as unknown as Onboarding[]
 }
 
-export async function marcarTarea({ onboardingId, taskId, hecha }: { onboardingId: string; taskId: string; hecha: boolean }) {
+/** `reiniciar`: si ya estaba hecha, la vuelve a marcar con la hora de ahora (`done_at` es la marca). */
+export async function marcarTarea({ onboardingId, taskId, hecha, reiniciar }: { onboardingId: string; taskId: string; hecha: boolean; reiniciar?: boolean }) {
+  if (hecha && reiniciar) {
+    const { error: e } = await supabase.from('client_onboarding_tasks').delete().eq('onboarding_id', onboardingId).eq('task_id', taskId)
+    if (e) throw e
+  }
   const { error } = hecha
     ? await supabase.from('client_onboarding_tasks').upsert({ onboarding_id: onboardingId, task_id: taskId }, { ignoreDuplicates: true })
     : await supabase.from('client_onboarding_tasks').delete().eq('onboarding_id', onboardingId).eq('task_id', taskId)

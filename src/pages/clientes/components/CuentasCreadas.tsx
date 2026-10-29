@@ -1,9 +1,9 @@
-import { ChevronRight, Copy } from 'lucide-react'
+import { ChevronRight, Copy, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useMarcarTarea, useOrganizacion } from '../hooks/useClientes'
 import { contrasenaInicial } from '../lib/equipo'
-import { tareaCuentaProbada } from '../lib/pasos'
+import { tareaCuentaProbada, tareaIngresoBorrado } from '../lib/pasos'
 import type { DatosDelAlta } from './datosDelAlta'
 import { copiarTexto } from './EnviarPorWhatsapp'
 
@@ -14,27 +14,43 @@ const fecha = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 'num
    accesos (el año es el de cuando se cargó el miembro). No se guardan en ningún lado: se rearman.
    La columna «Entró» (28/10/2026, por pedido) dice quién ya entró a su cuenta en Propelia y cuándo
    por primera vez: sale de `get_organization` del puente, cruzada por email. «Probé» es el tilde a
-   mano de quien lleva el alta: entró con ese usuario y anda (`tareaCuentaProbada`). */
+   mano de quien lleva el alta: entró con ese usuario y anda (`tareaCuentaProbada`).
+   «Calendario» y el resumen de abajo (29/10/2026, por pedido) siguen la guía de Propelia: quién
+   conectó su calendario y si la org ya tiene nombre, web, logo y colores (`setup` del puente).
+   El ✕ de «Entró» (29/10/2026, por pedido) borra el ingreso, que puede ser el tuyo al probar: desde
+   ahí solo cuenta un login posterior (`tareaIngresoBorrado`), y entonces se ve el último. */
 export function CuentasCreadas({ datos }: { datos: DatosDelAlta }) {
   const miembros = datos.o.miembros
   const org = useOrganizacion(datos.orgId)
   const marcar = useMarcarTarea()
   const probadas = new Set(datos.o.tareas.map(t => t.task_id))
+  const borradoEl = new Map(datos.o.tareas.map(t => [t.task_id, t.done_at]))
   const porEmail = new Map((org.data?.agents ?? []).filter(a => a.email).map(a => [a.email!.toLowerCase(), a]))
   // Sin el dato (puente viejo o caído) no se dice nada, en vez de «no entró» para todos.
   const sabeLogins = (org.data?.agents ?? []).some(a => a.last_sign_in_at !== undefined)
+  const sabeCalendarios = (org.data?.agents ?? []).some(a => a.calendar_connected !== undefined)
+  const setup = org.data?.setup
   const cuentas = [...miembros]
     .sort((a, b) => Number(b.is_owner) - Number(a.is_owner) || a.created_at.localeCompare(b.created_at))
     .map(m => {
       const agente = m.email ? porEmail.get(m.email.toLowerCase()) : undefined
+      const ultima = agente?.last_sign_in_at ?? null
+      const borrado = borradoEl.get(tareaIngresoBorrado(m.id))
+      const entro = !borrado ? agente?.first_sign_in_at ?? null
+        : ultima && new Date(ultima) > new Date(borrado) ? ultima : null
       return {
         id: m.id, nombre: `${m.first_name} ${m.last_name}`.trim(), responsable: m.is_owner, usuario: m.email ?? '',
         contrasena: contrasenaInicial(m.first_name, m.last_name, new Date(m.created_at).getFullYear()),
-        entro: agente?.first_sign_in_at ?? null, ultima: agente?.last_sign_in_at ?? null,
+        entro, ultima, borrado,
         probada: probadas.has(tareaCuentaProbada(m.id)),
+        calendario: agente?.calendar_connected === true,
       }
     })
   const entraron = cuentas.filter(c => c.entro).length
+  const conCalendario = cuentas.filter(c => c.calendario).length
+  const faltaDeLaOrg = setup
+    ? ([['name', 'nombre'], ['website', 'web'], ['logo', 'logo'], ['colors', 'colores']] as const).filter(([k]) => !setup[k]).map(([, r]) => r)
+    : []
   const nProbadas = cuentas.filter(c => c.probada).length
   const todo = cuentas.map(c => `${c.nombre}\nUsuario: ${c.usuario}\nContraseña: ${c.contrasena}`).join('\n\n')
   const copiar = (texto: string, aviso: string, rotulo: string) => (
@@ -56,16 +72,21 @@ export function CuentasCreadas({ datos }: { datos: DatosDelAlta }) {
             · {entraron === cuentas.length ? 'ya entraron todos' : `${entraron} de ${cuentas.length} ya entraron`}
           </span>
         )}
+        {setup && (
+          <span className={setup.done ? 'font-medium text-success' : undefined}>
+            · {setup.done ? 'org configurada' : `falta en la org: ${faltaDeLaOrg.join(', ')}`}
+          </span>
+        )}
       </summary>
-      <div className="mt-1.5 flex flex-col gap-2 rounded-md border border-(--line) bg-(--surface-2) p-3">
-        <div className="overflow-x-auto rounded-md border border-(--line) bg-card">
-          <table className="w-full min-w-[640px]">
+      <div className="mt-1.5 flex w-fit max-w-full flex-col gap-2 rounded-md border border-(--line) bg-(--surface-2) p-3">
+        <div className="w-fit max-w-full overflow-x-auto rounded-md border border-(--line) bg-card">
+          <table className="w-fit">
             <thead className="bg-(--surface-2) text-left text-[11px] uppercase tracking-wide text-(--fg-muted)">
-              <tr>{['Nombre', 'Usuario', 'Contraseña', 'Probé', 'Entró'].map(h => <th key={h} className="px-2.5 py-2 font-medium">{h}</th>)}</tr>
+              <tr>{['Nombre', 'Usuario', 'Contraseña', 'Probé', 'Entró', 'Calendario'].map(h => <th key={h} className="px-2.5 py-2 font-medium">{h}</th>)}</tr>
             </thead>
             <tbody>
               {cuentas.map(c => (
-                <tr key={c.id} className="border-t border-(--line)">
+                <tr key={c.id} className="whitespace-nowrap border-t border-(--line)">
                   <td className="px-2.5 py-1.5">
                     {c.nombre}
                     {c.responsable && <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">Responsable</span>}
@@ -82,7 +103,21 @@ export function CuentasCreadas({ datos }: { datos: DatosDelAlta }) {
                   </td>
                   <td className="whitespace-nowrap px-2.5 py-1.5">
                     {!sabeLogins ? <span className="text-(--fg-muted)">—</span>
-                      : c.entro ? <span className="font-medium text-success" title={c.ultima ? `Última vez: ${fecha(c.ultima)}` : undefined}>{fecha(c.entro)}</span>
+                      : c.entro ? (
+                        <span className="flex items-center gap-1">
+                          <span className="font-medium text-success" title={c.ultima ? `Última vez: ${fecha(c.ultima)}` : undefined}>{fecha(c.entro)}</span>
+                          <Button size="icon" variant="ghost" className="size-6 shrink-0" title="Borrar: fui yo probando la cuenta"
+                            aria-label={`Borrar el ingreso de ${c.nombre}`}
+                            onClick={() => marcar.mutate({ onboardingId: datos.o.id, taskId: tareaIngresoBorrado(c.id), hecha: true, reiniciar: true })}>
+                            <X className="size-3" />
+                          </Button>
+                        </span>
+                      )
+                      : <span className="text-(--fg-muted)" title={c.borrado ? `Borraste el ingreso el ${fecha(c.borrado)}` : undefined}>Todavía no</span>}
+                  </td>
+                  <td className="whitespace-nowrap px-2.5 py-1.5">
+                    {!sabeCalendarios ? <span className="text-(--fg-muted)">—</span>
+                      : c.calendario ? <span className="font-medium text-success">Conectado</span>
                       : <span className="text-(--fg-muted)">Todavía no</span>}
                   </td>
                 </tr>
@@ -90,10 +125,25 @@ export function CuentasCreadas({ datos }: { datos: DatosDelAlta }) {
             </tbody>
           </table>
         </div>
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+          <Resumen ok={nProbadas === cuentas.length} rotulo="Probadas" valor={`${nProbadas} de ${cuentas.length}`} />
+          {sabeLogins && <Resumen ok={entraron === cuentas.length} rotulo="Entraron" valor={`${entraron} de ${cuentas.length}`} />}
+          {sabeCalendarios && <Resumen ok={conCalendario === cuentas.length} rotulo="Calendario conectado" valor={`${conCalendario} de ${cuentas.length}`} />}
+          {setup && <Resumen ok={setup.done} rotulo="Organización" valor={setup.done ? 'configurada' : `falta ${faltaDeLaOrg.join(', ')}`} />}
+        </ul>
         <Button size="sm" variant="outline" className="h-7 self-start" onClick={() => void copiarTexto(todo, 'Cuentas copiadas')}>
           <Copy className="size-3.5" /> Copiar todas
         </Button>
       </div>
     </details>
+  )
+}
+
+function Resumen({ ok, rotulo, valor }: { ok: boolean; rotulo: string; valor: string }) {
+  return (
+    <li>
+      <span className="text-(--fg-muted)">{rotulo}: </span>
+      <span className={ok ? 'font-medium text-success' : 'font-medium'}>{valor}</span>
+    </li>
   )
 }

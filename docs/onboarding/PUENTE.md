@@ -119,6 +119,17 @@ vez) o, si falta, el último; el último es `last_sign_in_at` de auth (Admin API
 /clientes los muestra en la columna «Entró» de las cuentas creadas. Un `roadmap-bridge` anterior no
 los manda y el front no dice nada.
 
+Desde el 29/10/2026 cada agente trae `calendar_connected` (alguna fila `active` en
+`calendar_connections`, de cualquier proveedor) y la org, `setup`: lo obligatorio de Ajustes ›
+Organización y marca, que es lo que la guía del producto pide para dar el paso por hecho.
+
+```json
+"setup": { "name": true, "website": true, "logo": false, "colors": true, "done": false }
+```
+
+/clientes lo muestra en la columna «Calendario» y en el resumen debajo de las cuentas creadas. Sin
+esos campos (un `roadmap-bridge` anterior) no se dibujan.
+
 ### `import_template`
 
 Las columnas del Excel de la cartera. El Roadmap arma la plantilla `.xlsx` con esto (cabecera +

@@ -12,7 +12,7 @@ export type Accion =
   | 'plantilla-cartera' | 'importar-cartera' | 'link-pago' | 'ver-pago'
   | 'direcciones' | 'simular-lead'
 
-export const PLANTILLAS = ['contacto_inicial', 'accesos_enviados', 'corregir_mails', 'configurar_organizacion', 'link_de_pago', 'asignar_y_mails', 'integrar_portales'] as const
+export const PLANTILLAS = ['contacto_inicial', 'accesos_enviados', 'corregir_mails', 'tutorial_leads', 'link_de_pago', 'asignar_y_mails', 'integrar_portales'] as const
 export type PlantillaId = (typeof PLANTILLAS)[number]
 
 export type Tarea = { id: string; texto: string; acciones?: Accion[] }
@@ -26,15 +26,16 @@ export const PASOS: Paso[] = [
       { id: 'enviar', texto: 'Enviar el saludo con el enlace para que carguen su equipo', acciones: ['wa:contacto_inicial', 'link-alta'] },
       { id: 'excel-recibido', texto: 'Recibir el equipo y el nombre de la inmobiliaria', acciones: ['equipo-recibido'] },
       { id: 'importar-usuarios', texto: 'Importar el equipo: crea la organización y todas las cuentas', acciones: ['importar-usuarios'] },
-      { id: 'credenciales', texto: 'Verificar accesos y enviar a cada uno su usuario y clave por mail', acciones: ['mails', 'wa:accesos_enviados'] },
+      { id: 'credenciales', texto: 'Verificar accesos y enviar a cada uno su usuario y clave por mail', acciones: ['mails', 'wa:accesos_enviados', 'plantilla-cartera'] },
     ],
   },
   {
     id: 'cartera-org-pago', titulo: 'Cartera, org y pago',
     tareas: [
-      { id: 'excel', texto: 'Armar el Excel de propiedades con lo que pase el cliente', acciones: ['plantilla-cartera'] },
+      { id: 'excel', texto: 'Recibir el Excel de propiedades del cliente (va adjunto al WhatsApp de los accesos)', acciones: ['plantilla-cartera'] },
       { id: 'importar', texto: 'Importar la cartera a su organización', acciones: ['importar-cartera'] },
-      { id: 'llamada-org', texto: 'Configurar la organización con ellos (nombre, web, logo, colores)', acciones: ['wa:configurar_organizacion'] },
+      // Fue «Configurar la organización con ellos» (`llamada-org`): desde el 29/10/2026 la org la configuran solos con la guía de Propelia.
+      { id: 'tutorial-leads', texto: 'Enviar el tutorial de cómo funciona el sistema de leads', acciones: ['wa:tutorial_leads'] },
       { id: 'link-pago', texto: 'Generar y enviar el link de pago', acciones: ['link-pago'] },
       { id: 'pago', texto: 'Confirmar que pagó', acciones: ['ver-pago'] },
     ],
@@ -97,6 +98,10 @@ export const TAREA_CORREGIR_MAILS = claveDeTarea('contacto', 'corregir-mails')
  *  por pedido). Una fila de `client_onboarding_tasks` por miembro, sin migración: no está en `PASOS`
  *  y no cuenta para el avance. */
 export const tareaCuentaProbada = (miembroId: string) => claveDeTarea('contacto', `probada.${miembroId}`)
+
+/** El ✕ de «Entró» en las cuentas creadas (29/10/2026, por pedido): probar una cuenta es entrar con
+ *  ella. Su `done_at` es desde cuándo cuentan los logins de ese miembro. Sin migración, como el de arriba. */
+export const tareaIngresoBorrado = (miembroId: string) => claveDeTarea('contacto', `entro-borrado.${miembroId}`)
 
 /** Los pasos que hoy se trabajan: los de «Próximamente» no cuentan. */
 export const PASOS_ABIERTOS = PASOS.filter(p => !p.proximamente)

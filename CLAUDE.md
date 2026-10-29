@@ -277,12 +277,29 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   nombre de quien es (`listaDeMailsQueNoLlegaron`, `lib/mensajes.ts`), pidiendo el email bien escrito
   por WhatsApp. El renglón de corregir no tiene WhatsApp propio. Sin la migración corrida, los
   botones quedan apagados («Falta la plantilla en la base»).
+  **Ese WhatsApp lleva el Excel de propiedades y la guía** (29/10/2026, por pedido, migración
+  `20261029115832_onboarding_accesos_con_excel_y_guia` y `20261029120417_onboarding_accesos_sin_portales`, que **la aplica Antonio**): dice que va
+  adjunto el Excel para cargar la cartera (se baja con el botón de plantilla de la misma tarea y se
+  adjunta a mano: el enlace de WhatsApp no lleva archivos) y que al entrar Propelia les muestra la
+  guía: a los admins, configurar la organización y conectar el calendario; al resto, solo el
+  calendario (Idealista y Fotocasa salieron de la guía). Esa guía es el checklist del producto (`onboardingSteps.ts` de
+  propelia-frontend) y sale sola: las cuentas del puente nacen con `onboarding_completed_at` vacío.
+  Por lo mismo, en el paso 2 **«Configurar la organización con ellos» salió** (29/10/2026, por
+  pedido) y entró «Enviar el tutorial de cómo funciona el sistema de leads» (`tutorial-leads`,
+  WhatsApp `tutorial_leads`, migración `20261029124428_onboarding_tutorial_de_leads`, que **la aplica
+  Antonio**): llegada de leads, mails de Propelia en Idealista (inbound), pendientes, avisos de
+  visitas, agendar una visita y matching. Los tutoriales guiados en el producto (highlight flow)
+  vienen después. `configurar_organizacion` queda en la tabla sin uso.
   **«Ver cuentas y contraseñas» dice quién probaste y quién entró** (28/10/2026, por pedido):
   columna «Probé», un tilde a mano por cuenta (`tareaCuentaProbada` = `contacto.probada.<miembro>` en
   `client_onboarding_tasks`, sin migración, fuera de `PASOS`), y columna «Entró», con la fecha del
   primer login que trae `get_organization` del puente (`first_sign_in_at`/`last_sign_in_at`, ver
   `PUENTE.md`; hace falta deployar `roadmap-bridge` en el producto). Ojo: probar una cuenta es entrar
   con ella, así que cuenta como su primer login. No está en `PASOS`: no cuenta para el avance ni para «Marcar completo».
+  Desde el 29/10/2026 (por pedido) suma la columna «Calendario» (`calendar_connected`) y debajo un
+  resumen: probadas, entraron, calendario conectado y si la organización está configurada (`setup`:
+  nombre, web, logo y colores, lo que pide la guía del producto). Sale del mismo `get_organization`;
+  sin el `roadmap-bridge` del producto deployado no se dibujan.
 - **El Excel de usuarios se reemplaza por una página pública** (27/10/2026, por pedido; mock en
   `docs/onboarding/alta-publica.html`, migración `20261027133921_onboarding_alta_publica`, que **la
   aplica Antonio**). La página va en **propelia-frontend** (`crm.propelia.es/alta/<token>`) y los

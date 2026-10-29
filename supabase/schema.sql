@@ -2233,10 +2233,22 @@ insert into public.onboarding_message_templates (id, body) values
   E'{nombre}, ahora toca conectar los portales de {inmobiliaria}. En Propelia, entrad a Ajustes → Integraciones y conectad Idealista y Fotocasa.\n\n'
   'Si en algún paso os pide algo que no tenéis a mano, escribidme por aquí y lo vemos juntos.'
 ), (
+  'tutorial_leads',
+  E'{nombre}, os dejo cómo funciona el sistema de leads de Propelia, para que {inmobiliaria} empiece a trabajarlos desde aquí 👇\n\n'
+  '📥 Cómo llegan los leads: cada consulta de un portal entra sola en Propelia como un lead, con el inmueble por el que pregunta. También podéis cargarlos a mano.\n\n'
+  '⚙️ Idealista: en vuestra cuenta de Idealista tenéis que poner, para cada agente, la dirección de email de Propelia que os paso. Así los mensajes de Idealista llegan a Propelia y se convierten en leads solos.\n\n'
+  '✅ Pendientes: cada lead tiene su siguiente paso (llamar, responder, agendar). En Pendientes veis qué toca hoy y qué está vencido, para que no se os quede ninguno sin atender.\n\n'
+  '🔔 Avisos a los leads: cuando agendáis, cambiáis o canceláis una visita, Propelia le avisa al lead por email con vuestra marca.\n\n'
+  '📅 Agendar una visita: se agenda desde el propio lead: queda en vuestro calendario y al cliente le llega el aviso.\n\n'
+  '🔗 Matching: Propelia cruza lo que busca cada lead con vuestra cartera y os propone los inmuebles que encajan. Las reglas (precio, zona, habitaciones…) salen de lo que pidió el lead.\n\n'
+  'Os lo iré enseñando también con tutoriales dentro de Propelia. ¡Cualquier duda, por aquí!'
+), (
   'accesos_enviados',
   E'¡{nombre}, ya están listos los accesos de {inmobiliaria}! 🎉\n\n'
   'Acabo de enviar a cada persona del equipo un email desde info@propelia.es con su usuario y una contraseña temporal. Si alguien no lo encuentra, que revise la carpeta de spam o de promociones.\n\n'
   'La contraseña es temporal: la cambiaréis al terminar el onboarding, así que de momento no hace falta tocarla.\n\n'
+  'Al entrar, Propelia os va a mostrar una guía paso a paso. Los administradores configuráis ahí la organización (nombre, web, logo y colores) y conectáis vuestro calendario; el resto del equipo solo tiene que conectar su calendario.\n\n'
+  'Os adjunto también un Excel para cargar vuestras propiedades 📎 Rellenadlo con vuestra cartera y devolvédmelo por aquí: yo me encargo de subirlas.\n\n'
   'En cuanto hayáis entrado, decídmelo por aquí y seguimos con el siguiente paso 🚀'
 ), (
   'corregir_mails',

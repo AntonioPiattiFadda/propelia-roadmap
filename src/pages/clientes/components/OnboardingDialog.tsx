@@ -26,7 +26,7 @@ export function OnboardingDialog({ datos, lleva, yo, onCerrar }: {
   return (
     <Dialog open={datos != null} onOpenChange={o => { if (!o) onCerrar() }}>
       <DialogContent showCloseButton={false} onInteractOutside={e => e.preventDefault()}
-        className="ui-scale dialog-fullscreen-mobile flex h-[88vh] max-h-none w-[min(1320px,96vw)] max-w-none flex-col gap-0 overflow-hidden p-0">
+        className="ui-scale dialog-fullscreen-mobile flex h-[88vh] max-h-none w-[min(1640px,98vw)] max-w-none flex-col gap-0 overflow-hidden p-0">
         <DialogTitle className="sr-only">{datos ? `Onboarding de ${datos.inmobiliaria}` : 'Onboarding'}</DialogTitle>
         <DialogDescription className="sr-only">Los pasos del alta del cliente, con sus tareas.</DialogDescription>
         {datos && <Cuerpo key={datos.o.id} datos={datos} lleva={lleva} yo={yo} onCerrar={onCerrar} />}
@@ -80,7 +80,7 @@ function Cuerpo({ datos, lleva, yo, onCerrar }: { datos: DatosDelAlta; lleva: Us
           <Button size="icon" variant="ghost" className="size-8" aria-label="Cerrar" onClick={onCerrar}><X className="size-4" /></Button>
         </div>
       </header>
-      <div className="grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_320px] max-lg:grid-cols-[240px_minmax(0,1fr)] max-lg:grid-rows-[minmax(0,1fr)_260px] max-md:grid-cols-1 max-md:grid-rows-[auto_minmax(0,1fr)_240px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)_300px] max-lg:grid-cols-[220px_minmax(0,1fr)] max-lg:grid-rows-[minmax(0,1fr)_260px] max-md:grid-cols-1 max-md:grid-rows-[auto_minmax(0,1fr)_240px]">
         <ol className="flex flex-col gap-0.5 overflow-y-auto border-r border-(--line) p-2 max-md:flex-row max-md:overflow-x-auto max-md:border-r-0 max-md:border-b">
           {PASOS.map((p, i) => {
             const hecho = !p.proximamente && pasoHecho(p, hechas)
