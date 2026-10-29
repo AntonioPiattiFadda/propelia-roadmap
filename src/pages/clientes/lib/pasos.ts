@@ -2,7 +2,7 @@
    (`onboardingCatalog.ts`): en la base solo van las tareas hechas, por `task_id` = `<paso>.<tarea>`.
    Cambiar un id deja esa tarea pendiente para todos. Diseño en docs/onboarding/clientes.html.
 
-   Los pasos 4 a 7 están escritos pero en «Próximamente»: se iteran después. No cuentan para el
+   Los pasos 5 a 8 están escritos pero en «Próximamente»: se iteran después. No cuentan para el
    avance ni para «Marcar completo» hasta que se abran. */
 
 /** Lo que va al lado de cada tarea. `wa:<plantilla>` es copiar + enviar por WhatsApp Web. */
@@ -29,23 +29,33 @@ export const PASOS: Paso[] = [
       { id: 'credenciales', texto: 'Verificar accesos y enviar a cada uno su usuario y clave por mail', acciones: ['mails', 'wa:accesos_enviados', 'plantilla-cartera'] },
     ],
   },
+  /* 29/10/2026, por pedido: el paso 2 junta la cartera con lo de los leads (tutorial, asignar, mails de
+     Idealista, lead de prueba), el 3 es el MCP y el pago va aparte. Nadie tenía tildado nada de
+     `cartera-org-pago` ni de `asignar-mails`, así que los ids de paso cambiaron sin perder nada. */
   {
-    id: 'cartera-org-pago', titulo: 'Cartera, org y pago',
+    id: 'cartera-leads', titulo: 'Cartera y leads',
     tareas: [
       { id: 'excel', texto: 'Recibir el Excel de propiedades del cliente (va adjunto al WhatsApp de los accesos)', acciones: ['plantilla-cartera'] },
       { id: 'importar', texto: 'Importar la cartera a su organización', acciones: ['importar-cartera'] },
       // Fue «Configurar la organización con ellos» (`llamada-org`): desde el 29/10/2026 la org la configuran solos con la guía de Propelia.
       { id: 'tutorial-leads', texto: 'Enviar el tutorial de cómo funciona el sistema de leads', acciones: ['wa:tutorial_leads'] },
-      { id: 'link-pago', texto: 'Generar y enviar el link de pago', acciones: ['link-pago'] },
-      { id: 'pago', texto: 'Confirmar que pagó', acciones: ['ver-pago'] },
-    ],
-  },
-  {
-    id: 'asignar-mails', titulo: 'Asignar y mails de Idealista',
-    tareas: [
       { id: 'asignar', texto: 'Que asignen las propiedades importadas a cada agente', acciones: ['wa:asignar_y_mails'] },
       { id: 'mails-idealista', texto: 'Que configuren en Idealista los mails de cada agente', acciones: ['direcciones'] },
       { id: 'lead-prueba', texto: 'Probar que un lead llega', acciones: ['simular-lead'] },
+    ],
+  },
+  {
+    // Los pasos y el mensaje con los tutoriales se definen después: por ahora, una tarea a mano.
+    id: 'mcp', titulo: 'Configuración del MCP',
+    tareas: [
+      { id: 'tutoriales', texto: 'Enviar el mensaje con los tutoriales del MCP' },
+    ],
+  },
+  {
+    id: 'pago', titulo: 'Pago',
+    tareas: [
+      { id: 'link-pago', texto: 'Generar y enviar el link de pago', acciones: ['link-pago'] },
+      { id: 'pago', texto: 'Confirmar que pagó', acciones: ['ver-pago'] },
     ],
   },
   {

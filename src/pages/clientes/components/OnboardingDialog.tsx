@@ -12,12 +12,13 @@ import { listoParaCompletar, PASOS, pasoActual, pasoHecho } from '../lib/pasos'
 import { PUENTE_SIMULADO } from '../service/puente'
 import type { DatosDelAlta } from './datosDelAlta'
 import { ComentariosDelLead } from './ComentariosDelLead'
+import { CuentasCreadas } from './CuentasCreadas'
 import { TareaDelOnboarding } from './TareaDelOnboarding'
 
 const fmtFecha = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
 
 /* El onboarding de un cliente, en un dialog encima de la lista (`/clientes?lead=<id>`), como el
-   detalle del producto y el `?lead=` del CRM. Los 7 pasos a la izquierda; los de «Próximamente»
+   detalle del producto y el `?lead=` del CRM. Los 8 pasos a la izquierda; los de «Próximamente»
    se ven pero no se abren. Arranca en el paso actual. A la derecha, los comentarios del lead
    (`ComentariosDelLead`); en pantallas angostas bajan debajo de las tareas. */
 export function OnboardingDialog({ datos, lleva, yo, onCerrar }: {
@@ -109,6 +110,10 @@ function Cuerpo({ datos, lleva, yo, onCerrar }: { datos: DatosDelAlta; lleva: Us
             <p className="mt-2 text-[12px] text-(--fg-muted)">
               El cliente carga su equipo en la página de alta (el enlace va en el WhatsApp y se copia con 🔗). Lo que envía se ve en «Importar».
             </p>
+          )}
+          {/* Las cuentas del equipo, abajo de todo y en cualquier paso (29/10/2026, por pedido). */}
+          {datos.orgId && datos.o.miembros.length > 0 && (
+            <div className="mt-auto pt-4"><CuentasCreadas datos={datos} /></div>
           )}
         </section>
         <div className="flex min-h-0 flex-col max-lg:col-span-2 max-md:col-span-1">

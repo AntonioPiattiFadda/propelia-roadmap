@@ -15,7 +15,6 @@ import { claveDeTarea, TAREA_CORREGIR_MAILS, TAREA_CREDENCIALES, type Accion, ty
 import { descargarExcel } from '../service/excel'
 import { enviarLeadDePrueba, getColumnasDeCartera, PUENTE_SIMULADO } from '../service/puente'
 import { ConfirmarAccesosDialog } from './ConfirmarAccesosDialog'
-import { CuentasCreadas } from './CuentasCreadas'
 import { copiarTexto, EnviarPorWhatsapp } from './EnviarPorWhatsapp'
 import { ImportarCarteraPanel } from './ImportarCarteraPanel'
 import { ImportarUsuariosPanel } from './ImportarUsuariosPanel'
@@ -168,9 +167,6 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
         )}
       </div>
       {wa && mensaje && <VerMensaje texto={mensaje} />}
-      {tarea.acciones?.includes('importar-usuarios') && datos.orgId && datos.o.miembros.length > 0 && (
-        <CuentasCreadas datos={datos} />
-      )}
       {accesosQueNoLlegaron.length > 0 && (
         <ul className="ml-6.5 flex flex-col gap-1 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12.5px]">
           {accesosQueNoLlegaron.map(e => (

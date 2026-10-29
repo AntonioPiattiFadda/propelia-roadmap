@@ -241,8 +241,8 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   rechaza el cambio a mano (`crm_lead_type_solo_rpc`), y `client_onboarding_completar` lo pasa a
   `CLIENT`. Pruebas en `supabase/tests/clientes-onboarding.sql` (como `crm-permisos.sql`).
 - **La página** (solo SUPERADMIN: `NAV` y gate adentro, como Demos) lista los `ONBOARDING` y abre
-  cada alta en un dialog con `?lead=<id>`. Siete pasos (`lib/pasos.ts`, en el código como en el
-  producto; en la base solo las tareas hechas); **los pasos 4 a 7 están en «Próximamente»** y no
+  cada alta en un dialog con `?lead=<id>`. Ocho pasos (`lib/pasos.ts`, en el código como en el
+  producto; en la base solo las tareas hechas); **los pasos 5 a 8 están en «Próximamente»** y no
   cuentan para el avance ni para «Marcar completo». **Dos pestañas** (27/10/2026, por pedido,
   `?tab=mias`): «Sin asignar» (nadie lleva el alta, de cualquier cartera del CRM) y «Asignadas a
   mí»; «Tomar» la pasa de una a otra. Tomar escribe solo `client_onboardings.assigned_to`: el lead

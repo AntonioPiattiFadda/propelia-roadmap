@@ -56,7 +56,7 @@ export function ImportarCarteraPanel({ datos, archivo, hoja, onCerrar }: {
         creadas += res.filter(r => r.status === 'created').length
         setProgreso({ hechas: Math.min(i + FILAS_POR_LOTE, validas.length), total: validas.length })
       }
-      marcar.mutate({ onboardingId: datos.o.id, taskId: claveDeTarea('cartera-org-pago', 'importar'), hecha: true })
+      marcar.mutate({ onboardingId: datos.o.id, taskId: claveDeTarea('cartera-leads', 'importar'), hecha: true })
       toast.success(`${creadas} propiedades importadas`, PUENTE_SIMULADO ? { description: 'Puente simulado: en Propelia no se creó nada todavía.' } : undefined)
       onCerrar()
     } catch (e) {
