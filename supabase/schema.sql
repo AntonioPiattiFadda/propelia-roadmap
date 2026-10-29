@@ -2241,7 +2241,7 @@ insert into public.onboarding_message_templates (id, body) values
   '🔔 Avisos a los leads: cuando agendáis, cambiáis o canceláis una visita, Propelia le avisa al lead por email con vuestra marca.\n\n'
   '📅 Agendar una visita: se agenda desde el propio lead: queda en vuestro calendario y al cliente le llega el aviso.\n\n'
   '🔗 Matching: Propelia cruza lo que busca cada lead con vuestra cartera y os propone los inmuebles que encajan. Las reglas (precio, zona, habitaciones…) salen de lo que pidió el lead.\n\n'
-  'Os lo iré enseñando también con tutoriales dentro de Propelia. ¡Cualquier duda, por aquí!'
+  'Al entrar a Propelia vais a ver «Tutorial de leads», arriba a la derecha: cada punto es un recorrido guiado de un minuto por la pantalla de verdad. ¡Cualquier duda, por aquí!'
 ), (
   'accesos_enviados',
   E'¡{nombre}, ya están listos los accesos de {inmobiliaria}! 🎉\n\n'

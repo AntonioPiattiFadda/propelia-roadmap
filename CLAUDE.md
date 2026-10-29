@@ -282,7 +282,12 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   adjunto el Excel para cargar la cartera (se baja con el botón de plantilla de la misma tarea y se
   adjunta a mano: el enlace de WhatsApp no lleva archivos) y que al entrar Propelia les muestra la
   guía: a los admins, configurar la organización y conectar el calendario; al resto, solo el
-  calendario (Idealista y Fotocasa salieron de la guía). Esa guía es el checklist del producto (`onboardingSteps.ts` de
+  calendario (Idealista y Fotocasa salieron de la guía). **El Excel de la cartera trae los agentes**
+  (29/10/2026, por pedido, con el de Docta): dos columnas opcionales al final, «Agente captador» y
+  «Agente comercializador», con el email o el nombre de alguien de la org. Las resuelve el
+  `roadmap-bridge` del producto (`_shared/propertyImport/sheet.ts`, contra las cuentas de la org) y
+  el RPC las escribe con la migración `superadmin_import_properties_agentes` de propelia-frontend.
+  Alguien que no es de la org es error de esa fila. Detalle en `docs/onboarding/EXCEL_IMPORT_PROPIEDADES.md`. Esa guía es el checklist del producto (`onboardingSteps.ts` de
   propelia-frontend) y sale sola: las cuentas del puente nacen con `onboarding_completed_at` vacío.
   Por lo mismo, en el paso 2 **«Configurar la organización con ellos» salió** (29/10/2026, por
   pedido) y entró «Enviar el tutorial de cómo funciona el sistema de leads» (`tutorial-leads`,
@@ -290,6 +295,20 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   Antonio**): llegada de leads, mails de Propelia en Idealista (inbound), pendientes, avisos de
   visitas, agendar una visita y matching. Los tutoriales guiados en el producto (highlight flow)
   vienen después. `configurar_organizacion` queda en la tabla sin uso.
+  **Y prende el «Tutorial de leads» en Propelia** (29/10/2026, por pedido): la tarea pasó a «Activar
+  el tutorial de cómo funciona el sistema de leads y avisarles» y **tildarla lo activa** (como
+  «Enviar mails», no se tilda sola: `TAREA_TUTORIAL_LEADS`, `useActivarTutorialDeLeads`; si Propelia
+  falla, queda sin tildar), además del botón «Activar tutoriales» al lado del WhatsApp. Llama a
+  `activate_tour_group` del puente (`docs/onboarding/PUENTE.md`), que le prende a todo el equipo un
+  recorrido guiado por punto del mensaje (llegada de leads, el mail de Idealista de `/equipo`,
+  pendientes, avisos, agendar visita, matching); **el de avisos a leads, sólo a admin y superadmin**.
+  En Propelia es un checklist al lado de «Primeros pasos» (`TourGroupContainer`, grupos en
+  `supabase/functions/_shared/tourGroups.ts` del producto), y cada renglón se da por hecho al
+  **terminar** su recorrido. No espera a «Primeros pasos»: sin calendario o sin la marca configurada,
+  los recorridos lo avisan. Debajo de la tarea, quién lleva cuántos (`tour_groups` de
+  `get_organization`). Destildar no apaga nada allá. El cierre del WhatsApp dice que el tutorial
+  está al entrar (migración `20261029211937_onboarding_tutorial_de_leads_en_propelia`, que **la
+  aplica Antonio**; del lado del producto, `20261029210026_tour_guide_trigger` y deployar `roadmap-bridge`).
   **«Ver cuentas y contraseñas» dice quién probaste y quién entró** (28/10/2026, por pedido):
   columna «Probé», un tilde a mano por cuenta (`tareaCuentaProbada` = `contacto.probada.<miembro>` en
   `client_onboarding_tasks`, sin migración, fuera de `PASOS`), y columna «Entró», con la fecha del

@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { ChevronRight, CreditCard, Download, FlaskConical, Inbox, Link, Link2, Loader2, Mail, RotateCcw, Upload, Users } from 'lucide-react'
+import { ChevronRight, CreditCard, Download, FlaskConical, GraduationCap, Inbox, Link, Link2, Loader2, Mail, RotateCcw, Upload, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -8,12 +8,12 @@ import { leerPrimeraHoja } from '@/pages/crm/service/excel'
 import { useEmailsQueNoLlegaron } from '@/pages/crm/hooks/useEmails'
 import { motivoLegible, noLlegaronDelLead, rotuloDelEstado } from '@/pages/crm/lib/emails'
 import type { Celda } from '@/pages/crm/lib/importarLote'
-import { useMarcarTarea, useReabrirAlta } from '../hooks/useClientes'
+import { useActivarTutorialDeLeads, useMarcarTarea, useOrganizacion, useReabrirAlta } from '../hooks/useClientes'
 import { estadoDelAlta } from '../lib/equipo'
 import { listaDeMailsQueNoLlegaron } from '../lib/mensajes'
-import { claveDeTarea, TAREA_CORREGIR_MAILS, TAREA_CREDENCIALES, type Accion, type Paso, type PlantillaId, type Tarea } from '../lib/pasos'
+import { claveDeTarea, TAREA_CORREGIR_MAILS, TAREA_CREDENCIALES, TAREA_TUTORIAL_LEADS, type Accion, type Paso, type PlantillaId, type Tarea } from '../lib/pasos'
 import { descargarExcel } from '../service/excel'
-import { enviarLeadDePrueba, getColumnasDeCartera, PUENTE_SIMULADO } from '../service/puente'
+import { enviarLeadDePrueba, getColumnasDeCartera, GRUPO_TUTORIAL_DE_LEADS, PUENTE_SIMULADO } from '../service/puente'
 import { ConfirmarAccesosDialog } from './ConfirmarAccesosDialog'
 import { copiarTexto, EnviarPorWhatsapp } from './EnviarPorWhatsapp'
 import { ImportarCarteraPanel } from './ImportarCarteraPanel'
@@ -43,6 +43,8 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
   const hecha = datos.o.tareas.some(t => t.task_id === clave)
   const marcar = useMarcarTarea()
   const reabrir = useReabrirAlta()
+  const activarTutorial = useActivarTutorialDeLeads()
+  const activar = () => datos.orgId && activarTutorial.mutate({ orgId: datos.orgId, onboardingId: datos.o.id, taskId: clave })
   const [panel, setPanel] = useState<Panel | null>(null)
   const [confirmando, setConfirmando] = useState(false)
   const [ocupado, setOcupado] = useState<Accion | null>(null)
@@ -65,6 +67,12 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
 
   const tildar = (v: boolean) => {
     if (clave === TAREA_CREDENCIALES && v) { setConfirmando(true); return }
+    // Tildar el tutorial lo prende en Propelia: se tilda recién cuando Propelia contestó.
+    if (clave === TAREA_TUTORIAL_LEADS && v) {
+      if (!datos.orgId) toast.error(SIN_ORG)
+      else activar()
+      return
+    }
     marcar.mutate({ onboardingId: datos.o.id, taskId: clave, hecha: v })
   }
   const elegirArchivo = (fn: (f: File) => void) => {
@@ -147,6 +155,16 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
           const r = await enviarLeadDePrueba(datos.orgId!)
           toast.success(`Lead de prueba enviado a ${r.to}`, PUENTE_SIMULADO ? { description: 'Puente simulado: no salió ningún mail.' } : undefined)
         }), { requiereOrg: true })
+      case 'tutoriales':
+        // Vuelve a estar a mano después de tildarla: repetir suma a quien se haya agregado al equipo.
+        return (
+          <Button key={a} size="sm" variant="outline" className="h-8" disabled={!conOrg || activarTutorial.isPending}
+            title={conOrg ? 'Prende en Propelia el «Tutorial de leads» a todo el equipo (los avisos a leads, sólo a los admin)' : SIN_ORG}
+            onClick={activar}>
+            {activarTutorial.isPending ? <Loader2 className="size-4 animate-spin" /> : <GraduationCap className="size-4" />}
+            {hecha ? 'Activar de nuevo' : 'Activar tutoriales'}
+          </Button>
+        )
       default:
         return null
     }
@@ -166,6 +184,7 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
           </div>
         )}
       </div>
+      {clave === TAREA_TUTORIAL_LEADS && datos.orgId && <ProgresoDelTutorial orgId={datos.orgId} />}
       {wa && mensaje && <VerMensaje texto={mensaje} />}
       {accesosQueNoLlegaron.length > 0 && (
         <ul className="ml-6.5 flex flex-col gap-1 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12.5px]">
@@ -201,6 +220,33 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
       )}
       <input ref={archivo} type="file" accept=".xlsx" hidden onChange={e => { const f = e.target.files?.[0]; if (f) alElegir.current(f) }} />
       {clave === TAREA_CREDENCIALES && <ConfirmarAccesosDialog datos={datos} abierto={confirmando} onCerrar={() => setConfirmando(false)} />}
+    </div>
+  )
+}
+
+/** Quién lleva cuántos recorridos del «Tutorial de leads» (`tour_groups` de `get_organization`).
+ *  Sin el grupo prendido para nadie, o con un `roadmap-bridge` de antes, no se dibuja. */
+function ProgresoDelTutorial({ orgId }: { orgId: string }) {
+  const org = useOrganizacion(orgId)
+  const conTutorial = (org.data?.agents ?? []).flatMap(a => {
+    const p = a.tour_groups?.[GRUPO_TUTORIAL_DE_LEADS]
+    return p ? [{ a, p }] : []
+  })
+  if (!conTutorial.length) return null
+  const terminaron = conTutorial.filter(({ p }) => p.done >= p.total).length
+  return (
+    <div className="ml-6.5 flex flex-col gap-1 text-[12.5px]">
+      <span className="text-(--fg-muted)">
+        Lo terminaron {terminaron} de {conTutorial.length}
+      </span>
+      <ul className="flex flex-wrap gap-1.5">
+        {conTutorial.map(({ a, p }) => (
+          <li key={a.id} title={a.email ?? undefined}
+            className={cn('rounded-md border px-2 py-0.5', p.done >= p.total ? 'border-success/30 bg-success/5 text-success' : 'border-(--line) bg-(--surface-2) text-(--fg-2)')}>
+            {a.name} · {p.done}/{p.total}
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

@@ -10,7 +10,7 @@ export type Accion =
   | `wa:${PlantillaId}`
   | 'link-alta' | 'equipo-recibido' | 'importar-usuarios' | 'mails'
   | 'plantilla-cartera' | 'importar-cartera' | 'link-pago' | 'ver-pago'
-  | 'direcciones' | 'simular-lead'
+  | 'direcciones' | 'simular-lead' | 'tutoriales'
 
 export const PLANTILLAS = ['contacto_inicial', 'accesos_enviados', 'corregir_mails', 'tutorial_leads', 'link_de_pago', 'asignar_y_mails', 'integrar_portales'] as const
 export type PlantillaId = (typeof PLANTILLAS)[number]
@@ -38,7 +38,10 @@ export const PASOS: Paso[] = [
       { id: 'excel', texto: 'Recibir el Excel de propiedades del cliente (va adjunto al WhatsApp de los accesos)', acciones: ['plantilla-cartera'] },
       { id: 'importar', texto: 'Importar la cartera a su organización', acciones: ['importar-cartera'] },
       // Fue «Configurar la organización con ellos» (`llamada-org`): desde el 29/10/2026 la org la configuran solos con la guía de Propelia.
-      { id: 'tutorial-leads', texto: 'Enviar el tutorial de cómo funciona el sistema de leads', acciones: ['wa:tutorial_leads'] },
+      /* 29/10/2026, por pedido: además del WhatsApp, prende en Propelia el «Tutorial de leads» (un
+         recorrido guiado por punto del mensaje) a todo el equipo. Tildarla lo prende: ver
+         `TAREA_TUTORIAL_LEADS`. */
+      { id: 'tutorial-leads', texto: 'Activar el tutorial de cómo funciona el sistema de leads y avisarles', acciones: ['tutoriales', 'wa:tutorial_leads'] },
       { id: 'asignar', texto: 'Que asignen las propiedades importadas a cada agente', acciones: ['wa:asignar_y_mails'] },
       { id: 'mails-idealista', texto: 'Que configuren en Idealista los mails de cada agente', acciones: ['direcciones'] },
       { id: 'lead-prueba', texto: 'Probar que un lead llega', acciones: ['simular-lead'] },
@@ -98,6 +101,10 @@ export const TAREA_EQUIPO_RECIBIDO = claveDeTarea('contacto', 'excel-recibido')
 
 /** La tarea que no se tilda a mano: manda mails, pasa por `ConfirmarAccesosDialog`. */
 export const TAREA_CREDENCIALES = claveDeTarea('contacto', 'credenciales')
+
+/** Tildarla prende el «Tutorial de leads» en Propelia (`activate_tour_group`) y recién después se
+ *  tilda: sin org todavía, no se tilda. Destildarla no apaga nada allá. */
+export const TAREA_TUTORIAL_LEADS = claveDeTarea('cartera-leads', 'tutorial-leads')
 
 /** Aparece debajo de `TAREA_CREDENCIALES` solo si algún mail de accesos no llegó (27/10/2026, por
  *  pedido). No está en `PASOS`: no cuenta para el avance ni para «Marcar completo». Se tilda a mano;

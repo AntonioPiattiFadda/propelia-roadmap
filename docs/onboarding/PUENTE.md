@@ -130,6 +130,36 @@ Organización y marca, que es lo que la guía del producto pide para dar el paso
 /clientes lo muestra en la columna «Calendario» y en el resumen debajo de las cuentas creadas. Sin
 esos campos (un `roadmap-bridge` anterior) no se dibujan.
 
+Desde el 29/10/2026 cada agente trae `tour_groups`: por grupo de tutoriales que tenga prendido,
+cuántos recorridos le tocan por su rol, cuántos tiene prendidos y cuántos terminó (la última vuelta
+`completed` o `already_done`; cortarlo a mitad no cuenta). Sin nada prendido, `{}`.
+
+```json
+"tour_groups": { "leads": { "total": 6, "activated": 6, "done": 2 } }
+```
+
+### `activate_tour_group`
+
+Prende un grupo de tutoriales (los define `supabase/functions/_shared/tourGroups.ts` del producto;
+hoy sólo `leads`, el «Tutorial de leads») a todo el equipo de la org. A cada uno le tocan los
+recorridos de su rol: «Avisos a los leads» (`configure-lead-notifications`) sólo a admin y
+superadmin. Van con el trigger `guide` de `user_tour_activations`: en Propelia aparecen como un
+checklist al lado de «Primeros pasos», y cada renglón queda hecho cuando el usuario termina su
+recorrido. Repetirlo no pisa nada: lo ya prendido queda como estaba (hecho o no) y a un tour que
+soporte había prendido por la campanita sólo se le suma `guide`. Sirve para sumar a alguien que
+entró al equipo después.
+
+```json
+// { "action": "activate_tour_group", "org_id": "6f1c…", "group_id": "leads" } →
+{ "group_id": "leads", "activated": 11,
+  "users": [ { "id": "a1…", "name": "Marta Gil", "role": "admin", "total": 6, "activated": 6, "done": 0 } ] }
+```
+
+`activated` cuenta las filas que esta llamada prendió. Errores: `bad_request` (grupo desconocido u
+`org_id` inválido), `not_found` (org). Hace falta la migración `20261029210026_tour_guide_trigger`
+del producto (sin ella el trigger `guide` no pasa el `check`). /clientes lo llama al tildar «Activar
+el tutorial de cómo funciona el sistema de leads» o con su botón.
+
 ### `import_template`
 
 Las columnas del Excel de la cartera. El Roadmap arma la plantilla `.xlsx` con esto (cabecera +
@@ -142,7 +172,8 @@ fila de ejemplo); así las columnas tienen una sola fuente, del lado del product
 ] }
 ```
 
-Hoy son 14 (detalle en [`EXCEL_IMPORT_PROPIEDADES.md`](EXCEL_IMPORT_PROPIEDADES.md)).
+Hoy son 16: las 14 de la propiedad y, al final, «Agente captador» y «Agente comercializador»
+(opcionales; detalle en [`EXCEL_IMPORT_PROPIEDADES.md`](EXCEL_IMPORT_PROPIEDADES.md)).
 
 ### `check_properties`
 
@@ -171,6 +202,9 @@ la española, "Sí/No", tipos y operaciones los parsea el producto.
 `summary.operation` es `sale`, `rent` o `sale_rent`; `summary.price` el de venta si hay, si no el
 de alquiler.
 
+Los agentes se buscan entre las cuentas de la org (email o nombre): uno que no es de ahí es un
+error de la fila (`"Agente captador: \"x\" no es nadie de la organización"`).
+
 `existing_property_id` ≠ null: esa fila ya está en la org (mismo código de Idealista) y se va a
 saltear. Máximo **2000 filas** (`too_many_rows`).
 
@@ -191,6 +225,9 @@ y llama una vez por lote, en orden.
   { "row_number": 9, "status": "invalid", "errors": ["El código postal no es válido"] }
 ] }
 ```
+
+Los agentes resueltos van como `captured_by` / `commercialized_by` y el RPC los escribe si son
+de la org (migración `superadmin_import_properties_agentes` del producto; antes los ignoraba).
 
 Cada lote es todo o nada del lado de la base: si la respuesta es un error, ninguna fila de ese
 lote quedó creada y se puede reintentar. Más de 50 filas → `too_many_rows`.

@@ -20,7 +20,11 @@ export type AgenteDePropelia = {
   first_sign_in_at?: string | null; last_sign_in_at?: string | null
   /** Tiene algún calendario conectado en Propelia. Opcional: desde el 29/10/2026. */
   calendar_connected?: boolean
+  /** Por grupo de tutoriales prendido (hoy `leads`): cuántos le tocan, cuántos tiene prendidos y
+   *  cuántos terminó. Sin el grupo = no se le prendió. Opcional: desde el 29/10/2026. */
+  tour_groups?: Record<string, ProgresoDeTutorial>
 }
+export type ProgresoDeTutorial = { total: number; activated: number; done: number }
 /** Lo obligatorio de Ajustes › Organización y marca en Propelia (lo que pide su guía). Desde el 29/10/2026. */
 export type ConfiguracionDeLaOrg = { name: boolean; website: boolean; logo: boolean; colors: boolean; done: boolean }
 export type OrgConAgentes = OrgDePropelia & {
@@ -68,6 +72,12 @@ export const crearLinkDePago = (p: { plan_id: string; org_id: string; customer_e
   invocar<{ link: LinkDePago }>('create_payment_link', { ...p, amount_cents: null }).then(r => r.link)
 export const getLinksDePago = (org_id: string) =>
   invocar<{ links: LinkDePago[] }>('list_payment_links', { org_id }).then(r => r.links)
+/** Prende el «Tutorial de leads» (grupo `leads` de Propelia) a todo el equipo de la org: a cada
+ *  uno los tours de su rol (los avisos a leads, sólo a los admin). Repetirlo no pisa lo hecho. */
+export const activarTutorialDeLeads = (org_id: string) =>
+  invocar<{ group_id: string; activated: number; users: ({ id: string; name: string; role: string } & Partial<ProgresoDeTutorial>)[] }>(
+    'activate_tour_group', { org_id, group_id: GRUPO_TUTORIAL_DE_LEADS })
+export const GRUPO_TUTORIAL_DE_LEADS = 'leads'
 export const enviarLeadDePrueba = (org_id: string) =>
   invocar<{ email_id: string; to: string }>('send_simulated_inbound', { org_id, user_slug: null, scenario_id: 'dip-visita' })
 
@@ -88,6 +98,7 @@ const COLUMNAS: ColumnaDeCartera[] = [
   ['city', 'Ciudad', 'Barcelona'], ['operation', 'Operación', 'Venta'], ['sale_price', 'Precio venta', '250000'],
   ['rent_price', 'Precio alquiler', ''], ['bedrooms', 'Habitaciones', '3'], ['bathrooms', 'Baños', '2'],
   ['elevator', 'Ascensor', 'Sí'], ['built_m2', 'm² construidos', '85'], ['balcony', 'Balcón', 'No'],
+  ['captured_by', 'Agente captador', 'agente@inmobiliaria.es'], ['commercialized_by', 'Agente comercializador', 'agente@inmobiliaria.es'],
 ].map(([key, header, example]) => ({ key, header, example }))
 
 async function simular(action: string, p: Record<string, unknown>): Promise<unknown> {
@@ -144,6 +155,16 @@ async function simular(action: string, p: Record<string, unknown>): Promise<unkn
       return { link }
     }
     case 'list_payment_links': return { links: m.links[String(p.org_id)] ?? [] }
+    case 'activate_tour_group': {
+      const org = m.orgs[String(p.org_id)]
+      if (!org) throw new Error('La organización no existe en Propelia (simulado: se creó en otro navegador).')
+      for (const a of org.agents) {
+        const total = a.role === 'admin' ? 6 : 5
+        a.tour_groups = { ...a.tour_groups, [String(p.group_id)]: { total, activated: total, done: a.tour_groups?.[String(p.group_id)]?.done ?? 0 } }
+      }
+      guardar(m)
+      return { group_id: p.group_id, activated: org.agents.length, users: org.agents.map(a => ({ id: a.id, name: a.name, role: a.role, ...a.tour_groups![String(p.group_id)] })) }
+    }
     case 'send_simulated_inbound': return { email_id: `re_simulado_${Date.now()}`, to: m.orgs[String(p.org_id)]?.org_inbound_address ?? `leads@${DOMINIO}` }
     default: throw new Error(`Acción desconocida: ${action}`)
   }

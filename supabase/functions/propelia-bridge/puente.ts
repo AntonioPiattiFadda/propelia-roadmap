@@ -17,6 +17,7 @@ export const ACCIONES = [
   'list_payment_plans',
   'create_payment_link',
   'list_payment_links',
+  'activate_tour_group',
 ] as const
 
 export type PuenteDb = {

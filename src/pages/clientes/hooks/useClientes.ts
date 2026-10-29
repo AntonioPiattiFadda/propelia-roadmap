@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import {
   asignarOnboarding, completarOnboarding, getOnboardings, getPlantillas, importarEquipo, marcarTarea, reabrirAlta,
 } from '../service/clientes.service'
-import { getLinksDePago, getOrganizacion, getPlanes } from '../service/puente'
+import { activarTutorialDeLeads, getLinksDePago, getOrganizacion, getPlanes } from '../service/puente'
 import type { Onboarding } from '../types'
 
 export const CLIENTES_KEYS = {
@@ -71,6 +71,28 @@ export function useMarcarTarea() {
       toast.error('No se guardó la tarea', { description: mensajeDeError(e) })
     },
     onSettled: () => qc.invalidateQueries({ queryKey: CLIENTES_KEYS.onboardings }),
+  })
+}
+
+/** Prende el «Tutorial de leads» en Propelia y, recién con eso hecho, tilda la tarea. Si Propelia
+ *  falla, la tarea queda sin tildar: tildada diría que el cliente ya lo tiene. */
+export function useActivarTutorialDeLeads() {
+  const qc = useQueryClient()
+  const marcar = useMarcarTarea()
+  return useMutation({
+    mutationFn: async ({ orgId, onboardingId, taskId }: { orgId: string; onboardingId: string; taskId: string }) => {
+      const r = await activarTutorialDeLeads(orgId)
+      await marcar.mutateAsync({ onboardingId, taskId, hecha: true })
+      return r
+    },
+    onSuccess: r => {
+      const personas = r.users.filter(u => u.activated).length
+      toast.success(`Tutorial de leads activado para ${personas} ${personas === 1 ? 'persona' : 'personas'}`, {
+        description: 'Lo ven en Propelia al lado de «Primeros pasos». Los avisos a leads, sólo los admin.',
+      })
+    },
+    onError: e => toast.error('No se pudo activar el tutorial', { description: mensajeDeError(e) }),
+    onSettled: (_r, _e, v) => qc.invalidateQueries({ queryKey: CLIENTES_KEYS.org(v.orgId) }),
   })
 }
 
