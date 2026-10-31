@@ -864,6 +864,7 @@ export type Database = {
           ics_sequence: number
           id: string
           lead_id: string | null
+          onboarding_task: string | null
           reminder_minutes: number | null
           starts_at: string
           status: string
@@ -889,6 +890,7 @@ export type Database = {
           ics_sequence?: number
           id?: string
           lead_id?: string | null
+          onboarding_task?: string | null
           reminder_minutes?: number | null
           starts_at: string
           status?: string
@@ -914,6 +916,7 @@ export type Database = {
           ics_sequence?: number
           id?: string
           lead_id?: string | null
+          onboarding_task?: string | null
           reminder_minutes?: number | null
           starts_at?: string
           status?: string

@@ -812,6 +812,22 @@ export function siguienteDia(dia: string): string {
 
 const SOLO_SUPERADMIN = 'Sólo un SUPERADMIN la ve: a otro rol le devuelve la lista vacía.'
 
+/** Prefijo del tilde «Probé» de cada cuenta (`tareaCuentaProbada` del front): uno por miembro. */
+const CUENTA_PROBADA = 'contacto.probada.'
+
+/**
+ * Las tareas hechas de un alta. Los tildes «Probé» llevan el id del miembro y son uno por persona:
+ * listados, son ids larguísimos que no dicen nada (lo notó Claude al probarlo, 31/10/2026). Van
+ * contados aparte.
+ */
+export function tareasDelAlta(ids: unknown): { tareas_hechas: string[]; cuentas_probadas: number } {
+  const lista = Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string') : []
+  return {
+    tareas_hechas: lista.filter((id) => !id.startsWith(CUENTA_PROBADA)),
+    cuentas_probadas: lista.filter((id) => id.startsWith(CUENTA_PROBADA)).length,
+  }
+}
+
 const listOnboardings: McpToolDef = {
   name: 'list_onboardings',
   title: 'Altas de clientes',
@@ -850,7 +866,7 @@ const listOnboardings: McpToolDef = {
       creada: o.created_at,
       equipo_recibido_el: o.submitted_at ?? null,
       completada_el: o.completed_at ?? null,
-      tareas_hechas: Array.isArray(o.tareas_hechas) ? o.tareas_hechas : [],
+      ...tareasDelAlta(o.tareas_hechas),
     })), total, p)
   },
 }

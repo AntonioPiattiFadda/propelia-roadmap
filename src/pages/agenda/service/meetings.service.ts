@@ -25,6 +25,8 @@ export interface CreateMeetingPayload {
   reminderMinutes?: number | null
   guestUserIds?: string[]
   guestEmails?: string[]
+  /** La tarea del onboarding que cumple (`crm_meetings.onboarding_task`): las capacitaciones de /clientes. */
+  onboardingTask?: string
 }
 
 // Reuniones que se solapan con [fromIso, toIso) — para la página /agenda.
@@ -77,6 +79,8 @@ export const createMeeting = async (payload: CreateMeetingPayload): Promise<Meet
       reminder_minutes: payload.reminderMinutes ?? null,
       guest_user_ids: payload.guestUserIds ?? [],
       guest_emails: payload.guestEmails ?? [],
+      // Solo si viene: sin la migración corrida, la columna no existe y el resto sigue agendando.
+      ...(payload.onboardingTask ? { onboarding_task: payload.onboardingTask } : {}),
     })
     .select()
     .single()

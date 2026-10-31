@@ -14,6 +14,8 @@ type Props = {
   defaultDescription?: string
   guests?: { label: string }[]
   meeting?: EditableMeeting
+  onboardingTask?: string
+  onSaved?: () => void
 }
 
 export function MeetingFormDialog({ open, onOpenChange, meeting, ...rest }: Props) {

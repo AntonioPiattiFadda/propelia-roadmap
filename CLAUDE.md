@@ -220,6 +220,9 @@ Antonio**. Todo en `docs/mcp/README.md`, con la tabla de tools.
   funciones que la RLS (`es_usuario()`, `crm_puede*()`, y `crm_es_superadmin()` para altas y caja).
   Si cambia una regla de RLS de esas tablas, cambia también en su vista `mcp_*`.
 - **Nunca salen teléfonos ni emails** (las vistas no los tienen) ni tokens; sí los textos del equipo.
+- **La URL es `https://propelia-roadmap.vercel.app/mcp`** (31/10/2026; `equipo.propelia.es` no
+  existe). En Supabase quedaron prendidos el OAuth Server y el registro dinámico (Claude y ChatGPT se
+  registran solos). Estado de cada paso y qué mirar si no conecta: `docs/mcp/README.md` › Cómo quedó.
 - **Demos** (31/10/2026, por pedido, migración `20261031141933_mcp_demos_y_rendimiento`, que **la
   aplica Antonio**): `list_demos` y `get_demo_briefing`, que trae todo lo que se sabe del lead para
   preparar la demo. La misma migración saca `crm_puede()` por fila de las vistas del CRM
@@ -332,7 +335,11 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   `supabase/functions/_shared/tourGroups.ts` del producto), y cada renglón se da por hecho al
   **terminar** su recorrido. No espera a «Primeros pasos»: sin calendario o sin la marca configurada,
   los recorridos lo avisan. Debajo de la tarea, quién lleva cuántos (`tour_groups` de
-  `get_organization`). Destildar no apaga nada allá. El cierre del WhatsApp dice que el tutorial
+  `get_organization`). Destildar no apaga nada allá: **para apagarlo está «Desactivar tutoriales»**
+  (31/10/2026, por pedido), al lado de «Activar de nuevo» con la tarea tildada
+  (`useDesactivarTutorialDeLeads`, acción `deactivate_tour_group` del puente): saca el grupo del
+  checklist de todo el equipo, destilda la tarea y no borra lo terminado (volver a activarlo lo
+  respeta). Necesita esa acción en el `roadmap-bridge` del producto; sin ella contesta «Acción desconocida». El cierre del WhatsApp dice que el tutorial
   está al entrar (migración `20261029211937_onboarding_tutorial_de_leads_en_propelia`, que **la
   aplica Antonio**; del lado del producto, `20261029210026_tour_guide_trigger` y deployar `roadmap-bridge`).
   **«Ver cuentas y contraseñas» dice quién probaste y quién entró** (28/10/2026, por pedido):
@@ -372,6 +379,17 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   `onboarding_alta_reabrir` (acción `reabrir` de `onboarding-alta`, migración
   `20261027150225_onboarding_alta_reabrir`), igual que «Reabrir» de /clientes, salvo que el lead ya
   tenga org en Propelia: ahí contesta `alta_ya_importada` y la página avisa que ya se crearon las cuentas.
+- **Dos capacitaciones por Google Meet en el paso 2** (31/10/2026, por pedido, migración
+  `20261031173059_onboarding_reuniones_de_capacitacion`, que **la aplica Antonio**): arriba del
+  tutorial de leads, «con el equipo» y «con el dueño» (`Tarea.reunion` en `lib/pasos.ts`). Cada una
+  lleva su WhatsApp (`reunion_equipo` / `reunion_dueno`) y «Agendar», que abre el form de reunión de la
+  Agenda: queda como reunión del CRM del lead, en el Google de quien lleva el alta, marcada con
+  `crm_meetings.onboarding_task` (la clave de la tarea). Agendarla tilda la tarea. Pasada la reunión,
+  debajo pregunta «¿Se hizo la reunión?» (`tareaReunionHecha`, `preguntaSiSeHizo` en
+  `lib/reuniones.ts`): tildarlo la marca hecha también en la Agenda, y **el paso no está hecho hasta
+  contestar que sí** (`clavesDeTarea`). **El link de Meet no se genera todavía** (por pedido): sale de
+  Google a mano. Invitados y textos finos, después. Sin la migración, la reunión se agenda igual pero
+  no se ata a la tarea, y los WhatsApp dicen «Falta la plantilla en la base».
 - **Comentarios del lead al costado del alta** (28/10/2026, por pedido): una tercera columna del
   dialog (`ComentariosDelLead`; en pantallas angostas, abajo) lista las notas a mano del lead y deja
   escribir una (Enter comenta, Shift+Enter otra línea). Es una nota `MANUAL` sin meta en

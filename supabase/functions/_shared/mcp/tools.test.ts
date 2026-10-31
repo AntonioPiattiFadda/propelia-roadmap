@@ -1,7 +1,7 @@
 import { assert, assertEquals } from 'jsr:@std/assert@1'
 import type { McpDb, Row, ViewQuery } from './db.ts'
 import { MCP_RELATIONS } from './relations.ts'
-import { inicioDelDiaEnEspana, siguienteDia, TOOLS, type ToolContext } from './tools.ts'
+import { inicioDelDiaEnEspana, siguienteDia, tareasDelAlta, TOOLS, type ToolContext } from './tools.ts'
 import { sanitizeOutput } from './sanitize.ts'
 
 const EQUIPO: Row[] = [
@@ -202,4 +202,11 @@ Deno.test('get_demo_briefing: la demo y el lead entero, con resumen, correos y s
 Deno.test('inicioDelDiaEnEspana: horario de verano e invierno', () => {
   assertEquals(inicioDelDiaEnEspana('2026-07-15'), '2026-07-15T00:00:00+02:00')
   assertEquals(inicioDelDiaEnEspana('2026-12-15'), '2026-12-15T00:00:00+01:00')
+})
+
+Deno.test('tareasDelAlta: los tildes «Probé» por cuenta van contados, no como ids', () => {
+  assertEquals(
+    tareasDelAlta(['contacto.excel-recibido', 'contacto.probada.0b7c-…-1', 'contacto.probada.0b7c-…-2', 'accesos.enviar-mails']),
+    { tareas_hechas: ['contacto.excel-recibido', 'accesos.enviar-mails'], cuentas_probadas: 2 },
+  )
 })

@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import {
   asignarOnboarding, completarOnboarding, getOnboardings, getPlantillas, importarEquipo, marcarTarea, reabrirAlta,
 } from '../service/clientes.service'
-import { activarTutorialDeLeads, getLinksDePago, getOrganizacion, getPlanes } from '../service/puente'
+import { activarTutorialDeLeads, desactivarTutorialDeLeads, getLinksDePago, getOrganizacion, getPlanes } from '../service/puente'
 import type { Onboarding } from '../types'
 
 export const CLIENTES_KEYS = {
@@ -38,8 +38,9 @@ export function useClientesRealtime(activo: boolean) {
   useEffect(() => {
     if (!activo) return
     const canal = supabase.channel(`clientes-${crypto.randomUUID()}`)
-    // crm_tasks: la columna «Tareas» (la tarea que crea el envío del alta aparece sola).
-    for (const tabla of ['client_onboardings', 'client_onboarding_members', 'client_onboarding_tasks', 'crm_tasks']) {
+    // crm_tasks: la columna «Tareas» (la tarea que crea el envío del alta aparece sola). crm_meetings:
+    // las capacitaciones, que se mueven o se cancelan también desde la Agenda y desde Google.
+    for (const tabla of ['client_onboardings', 'client_onboarding_members', 'client_onboarding_tasks', 'crm_tasks', 'crm_meetings']) {
       canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla },
         () => { void qc.invalidateQueries({ queryKey: CLIENTES_KEYS.onboardings }) })
     }
@@ -92,6 +93,25 @@ export function useActivarTutorialDeLeads() {
       })
     },
     onError: e => toast.error('No se pudo activar el tutorial', { description: mensajeDeError(e) }),
+    onSettled: (_r, _e, v) => qc.invalidateQueries({ queryKey: CLIENTES_KEYS.org(v.orgId) }),
+  })
+}
+
+/** Lo contrario: apaga el tutorial en Propelia y destilda la tarea. Volver a activarlo no pierde lo
+ *  que cada uno ya había terminado. */
+export function useDesactivarTutorialDeLeads() {
+  const qc = useQueryClient()
+  const marcar = useMarcarTarea()
+  return useMutation({
+    mutationFn: async ({ orgId, onboardingId, taskId }: { orgId: string; onboardingId: string; taskId: string }) => {
+      const r = await desactivarTutorialDeLeads(orgId)
+      await marcar.mutateAsync({ onboardingId, taskId, hecha: false })
+      return r
+    },
+    onSuccess: () => toast.success('Tutorial desactivado', {
+      description: 'Ya no lo ve nadie del equipo en Propelia. Si lo volvés a activar, lo terminado sigue terminado.',
+    }),
+    onError: e => toast.error('No se pudo desactivar el tutorial', { description: mensajeDeError(e) }),
     onSettled: (_r, _e, v) => qc.invalidateQueries({ queryKey: CLIENTES_KEYS.org(v.orgId) }),
   })
 }

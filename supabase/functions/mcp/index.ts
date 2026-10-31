@@ -96,6 +96,26 @@ interface CallContext {
   audit: AuditWriter
 }
 
+/**
+ * Lo que queda en mcp_audit_log.error. Los errores de PostgREST no son `Error` sino objetos
+ * `{ code, message, details, hint }`: con `String(err)` quedaba «[object Object]» y no se sabía qué
+ * había fallado (31/10/2026).
+ */
+export function mensajeDeError(err: unknown): string {
+  if (err instanceof Error) return err.message
+  if (err && typeof err === 'object') {
+    const e = err as Record<string, unknown>
+    const partes = [e.code, e.message, e.details, e.hint].filter((x) => typeof x === 'string' && x)
+    if (partes.length) return partes.join(' · ')
+    try {
+      return JSON.stringify(err)
+    } catch {
+      // cae abajo
+    }
+  }
+  return String(err)
+}
+
 function registerTool(server: McpServer, tool: McpToolDef, tools: ToolContext, ctx: CallContext) {
   server.registerTool(
     tool.name,
@@ -119,7 +139,7 @@ function registerTool(server: McpServer, tool: McpToolDef, tools: ToolContext, c
         return { content: [{ type: 'text' as const, text: JSON.stringify(value) }] }
       } catch (err) {
         console.error(`mcp ${tool.name}: falló la consulta`, err)
-        await ctx.audit({ ...base, resultCount: null, ok: false, error: err instanceof Error ? err.message : String(err) })
+        await ctx.audit({ ...base, resultCount: null, ok: false, error: mensajeDeError(err) })
         return { isError: true, content: [{ type: 'text' as const, text: 'No se pudieron leer los datos. Probá de nuevo en un momento.' }] }
       }
     },

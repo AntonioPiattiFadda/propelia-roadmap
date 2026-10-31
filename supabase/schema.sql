@@ -1773,6 +1773,9 @@ alter table public.crm_meetings
   add column if not exists guest_user_ids    uuid[] not null default '{}',
   add column if not exists guest_emails      text[] not null default '{}';
 alter table public.crm_meetings alter column sync_status set default 'pending';
+-- De qué tarea del onboarding es la reunión (`<paso>.<tarea>` de `client_onboarding_tasks`; las
+-- capacitaciones con el equipo y con el dueño, 31/10/2026). Null en todas las demás.
+alter table public.crm_meetings add column if not exists onboarding_task text;
 
 alter table public.crm_meetings drop constraint if exists crm_meetings_sync_status_check;
 alter table public.crm_meetings add constraint crm_meetings_sync_status_check
@@ -2255,6 +2258,22 @@ insert into public.onboarding_message_templates (id, body) values
   E'⚠️ Una cosa: el email con los accesos no les ha llegado a estas personas del equipo 👇\n\n'
   '{mails}\n\n'
   'Seguramente la dirección esté mal escrita o no reciba correo. ¿Me pasáis por aquí el email correcto de cada una? En cuanto lo tenga, se lo vuelvo a enviar.'
+)
+on conflict (id) do nothing;
+
+-- Las dos capacitaciones por Google Meet del paso 2 (31/10/2026).
+insert into public.onboarding_message_templates (id, body) values
+(
+  'reunion_equipo',
+  E'{nombre}, para que {inmobiliaria} le saque todo el partido a Propelia nos gustaría hacer una capacitación online con todo el equipo 🎓\n\n'
+  'Es por Google Meet y dura unos 45 minutos: os conocemos, vemos cómo trabajáis y qué necesitáis, y os enseñamos cómo Propelia os ayuda en el día a día.\n\n'
+  '¿Qué día y hora os viene bien? En cuanto lo cerremos os llega la invitación con el enlace.'
+),
+(
+  'reunion_dueno',
+  E'{nombre}, además de la capacitación con el equipo, me gustaría tener una reunión contigo 🤝\n\n'
+  'Es por Google Meet, unos 30 minutos: te enseño cómo ver desde Propelia el trabajo de tu equipo (qué leads atiende cada uno, qué tiene pendiente, qué visitas agenda) y vemos juntos cómo lo vais a usar para sacarle el máximo.\n\n'
+  '¿Cuándo te viene bien? Te mando la invitación con el enlace.'
 )
 on conflict (id) do nothing;
 
@@ -3068,8 +3087,11 @@ as $$
   where a.viewer_id = auth.uid() and a.access in ('read', 'write') and public.es_usuario();
 $$;
 
--- La llaman sólo las vistas, que corren como su dueño: nadie más la necesita.
-revoke all on function public.mcp_carteras_visibles() from public, anon, authenticated;
+-- La llaman las vistas del CRM del MCP. Devuelve sólo las carteras que el propio usuario ya ve.
+revoke all on function public.mcp_carteras_visibles() from public, anon;
+-- El EXECUTE de una función que llama una vista se chequea contra quien consulta, no contra el dueño
+-- de la vista: sin esto fallan todas las del CRM (20261031144827_mcp_carteras_visibles_permiso).
+grant execute on function public.mcp_carteras_visibles() to authenticated;
 
 -- ─── CRM: las mismas vistas, con el corte nuevo y columnas al final ────────
 -- (`create or replace view` deja agregar columnas al final, no cambiar las que había.)
@@ -3209,3 +3231,13 @@ as $$
     'mcp_onboardings', 'mcp_expenses', 'mcp_crm_assignment_history', 'mcp_crm_emails'
   ]::text[];
 $$;
+
+-- ─── índices por lead (migración 20261031145314_crm_indices_por_lead) ──────
+create index if not exists crm_comments_lead_idx
+  on public.crm_comments (lead_id, created_at desc) where deleted_at is null;
+
+create index if not exists crm_stage_history_lead_idx
+  on public.crm_stage_history (lead_id, changed_at desc);
+
+create index if not exists crm_assignment_history_lead_idx
+  on public.crm_assignment_history (lead_id, changed_at desc);

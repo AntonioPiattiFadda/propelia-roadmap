@@ -77,6 +77,10 @@ export const getLinksDePago = (org_id: string) =>
 export const activarTutorialDeLeads = (org_id: string) =>
   invocar<{ group_id: string; activated: number; users: ({ id: string; name: string; role: string } & Partial<ProgresoDeTutorial>)[] }>(
     'activate_tour_group', { org_id, group_id: GRUPO_TUTORIAL_DE_LEADS })
+/** Lo apaga: saca el grupo del checklist de todo el equipo. Lo terminado sigue contando como
+ *  terminado si se vuelve a activar (las vueltas de cada tour quedan en Propelia). */
+export const desactivarTutorialDeLeads = (org_id: string) =>
+  invocar<{ group_id: string; deactivated: number }>('deactivate_tour_group', { org_id, group_id: GRUPO_TUTORIAL_DE_LEADS })
 export const GRUPO_TUTORIAL_DE_LEADS = 'leads'
 export const enviarLeadDePrueba = (org_id: string) =>
   invocar<{ email_id: string; to: string }>('send_simulated_inbound', { org_id, user_slug: null, scenario_id: 'dip-visita' })
@@ -164,6 +168,21 @@ async function simular(action: string, p: Record<string, unknown>): Promise<unkn
       }
       guardar(m)
       return { group_id: p.group_id, activated: org.agents.length, users: org.agents.map(a => ({ id: a.id, name: a.name, role: a.role, ...a.tour_groups![String(p.group_id)] })) }
+    }
+    case 'deactivate_tour_group': {
+      const org = m.orgs[String(p.org_id)]
+      if (!org) throw new Error('La organización no existe en Propelia (simulado: se creó en otro navegador).')
+      let deactivated = 0
+      for (const a of org.agents) {
+        const g = a.tour_groups?.[String(p.group_id)]
+        if (!g) continue
+        deactivated += g.activated
+        const resto = { ...a.tour_groups }
+        delete resto[String(p.group_id)]
+        a.tour_groups = resto
+      }
+      guardar(m)
+      return { group_id: p.group_id, deactivated }
     }
     case 'send_simulated_inbound': return { email_id: `re_simulado_${Date.now()}`, to: m.orgs[String(p.org_id)]?.org_inbound_address ?? `leads@${DOMINIO}` }
     default: throw new Error(`Acción desconocida: ${action}`)

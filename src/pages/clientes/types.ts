@@ -17,6 +17,8 @@ export type Onboarding = ClientOnboarding & {
     client: ClienteDelOnboarding | null
     /** Las tareas del CRM del lead (todas: el front se queda con las pendientes). */
     tareas_crm: CrmTask[]
+    /** Las reuniones del CRM del lead (todas: las del alta se reconocen por `onboarding_task`). */
+    reuniones: Tables<'crm_meetings'>[]
   }
   miembros: MiembroDelOnboarding[]
   tareas: Pick<Tables<'client_onboarding_tasks'>, 'task_id' | 'done_at' | 'done_by'>[]

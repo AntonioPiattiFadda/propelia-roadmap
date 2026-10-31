@@ -160,6 +160,25 @@ entró al equipo después.
 del producto (sin ella el trigger `guide` no pasa el `check`). /clientes lo llama al tildar «Activar
 el tutorial de cómo funciona el sistema de leads» o con su botón.
 
+### `deactivate_tour_group`
+
+Lo contrario (31/10/2026): saca el grupo del checklist de todo el equipo de la org. A cada fila de
+`user_tour_activations` de los tours del grupo le quita el trigger `guide`; si no le queda ningún
+otro (`bell`, `page`), borra la fila. **No toca `user_tour_runs`**: lo que cada uno terminó sigue
+terminado si después se vuelve a activar. Un tour que soporte había prendido por la campanita sigue
+prendido por la campanita.
+
+```json
+// { "action": "deactivate_tour_group", "org_id": "6f1c…", "group_id": "leads" } →
+{ "group_id": "leads", "deactivated": 11 }
+```
+
+`deactivated` cuenta las filas a las que esta llamada les sacó `guide` (0 si no había nada
+prendido). Mismos errores que `activate_tour_group`. /clientes lo llama con «Desactivar tutoriales»,
+que aparece al lado de «Activar de nuevo» con la tarea tildada, y destilda la tarea. Sin la acción
+en el `roadmap-bridge` del producto, contesta `bad_request` («Acción desconocida») y la tarea queda
+como estaba.
+
 ### `import_template`
 
 Las columnas del Excel de la cartera. El Roadmap arma la plantilla `.xlsx` con esto (cabecera +

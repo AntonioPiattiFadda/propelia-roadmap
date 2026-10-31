@@ -15,7 +15,8 @@ export async function getOnboardings(): Promise<Onboarding[]> {
       lead:crm_leads!inner(id, assigned_to, propelia_organization_id, lead_type,
         client:crm_clients(company_name, first_name, last_name, email, phone, alternative_phone_1, alternative_phone_2,
           alternative_phone_1_is_decision_maker, alternative_phone_2_is_decision_maker, google_maps_phone),
-        tareas_crm:crm_tasks(*)),
+        tareas_crm:crm_tasks(*),
+        reuniones:crm_meetings(*)),
       miembros:client_onboarding_members(*),
       tareas:client_onboarding_tasks(task_id, done_at, done_by)`)
     .is('completed_at', null)

@@ -10,12 +10,15 @@ export type Accion =
   | `wa:${PlantillaId}`
   | 'link-alta' | 'equipo-recibido' | 'importar-usuarios' | 'mails'
   | 'plantilla-cartera' | 'importar-cartera' | 'link-pago' | 'ver-pago'
-  | 'direcciones' | 'simular-lead' | 'tutoriales'
+  | 'direcciones' | 'simular-lead' | 'tutoriales' | 'desactivar-tutoriales' | 'agendar-reunion'
 
-export const PLANTILLAS = ['contacto_inicial', 'accesos_enviados', 'corregir_mails', 'tutorial_leads', 'link_de_pago', 'asignar_y_mails', 'integrar_portales'] as const
+export const PLANTILLAS = ['contacto_inicial', 'accesos_enviados', 'corregir_mails', 'tutorial_leads', 'link_de_pago', 'asignar_y_mails', 'integrar_portales', 'reunion_equipo', 'reunion_dueno'] as const
 export type PlantillaId = (typeof PLANTILLAS)[number]
 
-export type Tarea = { id: string; texto: string; acciones?: Accion[] }
+/** `reunion`: la tarea se cumple con una reunión del CRM del lead (`crm_meetings.onboarding_task`).
+ *  Tildarla es «agendada»; pasada la hora, debajo pregunta si se hizo (`tareaReunionHecha`), y el paso
+ *  no está hecho hasta contestar que sí. */
+export type Tarea = { id: string; texto: string; acciones?: Accion[]; reunion?: { titulo: string } }
 export type Paso = { id: string; titulo: string; tareas: Tarea[]; proximamente?: boolean }
 
 export const PASOS: Paso[] = [
@@ -37,11 +40,15 @@ export const PASOS: Paso[] = [
     tareas: [
       { id: 'excel', texto: 'Recibir el Excel de propiedades del cliente (va adjunto al WhatsApp de los accesos)', acciones: ['plantilla-cartera'] },
       { id: 'importar', texto: 'Importar la cartera a su organización', acciones: ['importar-cartera'] },
+      /* 31/10/2026, por pedido: las dos capacitaciones por Google Meet, arriba del tutorial. El WhatsApp
+         la propone y «Agendar» la deja en el Google de quien la agenda; el link de Meet, por ahora, a mano. */
+      { id: 'reunion-equipo', texto: 'Agendar la capacitación con el equipo por Google Meet', acciones: ['wa:reunion_equipo', 'agendar-reunion'], reunion: { titulo: 'Capacitación del equipo' } },
+      { id: 'reunion-dueno', texto: 'Agendar la capacitación con el dueño por Google Meet', acciones: ['wa:reunion_dueno', 'agendar-reunion'], reunion: { titulo: 'Capacitación con el dueño' } },
       // Fue «Configurar la organización con ellos» (`llamada-org`): desde el 29/10/2026 la org la configuran solos con la guía de Propelia.
       /* 29/10/2026, por pedido: además del WhatsApp, prende en Propelia el «Tutorial de leads» (un
          recorrido guiado por punto del mensaje) a todo el equipo. Tildarla lo prende: ver
          `TAREA_TUTORIAL_LEADS`. */
-      { id: 'tutorial-leads', texto: 'Activar el tutorial de cómo funciona el sistema de leads y avisarles', acciones: ['tutoriales', 'wa:tutorial_leads'] },
+      { id: 'tutorial-leads', texto: 'Activar el tutorial de cómo funciona el sistema de leads y avisarles', acciones: ['tutoriales', 'desactivar-tutoriales', 'wa:tutorial_leads'] },
       { id: 'asignar', texto: 'Que asignen las propiedades importadas a cada agente', acciones: ['wa:asignar_y_mails'] },
       { id: 'mails-idealista', texto: 'Que configuren en Idealista los mails de cada agente', acciones: ['direcciones'] },
       { id: 'lead-prueba', texto: 'Probar que un lead llega', acciones: ['simular-lead'] },
@@ -120,11 +127,19 @@ export const tareaCuentaProbada = (miembroId: string) => claveDeTarea('contacto'
  *  ella. Su `done_at` es desde cuándo cuentan los logins de ese miembro. Sin migración, como el de arriba. */
 export const tareaIngresoBorrado = (miembroId: string) => claveDeTarea('contacto', `entro-borrado.${miembroId}`)
 
+/** «¿Se hizo la reunión?» de una tarea con `reunion`: aparece debajo pasada la hora (o enseguida, si se
+ *  tildó «agendada» sin reunión en el sistema). Sí cuenta para el avance: ver `pasoHecho`. */
+export const tareaReunionHecha = (pasoId: string, tareaId: string) => claveDeTarea(pasoId, `${tareaId}-hecha`)
+
+/** Las claves que tiene que tener hechas una tarea: la suya y, si es una reunión, la de «se hizo». */
+export const clavesDeTarea = (pasoId: string, t: Tarea) =>
+  t.reunion ? [claveDeTarea(pasoId, t.id), tareaReunionHecha(pasoId, t.id)] : [claveDeTarea(pasoId, t.id)]
+
 /** Los pasos que hoy se trabajan: los de «Próximamente» no cuentan. */
 export const PASOS_ABIERTOS = PASOS.filter(p => !p.proximamente)
 
 export const pasoHecho = (paso: Paso, hechas: ReadonlySet<string>) =>
-  paso.tareas.every(t => hechas.has(claveDeTarea(paso.id, t.id)))
+  paso.tareas.every(t => clavesDeTarea(paso.id, t).every(c => hechas.has(c)))
 
 /** Cuántos de los pasos abiertos están hechos. */
 export const pasosHechos = (hechas: ReadonlySet<string>) => PASOS_ABIERTOS.filter(p => pasoHecho(p, hechas)).length

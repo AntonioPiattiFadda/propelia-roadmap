@@ -113,6 +113,71 @@ Sign In / Providers → Email).
 5. Probar: agregar el conector en Claude y pedirle «¿con qué cuenta estás conectado?», después
    «¿qué tareas críticas hay en el roadmap?» y «¿qué demos hay esta semana?».
 
+### Cómo quedó (31/10/2026)
+
+| Paso | Estado |
+|---|---|
+| Migraciones `20261030115614_mcp_oauth_infra` y `20261031135450_mcp_tools` | Aplicadas |
+| Migración `20261031141933_mcp_demos_y_rendimiento` | Pendiente de `db push` al escribir esto (`supabase migration list` lo dice) |
+| Función `mcp` y proxy de Vercel | Deployados: `POST /mcp` sin token da 401 con el `WWW-Authenticate` que apunta a `propelia-roadmap.vercel.app` |
+| OAuth Server (Authentication → OAuth Server) | Prendido, *Authorization Path* `/oauth/consent` |
+| *Allow Dynamic OAuth Apps* | Prendido. Supabase pide confirmar el riesgo (registros de apps falsas para phishing): lo cubre la pantalla de consentimiento, que sólo deja aprobar si el código vuelve a Claude o ChatGPT, y el token igual sólo lee las vistas `mcp_*` |
+| *Site URL* | **Quedó en `http://localhost:3000`**: hay que pasarlo a `https://propelia-roadmap.vercel.app` (Authentication → URL Configuration). Con localhost, el consentimiento se abre en la máquina de cada uno y no conecta |
+
+**El dominio es `propelia-roadmap.vercel.app`**, no `equipo.propelia.es` (que no existe; se había
+supuesto de los tests y se corrigió el 31/10/2026). Está en `TABLERO_MCP_URL`
+(`_shared/mcp/oauthResource.ts`) y en el ícono de `mcp/index.ts`; `MCP_RESOURCE_URL` lo pisa sin
+deployar código. Ojo con el logo: Claude toma el favicon del dominio y en `vercel.app` puede salir
+el de Vercel. Para ver el de Propelia hace falta un dominio propio (ej. `tablero.propelia.es`).
+
+### Si Claude no deja agregarlo
+
+- **Pide «Usa tu propio cliente OAuth» / un ID de cliente**: el registro dinámico está apagado o el
+  OAuth Server no está prendido. Se ve con
+  `curl https://itqwxnmuxuiiydsueazb.supabase.co/.well-known/oauth-authorization-server/auth/v1`:
+  tiene que traer `registration_endpoint` (apagado contesta `"OAuth server is disabled"`). Así
+  estaba la primera vez, el 31/10/2026.
+- **El login se abre en localhost**: el *Site URL* (ver arriba).
+- **Conecta pero las tools dicen «No se pudieron leer los datos»**: el error real queda en
+  `mcp_audit_log.error`. Puede faltar una migración (una vista que no está en la base, el guard la
+  rechaza) o un permiso: **una función que llama una vista se ejecuta con los permisos de quien
+  consulta, no del dueño de la vista**. El 31/10/2026 todas las del CRM fallaban por haberle sacado
+  a `authenticated` el EXECUTE de `mcp_carteras_visibles()` (lo devolvió
+  `20261031144827_mcp_carteras_visibles_permiso`). Toda función nueva que usen las vistas necesita
+  `grant execute … to authenticated`.
+- En Claude se elige «Iniciar sesión ahora» y, en Cliente OAuth, «Registrar automáticamente».
+
+### Cuánto cuesta cada consulta (medido el 31/10/2026)
+
+Con `EXPLAIN ANALYZE` sobre las vistas, simulando al usuario en una transacción que sólo lee
+(`set local role authenticated`, `request.jwt.claims` con su id, `statement_timeout` de 5 s y
+`rollback`). **Nunca consultar las tablas así**: con el rol `authenticated` se paga la RLS de cada
+fila, y una consulta sobre toda la actividad quedó corriendo en producción.
+
+| Consulta | Tiempo | Nota |
+|---|---|---|
+| Lista de leads (SUPERADMIN, 431) | 72 ms en frío, el `count` 5 ms | El permiso se evalúa una vez (`InitPlan`); antes, 139 ms con `crm_puede()` por fila |
+| Lista de leads de un SDR con búsqueda | 14 ms | La lista de carteras se arma una vez (`loops=1`) |
+| Briefing de una demo (actividad, tareas, reuniones, etapas, correos) | ~30 ms las cinco | Recorría toda la actividad y los cambios de etapa sin índice por lead: los suma `20261031145314_crm_indices_por_lead` |
+
+Tamaño: listas de 25 por defecto (tope 100), textos cortados a 4.000 caracteres por el
+sanitizador, el briefing con hasta 100 actividades (hoy un lead tiene como mucho 13).
+
+### Pendiente: revisión de seguridad
+
+Quedó para evaluar con calma (31/10/2026). Lo que ya está y lo que hay que mirar:
+
+| Tema | Hoy | Qué revisar |
+|---|---|---|
+| Registro dinámico abierto | Cualquiera registra una app con cualquier nombre; el consentimiento sólo aprueba si el código vuelve a Claude o ChatGPT (`oauthRedirectTrust.ts`) | Mirar cada tanto Authentication → OAuth Apps y borrar lo raro. ¿Hace falta registrar los clientes a mano y apagar el registro dinámico? |
+| El token puede cambiar la contraseña | Heredado del producto: `PUT /auth/v1/user` con el token del conector no pasa por PostgREST ni por la RLS | Prender *Secure password change* (Authentication → Sign In / Providers → Email), que en este proyecto no se verificó, y saber que igual deja 24 h abiertas |
+| Las vistas corren como su dueño | Copian la regla de la RLS (`es_usuario()`, la cartera vía `mcp_carteras_visibles()`, `crm_es_superadmin()`) | Si cambia una policy de `crm_*`, `expenses` o `client_onboardings`, la vista no se entera sola. Falta un test tipo `crm-permisos.sql` que compare vista contra RLS por usuario |
+| Qué datos salen | Sin teléfonos, emails, tokens ni archivos; sí todos los textos del equipo (notas, consejo del SDR, conversaciones, notas de contactos) | ¿Está bien que un SDR lleve a Claude/ChatGPT todo el texto de su cartera? ¿Y la caja a un SUPERADMIN? |
+| Prompt injection | Los textos los escribe el equipo; las `instructions` le piden al modelo tratarlos como datos; el sanitizador limpia caracteres raros y corta largos | Todo es sólo lectura, así que el daño posible es que el modelo lea algo mal o lo mande a otra tool del chat |
+| Auditoría | Cada llamada queda en `mcp_audit_log` (quién, qué tool, argumentos cortos, cuántas filas); la lee un SUPERADMIN | No hay pantalla para verla ni alerta de uso raro |
+| Revocar el acceso | Se quita desde Claude/ChatGPT; dar de baja a la persona (`activo = false`) corta en la siguiente llamada (403) | Ver cuánto duran los tokens y si conviene acortarlos |
+| Dominio | `vercel.app` es compartido | Un dominio propio da logo y una URL que no depende del subdominio de Vercel |
+
 ## Tests
 
 ```bash

@@ -70,6 +70,8 @@ el año sumado si no llega a 6 caracteres (ver `initialPassword` y `MIN_PASSWORD
 |---|---|---|
 | `excel` | Armar el Excel de propiedades con lo que pase el cliente | plantilla · `import_template` |
 | `importar` | Importar la cartera a su organización | `check_properties` + `import_properties` |
+| `reunion-equipo` | Agendar la capacitación con el equipo por Google Meet (31/10/2026) | WhatsApp `reunion_equipo` · reunión del CRM con `onboarding_task` · después «¿se hizo?» (`reunion-equipo-hecha`) |
+| `reunion-dueno` | Agendar la capacitación con el dueño por Google Meet (31/10/2026) | WhatsApp `reunion_dueno` · ídem (`reunion-dueno-hecha`) |
 | `tutorial-leads` | Enviar el tutorial del sistema de leads (desde el 29/10/2026; reemplazó a `llamada-org`: la org la configuran solos con la guía de Propelia) | WhatsApp `tutorial_leads` |
 | `link-pago` | Generar y enviar el link de pago | `create_payment_link` · WhatsApp `link_de_pago` |
 | `pago` | Confirmar que pagó | `list_payment_links` |

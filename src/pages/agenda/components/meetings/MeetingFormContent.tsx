@@ -84,6 +84,8 @@ type Props = {
   onAbrirContacto?: (campo: CampoDecisor) => void
   /** Con `demo`: lo que ya se venía escribiendo en otra actividad del lead, para que no se pierda. */
   registroInicial?: RegistroInicialDeDemo
+  /** La tarea del onboarding que cumple la reunión que se crea (`crm_meetings.onboarding_task`). */
+  onboardingTask?: string
   /** Recordatorio con el que nace (minutos antes; tiene que ser una de las opciones). Por defecto, ninguno. */
   defaultReminderMinutes?: number | null
   /** Notifican cada edición de título/descripción — usado por MeetingFormPopover para reflejarlas en la URL
@@ -138,6 +140,7 @@ export function MeetingFormContent({
   demo: demoPedida = false,
   registroInicial,
   onAbrirContacto,
+  onboardingTask,
   defaultReminderMinutes = null,
   onTitleChange,
   onDescriptionChange,
@@ -294,6 +297,7 @@ export function MeetingFormContent({
         reminderMinutes,
         guestUserIds,
         guestEmails,
+        onboardingTask,
       },
       {
         onSuccess: (created) => {

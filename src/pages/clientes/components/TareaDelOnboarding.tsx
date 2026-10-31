@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { ChevronRight, CreditCard, Download, FlaskConical, GraduationCap, Inbox, Link, Link2, Loader2, Mail, RotateCcw, Upload, Users } from 'lucide-react'
+import { CalendarCheck, CalendarPlus, ChevronRight, CircleOff, CreditCard, Download, FlaskConical, GraduationCap, Inbox, Link, Link2, Loader2, Mail, RotateCcw, Upload, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -8,10 +8,13 @@ import { leerPrimeraHoja } from '@/pages/crm/service/excel'
 import { useEmailsQueNoLlegaron } from '@/pages/crm/hooks/useEmails'
 import { motivoLegible, noLlegaronDelLead, rotuloDelEstado } from '@/pages/crm/lib/emails'
 import type { Celda } from '@/pages/crm/lib/importarLote'
-import { useActivarTutorialDeLeads, useMarcarTarea, useOrganizacion, useReabrirAlta } from '../hooks/useClientes'
+import { MeetingFormDialog, type EditableMeeting } from '@/pages/agenda/components/meetings/MeetingFormDialog'
+import { markMeetingOutcome } from '@/pages/agenda/service/meetings.service'
+import { useActivarTutorialDeLeads, useDesactivarTutorialDeLeads, useMarcarTarea, useOrganizacion, useReabrirAlta } from '../hooks/useClientes'
 import { estadoDelAlta } from '../lib/equipo'
 import { listaDeMailsQueNoLlegaron } from '../lib/mensajes'
-import { claveDeTarea, TAREA_CORREGIR_MAILS, TAREA_CREDENCIALES, TAREA_TUTORIAL_LEADS, type Accion, type Paso, type PlantillaId, type Tarea } from '../lib/pasos'
+import { claveDeTarea, TAREA_CORREGIR_MAILS, TAREA_CREDENCIALES, TAREA_TUTORIAL_LEADS, tareaReunionHecha, type Accion, type Paso, type PlantillaId, type Tarea } from '../lib/pasos'
+import { preguntaSiSeHizo, reunionDeLaTarea } from '../lib/reuniones'
 import { descargarExcel } from '../service/excel'
 import { enviarLeadDePrueba, getColumnasDeCartera, GRUPO_TUTORIAL_DE_LEADS, PUENTE_SIMULADO } from '../service/puente'
 import { ConfirmarAccesosDialog } from './ConfirmarAccesosDialog'
@@ -35,7 +38,7 @@ const slug = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').to
 
 /* Un renglón del paso: el tilde y el texto a la izquierda, sus acciones a la derecha y, debajo, el
    mensaje plegado (si es un WhatsApp) o el panel de la acción que se está usando. Las acciones
-   hacen el trabajo; tildar sigue siendo a mano, salvo «Recibir el equipo» (lo tilda la base cuando
+   hacen el trabajo; tildar sigue siendo a mano (agendar una capacitación la tilda), salvo «Recibir el equipo» (lo tilda la base cuando
    el cliente envía la página de alta), los dos imports y el envío de accesos, que tildan solos (y
    este último no se tilda a mano: abre la confirmación). */
 export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta; paso: Paso; tarea: Tarea }) {
@@ -45,9 +48,16 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
   const reabrir = useReabrirAlta()
   const activarTutorial = useActivarTutorialDeLeads()
   const activar = () => datos.orgId && activarTutorial.mutate({ orgId: datos.orgId, onboardingId: datos.o.id, taskId: clave })
+  const desactivarTutorial = useDesactivarTutorialDeLeads()
+  const desactivar = () => datos.orgId && desactivarTutorial.mutate({ orgId: datos.orgId, onboardingId: datos.o.id, taskId: clave })
   const [panel, setPanel] = useState<Panel | null>(null)
   const [confirmando, setConfirmando] = useState(false)
   const [ocupado, setOcupado] = useState<Accion | null>(null)
+  /* Las capacitaciones (31/10/2026): tildada es «agendada»; pasada la reunión, debajo pregunta si se hizo. */
+  const [agendando, setAgendando] = useState(false)
+  const reunion = tarea.reunion ? reunionDeLaTarea(datos.o.lead.reuniones ?? [], clave) : null
+  const claveSeHizo = tarea.reunion ? tareaReunionHecha(paso.id, tarea.id) : null
+  const seHizo = !!claveSeHizo && datos.o.tareas.some(t => t.task_id === claveSeHizo)
   const archivo = useRef<HTMLInputElement>(null)
   const alElegir = useRef<(f: File) => void>(() => {})
   const wa = tarea.acciones?.find(a => a.startsWith('wa:'))
@@ -155,6 +165,18 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
           const r = await enviarLeadDePrueba(datos.orgId!)
           toast.success(`Lead de prueba enviado a ${r.to}`, PUENTE_SIMULADO ? { description: 'Puente simulado: no salió ningún mail.' } : undefined)
         }), { requiereOrg: true })
+      case 'agendar-reunion':
+        return (
+          <span key={a} className="flex items-center gap-1.5">
+            {reunion?.activa
+              ? <span className="text-[12px] font-medium text-success">{fecha(reunion.activa.starts_at)}</span>
+              : reunion?.cancelada && <span className="text-[12px] text-(--fg-muted)">Cancelada</span>}
+            <Button size="sm" variant="outline" className="h-8" onClick={() => setAgendando(true)}>
+              {reunion?.activa ? <CalendarCheck className="size-4" /> : <CalendarPlus className="size-4" />}
+              {reunion?.activa ? 'Cambiar' : 'Agendar'}
+            </Button>
+          </span>
+        )
       case 'tutoriales':
         // Vuelve a estar a mano después de tildarla: repetir suma a quien se haya agregado al equipo.
         return (
@@ -163,6 +185,17 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
             onClick={activar}>
             {activarTutorial.isPending ? <Loader2 className="size-4 animate-spin" /> : <GraduationCap className="size-4" />}
             {hecha ? 'Activar de nuevo' : 'Activar tutoriales'}
+          </Button>
+        )
+      case 'desactivar-tutoriales':
+        // Sólo con el tutorial prendido (la tarea tildada): apagar algo que no está prendido no es una acción.
+        if (!hecha) return null
+        return (
+          <Button key={a} size="sm" variant="outline" className="h-8" disabled={!conOrg || desactivarTutorial.isPending}
+            title="Saca el «Tutorial de leads» del checklist de todo el equipo en Propelia. Lo terminado no se pierde"
+            onClick={desactivar}>
+            {desactivarTutorial.isPending ? <Loader2 className="size-4 animate-spin" /> : <CircleOff className="size-4" />}
+            Desactivar tutoriales
           </Button>
         )
       default:
@@ -185,6 +218,23 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
         )}
       </div>
       {clave === TAREA_TUTORIAL_LEADS && datos.orgId && <ProgresoDelTutorial orgId={datos.orgId} />}
+      {claveSeHizo && reunion && (seHizo || preguntaSiSeHizo(hecha, reunion, new Date())) && (() => {
+        const cuando = reunion.activa ? ` del ${fecha(reunion.activa.starts_at)}` : ''
+        return (
+          <label className={cn('ml-6.5 flex w-max max-w-full cursor-pointer items-start gap-2.5 rounded-md px-2 py-1 text-[13.5px]', !seHizo && 'border border-primary/30 bg-primary/5')}>
+            <Checkbox className="mt-0.5" checked={seHizo} onCheckedChange={v => {
+              marcar.mutate({ onboardingId: datos.o.id, taskId: claveSeHizo, hecha: v === true })
+              // La reunión queda hecha también en la Agenda; deshacer el tilde no la reabre.
+              if (v === true && reunion.activa?.status === 'scheduled') {
+                markMeetingOutcome(reunion.activa.id, 'completed').catch(() => toast.error('No se pudo marcar la reunión como hecha en la Agenda'))
+              }
+            }} />
+            <span className={cn(seHizo && 'text-(--fg-muted) line-through')}>
+              {seHizo ? `Se hizo la reunión${cuando}` : `¿Se hizo la reunión${cuando}?`}
+            </span>
+          </label>
+        )
+      })()}
       {wa && mensaje && <VerMensaje texto={mensaje} />}
       {accesosQueNoLlegaron.length > 0 && (
         <ul className="ml-6.5 flex flex-col gap-1 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12.5px]">
@@ -219,6 +269,15 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
         </div>
       )}
       <input ref={archivo} type="file" accept=".xlsx" hidden onChange={e => { const f = e.target.files?.[0]; if (f) alElegir.current(f) }} />
+      {tarea.reunion && (
+        <MeetingFormDialog open={agendando} onOpenChange={setAgendando} leadId={datos.o.lead.id}
+          assignedTo={datos.o.assigned_to ?? undefined}
+          defaultTitle={`${tarea.reunion.titulo} · ${datos.inmobiliaria}`}
+          onboardingTask={clave}
+          // La fila tiene todo lo que pide el form; `status` y `sync_status` son text en la base.
+          meeting={reunion?.activa ? reunion.activa as unknown as EditableMeeting : undefined}
+          onSaved={() => { if (!hecha) marcar.mutate({ onboardingId: datos.o.id, taskId: clave, hecha: true }) }} />
+      )}
       {clave === TAREA_CREDENCIALES && <ConfirmarAccesosDialog datos={datos} abierto={confirmando} onCerrar={() => setConfirmando(false)} />}
     </div>
   )

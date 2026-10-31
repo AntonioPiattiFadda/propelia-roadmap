@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertStringIncludes } from 'jsr:@std/assert@1'
-import { handleRequest, type AuthResult, type McpDeps } from './index.ts'
+import { handleRequest, mensajeDeError, type AuthResult, type McpDeps } from './index.ts'
 import type { McpDb } from '../_shared/mcp/db.ts'
 import type { AuditEntry } from '../_shared/mcp/audit.ts'
 
@@ -155,4 +155,13 @@ Deno.test('si la base falla: isError con mensaje genérico, sin filtrar el error
   assertEquals(result.isError, true)
   assert(!result.content[0].text.includes('permission'))
   assertEquals(audits[0].ok, false)
+})
+
+Deno.test('mensajeDeError: el error de PostgREST queda legible en la auditoría, no «[object Object]»', () => {
+  assertEquals(
+    mensajeDeError({ code: '42501', message: 'permission denied for function mcp_carteras_visibles', details: null, hint: null }),
+    '42501 · permission denied for function mcp_carteras_visibles',
+  )
+  assertEquals(mensajeDeError(new Error('red')), 'red')
+  assertEquals(mensajeDeError({ raro: 1 }), '{"raro":1}')
 })

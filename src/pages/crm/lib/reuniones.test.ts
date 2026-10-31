@@ -59,7 +59,7 @@ describe('valores de fábrica de la demo', () => {
 const reunion = (id: string, starts: Date, status: CrmMeeting['status'] = 'scheduled'): CrmMeeting => ({
   id, lead_id: 'l', assigned_to: 'u', starts_at: starts.toISOString(), ends_at: new Date(starts.getTime() + 3600_000).toISOString(),
   status, title: null, description: null, cancel_reason: null, created_by: null, created_at: '', updated_at: '', deleted_at: null,
-  sync_status: 'disabled', sync_error: null, sync_attempts: 0, external_event_id: null, external_provider: null, ics_sequence: 0, color_id: null, reminder_minutes: null, guest_user_ids: [], guest_emails: [],
+  sync_status: 'disabled', sync_error: null, sync_attempts: 0, external_event_id: null, external_provider: null, ics_sequence: 0, color_id: null, reminder_minutes: null, guest_user_ids: [], guest_emails: [], onboarding_task: null,
 })
 
 describe('armarReunion', () => {
