@@ -72,21 +72,21 @@ Deno.test('metadata OAuth: en local usa la URL pública, no la interna del runti
   assertEquals(body.authorization_servers, ['http://127.0.0.1:54321/auth/v1'])
 })
 
-Deno.test('por el proxy del tablero (?via=equipo): resource es equipo.propelia.es/mcp; Auth sigue en Supabase', async () => {
+Deno.test('por el proxy del tablero (?via=equipo): resource es propelia-roadmap.vercel.app/mcp; Auth sigue en Supabase', async () => {
   const { deps } = setup()
   const res = await handleRequest(new Request(`${MCP_URL}/.well-known/oauth-protected-resource?via=equipo`), deps)
   const body = await res.json()
-  assertEquals(body.resource, 'https://equipo.propelia.es/mcp')
+  assertEquals(body.resource, 'https://propelia-roadmap.vercel.app/mcp')
   assertEquals(body.authorization_servers, ['https://ref.supabase.co/auth/v1'])
 })
 
-Deno.test('por el proxy del tablero: el 401 apunta a la metadata bajo equipo.propelia.es', async () => {
+Deno.test('por el proxy del tablero: el 401 apunta a la metadata bajo propelia-roadmap.vercel.app', async () => {
   const { deps } = setup()
   const res = await handleRequest(rpc(INITIALIZE, null, `${MCP_URL}?via=equipo`), deps)
   assertEquals(res.status, 401)
   assertEquals(
     res.headers.get('WWW-Authenticate'),
-    'Bearer resource_metadata="https://equipo.propelia.es/mcp/.well-known/oauth-protected-resource"',
+    'Bearer resource_metadata="https://propelia-roadmap.vercel.app/mcp/.well-known/oauth-protected-resource"',
   )
 })
 

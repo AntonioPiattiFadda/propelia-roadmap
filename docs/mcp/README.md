@@ -35,14 +35,14 @@ que carga el cliente, los tokens de Google ni los archivos. Sí salen los textos
 equipo (notas, explicaciones, conversaciones, consejo del SDR): es el CRM interno y sin eso no
 sirve. Las `instructions` del servidor le piden al modelo tratarlos como datos.
 
-URL que se pega: **`https://equipo.propelia.es/mcp`**
+URL que se pega: **`https://propelia-roadmap.vercel.app/mcp`**
 
 - **Claude**: Settings → Connectors → Add custom connector.
 - **ChatGPT**: Settings → Connectors (o Apps) → Advanced → *Developer mode*; después Create →
   pegar la URL, autenticación OAuth.
 
 Es un proxy de Vercel (`vercel.json`) a `…supabase.co/functions/v1/mcp?via=equipo`; con eso la
-función anuncia `equipo.propelia.es/mcp` como `resource` (`publicUrls`,
+función anuncia `propelia-roadmap.vercel.app/mcp` como `resource` (`publicUrls`,
 `_shared/mcp/oauthResource.ts`). Existe por el ícono: claude.ai ignora `serverInfo.icons` y
 muestra el favicon que Google tiene para el dominio de la URL del conector. Con la URL de
 Supabase sale el logo de Supabase.
@@ -107,7 +107,7 @@ Sign In / Providers → Email).
 2. Dashboard → **Authentication → OAuth Server**: habilitar, *Authorization path*
    `/oauth/consent`, *Allow dynamic client registration* activado.
 3. Dashboard → **Authentication → URL Configuration**: el *Site URL* tiene que ser
-   `https://equipo.propelia.es` (el consentimiento se abre en `<Site URL>/oauth/consent`).
+   `https://propelia-roadmap.vercel.app` (el consentimiento se abre en `<Site URL>/oauth/consent`).
 4. `supabase functions deploy` de **todas** las funciones (todas llevan el guard; `mcp` toma
    `verify_jwt = false` de `config.toml`) y el front en Vercel (ruta nueva + proxy).
 5. Probar: agregar el conector en Claude y pedirle «¿con qué cuenta estás conectado?», después

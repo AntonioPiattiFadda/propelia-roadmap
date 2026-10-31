@@ -24,15 +24,15 @@ export interface McpPublicUrls {
 /**
  * URL del conector bajo el dominio del tablero. Claude no usa el ícono que manda el servidor:
  * pide a Google el favicon del dominio de la URL del conector. Con la URL de Supabase el
- * conector sale con el logo de Supabase. vercel.json reenvía `equipo.propelia.es/mcp` a esta
+ * conector sale con el logo de Supabase. vercel.json reenvía `propelia-roadmap.vercel.app/mcp` a esta
  * función agregando `?via=equipo`.
  */
-export const EQUIPO_MCP_URL = 'https://equipo.propelia.es/mcp'
+export const TABLERO_MCP_URL = 'https://propelia-roadmap.vercel.app/mcp'
 export const VIA_PARAM = 'via'
 
 /**
  * Las URLs tienen que ser las PÚBLICAS, y `resource` la misma que el cliente pegó en Claude:
- *   · llegó por el proxy del tablero (`?via=equipo`) → `EQUIPO_MCP_URL` (pisable con MCP_RESOURCE_URL);
+ *   · llegó por el proxy del tablero (`?via=equipo`) → `TABLERO_MCP_URL` (pisable con MCP_RESOURCE_URL);
  *   · si no → la de Supabase.
  * Dentro del edge runtime local `SUPABASE_URL` es `http://kong:8000`, inalcanzable para Claude
  * o el MCP Inspector: en local se pisa con `MCP_PUBLIC_SUPABASE_URL`.
@@ -42,7 +42,7 @@ export function publicUrls(getEnv: GetEnv, req?: Request): McpPublicUrls {
   const base = (getEnv('MCP_PUBLIC_SUPABASE_URL') || getEnv('SUPABASE_URL') || '').replace(/\/+$/, '')
   const viaEquipo = req ? new URL(req.url).searchParams.get(VIA_PARAM) === 'equipo' : false
   const resource = viaEquipo
-    ? (getEnv('MCP_RESOURCE_URL') || EQUIPO_MCP_URL).replace(/\/+$/, '')
+    ? (getEnv('MCP_RESOURCE_URL') || TABLERO_MCP_URL).replace(/\/+$/, '')
     : `${base}/functions/v1/mcp`
   return { resource, metadata: `${resource}${METADATA_PATH}`, authorizationServer: `${base}/auth/v1` }
 }

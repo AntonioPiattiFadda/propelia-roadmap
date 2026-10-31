@@ -1,7 +1,7 @@
 // Servidor MCP remoto del tablero (Roadmap, CRM, Caja): lo que se conecta como "custom
 // connector" en Claude (web, Desktop o mobile) o como app en ChatGPT (developer mode).
 // Copiado de `mcp` de propelia-frontend. Detalle en docs/mcp/README.md.
-// URL: https://equipo.propelia.es/mcp (proxy de vercel.json a esta función)
+// URL: https://propelia-roadmap.vercel.app/mcp (proxy de vercel.json a esta función)
 //
 //   GET  …/mcp/.well-known/oauth-protected-resource   metadata OAuth (pública, sin token)
 //   POST …/mcp                                        JSON-RPC de MCP (Streamable HTTP)
@@ -70,7 +70,7 @@ function supabaseAuthenticate(getEnv: GetEnv) {
 }
 
 const SERVER_ICONS = [
-  { src: 'https://equipo.propelia.es/favicon.png', mimeType: 'image/png', sizes: ['256x256'] },
+  { src: 'https://propelia-roadmap.vercel.app/favicon.png', mimeType: 'image/png', sizes: ['256x256'] },
 ]
 
 const INSTRUCTIONS =
@@ -128,7 +128,7 @@ function registerTool(server: McpServer, tool: McpToolDef, tools: ToolContext, c
 
 function buildServer(tools: ToolContext, ctx: CallContext): McpServer {
   // `icons` es el estándar (SEP-973), pero claude.ai lo ignora y usa el favicon del dominio de
-  // la URL del conector (ver EQUIPO_MCP_URL). Va igual, para los clientes que sí lo leen.
+  // la URL del conector (ver TABLERO_MCP_URL). Va igual, para los clientes que sí lo leen.
   const server = new McpServer(
     { name: 'propelia-roadmap', title: 'Propelia Roadmap', version: '1.0.0', icons: SERVER_ICONS },
     { instructions: INSTRUCTIONS },

@@ -209,7 +209,7 @@ acá son las reuniones del CRM (`crm_meetings`, las demos incluidas). Migración
 - Código en `src/pages/agenda/` (libs puras con sus tests, copiados del producto) y
   `supabase/functions/_shared/{googleCalendar,webhookSync,googleOAuth,googleTokens,oauthState,tokenCrypto}.ts`.
 
-## Conector MCP (Claude / ChatGPT) — `equipo.propelia.es/mcp`
+## Conector MCP (Claude / ChatGPT) — `propelia-roadmap.vercel.app/mcp`
 
 Desde el 30/10/2026, copiado de `propelia-frontend` (por pedido). Infra en la migración
 `20261030115614_mcp_oauth_infra` (aplicada) y, desde el 31/10/2026, **doce tools de sólo lectura**
