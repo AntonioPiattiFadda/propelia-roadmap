@@ -75,7 +75,11 @@ export const getLinksDePago = (org_id: string) =>
 /** Prende el «Tutorial de leads» (grupo `leads` de Propelia) a todo el equipo de la org: a cada
  *  uno los tours de su rol (los avisos a leads, sólo a los admin). Repetirlo no pisa lo hecho. */
 export const activarTutorialDeLeads = (org_id: string) =>
-  invocar<{ group_id: string; activated: number; users: ({ id: string; name: string; role: string } & Partial<ProgresoDeTutorial>)[] }>(
+  invocar<{
+    group_id: string; activated: number; users: ({ id: string; name: string; role: string } & Partial<ProgresoDeTutorial>)[]
+    /** Lo de ejemplo que se creó para poder hacer los recorridos (un `roadmap-bridge` anterior no lo trae). */
+    demo?: { properties_created: number; leads_created: number }
+  }>(
     'activate_tour_group', { org_id, group_id: GRUPO_TUTORIAL_DE_LEADS })
 /** Lo apaga: saca el grupo del checklist de todo el equipo. Lo terminado sigue contando como
  *  terminado si se vuelve a activar (las vueltas de cada tour quedan en Propelia). */

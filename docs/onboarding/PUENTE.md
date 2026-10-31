@@ -155,7 +155,13 @@ entró al equipo después.
   "users": [ { "id": "a1…", "name": "Marta Gil", "role": "admin", "total": 6, "activated": 6, "done": 0 } ] }
 ```
 
-`activated` cuenta las filas que esta llamada prendió. Errores: `bad_request` (grupo desconocido u
+`activated` cuenta las filas que esta llamada prendió. **Desde el 31/10/2026 (pedido, a construir en el
+producto)** también trae `demo: { properties_created, leads_created }`. Para que haya algo que mostrar
+en los recorridos, se le crea un lead comprador de ejemplo a cada usuario sin leads, armado a partir
+de un inmueble de la org para que el matching le encuentre cruces. Y a la org, un inmueble de ejemplo
+si no tiene ninguno. Los dos van marcados como ejemplo: no cuentan, no avisan a nadie y
+`deactivate_tour_group` los borra. /clientes lo dice en el aviso (`textoDeEjemplos`). Un
+`roadmap-bridge` anterior no lo trae y no pasa nada. Errores: `bad_request` (grupo desconocido u
 `org_id` inválido), `not_found` (org). Hace falta la migración `20261029210026_tour_guide_trigger`
 del producto (sin ella el trigger `guide` no pasa el `check`). /clientes lo llama al tildar «Activar
 el tutorial de cómo funciona el sistema de leads» o con su botón.

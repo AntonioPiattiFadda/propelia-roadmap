@@ -89,12 +89,23 @@ export function useActivarTutorialDeLeads() {
     onSuccess: r => {
       const personas = r.users.filter(u => u.activated).length
       toast.success(`Tutorial de leads activado para ${personas} ${personas === 1 ? 'persona' : 'personas'}`, {
-        description: 'Lo ven en Propelia al lado de «Primeros pasos». Los avisos a leads, sólo los admin.',
+        description: ['Lo ven en Propelia al lado de «Primeros pasos». Los avisos a leads, sólo los admin.', textoDeEjemplos(r.demo)]
+          .filter(Boolean).join(' '),
       })
     },
     onError: e => toast.error('No se pudo activar el tutorial', { description: mensajeDeError(e) }),
     onSettled: (_r, _e, v) => qc.invalidateQueries({ queryKey: CLIENTES_KEYS.org(v.orgId) }),
   })
+}
+
+/** «Se creó un lead de ejemplo para 2 personas y un inmueble de ejemplo.», o nada si no se creó nada. */
+export function textoDeEjemplos(demo: { properties_created: number; leads_created: number } | undefined): string {
+  if (!demo) return ''
+  const partes = [
+    demo.leads_created > 0 && `un lead de ejemplo para ${demo.leads_created} ${demo.leads_created === 1 ? 'persona' : 'personas'}`,
+    demo.properties_created > 0 && 'un inmueble de ejemplo',
+  ].filter(Boolean)
+  return partes.length ? `Se creó ${partes.join(' y ')}, para que puedan hacer los recorridos.` : ''
 }
 
 /** Lo contrario: apaga el tutorial en Propelia y destilda la tarea. Volver a activarlo no pierde lo
