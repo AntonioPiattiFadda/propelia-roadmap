@@ -1,1 +1,18 @@
-{ "rewrites": [{ "source": "/video", "destination": "/video.html" }, { "source": "/(.*)", "destination": "/index.html" }] }
+{
+  "rewrites": [
+    { "source": "/video", "destination": "/video.html" },
+    {
+      "source": "/mcp",
+      "destination": "https://itqwxnmuxuiiydsueazb.supabase.co/functions/v1/mcp?via=equipo"
+    },
+    {
+      "source": "/mcp/:path(.*)",
+      "destination": "https://itqwxnmuxuiiydsueazb.supabase.co/functions/v1/mcp/:path?via=equipo"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/mcp",
+      "destination": "https://itqwxnmuxuiiydsueazb.supabase.co/functions/v1/mcp/.well-known/oauth-protected-resource?via=equipo"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

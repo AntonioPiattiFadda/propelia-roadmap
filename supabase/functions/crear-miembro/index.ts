@@ -1,6 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { crearMiembro, type CrearMiembroDb } from './crearMiembro.ts'
+import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 
 /* Alta de un miembro desde /equipo. Existe porque crear una cuenta en auth.users pide el
    service_role, que no puede ir al navegador. Quién puede llamarla lo decide `crearMiembro`
@@ -45,7 +46,7 @@ async function quienLlamaId(req: Request): Promise<string | null> {
   return data?.user?.id ?? null
 }
 
-Deno.serve(async req => {
+Deno.serve(withoutOAuthClients(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
 
   const callerId = await quienLlamaId(req)
@@ -63,4 +64,4 @@ Deno.serve(async req => {
   return r.ok
     ? new Response(JSON.stringify({ user: r.user }), { headers: json })
     : new Response(JSON.stringify({ error: r.error }), { status: r.status, headers: json })
-})
+}))

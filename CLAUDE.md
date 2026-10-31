@@ -209,6 +209,28 @@ acá son las reuniones del CRM (`crm_meetings`, las demos incluidas). Migración
 - Código en `src/pages/agenda/` (libs puras con sus tests, copiados del producto) y
   `supabase/functions/_shared/{googleCalendar,webhookSync,googleOAuth,googleTokens,oauthState,tokenCrypto}.ts`.
 
+## Conector MCP (Claude / ChatGPT) — `equipo.propelia.es/mcp`
+
+Desde el 30/10/2026, copiado de `propelia-frontend` (por pedido). Infra en la migración
+`20261030115614_mcp_oauth_infra` (aplicada) y, desde el 31/10/2026, **doce tools de sólo lectura**
+(roadmap, CRM, altas y caja) sobre las vistas de `20261031135450_mcp_tools`, que **la aplica
+Antonio**. Todo en `docs/mcp/README.md`, con la tabla de tools.
+
+- **Cada uno ve lo que ve en la app**: las vistas corren como su dueño y recortan con las mismas
+  funciones que la RLS (`es_usuario()`, `crm_puede*()`, y `crm_es_superadmin()` para altas y caja).
+  Si cambia una regla de RLS de esas tablas, cambia también en su vista `mcp_*`.
+- **Nunca salen teléfonos ni emails** (las vistas no los tienen) ni tokens; sí los textos del equipo.
+
+- **El token del conector solo sirve para el MCP**: es un JWT del usuario con `client_id`, y la
+  base (guard de PostgREST + RLS restrictiva en todas las tablas + Storage) y las edge functions
+  (`withoutOAuthClients`) lo cortan en todo lo demás. **Una tabla nueva** termina su migración con
+  `select public.oauth_guard_apply();`; **una edge function nueva** va con
+  `Deno.serve(withoutOAuthClients(…))` (lo verifica `_shared/auth/todasLasFunciones.test.ts`).
+- Una tool nueva lee de una **vista `mcp_*`**, nunca de la tabla, y se suma a la lista blanca en
+  la base y en `_shared/mcp/relations.ts`. Y se actualiza lo que promete `/oauth/consent`.
+- El consentimiento (`/oauth/consent`) pide fila activa en `users` y solo aprueba si el código
+  vuelve a Claude o ChatGPT (`lib/oauthRedirectTrust.ts`).
+
 ## Onboarding de clientes — `/onboarding` (a construir)
 
 Desde el 26/10/2026 el alta de clientes nuevos se muda de `propelia-frontend` (`/onboarding-admin`)

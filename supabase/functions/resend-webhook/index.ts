@@ -1,13 +1,14 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { handleWebhook } from './resendWebhook.ts'
+import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 
 /* El webhook de Resend (20/10/2026): le cambia el estado a la fila de `crm_emails` que escribió
    `send-email` al mandar. Lo llama Resend, sin JWT (`verify_jwt = false` en `config.toml`): la
    puerta es la firma svix, con el secreto `RESEND_WEBHOOK_SECRET` que da el panel de Resend.
    Que el estado solo avance lo decide `crm_email_evento()` en la base. */
 
-Deno.serve(async req => {
+Deno.serve(withoutOAuthClients(async req => {
   if (req.method !== 'POST') return new Response('Método no permitido', { status: 405 })
   const cuerpo = await req.text()
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
@@ -26,4 +27,4 @@ Deno.serve(async req => {
     },
   )
   return new Response(JSON.stringify(r.body), { status: r.status, headers: { 'Content-Type': 'application/json' } })
-})
+}))

@@ -1,6 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { reenviar, type PuenteDb } from './puente.ts'
+import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 
 /* El puente con Propelia para el onboarding de clientes (docs/onboarding/PUENTE.md). El front
    nunca habla con Propelia: llama acá, y acá se decide quién puede (`reenviar`). */
@@ -28,7 +29,7 @@ async function quienLlamaId(req: Request): Promise<string | null> {
   return data?.user?.id ?? null
 }
 
-Deno.serve(async req => {
+Deno.serve(withoutOAuthClients(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'method_not_allowed', message: 'Método no permitido.' }), { status: 405, headers: json })
@@ -42,4 +43,4 @@ Deno.serve(async req => {
     fetch,
   })
   return new Response(JSON.stringify(r.body), { status: r.status, headers: json })
-})
+}))

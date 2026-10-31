@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { planGoogleSync, mapMeetingToGoogleEvent, mapGoogleEventsToAgenda, buildGuestAttendees, mapGuestResponses, type GoogleAttendee, type RawGoogleEvent } from '../_shared/googleCalendar.ts'
 import { refreshAccessToken } from '../_shared/googleTokens.ts'
 import { encryptToken, decryptToken } from '../_shared/tokenCrypto.ts'
+import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 
 /* Copiada de `propelia-frontend` (21/10/2026), donde sincroniza `visits`. Acá empuja las reuniones
    del CRM (`crm_meetings`, las demos incluidas) al Google Calendar de su responsable y lee la agenda
@@ -342,7 +343,7 @@ const processMeeting = async (admin: SupabaseClient, meetingId: string, encrypti
   return { google }
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withoutOAuthClients(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -587,4 +588,4 @@ Deno.serve(async (req: Request) => {
   } catch {
     return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500, headers: jsonHeaders })
   }
-})
+}))

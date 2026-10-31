@@ -1,6 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { reactivarMiembro, type ReactivarMiembroDb } from './reactivarMiembro.ts'
+import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 
 /* Reactivar a un miembro desde /equipo, con contraseña nueva opcional. Existe porque cambiarle la
    contraseña a otra cuenta pide el service_role, que no puede ir al navegador, y el front no tiene
@@ -42,7 +43,7 @@ async function quienLlamaId(req: Request): Promise<string | null> {
   return data?.user?.id ?? null
 }
 
-Deno.serve(async req => {
+Deno.serve(withoutOAuthClients(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
 
   const callerId = await quienLlamaId(req)
@@ -56,4 +57,4 @@ Deno.serve(async req => {
   return r.ok
     ? new Response(JSON.stringify({ ok: true }), { headers: json })
     : new Response(JSON.stringify({ error: r.error }), { status: r.status, headers: json })
-})
+}))

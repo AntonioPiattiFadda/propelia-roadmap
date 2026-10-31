@@ -363,12 +363,14 @@ enabled = false
 
 # OAuth server configuration
 [auth.oauth_server]
-# Enable OAuth server functionality
-enabled = false
+# Servidor OAuth para el conector MCP (docs/mcp/README.md). En producción se prende desde el
+# dashboard: Authentication → OAuth Server.
+enabled = true
 # Path for OAuth consent flow UI
 authorization_url_path = "/oauth/consent"
-# Allow dynamic client registration
-allow_dynamic_registration = false
+# Claude y ChatGPT se registran solos. Registrarse no da acceso a nada: cada usuario igual tiene
+# que loguearse y aprobar en la pantalla de consentimiento.
+allow_dynamic_registration = true
 
 [edge_runtime]
 enabled = true
@@ -430,4 +432,9 @@ verify_jwt = false
 # La página pública de alta del cliente (crm.propelia.es/alta/<token>): el cliente no tiene
 # cuenta, así que no hay JWT. La llave es el token del enlace (`client_onboardings.public_token`).
 [functions.onboarding-alta]
+verify_jwt = false
+
+# Servidor MCP (conector de Claude / ChatGPT, docs/mcp/README.md). Se autentica sola con el token
+# OAuth: el 401 del gateway no trae el `WWW-Authenticate` y Claude no encontraría el login.
+[functions.mcp]
 verify_jwt = false

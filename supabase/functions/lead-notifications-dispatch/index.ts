@@ -8,6 +8,7 @@ import {
   createSupabaseDispatchDb,
   emailAssetsBaseUrl,
 } from '../_shared/leadNotifications/supabaseAdapters.ts'
+import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 
 const jsonHeaders = { 'Content-Type': 'application/json' }
 
@@ -19,7 +20,7 @@ const jsonHeaders = { 'Content-Type': 'application/json' }
  * producto usa un secreto de Vault). Llamarlo de más no manda nada de más: solo vacía la cola, y
  * cada envío lleva Idempotency-Key.
  */
-Deno.serve(async (_req: Request) => {
+Deno.serve(withoutOAuthClients(async (_req: Request) => {
   const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 
   try {
@@ -37,4 +38,4 @@ Deno.serve(async (_req: Request) => {
     console.error('lead-notifications-dispatch:', error instanceof Error ? error.message : error)
     return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500, headers: jsonHeaders })
   }
-})
+}))

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logo Propelia Roadmap</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: una hoja de muestras — cada variante es una ficha con el logo grande y las tres
+   escalas en que se usa de verdad (favicon 16 y 32, avatar del conector 48) sobre claro y oscuro. */
+:root {
+  --bg: #F3F5FB;
+  --surface: #FFFFFF;
+  --fg: #0D1530;
+  --muted: #5A6485;
+  --line: #DCE1EF;
+  --accent: #0147FE;
+  --tile-dark: #0D1530;
+  --tile-light: #FFFFFF;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0A0F22; --surface: #121A36; --fg: #E8ECF8; --muted: #95A0C2; --line: #26304F;
+    --accent: #5B8CFF; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0A0F22; --surface: #121A36; --fg: #E8ECF8; --muted: #95A0C2; --line: #26304F;
+  --accent: #5B8CFF; color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: grid; gap: 32px; }
+header { display: grid; gap: 8px; max-width: 68ch; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font-family: var(--display); font-weight: 700; font-size: clamp(28px, 4vw, 40px); line-height: 1.1; margin: 0; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  display: grid; grid-template-rows: auto auto 1fr auto; overflow: hidden; min-width: 0;
+}
+.card.rec { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.hero { display: grid; place-items: center; padding: 28px 0 20px; background:
+  radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--accent) 9%, transparent), transparent 65%); }
+.hero svg { width: 148px; height: 148px; }
+.scales { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line); }
+.tile { display: flex; align-items: end; justify-content: center; gap: 18px; padding: 14px 8px 10px; }
+.tile.light { background: var(--tile-light); }
+.tile.dark { background: var(--tile-dark); }
+.tile figure { margin: 0; display: grid; justify-items: center; gap: 4px; }
+.tile figcaption { font-family: var(--mono); font-size: 10px; color: #8A93B0; font-variant-numeric: tabular-nums; }
+.meta { padding: 16px 18px 6px; display: grid; gap: 4px; min-width: 0; }
+.meta h2 { font-family: var(--display); font-weight: 600; font-size: 19px; margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tag { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--accent); border: 1px solid currentColor; border-radius: 999px; padding: 1px 8px; }
+.meta p { margin: 0; color: var(--muted); font-size: 14px; }
+.foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 18px 16px; }
+.code { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+button {
+  font: 500 13px var(--body); color: var(--fg); background: transparent; border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.note { max-width: 68ch; color: var(--muted); font-size: 14px; border-left: 3px solid var(--accent); padding-left: 14px; }
+.note strong { color: var(--fg); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Conector MCP · equipo.propelia.es</span>
+    <h1>Variantes del logo para el tablero</h1>
+    <p>El P de Propelia con un guiño a tareas y roadmap. Cada ficha muestra el logo grande y cómo se ve donde importa: favicon a 16 y 32 px y el avatar del conector a 48 px, sobre fondo claro y oscuro.</p>
+  </header>
+
+  <div class="grid" id="grid"></div>
+
+  <p class="note"><strong>Para elegir:</strong> a 16 px solo sobreviven las formas grandes. La casilla (C) y la insignia (F) se siguen leyendo; el tilde chico (B) y el hito (E) se pierden. El que elijas lo paso a <code>public/favicon.png</code> y al ícono del servidor MCP.</p>
+</div>
+
+<script>
+const VARIANTES = [
+  { k: 'A', nombre: 'Original', texto: 'El P de Propelia como está hoy, de referencia.' },
+  { k: 'B', nombre: 'Tilde', texto: 'Un tilde dentro del ojo del P: tarea hecha.' },
+  { k: 'C', nombre: 'Casilla', texto: 'El ojo del P es una casilla tildada. Se lee como checklist sin dejar de ser el P.', rec: true },
+  { k: 'D', nombre: 'Pila de tareas', texto: 'El palo son tres renglones que se apagan: hecha, en curso, por hacer.' },
+  { k: 'E', nombre: 'Hito', texto: 'El palo es una línea de tiempo con hitos: el roadmap.' },
+  { k: 'F', nombre: 'Insignia', texto: 'El P intacto con una insignia de tilde. Distinto del producto sin tocar la marca.', rec: true },
+]
+
+const STEM = '<rect x="12" y="4" width="24" height="88" rx="12" fill="url(#G)"/>'
+const RING = '<circle cx="56" cy="40" r="26" fill="none" stroke="url(#G)" stroke-width="22"/>'
+const check = (d, w, color = 'url(#G)') =>
+  `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"/>`
+
+const CUERPOS = {
+  A: STEM + RING,
+  B: STEM + RING + check('M48.5 40.5 l5 5 l9.5 -10.5', 4.5),
+  C: STEM + '<rect x="31" y="14" width="50" height="50" rx="14" fill="none" stroke="url(#G)" stroke-width="20"/>'
+      + check('M47.5 39.5 l6 6 l11 -12', 5.5),
+  D: RING
+      + '<rect x="12" y="4" width="24" height="26" rx="12" fill="url(#G)"/>'
+      + '<rect x="12" y="36" width="24" height="24" rx="12" fill="url(#G)" opacity=".72"/>'
+      + '<rect x="12" y="66" width="24" height="26" rx="12" fill="url(#G)" opacity=".45"/>',
+  E: RING
+      + '<rect x="20" y="4" width="8" height="86" rx="4" fill="url(#G)"/>'
+      + '<circle cx="24" cy="62" r="9" fill="url(#G)"/>'
+      + '<circle cx="24" cy="86" r="8" fill="#fff" stroke="url(#G)" stroke-width="5"/>',
+  F: STEM + RING
+      + '<circle cx="77" cy="79" r="18" fill="#0A1A4A" stroke="#fff" stroke-width="5"/>'
+      + check('M69.5 79.5 l5 5 l9 -10', 4.5, '#fff'),
+}
+
+let n = 0
+function svg(k) {
+  const id = 'g' + (n++)
+  const defs = `<defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="10" y1="95" x2="95" y2="5">`
+    + '<stop offset="0" stop-color="#0B3BFF"/><stop offset=".55" stop-color="#2F7BFF"/><stop offset="1" stop-color="#3FD4F5"/>'
+    + '</linearGradient></defs>'
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="Variante ${k}">`
+    + defs + CUERPOS[k].replaceAll('url(#G)', `url(#${id})`) + '</svg>'
+}
+
+const escalas = k => [16, 32, 48].map(px =>
+  `<figure><span style="width:${px}px;height:${px}px;display:block">${svg(k).replace('<svg ', `<svg width="${px}" height="${px}" `)}</span><figcaption>${px}</figcaption></figure>`).join('')
+
+document.getElementById('grid').innerHTML = VARIANTES.map(v => `
+  <article class="card${v.rec ? ' rec' : ''}">
+    <div class="hero">${svg(v.k)}</div>
+    <div class="scales">
+      <div class="tile light" aria-label="Sobre fondo claro">${escalas(v.k)}</div>
+      <div class="tile dark" aria-label="Sobre fondo oscuro">${escalas(v.k)}</div>
+    </div>
+    <div class="meta">
+      <h2>${v.k} · ${v.nombre}${v.rec ? '<span class="tag">recomendada</span>' : ''}</h2>
+      <p>${v.texto}</p>
+    </div>
+    <div class="foot">
+      <span class="code">viewBox 100×100</span>
+      <button type="button" id="copiar-${v.k}" data-k="${v.k}">Copiar SVG</button>
+    </div>
+  </article>`).join('')
+
+document.getElementById('grid').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-k]')
+  if (!b) return
+  const texto = svg(b.dataset.k)
+  try {
+    await navigator.clipboard.writeText(texto)
+    b.textContent = 'Copiado'
+  } catch {
+    b.textContent = 'No se pudo copiar'
+  }
+  setTimeout(() => { b.textContent = 'Copiar SVG' }, 1600)
+})
+</script>
+</body>
+</html>

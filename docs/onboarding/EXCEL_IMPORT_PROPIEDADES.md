@@ -9,7 +9,8 @@ También se puede partir de la plantilla del botón **Descargar plantilla**.
 - Se lee **sólo la primera hoja**.
 - La **primera fila** son los nombres de las columnas; desde la segunda, una propiedad por fila.
 - Tienen que estar **las 14 columnas**, aunque alguna quede vacía. Si falta una, el archivo
-  se rechaza entero.
+  se rechaza entero. Las dos de agentes (al final) son **opcionales**: sin ellas, las
+  propiedades entran sin agente.
 - Los nombres de las columnas no distinguen **mayúsculas, acentos ni orden**: `Baños`,
   `BANOS` y `baños` son la misma. Las columnas de más se ignoran.
 - Las filas totalmente vacías se saltean.
@@ -32,6 +33,8 @@ También se puede partir de la plantilla del botón **Descargar plantilla**.
 | Ascensor | **Sí** | `Sí` o `No` | `Sí` |
 | m² construidos | No | Número | `85` |
 | Balcón | No | `Sí` o `No` | `No` |
+| Agente captador | No | Email (o nombre) de alguien de la organización | `marta@inmobiliaria.es` |
+| Agente comercializador | No | Email (o nombre) de alguien de la organización | `marta@inmobiliaria.es` |
 
 ## Detalle de cada columna
 
@@ -100,6 +103,16 @@ En un garaje, local o terreno, poné `0`.
 Se acepta `Sí`, `Si`, `S`, `X`, `1` o `true` para sí, y `No`, `N`, `0` o `false` para no.
 
 Ascensor es obligatorio; Balcón se puede dejar vacío.
+
+### Agente captador y Agente comercializador
+
+Desde el 29/10/2026 (por pedido, con el Excel de Docta). Van a `captured_by` y
+`commercialized_by` de la propiedad. Se busca a la persona **entre las cuentas de la
+organización** (por eso se importa después del equipo): primero por email (sin importar
+mayúsculas), y si no, por «Nombre Apellido» o por el nombre solo si no hay dos iguales. Vacía =
+sin agente. Alguien que no está en la org, o un nombre que son dos personas, es un error de esa
+fila. También se reconocen `Captador`, `Captado por`, `Captured by`, `Comercializador`,
+`Comercializado por` y `Commercialized by`, y el «▼» de un desplegable en la cabecera no cuenta.
 
 ## Ejemplo
 

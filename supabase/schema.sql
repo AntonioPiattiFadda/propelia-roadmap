@@ -2722,3 +2722,332 @@ update public.crm_leads l set lead_type = 'ONBOARDING'
 from public.crm_funnel_stages s
 where s.id = l.funnel_stage_id and s.starts_onboarding and s.deleted_at is null
   and l.lead_type = 'LEAD' and l.deleted_at is null;
+
+
+-- ========== Conector MCP (Claude / ChatGPT) ==========
+-- Va al final a propósito: `oauth_guard_apply()` le pone la política restrictiva a todas las
+-- tablas que existen en ese momento. Una tabla nueva en este archivo va ARRIBA de esto.
+-- Migración 20261030115614_mcp_oauth_infra; docs/mcp/README.md.
+
+-- ─── quién soy (el MCP lo usa en vez de leer `users`, que queda cerrada) ───
+create or replace function public.mcp_whoami()
+returns jsonb
+language sql
+stable
+security definer
+set search_path to 'public'
+as $$
+  select jsonb_build_object(
+    'user_id', u.id,
+    'activo', u.activo,
+    'nombre', u.nombre,
+    'rol', u.rol
+  )
+  from public.users u
+  where u.id = auth.uid();
+$$;
+
+revoke all on function public.mcp_whoami() from public, anon;
+grant execute on function public.mcp_whoami() to authenticated;
+
+-- ─── lista blanca ──────────────────────────────────────────────────────────
+create or replace function public.mcp_oauth_relations()
+returns text[]
+language sql
+immutable
+as $$
+  select array[
+    'mcp_team', 'mcp_roadmap_tareas', 'mcp_roadmap_grupos', 'mcp_crm_stages', 'mcp_crm_leads',
+    'mcp_crm_tasks', 'mcp_crm_meetings', 'mcp_crm_comments', 'mcp_crm_stage_history',
+    'mcp_onboardings', 'mcp_expenses'
+  ]::text[];
+$$;
+
+create or replace function public.mcp_oauth_rpcs()
+returns text[]
+language sql
+immutable
+as $$
+  select array['mcp_whoami']::text[];
+$$;
+
+-- ─── 1. PostgREST: guard antes de cada request ─────────────────────────────
+-- Corre en TODOS los requests de la API: tiene que ser barato y no fallar nunca para uno
+-- normal. Si los claims no se pueden leer, deja pasar (la capa 2 sigue cerrando al conector).
+create or replace function public.oauth_client_request_guard()
+returns void
+language plpgsql
+stable
+as $$
+declare
+  v_claims jsonb;
+  v_method text;
+  v_path   text;
+begin
+  begin
+    v_claims := nullif(current_setting('request.jwt.claims', true), '')::jsonb;
+  exception when others then
+    return;
+  end;
+
+  if v_claims is null or v_claims ->> 'client_id' is null then
+    return;
+  end if;
+
+  v_method := coalesce(current_setting('request.method', true), '');
+  v_path   := ltrim(coalesce(current_setting('request.path', true), ''), '/');
+
+  if v_method in ('GET', 'HEAD') and (
+       v_path = any (public.mcp_oauth_relations())
+       or (v_path like 'rpc/%' and substr(v_path, 5) = any (public.mcp_oauth_rpcs()))
+     ) then
+    return;
+  end if;
+
+  raise exception 'Los conectores (OAuth) son de sólo lectura y sólo acceden a los datos del conector'
+    using errcode = '42501';
+end;
+$$;
+
+alter role authenticator set pgrst.db_pre_request to 'public.oauth_client_request_guard';
+notify pgrst, 'reload config';
+
+-- ─── 2. RLS restrictiva en todas las tablas de public ──────────────────────
+-- En las políticas va `(select auth.jwt() ->> 'client_id') is null` y no una función: así
+-- Postgres lo evalúa una vez por consulta (initplan), no una vez por fila.
+create or replace function public.oauth_guard_apply()
+returns void
+language plpgsql
+as $$
+declare
+  t record;
+begin
+  for t in
+    select c.relname
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'public' and c.relkind in ('r', 'p') and c.relrowsecurity
+  loop
+    execute format('drop policy if exists oauth_clients_no_access on public.%I', t.relname);
+    execute format(
+      'create policy oauth_clients_no_access on public.%I as restrictive for all to authenticated
+         using ((select auth.jwt() ->> ''client_id'') is null)
+         with check ((select auth.jwt() ->> ''client_id'') is null)', t.relname);
+  end loop;
+end;
+$$;
+
+revoke all on function public.oauth_guard_apply() from public, anon, authenticated;
+
+-- Tablas de public que el conector podría leer: sin RLS, o sin la política restrictiva (una
+-- tabla creada después de la última corrida de oauth_guard_apply()). Tiene que dar vacío.
+create or replace function public.oauth_guard_missing_tables()
+returns text[]
+language sql
+stable
+as $$
+  select coalesce(array_agg(c.relname::text order by c.relname), '{}')
+  from pg_class c
+  join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind in ('r', 'p')
+    and (not c.relrowsecurity
+         or not exists (select 1 from pg_policies p
+                        where p.schemaname = 'public' and p.tablename = c.relname
+                          and p.policyname = 'oauth_clients_no_access'
+                          and p.permissive = 'RESTRICTIVE'));
+$$;
+
+revoke all on function public.oauth_guard_missing_tables() from public, anon, authenticated;
+grant execute on function public.oauth_guard_missing_tables() to service_role;
+
+-- ─── 3. Storage ────────────────────────────────────────────────────────────
+drop policy if exists oauth_clients_no_storage on storage.objects;
+create policy oauth_clients_no_storage on storage.objects
+  as restrictive for all to authenticated
+  using ((select auth.jwt() ->> 'client_id') is null)
+  with check ((select auth.jwt() ->> 'client_id') is null);
+
+-- ─── auditoría ─────────────────────────────────────────────────────────────
+-- Una fila por cada llamada a una tool: quién, desde qué cliente OAuth, qué tool, con qué
+-- argumentos (cortos), cuántas filas devolvió, si falló y si el sanitizador tuvo que sacar
+-- alguna clave sensible (eso es un bug de la tool: revisar). La escribe SÓLO la función `mcp`
+-- con la service role (no hay policy de insert). La lee un SUPERADMIN.
+create table if not exists public.mcp_audit_log (
+  id               bigint generated always as identity primary key,
+  created_at       timestamptz not null default now(),
+  user_id          uuid,
+  oauth_client_id  text,
+  tool             text not null,
+  args             jsonb,
+  result_count     integer,
+  ok               boolean not null,
+  error            text,
+  removed_keys     text[],
+  cost_usd         numeric,
+  cost_detail      jsonb
+);
+
+create index if not exists mcp_audit_log_created_idx on public.mcp_audit_log (created_at desc);
+
+alter table public.mcp_audit_log enable row level security;
+
+drop policy if exists mcp_audit_log_select on public.mcp_audit_log;
+create policy mcp_audit_log_select on public.mcp_audit_log
+  for select to authenticated
+  using (public.crm_es_superadmin());
+
+revoke all on public.mcp_audit_log from anon;
+revoke insert, update, delete, truncate on public.mcp_audit_log from authenticated;
+grant select on public.mcp_audit_log to authenticated;
+
+-- Al final, con la tabla de auditoría ya creada: que el bloqueo cubra todas.
+select public.oauth_guard_apply();
+
+-- ─── las vistas de las tools (migración 20261031135450_mcp_tools) ──────────
+-- ─── equipo ─────────────────────────────────────────────────────────────────
+create or replace view public.mcp_team
+with (security_barrier = true)
+as
+select u.id, u.nombre, u.last_name, u.rol::text as rol, u.activo
+from public.users u
+where (select public.es_usuario());
+
+-- ─── roadmap ────────────────────────────────────────────────────────────────
+-- `expl` va crudo (texto, HTML con `<!--h-->` o bloques con `<!--b-->`): lo pasa a texto la tool.
+create or replace view public.mcp_roadmap_tareas
+with (security_barrier = true)
+as
+select
+  t.id, t.tarea, t.estado, t.prioridad, t.pend, t.backlog, t.sprint, t.modulo, t.dep,
+  t.creada, t.updated_at, t.expl, t.subtareas, t.chat,
+  lower(concat_ws(' ', t.id, t.tarea, t.modulo, t.dep)) as busqueda
+from public.roadmap_tareas t
+where (select public.es_usuario());
+
+-- Los nombres de los grupos del backlog (`roadmap_notas`, id `grupo-N`; ver CLAUDE.md).
+create or replace view public.mcp_roadmap_grupos
+with (security_barrier = true)
+as
+select substr(n.id, 7)::int as numero, nullif(trim(n.titulo), '') as nombre
+from public.roadmap_notas n
+where n.id ~ '^grupo-[0-9]+$'
+  and (select public.es_usuario());
+
+-- ─── CRM ────────────────────────────────────────────────────────────────────
+create or replace view public.mcp_crm_stages
+with (security_barrier = true)
+as
+select s.id, s.label, s.value, s.position, s.is_out_of_funnel, s.management_type, s.starts_onboarding
+from public.crm_funnel_stages s
+where s.deleted_at is null
+  and (select public.es_usuario());
+
+-- El lead con su inmobiliaria. Los contactos van sin teléfono ni email: nombre, rol y si decide.
+create or replace view public.mcp_crm_leads
+with (security_barrier = true)
+as
+select
+  l.id, l.assigned_to, l.funnel_stage_id, s.label as stage_label,
+  coalesce(s.value = 'DISCARDED', false) as descartado, ch.label as channel_label,
+  l.lead_type::text as lead_type, l.importante, l.discard_reason, l.recontact_at,
+  l.created_at, l.updated_at, l.last_important_event_at,
+  c.company_name, c.city, c.neighborhood, c.website, c.idealista_url, c.google_maps_url,
+  c.agents_count, coalesce(sw.label, c.current_crm) as current_crm,
+  c.idealista_years, c.idealista_listings, c.sdr_advice, c.import_batch, c.selection_reason,
+  (
+    select coalesce(jsonb_agg(x.contacto) filter (where x.contacto is not null), '[]'::jsonb)
+    from (values
+      (case when coalesce(nullif(trim(concat_ws(' ', c.first_name, c.last_name)), ''), c.contact_role) is not null
+            then jsonb_build_object('nombre', nullif(trim(concat_ws(' ', c.first_name, c.last_name)), ''),
+                                    'rol', c.contact_role, 'decisor', c.contact_is_decision_maker) end),
+      (case when coalesce(nullif(trim(c.alternative_phone_1_note), ''), c.alternative_phone_1_role) is not null
+            then jsonb_build_object('nombre', nullif(trim(c.alternative_phone_1_note), ''),
+                                    'rol', c.alternative_phone_1_role, 'decisor', c.alternative_phone_1_is_decision_maker) end),
+      (case when coalesce(nullif(trim(c.alternative_phone_2_note), ''), c.alternative_phone_2_role) is not null
+            then jsonb_build_object('nombre', nullif(trim(c.alternative_phone_2_note), ''),
+                                    'rol', c.alternative_phone_2_role, 'decisor', c.alternative_phone_2_is_decision_maker) end)
+    ) as x(contacto)
+  ) as contactos,
+  lower(concat_ws(' ', c.company_name, c.city, c.neighborhood, c.website, c.import_batch)) as busqueda
+from public.crm_leads l
+join public.crm_clients c on c.id = l.client_id
+left join public.crm_funnel_stages s on s.id = l.funnel_stage_id
+left join public.crm_channels ch on ch.id = l.channel_id
+left join public.crm_software sw on sw.id = c.current_crm_id
+where l.deleted_at is null
+  and public.crm_puede(l.assigned_to, 'read');
+
+create or replace view public.mcp_crm_tasks
+with (security_barrier = true)
+as
+select t.id, t.lead_id, t.title, t.due_date, t.due_time, t.completed, t.completed_at,
+       t.assigned_to, t.created_at
+from public.crm_tasks t
+where t.deleted_at is null
+  and case when t.lead_id is not null then public.crm_puede_lead(t.lead_id, 'read')
+           else public.crm_puede(t.assigned_to, 'read') end;
+
+-- Sin `guest_emails` ni lo de la sincronización con Google.
+create or replace view public.mcp_crm_meetings
+with (security_barrier = true)
+as
+select m.id, m.lead_id, m.assigned_to, m.starts_at, m.ends_at, m.status, m.title,
+       m.cancel_reason, m.created_by, m.created_at
+from public.crm_meetings m
+where m.deleted_at is null
+  and case when m.lead_id is not null then public.crm_puede_lead(m.lead_id, 'read')
+           else public.crm_puede(m.assigned_to, 'read') end;
+
+-- La actividad del lead. `long_description` trae la meta (`<!--act-->{json}`): la tool lee de
+-- ahí el tipo y con quién, y nunca el teléfono.
+create or replace view public.mcp_crm_comments
+with (security_barrier = true)
+as
+select k.id, k.lead_id, k.comment_type, k.description, k.long_description, k.created_by, k.created_at
+from public.crm_comments k
+where k.deleted_at is null
+  and public.crm_puede_lead(k.lead_id, 'read');
+
+create or replace view public.mcp_crm_stage_history
+with (security_barrier = true)
+as
+select h.id, h.lead_id, h.from_stage_id, h.to_stage_id, h.changed_by, h.changed_at
+from public.crm_stage_history h
+where public.crm_puede_lead(h.lead_id, 'read');
+
+-- ─── clientes (onboarding) y caja: sólo SUPERADMIN, como en el front ───────
+-- Sin `public_token` (es la llave del alta pública) ni el equipo que cargó el cliente.
+create or replace view public.mcp_onboardings
+with (security_barrier = true)
+as
+select o.id, o.lead_id, o.company_name, o.website, o.assigned_to, o.created_at,
+       o.submitted_at, o.completed_at,
+       coalesce((select array_agg(t.task_id order by t.task_id)
+                 from public.client_onboarding_tasks t where t.onboarding_id = o.id), '{}') as tareas_hechas
+from public.client_onboardings o
+where (select public.crm_es_superadmin());
+
+create or replace view public.mcp_expenses
+with (security_barrier = true)
+as
+select e.id, e.expense_name, e.expense_type, e.amount, e.date, e.period, e.recurrence,
+       e.status, e.notes, e.paid_by, e.created_at
+from public.expenses e
+where e.deleted_at is null
+  and (select public.crm_es_superadmin());
+
+-- ─── permisos de las vistas ────────────────────────────────────────────────
+do $$
+declare
+  v text;
+begin
+  foreach v in array array[
+    'mcp_team', 'mcp_roadmap_tareas', 'mcp_roadmap_grupos', 'mcp_crm_stages', 'mcp_crm_leads',
+    'mcp_crm_tasks', 'mcp_crm_meetings', 'mcp_crm_comments', 'mcp_crm_stage_history',
+    'mcp_onboardings', 'mcp_expenses'
+  ] loop
+    execute format('revoke all on public.%I from public, anon, authenticated', v);
+    execute format('grant select on public.%I to authenticated', v);
+  end loop;
+end $$;
+

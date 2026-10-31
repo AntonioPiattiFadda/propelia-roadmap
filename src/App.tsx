@@ -4,7 +4,8 @@ import { Toaster } from '@/components/ui/sonner'
 import { AppLayout } from '@/layouts/AppLayout'
 import { AuthPageShell } from '@/pages/auth/AuthPageShell'
 import { SignIn } from '@/pages/auth/SignIn'
-import { PublicRoutesAuthCheck, RequireAcceso, RequireAuth, RequireRol } from '@/pages/auth/guards'
+import { PublicRoutesAuthCheck, RequireAcceso, RequireAuth, RequireAuthReturning, RequireRol } from '@/pages/auth/guards'
+import { OAuthConsent } from '@/pages/oauth/OAuthConsent'
 import { Roadmap } from '@/pages/roadmap/Roadmap'
 import { Backlog } from '@/pages/roadmap/Backlog'
 import { Ajustes } from '@/pages/ajustes/Ajustes'
@@ -37,6 +38,16 @@ const App = () => (
         <Route element={<PublicRoutesAuthCheck />}>
           <Route element={<AuthPageShell />}>
             <Route path="/sign-in" element={<SignIn />} />
+          </Route>
+        </Route>
+
+        {/* El consentimiento del conector MCP (Claude / ChatGPT): con el marco del login y sin la
+            barra lateral. Pide fila activa en `users`, como el resto. */}
+        <Route element={<RequireAuthReturning />}>
+          <Route element={<RequireAcceso />}>
+            <Route element={<AuthPageShell />}>
+              <Route path="/oauth/consent" element={<OAuthConsent />} />
+            </Route>
           </Route>
         </Route>
 

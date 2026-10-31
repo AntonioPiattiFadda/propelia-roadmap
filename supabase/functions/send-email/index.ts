@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { EmailConfigError, EmailProviderError, sendEmail } from '../_shared/email.ts'
 import { camposDesde, plantillaGuardable, type PlantillaEmailId } from '../_shared/plantillasEmail.ts'
 import { handleSendEmail } from './handler.ts'
+import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 
 /* Envío de un email desde el front: el formulario de prueba del CRM y las plantillas de «Mensajes».
    Quién puede llamarla lo decide `handleSendEmail` (SUPERADMIN para texto libre, usuario activo
@@ -35,7 +36,7 @@ async function leadVisible(caller: SupabaseClient, leadId: unknown): Promise<str
   return data?.id ?? null
 }
 
-Deno.serve(async req => {
+Deno.serve(withoutOAuthClients(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
 
   const caller = clienteDe(req)
@@ -87,4 +88,4 @@ Deno.serve(async req => {
     if (error instanceof EmailProviderError) return respond(502, { error: error.message })
     return respond(500, { error: 'Error interno' })
   }
-})
+}))

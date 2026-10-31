@@ -1,4 +1,5 @@
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Navigate, Outlet, useLocation, useSearchParams } from 'react-router-dom'
+import { safeNextPath } from '@/lib/safeNextPath'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { accesoDe } from '@/lib/acceso'
@@ -12,11 +13,24 @@ export function RequireAuth() {
   return userSession ? <Outlet /> : <Navigate to="/sign-in" replace />
 }
 
-/** Con sesión → adentro. Es lo que saca del login después de `signInWithPassword`. */
+/** Como `RequireAuth`, pero el login vuelve a donde estaba (`/sign-in?next=…`). Lo usa
+    /oauth/consent: se llega desde Claude y, sin esto, el login terminaría en /roadmap y el
+    conector quedaría colgado. El resto de la app no lo usa a propósito. */
+export function RequireAuthReturning() {
+  const { lookingForSession, userSession } = useUserSession()
+  const location = useLocation()
+  if (lookingForSession) return null
+  if (userSession) return <Outlet />
+  return <Navigate to={`/sign-in?next=${encodeURIComponent(location.pathname + location.search)}`} replace />
+}
+
+/** Con sesión → adentro. Es lo que saca del login después de `signInWithPassword`. El
+    `?next=` lo pone `RequireAuthReturning`; sin él, a /roadmap como siempre. */
 export function PublicRoutesAuthCheck() {
   const { lookingForSession, userSession } = useUserSession()
+  const [searchParams] = useSearchParams()
   if (lookingForSession) return null
-  return userSession ? <Navigate to="/roadmap" replace /> : <Outlet />
+  return userSession ? <Navigate to={safeNextPath(searchParams.get('next')) ?? '/roadmap'} replace /> : <Outlet />
 }
 
 /** Con sesión pero sin fila activa en `users` → no se pasa. Va debajo de `RequireAuth`. */

@@ -3,6 +3,7 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { extractMeetingId, planWebhookUpdate, type IncomingEvent } from '../_shared/webhookSync.ts'
 import { refreshAccessToken } from '../_shared/googleTokens.ts'
 import { encryptToken, decryptToken } from '../_shared/tokenCrypto.ts'
+import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 
 /* Copiada de `propelia-frontend` (21/10/2026), donde reconcilia `visits`. Google avisa que cambió
    el calendario de una conexión (el watch que registra `calendar-sync`); se leen los cambios con el
@@ -77,7 +78,7 @@ const applyEvent = async (admin: SupabaseClient, event: IncomingEvent): Promise<
   await admin.from('crm_meetings').update(patch).eq('id', meeting.id).eq('ics_sequence', meeting.ics_sequence)
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withoutOAuthClients(async (req: Request) => {
   const ok = () => new Response(null, { status: 200 })
 
   try {
@@ -183,4 +184,4 @@ Deno.serve(async (req: Request) => {
   } catch {
     return new Response(null, { status: 200 })
   }
-})
+}))

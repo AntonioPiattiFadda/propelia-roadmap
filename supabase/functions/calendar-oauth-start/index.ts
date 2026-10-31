@@ -2,6 +2,7 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { signState } from '../_shared/oauthState.ts'
 import { buildGoogleAuthUrl, isAllowedRedirectOrigin } from '../_shared/googleOAuth.ts'
+import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 
 /* Copiada de `propelia-frontend` (21/10/2026). Arranca la conexión con Google Calendar de quien
    llama: devuelve la URL de consentimiento con un `state` firmado que el callback verifica. Sin el
@@ -14,7 +15,7 @@ const corsHeaders = {
 
 const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json' }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withoutOAuthClients(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -61,4 +62,4 @@ Deno.serve(async (req: Request) => {
   } catch {
     return new Response(JSON.stringify({ error: 'Internal server error' }), { status: 500, headers: jsonHeaders })
   }
-})
+}))

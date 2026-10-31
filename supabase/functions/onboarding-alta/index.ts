@@ -1,6 +1,7 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { altaPublica, type AltaPublica, type AltaPublicaDb } from './altaPublica.ts'
+import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 
 /* La puerta de la página pública de alta (crm.propelia.es/alta/<token>, en propelia-frontend).
    Sin JWT (`verify_jwt = false`): quien la abre es el cliente, que no tiene cuenta. La llave es el
@@ -33,7 +34,7 @@ function dbDe(admin: SupabaseClient): AltaPublicaDb {
   }
 }
 
-Deno.serve(async req => {
+Deno.serve(withoutOAuthClients(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
   if (req.method !== 'POST') return new Response(JSON.stringify({ error: 'alta_accion_invalida' }), { status: 405, headers: json })
 
@@ -45,4 +46,4 @@ Deno.serve(async req => {
   return r.ok
     ? new Response(JSON.stringify(r.body), { headers: json })
     : new Response(JSON.stringify({ error: r.error }), { status: r.status, headers: json })
-})
+}))

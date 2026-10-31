@@ -3,6 +3,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { verifyState } from '../_shared/oauthState.ts'
 import { encryptToken } from '../_shared/tokenCrypto.ts'
 import { decodeJwtPayload } from '../_shared/googleOAuth.ts'
+import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 
 /* Copiada de `propelia-frontend` (21/10/2026). A dónde vuelve el navegador después del
    consentimiento de Google: canjea el código, guarda los tokens cifrados en
@@ -19,7 +20,7 @@ interface GoogleTokenResponse {
 
 const SETTINGS_PATH = '/ajustes?tab=integraciones'
 
-Deno.serve(async (req: Request) => {
+Deno.serve(withoutOAuthClients(async (req: Request) => {
   const requestUrl = new URL(req.url)
   const code = requestUrl.searchParams.get('code')
   const stateParam = requestUrl.searchParams.get('state')
@@ -113,4 +114,4 @@ Deno.serve(async (req: Request) => {
   } catch {
     return fail('exchange')
   }
-})
+}))
