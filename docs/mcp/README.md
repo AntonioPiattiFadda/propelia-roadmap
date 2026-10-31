@@ -17,13 +17,19 @@ blindaje del token, la auditoría y la pantalla de consentimiento (migración
 | `get_crm_lead` | Un lead entero: datos de la inmobiliaria, contactos (nombre, rol, decisor), tareas, reuniones, actividad y cambios de etapa | `mcp_crm_*` |
 | `list_crm_tasks` | Tareas del CRM. Por defecto las pendientes tuyas; `hoy` y `vencidas` en hora de España | `mcp_crm_tasks` |
 | `list_crm_meetings` | Reuniones y demos, por defecto las próximas | `mcp_crm_meetings` |
+| `list_demos` | Las demos agendadas (por defecto las próximas): hora de España, inmobiliaria y su etapa, quién asiste, decisor apuntado y notas de quien la agendó (del registro de la demo; las de antes del 22/10/2026, de `description` sin el email) | `mcp_crm_meetings`, `mcp_crm_leads`, `mcp_crm_comments` |
+| `get_demo_briefing` | Para preparar una demo: la demo y el lead entero, con notas de cada contacto, notas de la inmobiliaria, oficina, cómo llegó, toda la actividad, reasignaciones, correos enviados (asunto y estado), otras reuniones y un resumen con números | las de arriba + `mcp_crm_emails`, `mcp_crm_assignment_history` |
 | `list_onboardings` | Altas de clientes (sólo SUPERADMIN) | `mcp_onboardings` |
 | `list_expenses` | La caja, con total y cuánto pagó cada uno de lo filtrado (sólo SUPERADMIN) | `mcp_expenses` |
 
 **Cada uno ve lo que ve en la app**: las vistas corren como su dueño (la RLS restrictiva le cierra
-las tablas al conector) y recortan cada fila con las mismas funciones que la RLS:
-`es_usuario()`, `crm_puede*()` (la cartera) y `crm_es_superadmin()` (altas y caja, que el front
-también esconde a un SDR). **Nunca salen** teléfonos ni emails (de contactos, de la inmobiliaria ni
+las tablas al conector) y recortan cada fila con la misma regla que la RLS: `es_usuario()`, la
+cartera de `crm_puede()` y `crm_es_superadmin()` (altas y caja, que el front también esconde a un
+SDR). **Las del CRM no llaman a `crm_puede()` por fila** (migración
+`20261031141933_mcp_demos_y_rendimiento`): `(select crm_es_superadmin()) or owner in (select
+mcp_carteras_visibles())` dice lo mismo y se evalúa una vez por consulta. Con la función por fila,
+la lista de leads tardaba 139 ms en 431 filas y crecía con la tabla; y `security_barrier` no deja
+adelantar un `ilike` a ese corte. Si cambia `crm_puede()`, cambia `mcp_carteras_visibles()`. **Nunca salen** teléfonos ni emails (de contactos, de la inmobiliaria ni
 de las invitaciones), el teléfono de la meta de una llamada, el `public_token` del alta, el equipo
 que carga el cliente, los tokens de Google ni los archivos. Sí salen los textos que escribe el
 equipo (notas, explicaciones, conversaciones, consejo del SDR): es el CRM interno y sin eso no

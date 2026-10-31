@@ -77,8 +77,12 @@ const INSTRUCTIONS =
   'Propelia Roadmap es el tablero interno del equipo de Propelia (la empresa que vende el CRM ' +
   'Propelia a inmobiliarias): el roadmap de desarrollo (list_roadmap_tasks, get_roadmap_task, ' +
   'list_backlog_groups), el CRM comercial donde los leads son inmobiliarias (list_crm_stages, ' +
-  'list_crm_leads, get_crm_lead, list_crm_tasks, list_crm_meetings), las altas de clientes ' +
-  '(list_onboardings) y la caja de la empresa (list_expenses). Todo es de sólo lectura: no se ' +
+  'list_crm_leads, get_crm_lead, list_crm_tasks, list_crm_meetings), las demos de Propelia con ' +
+  'inmobiliarias (list_demos para ver las agendadas; get_demo_briefing para preparar una: trae ' +
+  'todo lo que se sabe del lead), las altas de clientes (list_onboardings) y la caja de la ' +
+  'empresa (list_expenses). Para preparar una demo, armá un briefing breve: quién es la agencia, ' +
+  'quién asiste y quién decide, qué pasó en las llamadas, qué le interesa u objetó y qué conviene ' +
+  'mostrar; si sirve, completalo mirando su web o su Idealista. Todo es de sólo lectura: no se ' +
   'puede crear ni cambiar nada desde acá. Cada uno ve lo que ve en la app: el CRM, de las ' +
   'carteras que tiene habilitadas; altas y caja, sólo un SUPERADMIN. Para "lo mío" usá el id de ' +
   'get_me; para nombres de personas, list_team. Fechas y horas del equipo, en hora de España. ' +

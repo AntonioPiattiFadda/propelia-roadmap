@@ -220,6 +220,10 @@ Antonio**. Todo en `docs/mcp/README.md`, con la tabla de tools.
   funciones que la RLS (`es_usuario()`, `crm_puede*()`, y `crm_es_superadmin()` para altas y caja).
   Si cambia una regla de RLS de esas tablas, cambia también en su vista `mcp_*`.
 - **Nunca salen teléfonos ni emails** (las vistas no los tienen) ni tokens; sí los textos del equipo.
+- **Demos** (31/10/2026, por pedido, migración `20261031141933_mcp_demos_y_rendimiento`, que **la
+  aplica Antonio**): `list_demos` y `get_demo_briefing`, que trae todo lo que se sabe del lead para
+  preparar la demo. La misma migración saca `crm_puede()` por fila de las vistas del CRM
+  (`mcp_carteras_visibles()`, una vez por consulta): si cambia `crm_puede()`, cambia esa función.
 
 - **El token del conector solo sirve para el MCP**: es un JWT del usuario con `client_id`, y la
   base (guard de PostgREST + RLS restrictiva en todas las tablas + Storage) y las edge functions

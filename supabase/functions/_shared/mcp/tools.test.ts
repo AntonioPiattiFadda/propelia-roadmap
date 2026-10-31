@@ -1,7 +1,7 @@
 import { assert, assertEquals } from 'jsr:@std/assert@1'
 import type { McpDb, Row, ViewQuery } from './db.ts'
 import { MCP_RELATIONS } from './relations.ts'
-import { siguienteDia, TOOLS, type ToolContext } from './tools.ts'
+import { inicioDelDiaEnEspana, siguienteDia, TOOLS, type ToolContext } from './tools.ts'
 import { sanitizeOutput } from './sanitize.ts'
 
 const EQUIPO: Row[] = [
@@ -24,6 +24,7 @@ function base(rowsByView: Record<string, Row[]> = {}) {
   return { ctx, queries, de: (view: string) => queries.find((q) => q.view === view)! }
 }
 
+const DEMO = '00000000-0000-0000-0000-0000000000d1'
 const tool = (name: string) => TOOLS.find((t) => t.name === name)!
 const run = (name: string, ctx: ToolContext, args: Record<string, unknown> = {}) => tool(name).run(ctx, args)
 
@@ -33,10 +34,16 @@ Deno.test('toda tool lee sólo vistas de la lista blanca y su salida pasa el san
     mcp_crm_leads: [{ id: 'l1', company_name: 'Inmo Sol', assigned_to: 'u2', funnel_stage_id: 's1', contactos: [{ nombre: 'Pedro', rol: 'Gerente', decisor: true }] }],
     mcp_crm_stages: [{ id: 's1', label: 'Contactado', value: 'CUSTOM', position: 1 }],
     mcp_expenses: [{ id: 'e1', expense_name: 'Claude', expense_type: 'FIXED', amount: '55', paid_by: 'u1', notes: 'mes' }],
+    mcp_crm_meetings: [{ id: DEMO, lead_id: 'l1', status: 'scheduled', starts_at: '2099-01-01T10:00:00Z', ends_at: '2099-01-01T10:30:00Z', description: 'Invitación a: a@b.es', invitados: 3 }],
+    mcp_crm_comments: [{ comment_type: 'MANUAL', description: 'Demo agendada.', long_description: `<!--act-->{"tipo":"demo","con":["Pedro"],"reunion":"${DEMO}"}`, created_by: 'u2', created_at: '2026-10-30T10:00:00Z' }],
+    mcp_crm_emails: [{ subject: 'Presentación', plantilla: 'video', status: 'delivered', sent_at: '2026-10-29T10:00:00Z', sent_by: 'u1' }],
   }
   for (const t of TOOLS) {
     const { ctx, queries } = base(filas)
-    const args = t.name === 'get_roadmap_task' ? { id: 'T-1' } : t.name === 'get_crm_lead' ? { lead_id: 'l1' } : {}
+    const args = t.name === 'get_roadmap_task' ? { id: 'T-1' }
+      : t.name === 'get_crm_lead' ? { lead_id: 'l1' }
+      : t.name === 'get_demo_briefing' ? { demo_id: DEMO }
+      : {}
     const out = await t.run(ctx, args)
     for (const q of queries) assert((MCP_RELATIONS as readonly string[]).includes(q.view), `${t.name} lee ${q.view}`)
     for (const q of queries) assert(!q.columns.includes('*'), t.name)
@@ -132,4 +139,67 @@ Deno.test('list_expenses: total y reparto de todo lo filtrado, no de la página'
 
 Deno.test('siguienteDia: cruza el mes', () => {
   assertEquals(siguienteDia('2026-10-31'), '2026-11-01')
+})
+
+const FILAS_DE_DEMO: Record<string, Row[]> = {
+  mcp_crm_meetings: [
+    { id: DEMO, lead_id: 'l1', assigned_to: 'u2', created_by: 'u1', status: 'scheduled', title: 'Demo de Propelia · Inmo Sol', starts_at: '2099-01-01T09:00:00Z', ends_at: '2099-01-01T09:30:00Z', description: 'Texto para el cliente', invitados: 3 },
+    { id: 'vieja', lead_id: 'l1', assigned_to: 'u2', status: 'cancelled', title: 'Demo', starts_at: '2026-10-01T09:00:00Z', ends_at: '2026-10-01T09:30:00Z', cancel_reason: 'No podía', description: 'Invitación a: x@y.es\nAsisten: Pedro\nPrefiere tarde' },
+  ],
+  mcp_crm_leads: [{
+    id: 'l1', company_name: 'Inmo Sol', city: 'Barcelona', stage_label: 'Demo agendada', assigned_to: 'u2', created_at: '2026-09-01T00:00:00Z',
+    agents_count: 6, current_crm: 'Inmovilla', selection_reason: 'inmovilla', office_address: 'Carrer X 1', client_notes: 'Abren a las 10',
+    contactos: [{ nombre: 'Pedro', rol: 'Gerente', decisor: true, notas: 'Prefiere WhatsApp' }, { nombre: 'Marta', rol: null, decisor: null, notas: null }],
+  }],
+  mcp_crm_comments: [
+    { comment_type: 'MANUAL', description: 'Demo agendada.', long_description: `<!--act-->{"tipo":"demo","con":["Pedro","Marta"],"decisorApuntado":"Jordi","reunion":"${DEMO}"}`, created_by: 'u1', created_at: '2026-10-30T10:00:00Z' },
+    { comment_type: 'MANUAL', description: 'Le interesa el matching', long_description: '<!--act-->{"tipo":"llamada","con":["Pedro"],"decisor":true,"telefono":{"numero":"+34600111222"}}', created_by: 'u2', created_at: '2026-10-20T10:00:00Z' },
+    { comment_type: 'MANUAL', description: 'No atendió', long_description: '<!--act-->{"tipo":"fallido","con":[]}', created_by: 'u2', created_at: '2026-10-10T10:00:00Z' },
+    { comment_type: 'SYSTEM', description: 'Lead reasignado de Ana a Lorenzo.', long_description: null, created_by: null, created_at: '2026-09-02T10:00:00Z' },
+  ],
+  mcp_crm_emails: [{ subject: 'Presentación', plantilla: 'video', status: 'delivered', sent_at: '2026-10-29T10:00:00Z', sent_by: 'u1' }],
+}
+
+Deno.test('list_demos: próximas, con lead, quién asiste y decisor del registro; las viejas, de la descripción sin el email', async () => {
+  const { ctx, de } = base(FILAS_DE_DEMO)
+  const out = (await run('list_demos', ctx)) as Record<string, any>
+  const f = de('mcp_crm_meetings').filters!
+  assert(f.some((x) => x.op === 'eq' && x.column === 'status' && x.value === 'scheduled'))
+  assert(f.some((x) => x.op === 'gte' && x.column === 'ends_at'))
+  const [nueva, vieja] = out.demos
+  assertEquals(nueva.hora_espana, 'jue 01/01/2099 10:00')
+  assertEquals(nueva.asistentes, ['Pedro', 'Marta'])
+  assertEquals(nueva.decisor_apuntado, 'Jordi')
+  assertEquals(nueva.notas, '')
+  assertEquals(nueva.agendada_por, 'Lorenzo Piatti')
+  assertEquals(nueva.lead.inmobiliaria, 'Inmo Sol')
+  assertEquals(vieja.asistentes, ['Pedro'])
+  assertEquals(vieja.notas, 'Prefiere tarde')
+  assert(!JSON.stringify(out).includes('x@y.es'))
+  // Los registros se piden de una, para todos los leads de la página.
+  assert(de('mcp_crm_comments').filters!.some((x) => x.op === 'eq' && x.column === 'es_registro_de_demo'))
+})
+
+Deno.test('get_demo_briefing: la demo y el lead entero, con resumen, correos y sin teléfonos', async () => {
+  const { ctx } = base(FILAS_DE_DEMO)
+  const out = (await run('get_demo_briefing', ctx, { lead_id: 'l1' })) as Record<string, any>
+  assertEquals(out.demo.id, DEMO) // con lead_id, la próxima agendada
+  assertEquals(out.demo.decisor_apuntado, 'Jordi')
+  assertEquals(out.lead.inmobiliaria_datos.motivo_de_seleccion, 'Usa Inmovilla')
+  assertEquals(out.lead.inmobiliaria_datos.direccion_oficina, 'Carrer X 1')
+  assertEquals(out.lead.contactos[0].notas, 'Prefiere WhatsApp')
+  assertEquals(out.lead.resumen.llamadas, 1)
+  assertEquals(out.lead.resumen.contactos_fallidos, 1)
+  assertEquals(out.lead.resumen.demos_canceladas, 1)
+  assertEquals(out.lead.resumen.decisores_conocidos, ['Pedro'])
+  assertEquals(out.lead.correos_enviados[0].asunto, 'Presentación')
+  assertEquals(out.lead.actividad[1].decide, true)
+  assert(!JSON.stringify(out).includes('+34600111222'))
+  assertEquals(sanitizeOutput(out).removed, [])
+  assertEquals(await run('get_demo_briefing', base().ctx, {}), { found: false, error: 'Falta demo_id o lead_id.' })
+})
+
+Deno.test('inicioDelDiaEnEspana: horario de verano e invierno', () => {
+  assertEquals(inicioDelDiaEnEspana('2026-07-15'), '2026-07-15T00:00:00+02:00')
+  assertEquals(inicioDelDiaEnEspana('2026-12-15'), '2026-12-15T00:00:00+01:00')
 })

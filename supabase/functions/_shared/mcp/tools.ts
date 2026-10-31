@@ -14,7 +14,7 @@ import {
   avisosDeExpl, ESTADO_IDS, estadoLabel, explATexto, fechaISO, type Paso, PRIORIDAD_IDS, prioridadLabel,
   responsablesDe,
 } from './roadmap.ts'
-import { actividadDe, hoyEnEspana } from './crm.ts'
+import { actividadDe, demoVieja, diasEntre, horaEnEspana, hoyEnEspana, TEXTO_DE_DEMO } from './crm.ts'
 
 export interface ToolContext {
   db: McpDb
@@ -364,91 +364,328 @@ const listCrmLeads: McpToolDef = {
 }
 
 const MAX_ACTIVIDAD = 40
+/** El briefing de una demo trae la historia entera (hoy un lead tiene como mucho ~15). */
+const ACTIVIDAD_DEL_BRIEFING = 100
+
+/** Qué es cada `selection_reason` (MOTIVOS_DE_SELECCION del front): con qué ángulo abre el SDR. */
+const MOTIVOS_DE_SELECCION: Record<string, string> = {
+  inmovilla: 'Usa Inmovilla',
+  new: 'Agencia nueva',
+  small: 'Agencia pequeña',
+}
+
+const FICHA_COLUMNS = [
+  ...LEAD_COLUMNS, 'discard_reason', 'website', 'idealista_url', 'google_maps_url', 'agents_count', 'current_crm',
+  'idealista_years', 'idealista_listings', 'sdr_advice', 'import_batch', 'selection_reason', 'contactos',
+  'created_via', 'batch_activated_on', 'client_notes', 'office_address',
+] as const
+
+const MEETING_COLUMNS = [
+  'id', 'lead_id', 'assigned_to', 'starts_at', 'ends_at', 'status', 'title', 'cancel_reason', 'created_by', 'created_at',
+  'description', 'invitados',
+] as const
+
+/**
+ * Todo lo que se sabe de un lead, en una pasada: la inmobiliaria, los contactos, las tareas, las
+ * reuniones, la actividad, los cambios de etapa y, con `completa`, los emails, las reasignaciones
+ * y un resumen con números. Lo usan get_crm_lead y get_demo_briefing.
+ */
+async function fichaDelLead(db: McpDb, gente: Map<string, Persona>, leadId: string, opts: { actividad: number; completa: boolean }) {
+  const porLead: Filter[] = [{ op: 'eq', column: 'lead_id', value: leadId }]
+  const { rows } = await db.select({ view: 'mcp_crm_leads', columns: FICHA_COLUMNS, filters: [{ op: 'eq', column: 'id', value: leadId }], range: [0, 0] })
+  const r = rows[0]
+  if (!r) return null
+
+  const vacio = Promise.resolve({ rows: [] as Row[], total: 0 })
+  const [tareas, reuniones, actividad, cambios, etapas, emails, reasignaciones] = await Promise.all([
+    db.select({ view: 'mcp_crm_tasks', columns: ['title', 'due_date', 'due_time', 'completed', 'completed_at', 'assigned_to'], filters: porLead, order: [{ column: 'due_date', ascending: true }], range: [0, 49] }),
+    db.select({ view: 'mcp_crm_meetings', columns: MEETING_COLUMNS, filters: porLead, order: [{ column: 'starts_at', ascending: false }], range: [0, 19] }),
+    opts.actividad > 0
+      ? db.select({ view: 'mcp_crm_comments', columns: ['comment_type', 'description', 'long_description', 'created_by', 'created_at'], filters: porLead, order: [{ column: 'created_at', ascending: false }], range: [0, opts.actividad - 1] })
+      : vacio,
+    db.select({ view: 'mcp_crm_stage_history', columns: ['from_stage_id', 'to_stage_id', 'changed_by', 'changed_at'], filters: porLead, order: [{ column: 'changed_at', ascending: false }], range: [0, 29] }),
+    db.select({ view: 'mcp_crm_stages', columns: ['id', 'label'], range: [0, ALL] }),
+    opts.completa
+      ? db.select({ view: 'mcp_crm_emails', columns: ['subject', 'plantilla', 'status', 'sent_at', 'sent_by'], filters: porLead, order: [{ column: 'sent_at', ascending: false }], range: [0, 29] })
+      : vacio,
+    opts.completa
+      ? db.select({ view: 'mcp_crm_assignment_history', columns: ['from_user_id', 'to_user_id', 'changed_by', 'changed_at'], filters: porLead, order: [{ column: 'changed_at', ascending: false }], range: [0, 19] })
+      : vacio,
+  ])
+  const etapa = new Map(etapas.rows.map((e) => [e.id as string, e.label as string]))
+  const nombreEtapa = (id: unknown) => (typeof id === 'string' ? (etapa.get(id) ?? 'una etapa borrada') : null)
+  const registros = actividad.rows.map((k) => ({ k, a: actividadDe(k.comment_type, k.long_description) }))
+
+  const ficha: Record<string, unknown> = {
+    ...leadResumen(r, gente),
+    motivo_descarte: str(r.discard_reason) ?? null,
+    como_llego: { canal: r.channel_label ?? null, alta: str(r.created_via) ?? null },
+    inmobiliaria_datos: {
+      web: str(r.website) ?? null,
+      idealista: str(r.idealista_url) ?? null,
+      google_maps: str(r.google_maps_url) ?? null,
+      direccion_oficina: str(r.office_address) ?? null,
+      agentes: r.agents_count ?? null,
+      crm_que_usa: str(r.current_crm) ?? null,
+      anios_en_idealista: r.idealista_years ?? null,
+      anuncios_en_idealista: r.idealista_listings ?? null,
+      lote: str(r.import_batch) ?? null,
+      lote_activado_el: r.batch_activated_on ?? null,
+      motivo_de_seleccion: typeof r.selection_reason === 'string' ? (MOTIVOS_DE_SELECCION[r.selection_reason] ?? r.selection_reason) : null,
+      consejo_sdr: str(r.sdr_advice) ?? null,
+      notas: str(r.client_notes) ?? null,
+    },
+    contactos: Array.isArray(r.contactos) ? r.contactos : [],
+    tareas: tareas.rows.map((t) => ({
+      titulo: t.title,
+      vence: t.due_date ?? null,
+      hora_espana: t.due_time ? String(t.due_time).slice(0, 5) : null,
+      hecha: t.completed === true,
+      hecha_el: t.completed_at ?? null,
+      responsable: nombreDe(gente, t.assigned_to),
+    })),
+    reuniones: reuniones.rows.map((m) => ({
+      id: m.id,
+      titulo: m.title,
+      inicio: m.starts_at,
+      hora_espana: horaEnEspana(m.starts_at),
+      estado: m.status,
+      motivo_cancelacion: str(m.cancel_reason) ?? null,
+      responsable: nombreDe(gente, m.assigned_to),
+    })),
+    actividad: registros.map(({ k, a }) => ({
+      fecha: k.created_at,
+      tipo: a.tipo,
+      autor: nombreDe(gente, k.created_by),
+      con: a.con,
+      ...(a.decisor !== undefined ? { decide: a.decisor } : {}),
+      ...(a.decisorApuntado ? { decisor_apuntado: a.decisorApuntado } : {}),
+      texto: str(k.description) ?? '',
+    })),
+    cambios_de_etapa: cambios.rows.map((h) => ({
+      fecha: h.changed_at,
+      de: nombreEtapa(h.from_stage_id),
+      a: nombreEtapa(h.to_stage_id),
+      por: nombreDe(gente, h.changed_by),
+    })),
+  }
+  if (opts.completa) {
+    const ahora = new Date().toISOString()
+    const manuales = registros.filter(({ k }) => k.comment_type !== 'SYSTEM')
+    const primero = manuales.at(-1)?.k.created_at ?? null
+    ficha.correos_enviados = emails.rows.map((e) => ({
+      fecha: e.sent_at,
+      asunto: e.subject ?? null,
+      plantilla: e.plantilla ?? null,
+      estado: e.status ?? null,
+      enviado_por: nombreDe(gente, e.sent_by),
+    }))
+    ficha.reasignaciones = reasignaciones.rows.map((h) => ({
+      fecha: h.changed_at,
+      de: nombreDe(gente, h.from_user_id),
+      a: nombreDe(gente, h.to_user_id),
+      por: nombreDe(gente, h.changed_by),
+    }))
+    ficha.resumen = {
+      dias_en_el_crm: diasEntre(r.created_at, ahora),
+      primer_contacto_registrado: primero,
+      llamadas: manuales.filter(({ a }) => a.tipo === 'llamada').length,
+      contactos_fallidos: manuales.filter(({ a }) => a.tipo === 'contacto fallido').length,
+      notas: manuales.filter(({ a }) => a.tipo === 'nota').length,
+      demos_canceladas: reuniones.rows.filter((m) => m.status === 'cancelled').length,
+      decisores_conocidos: (Array.isArray(r.contactos) ? r.contactos : []).filter((c: Row) => c?.decisor === true).map((c: Row) => c.nombre ?? '(sin nombre)'),
+    }
+  }
+  return { ficha, reuniones: reuniones.rows, registros }
+}
 
 const getCrmLead: McpToolDef = {
   name: 'get_crm_lead',
   title: 'Lead del CRM',
   description:
-    'Un lead entero: la inmobiliaria (web, Idealista, agentes, CRM que usa, consejo del SDR), sus contactos (nombre, rol y si ' +
-    'decide; sin teléfonos ni emails), tareas, reuniones/demos, la actividad registrada (llamadas, notas, sistema) y los cambios de etapa.',
+    'Un lead entero: la inmobiliaria (web, Idealista, agentes, CRM que usa, consejo del SDR), sus contactos (nombre, rol, si ' +
+    'decide y notas; sin teléfonos ni emails), tareas, reuniones/demos, la actividad registrada (llamadas, notas, sistema) y los ' +
+    'cambios de etapa. Para preparar una demo, mejor get_demo_briefing.',
   inputSchema: {
     lead_id: uuid,
     actividad: z.number().int().min(0).max(MAX_ACTIVIDAD).optional().describe(`Cuántas actividades, de la más nueva (por defecto 20, tope ${MAX_ACTIVIDAD}).`),
   },
   async run({ db }, args) {
-    const leadId = String(args.lead_id)
-    const porLead: Filter[] = [{ op: 'eq', column: 'lead_id', value: leadId }]
-    const cuantas = typeof args.actividad === 'number' ? args.actividad : 20
-    const [{ rows }, gente] = await Promise.all([
+    const gente = await equipo(db)
+    const res = await fichaDelLead(db, gente, String(args.lead_id), {
+      actividad: typeof args.actividad === 'number' ? args.actividad : 20,
+      completa: false,
+    })
+    return res ? { found: true, ...res.ficha } : { found: false }
+  },
+}
+
+// ─── demos ──────────────────────────────────────────────────────────────────
+
+interface RegistroDeDemo {
+  con: string[]
+  decisorApuntado?: string
+  texto: string
+  autor: unknown
+  fecha: unknown
+}
+
+/** El registro que dejó cada demo al agendarse, por id de reunión (meta `reunion`). */
+function registrosPorReunion(comentarios: Row[]): Map<string, RegistroDeDemo> {
+  const porReunion = new Map<string, RegistroDeDemo>()
+  for (const k of comentarios) {
+    const a = actividadDe(k.comment_type, k.long_description)
+    if (a.tipo !== 'demo agendada' || !a.reunion) continue
+    porReunion.set(a.reunion, { con: a.con, decisorApuntado: a.decisorApuntado, texto: str(k.description) ?? '', autor: k.created_by, fecha: k.created_at })
+  }
+  return porReunion
+}
+
+/**
+ * Lo que la tabla de Demos muestra de cada una (`datosDeLaDemo` del front): desde el 22/10/2026
+ * sale del registro de actividad; las de antes lo traen en `description`. Nunca el email.
+ */
+function demoResumen(m: Row, registro: RegistroDeDemo | undefined, gente: Map<string, Persona>) {
+  const vieja = registro ? null : demoVieja(m.description)
+  return {
+    id: m.id,
+    titulo: m.title,
+    inicio: m.starts_at,
+    fin: m.ends_at,
+    hora_espana: horaEnEspana(m.starts_at),
+    estado: m.status,
+    motivo_cancelacion: str(m.cancel_reason) ?? null,
+    responsable: nombreDe(gente, m.assigned_to),
+    agendada_por: nombreDe(gente, registro?.autor ?? m.created_by),
+    agendada_el: m.created_at,
+    asistentes: registro ? registro.con : (vieja?.asistentes ?? []),
+    decisor_apuntado: registro?.decisorApuntado ?? null,
+    notas: registro ? (registro.texto !== TEXTO_DE_DEMO ? registro.texto : '') : (vieja?.notas ?? ''),
+    invitados_al_calendario: Number(m.invitados) || 0,
+  }
+}
+
+const listDemos: McpToolDef = {
+  name: 'list_demos',
+  title: 'Demos',
+  description:
+    'Las demos de Propelia agendadas con inmobiliarias (de las carteras que el usuario ve). Por defecto las próximas, la más ' +
+    'cercana primero, con la hora en España, la inmobiliaria, su etapa, quién asiste, el decisor apuntado y las notas de quien la ' +
+    'agendó. Para preparar una, get_demo_briefing con su id.',
+  inputSchema: {
+    cuando: z.enum(['proximas', 'pasadas', 'todas']).optional().describe('Por defecto, proximas (agendadas que todavía no terminaron).'),
+    desde: day.optional().describe('Desde ese día (hora de España, inclusive).'),
+    hasta: day.optional().describe('Hasta ese día, inclusive.'),
+    responsable: uuid.optional().describe('Id de quien lleva el lead (list_team o get_me).'),
+    incluir_canceladas: z.boolean().optional().describe('En pasadas/todas, también las canceladas (por defecto no).'),
+    limit,
+    offset,
+  },
+  async run({ db }, args) {
+    const p = page(args)
+    const cuando = typeof args.cuando === 'string' ? args.cuando : 'proximas'
+    const ahora = new Date().toISOString()
+    const filters: Filter[] = [{ op: 'not_null', column: 'lead_id' }]
+    if (cuando === 'proximas') {
+      filters.push({ op: 'eq', column: 'status', value: 'scheduled' }, { op: 'gte', column: 'ends_at', value: ahora })
+    } else {
+      if (cuando === 'pasadas') filters.push({ op: 'lt', column: 'starts_at', value: ahora })
+      if (args.incluir_canceladas !== true) filters.push({ op: 'eq', column: 'status', value: 'scheduled' })
+    }
+    if (typeof args.desde === 'string') filters.push({ op: 'gte', column: 'starts_at', value: inicioDelDiaEnEspana(args.desde) })
+    if (typeof args.hasta === 'string') filters.push({ op: 'lt', column: 'starts_at', value: inicioDelDiaEnEspana(siguienteDia(args.hasta)) })
+    if (typeof args.responsable === 'string') filters.push({ op: 'eq', column: 'assigned_to', value: args.responsable })
+
+    const [{ rows, total }, gente] = await Promise.all([
       db.select({
-        view: 'mcp_crm_leads',
-        columns: [...LEAD_COLUMNS, 'discard_reason', 'website', 'idealista_url', 'google_maps_url', 'agents_count', 'current_crm',
-          'idealista_years', 'idealista_listings', 'sdr_advice', 'import_batch', 'selection_reason', 'contactos'],
-        filters: [{ op: 'eq', column: 'id', value: leadId }],
-        range: [0, 0],
+        view: 'mcp_crm_meetings',
+        columns: MEETING_COLUMNS,
+        filters,
+        order: [{ column: 'starts_at', ascending: cuando === 'proximas' }],
+        range: [p.offset, p.offset + p.limit - 1],
+        count: true,
       }),
       equipo(db),
     ])
-    const r = rows[0]
-    if (!r) return { found: false }
+    const leadIds = [...new Set(rows.map((m) => m.lead_id as string))]
+    const [leads, comentarios] = leadIds.length
+      ? await Promise.all([
+        db.select({ view: 'mcp_crm_leads', columns: ['id', 'company_name', 'city', 'stage_label', 'importante', 'agents_count', 'current_crm'], filters: [{ op: 'in', column: 'id', values: leadIds }], range: [0, ALL] }),
+        db.select({ view: 'mcp_crm_comments', columns: ['comment_type', 'description', 'long_description', 'created_by', 'created_at'], filters: [{ op: 'in', column: 'lead_id', values: leadIds }, { op: 'eq', column: 'es_registro_de_demo', value: true }], range: [0, ALL] }),
+      ])
+      : [{ rows: [] as Row[] }, { rows: [] as Row[] }]
+    const lead = new Map(leads.rows.map((l) => [l.id as string, l]))
+    const registros = registrosPorReunion(comentarios.rows)
 
-    const [tareas, reuniones, actividad, cambios, etapas] = await Promise.all([
-      db.select({ view: 'mcp_crm_tasks', columns: ['title', 'due_date', 'due_time', 'completed', 'completed_at', 'assigned_to'], filters: porLead, order: [{ column: 'due_date', ascending: true }], range: [0, 49] }),
-      db.select({ view: 'mcp_crm_meetings', columns: ['title', 'starts_at', 'ends_at', 'status', 'cancel_reason', 'assigned_to'], filters: porLead, order: [{ column: 'starts_at', ascending: false }], range: [0, 19] }),
-      cuantas > 0
-        ? db.select({ view: 'mcp_crm_comments', columns: ['comment_type', 'description', 'long_description', 'created_by', 'created_at'], filters: porLead, order: [{ column: 'created_at', ascending: false }], range: [0, cuantas - 1] })
-        : Promise.resolve({ rows: [], total: 0 }),
-      db.select({ view: 'mcp_crm_stage_history', columns: ['from_stage_id', 'to_stage_id', 'changed_by', 'changed_at'], filters: porLead, order: [{ column: 'changed_at', ascending: false }], range: [0, 29] }),
-      db.select({ view: 'mcp_crm_stages', columns: ['id', 'label'], range: [0, ALL] }),
-    ])
-    const etapa = new Map(etapas.rows.map((e) => [e.id as string, e.label as string]))
-    const nombreEtapa = (id: unknown) => (typeof id === 'string' ? (etapa.get(id) ?? 'una etapa borrada') : null)
+    return paged('demos', rows.map((m) => {
+      const l = lead.get(m.lead_id)
+      return {
+        ...demoResumen(m, registros.get(m.id), gente),
+        lead: {
+          id: m.lead_id,
+          inmobiliaria: str(l?.company_name) ?? '(sin nombre)',
+          ciudad: str(l?.city) ?? null,
+          etapa: l?.stage_label ?? null,
+          importante: l?.importante === true,
+          agentes: l?.agents_count ?? null,
+          crm_que_usa: str(l?.current_crm) ?? null,
+        },
+      }
+    }), total, p)
+  },
+}
 
+const getDemoBriefing: McpToolDef = {
+  name: 'get_demo_briefing',
+  title: 'Briefing de una demo',
+  description:
+    'Todo para preparar una demo: la demo (cuándo en hora de España, quién asiste, decisor apuntado, notas de quien la agendó) y ' +
+    'el lead entero — datos de la inmobiliaria (web, Idealista, Google Maps, oficina, agentes, CRM que usa, consejo del SDR), ' +
+    'contactos con su rol, si deciden y notas, toda la actividad (llamadas, notas, intentos fallidos), cambios de etapa, ' +
+    'reasignaciones, emails enviados, otras reuniones, tareas y un resumen con números. Con demo_id, esa demo; con lead_id, la ' +
+    'próxima agendada de ese lead (o la última). Para completar el contexto se puede mirar la web o el Idealista de la agencia.',
+  inputSchema: {
+    demo_id: uuid.optional().describe('Id de la demo (list_demos).'),
+    lead_id: uuid.optional().describe('Id del lead, si no se tiene el de la demo.'),
+  },
+  async run({ db }, args) {
+    if (typeof args.demo_id !== 'string' && typeof args.lead_id !== 'string') {
+      return { found: false, error: 'Falta demo_id o lead_id.' }
+    }
+    const gente = await equipo(db)
+    let leadId = typeof args.lead_id === 'string' ? args.lead_id : null
+    if (typeof args.demo_id === 'string') {
+      const { rows } = await db.select({ view: 'mcp_crm_meetings', columns: ['id', 'lead_id'], filters: [{ op: 'eq', column: 'id', value: args.demo_id }], range: [0, 0] })
+      if (!rows[0]?.lead_id) return { found: false }
+      leadId = rows[0].lead_id
+    }
+    const res = await fichaDelLead(db, gente, leadId!, { actividad: ACTIVIDAD_DEL_BRIEFING, completa: true })
+    if (!res) return { found: false }
+
+    // La demo: la pedida; si no, la próxima agendada del lead; si no, la última.
+    const ahora = Date.now()
+    const demo = typeof args.demo_id === 'string'
+      ? res.reuniones.find((m) => m.id === args.demo_id)
+      : ([...res.reuniones].reverse().find((m) => m.status === 'scheduled' && Date.parse(m.ends_at) > ahora) ?? res.reuniones[0])
+    const registros = registrosPorReunion(res.registros.map(({ k }) => k))
     return {
       found: true,
-      ...leadResumen(r, gente),
-      motivo_descarte: str(r.discard_reason) ?? null,
-      inmobiliaria_datos: {
-        web: str(r.website) ?? null,
-        idealista: str(r.idealista_url) ?? null,
-        google_maps: str(r.google_maps_url) ?? null,
-        agentes: r.agents_count ?? null,
-        crm_que_usa: str(r.current_crm) ?? null,
-        anios_en_idealista: r.idealista_years ?? null,
-        anuncios_en_idealista: r.idealista_listings ?? null,
-        lote: str(r.import_batch) ?? null,
-        motivo_de_seleccion: str(r.selection_reason) ?? null,
-        consejo_sdr: str(r.sdr_advice) ?? null,
-      },
-      contactos: Array.isArray(r.contactos) ? r.contactos : [],
-      tareas: tareas.rows.map((t) => ({
-        titulo: t.title,
-        vence: t.due_date ?? null,
-        hora_espana: t.due_time ? String(t.due_time).slice(0, 5) : null,
-        hecha: t.completed === true,
-        hecha_el: t.completed_at ?? null,
-        responsable: nombreDe(gente, t.assigned_to),
-      })),
-      reuniones: reuniones.rows.map((m) => ({
-        titulo: m.title,
-        inicio: m.starts_at,
-        fin: m.ends_at,
-        estado: m.status,
-        motivo_cancelacion: str(m.cancel_reason) ?? null,
-        responsable: nombreDe(gente, m.assigned_to),
-      })),
-      actividad: actividad.rows.map((k) => {
-        const a = actividadDe(k.comment_type, k.long_description)
-        return { fecha: k.created_at, tipo: a.tipo, autor: nombreDe(gente, k.created_by), con: a.con, texto: str(k.description) ?? '' }
-      }),
-      cambios_de_etapa: cambios.rows.map((h) => ({
-        fecha: h.changed_at,
-        de: nombreEtapa(h.from_stage_id),
-        a: nombreEtapa(h.to_stage_id),
-        por: nombreDe(gente, h.changed_by),
-      })),
+      demo: demo
+        ? { ...demoResumen(demo, registros.get(demo.id), gente), dias_hasta_la_demo: diasEntre(new Date().toISOString(), demo.starts_at) }
+        : null,
+      lead: res.ficha,
     }
   },
+}
+
+/** Medianoche de España de ese día, en ISO con zona, para comparar contra un timestamptz. */
+export function inicioDelDiaEnEspana(dia: string): string {
+  // El desfase de Madrid ese día (+01:00 o +02:00): se mira al mediodía UTC, lejos del cambio de hora.
+  const mediodia = new Date(`${dia}T12:00:00Z`)
+  const nombre = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Madrid', timeZoneName: 'longOffset' })
+    .formatToParts(mediodia).find((x) => x.type === 'timeZoneName')?.value ?? 'GMT+01:00'
+  const desfase = nombre.replace('GMT', '') || '+00:00'
+  return `${dia}T00:00:00${desfase}`
 }
 
 const listCrmTasks: McpToolDef = {
@@ -530,9 +767,9 @@ const listCrmMeetings: McpToolDef = {
   async run({ db }, args) {
     const p = page(args)
     const filters: Filter[] = []
-    const desde = typeof args.desde === 'string' ? args.desde : hoyEnEspana()
+    const desde = inicioDelDiaEnEspana(typeof args.desde === 'string' ? args.desde : hoyEnEspana())
     if (typeof args.lead_id !== 'string' || typeof args.desde === 'string') filters.push({ op: 'gte', column: 'starts_at', value: desde })
-    if (typeof args.hasta === 'string') filters.push({ op: 'lt', column: 'starts_at', value: siguienteDia(args.hasta) })
+    if (typeof args.hasta === 'string') filters.push({ op: 'lt', column: 'starts_at', value: inicioDelDiaEnEspana(siguienteDia(args.hasta)) })
     if (typeof args.responsable === 'string') filters.push({ op: 'eq', column: 'assigned_to', value: args.responsable })
     if (typeof args.lead_id === 'string') filters.push({ op: 'eq', column: 'lead_id', value: args.lead_id })
     if (typeof args.estado === 'string') filters.push({ op: 'eq', column: 'status', value: args.estado })
@@ -683,7 +920,7 @@ const redondear = (n: number) => Math.round(n * 100) / 100
 export const TOOLS: readonly McpToolDef[] = [
   getMe, listTeam,
   listRoadmapTasks, getRoadmapTask, listBacklogGroups,
-  listCrmStages, listCrmLeads, getCrmLead, listCrmTasks, listCrmMeetings,
+  listCrmStages, listCrmLeads, getCrmLead, listCrmTasks, listCrmMeetings, listDemos, getDemoBriefing,
   listOnboardings, listExpenses,
 ]
 
