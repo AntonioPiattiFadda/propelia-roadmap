@@ -185,6 +185,25 @@ que aparece al lado de «Activar de nuevo» con la tarea tildada, y destilda la 
 en el `roadmap-bridge` del producto, contesta `bad_request` («Acción desconocida») y la tarea queda
 como estaba.
 
+### `reset_tour_group_progress`
+
+Desmarca lo hecho sin apagar nada (31/10/2026, por pedido): el grupo sigue prendido, pero cada
+renglón vuelve a quedar sin hacer para todo el equipo de la org. Para cada usuario y tour del grupo
+cuya última vuelta terminó bien (`completed` o `already_done`), inserta en `user_tour_runs` una
+vuelta con `outcome = 'reset'`, que no cuenta como hecha. También pone en null el `completed_at`
+de la activación, para que el tour vuelva a estar pendiente. **El historial no se borra**: las
+vueltas de antes siguen ahí para las métricas.
+
+```json
+// { "action": "reset_tour_group_progress", "org_id": "6f1c…", "group_id": "leads" } →
+{ "group_id": "leads", "reset": 4 }
+```
+
+`reset` cuenta los renglones que estaban hechos y se desmarcaron. Mismos errores que
+`activate_tour_group`. /clientes lo llama con «Desmarcar lo hecho», al lado de «Desactivar
+tutoriales» con la tarea tildada; la tarea no cambia. Necesita la migración del producto que suma
+`'reset'` al `check` de `user_tour_runs.outcome`. Sin la acción contesta «Acción desconocida».
+
 ### `import_template`
 
 Las columnas del Excel de la cartera. El Roadmap arma la plantilla `.xlsx` con esto (cabecera +

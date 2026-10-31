@@ -10,7 +10,7 @@ import { motivoLegible, noLlegaronDelLead, rotuloDelEstado } from '@/pages/crm/l
 import type { Celda } from '@/pages/crm/lib/importarLote'
 import { MeetingFormDialog, type EditableMeeting } from '@/pages/agenda/components/meetings/MeetingFormDialog'
 import { markMeetingOutcome } from '@/pages/agenda/service/meetings.service'
-import { useActivarTutorialDeLeads, useDesactivarTutorialDeLeads, useMarcarTarea, useOrganizacion, useReabrirAlta } from '../hooks/useClientes'
+import { useActivarTutorialDeLeads, useDesactivarTutorialDeLeads, useMarcarTarea, useReiniciarTutorialDeLeads, useOrganizacion, useReabrirAlta } from '../hooks/useClientes'
 import { estadoDelAlta } from '../lib/equipo'
 import { listaDeMailsQueNoLlegaron } from '../lib/mensajes'
 import { claveDeTarea, TAREA_CORREGIR_MAILS, TAREA_CREDENCIALES, TAREA_TUTORIAL_LEADS, tareaReunionHecha, type Accion, type Paso, type PlantillaId, type Tarea } from '../lib/pasos'
@@ -49,6 +49,7 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
   const activarTutorial = useActivarTutorialDeLeads()
   const activar = () => datos.orgId && activarTutorial.mutate({ orgId: datos.orgId, onboardingId: datos.o.id, taskId: clave })
   const desactivarTutorial = useDesactivarTutorialDeLeads()
+  const reiniciarTutorial = useReiniciarTutorialDeLeads()
   const desactivar = () => datos.orgId && desactivarTutorial.mutate({ orgId: datos.orgId, onboardingId: datos.o.id, taskId: clave })
   const [panel, setPanel] = useState<Panel | null>(null)
   const [confirmando, setConfirmando] = useState(false)
@@ -185,6 +186,17 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
             onClick={activar}>
             {activarTutorial.isPending ? <Loader2 className="size-4 animate-spin" /> : <GraduationCap className="size-4" />}
             {hecha ? 'Activar de nuevo' : 'Activar tutoriales'}
+          </Button>
+        )
+      case 'reiniciar-tutoriales':
+        // Con el tutorial prendido: desmarca lo hecho de todo el equipo, pero lo deja activado.
+        if (!hecha) return null
+        return (
+          <Button key={a} size="sm" variant="outline" className="h-8" disabled={!conOrg || reiniciarTutorial.isPending}
+            title="Vuelve a dejar sin hacer los recorridos que terminó cada uno. El tutorial sigue activado"
+            onClick={() => datos.orgId && reiniciarTutorial.mutate({ orgId: datos.orgId })}>
+            {reiniciarTutorial.isPending ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+            Desmarcar lo hecho
           </Button>
         )
       case 'desactivar-tutoriales':

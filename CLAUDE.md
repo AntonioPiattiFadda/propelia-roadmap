@@ -339,7 +339,10 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   (31/10/2026, por pedido), al lado de «Activar de nuevo» con la tarea tildada
   (`useDesactivarTutorialDeLeads`, acción `deactivate_tour_group` del puente): saca el grupo del
   checklist de todo el equipo, destilda la tarea y no borra lo terminado (volver a activarlo lo
-  respeta). Necesita esa acción en el `roadmap-bridge` del producto; sin ella contesta «Acción desconocida». El cierre del WhatsApp dice que el tutorial
+  respeta). Necesita esa acción en el `roadmap-bridge` del producto; sin ella contesta «Acción desconocida».
+  Al lado, **«Desmarcar lo hecho»** (31/10/2026, por pedido; `useReiniciarTutorialDeLeads`,
+  acción `reset_tour_group_progress`): no apaga el tutorial, deja sin hacer los recorridos que cada
+  uno terminó (en Propelia, una vuelta `reset` que no cuenta; el historial queda). La tarea no cambia. El cierre del WhatsApp dice que el tutorial
   está al entrar (migración `20261029211937_onboarding_tutorial_de_leads_en_propelia`, que **la
   aplica Antonio**; del lado del producto, `20261029210026_tour_guide_trigger` y deployar `roadmap-bridge`).
   **«Ver cuentas y contraseñas» dice quién probaste y quién entró** (28/10/2026, por pedido):

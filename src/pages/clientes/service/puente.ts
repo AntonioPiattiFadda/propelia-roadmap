@@ -85,6 +85,10 @@ export const activarTutorialDeLeads = (org_id: string) =>
  *  terminado si se vuelve a activar (las vueltas de cada tour quedan en Propelia). */
 export const desactivarTutorialDeLeads = (org_id: string) =>
   invocar<{ group_id: string; deactivated: number }>('deactivate_tour_group', { org_id, group_id: GRUPO_TUTORIAL_DE_LEADS })
+/** Desmarca lo hecho: el tutorial sigue prendido, pero cada renglón vuelve a estar sin hacer para
+ *  todo el equipo (en Propelia queda una vuelta `reset`; el historial no se borra). */
+export const reiniciarTutorialDeLeads = (org_id: string) =>
+  invocar<{ group_id: string; reset: number }>('reset_tour_group_progress', { org_id, group_id: GRUPO_TUTORIAL_DE_LEADS })
 export const GRUPO_TUTORIAL_DE_LEADS = 'leads'
 export const enviarLeadDePrueba = (org_id: string) =>
   invocar<{ email_id: string; to: string }>('send_simulated_inbound', { org_id, user_slug: null, scenario_id: 'dip-visita' })
@@ -187,6 +191,19 @@ async function simular(action: string, p: Record<string, unknown>): Promise<unkn
       }
       guardar(m)
       return { group_id: p.group_id, deactivated }
+    }
+    case 'reset_tour_group_progress': {
+      const org = m.orgs[String(p.org_id)]
+      if (!org) throw new Error('La organización no existe en Propelia (simulado: se creó en otro navegador).')
+      let reset = 0
+      for (const a of org.agents) {
+        const g = a.tour_groups?.[String(p.group_id)]
+        if (!g) continue
+        reset += g.done
+        a.tour_groups = { ...a.tour_groups, [String(p.group_id)]: { ...g, done: 0 } }
+      }
+      guardar(m)
+      return { group_id: p.group_id, reset }
     }
     case 'send_simulated_inbound': return { email_id: `re_simulado_${Date.now()}`, to: m.orgs[String(p.org_id)]?.org_inbound_address ?? `leads@${DOMINIO}` }
     default: throw new Error(`Acción desconocida: ${action}`)

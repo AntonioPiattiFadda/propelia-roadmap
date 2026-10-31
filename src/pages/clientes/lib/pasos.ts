@@ -10,7 +10,7 @@ export type Accion =
   | `wa:${PlantillaId}`
   | 'link-alta' | 'equipo-recibido' | 'importar-usuarios' | 'mails'
   | 'plantilla-cartera' | 'importar-cartera' | 'link-pago' | 'ver-pago'
-  | 'direcciones' | 'simular-lead' | 'tutoriales' | 'desactivar-tutoriales' | 'agendar-reunion'
+  | 'direcciones' | 'simular-lead' | 'tutoriales' | 'reiniciar-tutoriales' | 'desactivar-tutoriales' | 'agendar-reunion'
 
 export const PLANTILLAS = ['contacto_inicial', 'accesos_enviados', 'corregir_mails', 'tutorial_leads', 'link_de_pago', 'asignar_y_mails', 'integrar_portales', 'reunion_equipo', 'reunion_dueno'] as const
 export type PlantillaId = (typeof PLANTILLAS)[number]
@@ -48,7 +48,7 @@ export const PASOS: Paso[] = [
       /* 29/10/2026, por pedido: además del WhatsApp, prende en Propelia el «Tutorial de leads» (un
          recorrido guiado por punto del mensaje) a todo el equipo. Tildarla lo prende: ver
          `TAREA_TUTORIAL_LEADS`. */
-      { id: 'tutorial-leads', texto: 'Activar el tutorial de cómo funciona el sistema de leads y avisarles', acciones: ['tutoriales', 'desactivar-tutoriales', 'wa:tutorial_leads'] },
+      { id: 'tutorial-leads', texto: 'Activar el tutorial de cómo funciona el sistema de leads y avisarles', acciones: ['tutoriales', 'reiniciar-tutoriales', 'desactivar-tutoriales', 'wa:tutorial_leads'] },
       { id: 'asignar', texto: 'Que asignen las propiedades importadas a cada agente', acciones: ['wa:asignar_y_mails'] },
       { id: 'mails-idealista', texto: 'Que configuren en Idealista los mails de cada agente', acciones: ['direcciones'] },
       { id: 'lead-prueba', texto: 'Probar que un lead llega', acciones: ['simular-lead'] },

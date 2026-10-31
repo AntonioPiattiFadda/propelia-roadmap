@@ -19,6 +19,7 @@ export const ACCIONES = [
   'list_payment_links',
   'activate_tour_group',
   'deactivate_tour_group',
+  'reset_tour_group_progress',
 ] as const
 
 export type PuenteDb = {

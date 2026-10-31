@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import {
   asignarOnboarding, completarOnboarding, getOnboardings, getPlantillas, importarEquipo, marcarTarea, reabrirAlta,
 } from '../service/clientes.service'
-import { activarTutorialDeLeads, desactivarTutorialDeLeads, getLinksDePago, getOrganizacion, getPlanes } from '../service/puente'
+import { activarTutorialDeLeads, desactivarTutorialDeLeads, getLinksDePago, reiniciarTutorialDeLeads, getOrganizacion, getPlanes } from '../service/puente'
 import type { Onboarding } from '../types'
 
 export const CLIENTES_KEYS = {
@@ -123,6 +123,22 @@ export function useDesactivarTutorialDeLeads() {
       description: 'Ya no lo ve nadie del equipo en Propelia. Si lo volvés a activar, lo terminado sigue terminado.',
     }),
     onError: e => toast.error('No se pudo desactivar el tutorial', { description: mensajeDeError(e) }),
+    onSettled: (_r, _e, v) => qc.invalidateQueries({ queryKey: CLIENTES_KEYS.org(v.orgId) }),
+  })
+}
+
+/** Desmarca lo que cada uno terminó, sin apagar el tutorial: vuelven a ver todos los renglones
+ *  sin hacer. La tarea no cambia (el tutorial sigue activado). */
+export function useReiniciarTutorialDeLeads() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ orgId }: { orgId: string }) => reiniciarTutorialDeLeads(orgId),
+    onSuccess: r => toast.success('Progreso del tutorial desmarcado', {
+      description: r.reset
+        ? `${r.reset} ${r.reset === 1 ? 'recorrido vuelve' : 'recorridos vuelven'} a estar sin hacer. El tutorial sigue activado.`
+        : 'Nadie había terminado ningún recorrido todavía.',
+    }),
+    onError: e => toast.error('No se pudo desmarcar el progreso', { description: mensajeDeError(e) }),
     onSettled: (_r, _e, v) => qc.invalidateQueries({ queryKey: CLIENTES_KEYS.org(v.orgId) }),
   })
 }
