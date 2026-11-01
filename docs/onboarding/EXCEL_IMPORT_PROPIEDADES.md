@@ -9,8 +9,8 @@ También se puede partir de la plantilla del botón **Descargar plantilla**.
 - Se lee **sólo la primera hoja**.
 - La **primera fila** son los nombres de las columnas; desde la segunda, una propiedad por fila.
 - Tienen que estar **las 14 columnas**, aunque alguna quede vacía. Si falta una, el archivo
-  se rechaza entero. Las dos de agentes (al final) son **opcionales**: sin ellas, las
-  propiedades entran sin agente.
+  se rechaza entero. Las dos de agentes y la de visibilidad (al final) son **opcionales**: sin
+  ellas, las propiedades entran sin agente y con la dirección exacta.
 - Los nombres de las columnas no distinguen **mayúsculas, acentos ni orden**: `Baños`,
   `BANOS` y `baños` son la misma. Las columnas de más se ignoran.
 - Las filas totalmente vacías se saltean.
@@ -21,8 +21,8 @@ También se puede partir de la plantilla del botón **Descargar plantilla**.
 |---|---|---|---|
 | Código anuncio Idealista | No, pero muy recomendada | Sólo números | `108765432` |
 | Tipo | **Sí** | Ver [Tipos](#tipos) | `Piso` |
-| Calle | **Sí** | Nombre de la calle, sin el número | `Carrer de Manso` |
-| Número | **Sí** | Número de portal | `58` |
+| Calle | No (se completa después) | Nombre de la calle, sin el número | `Carrer de Manso` |
+| Número | No (se completa después) | Número de portal | `58` |
 | Código postal | No | 5 dígitos, **como texto** | `08015` |
 | Ciudad | No, pero recomendada | Municipio | `Barcelona` |
 | Operación | No | `Venta`, `Alquiler` o `Venta y alquiler` | `Venta` |
@@ -35,6 +35,7 @@ También se puede partir de la plantilla del botón **Descargar plantilla**.
 | Balcón | No | `Sí` o `No` | `No` |
 | Agente captador | No | Email (o nombre) de alguien de la organización | `marta@inmobiliaria.es` |
 | Agente comercializador | No | Email (o nombre) de alguien de la organización | `marta@inmobiliaria.es` |
+| Visibilidad dirección | No | `Exacta`, `Mostrar sólo calle` u `Oculta` | `Exacta` |
 
 ## Detalle de cada columna
 
@@ -58,7 +59,7 @@ Se acepta cualquiera de estos textos:
 | Tipo en Propelia | Se puede escribir |
 |---|---|
 | Piso | `Piso`, `Apartamento`, `Ático`, `Dúplex`, `Estudio` |
-| Casa / Chalet | `Casa / Chalet`, `Casa`, `Chalet` |
+| Casa / Chalet | `Casa / Chalet`, `Casa`, `Chalet`, `Chalet pareado`, `Chalet adosado`, `Chalet independiente`, `Casa pareada`, `Casa adosada`, `Casa independiente` |
 | Casa rústica | `Casa rústica` |
 | Habitación | `Habitación` |
 | Local o nave | `Local o nave`, `Local`, `Nave` |
@@ -73,9 +74,16 @@ Cualquier otro texto da error en esa fila.
 
 ### Dirección (Calle, Número, Código postal, Ciudad)
 
-- **Calle y Número van en columnas separadas**, y los dos son obligatorios.
+- **Calle y Número van en columnas separadas.**
+- **Sin calle o sin número la fila entra igual, con aviso** (1/11/2026, por pedido, con el
+  Excel de Altamarco: los anuncios con la dirección oculta no la traen). En Propelia la tabla de
+  Propiedades la marca con **«Dirección incompleta»** en rojo, que abre el formulario completo
+  con la dirección a la vista; el formulario la exige para guardar. Hasta completarla no se
+  publica en Idealista y el matching no puntúa la zona (no la descarta: no sabe dónde está).
 - Al importar, la dirección se completa sola con Google (barrio, distrito, provincia,
-  coordenadas). Cuanto más completa venga (sobre todo **Ciudad**), mejor sale.
+  coordenadas). Cuanto más completa venga (sobre todo **Ciudad**), mejor sale. **Sin calle no
+  se consulta a Google**: con la ciudad sola devolvería el centro del municipio y el piso
+  quedaría en una zona que no es la suya.
 - **Código postal:** si la columna tiene formato de número, Excel borra el 0 inicial
   (`08015` → `8015`). Poné la columna en formato **Texto** antes de escribir.
 - Piso y puerta no se cargan acá: se completan después en la ficha.
@@ -113,6 +121,22 @@ mayúsculas), y si no, por «Nombre Apellido» o por el nombre solo si no hay do
 sin agente. Alguien que no está en la org, o un nombre que son dos personas, es un error de esa
 fila. También se reconocen `Captador`, `Captado por`, `Captured by`, `Comercializador`,
 `Comercializado por` y `Commercialized by`, y el «▼» de un desplegable en la cabecera no cuenta.
+
+### Visibilidad dirección
+
+Desde el 1/11/2026 (por pedido, con el Excel de Altamarco). Qué muestra el anuncio de la
+dirección. El Excel va **en español** y un adapter (`parseAddressVisibility`, en
+`_shared/propertyImport/sheet.ts` de propelia-frontend) lo pasa a `properties.address_visibility`:
+
+| En el Excel | En Propelia |
+|---|---|
+| `Exacta` | `exact`: calle y número |
+| `Mostrar sólo calle` | `street_only` |
+| `Oculta` | `hidden`: sin dirección |
+
+Sin mayúsculas ni acentos que importen (`mostrar solo calle` vale). Vacía = `Exacta`. Otro texto
+es un error de esa fila. También se reconocen `Visibilidad` y `Visibilidad de la dirección` como
+nombre de la columna.
 
 ## Ejemplo
 

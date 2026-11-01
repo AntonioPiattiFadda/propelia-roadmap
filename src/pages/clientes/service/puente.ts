@@ -111,6 +111,7 @@ const COLUMNAS: ColumnaDeCartera[] = [
   ['rent_price', 'Precio alquiler', ''], ['bedrooms', 'Habitaciones', '3'], ['bathrooms', 'Baños', '2'],
   ['elevator', 'Ascensor', 'Sí'], ['built_m2', 'm² construidos', '85'], ['balcony', 'Balcón', 'No'],
   ['captured_by', 'Agente captador', 'agente@inmobiliaria.es'], ['commercialized_by', 'Agente comercializador', 'agente@inmobiliaria.es'],
+  ['address_visibility', 'Visibilidad dirección', 'Exacta'],
 ].map(([key, header, example]) => ({ key, header, example }))
 
 async function simular(action: string, p: Record<string, unknown>): Promise<unknown> {

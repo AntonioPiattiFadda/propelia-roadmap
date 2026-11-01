@@ -316,7 +316,14 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   «Agente comercializador», con el email o el nombre de alguien de la org. Las resuelve el
   `roadmap-bridge` del producto (`_shared/propertyImport/sheet.ts`, contra las cuentas de la org) y
   el RPC las escribe con la migración `superadmin_import_properties_agentes` de propelia-frontend.
-  Alguien que no es de la org es error de esa fila. Detalle en `docs/onboarding/EXCEL_IMPORT_PROPIEDADES.md`. Esa guía es el checklist del producto (`onboardingSteps.ts` de
+  Alguien que no es de la org es error de esa fila. Detalle en `docs/onboarding/EXCEL_IMPORT_PROPIEDADES.md`.
+  **Y la visibilidad de la dirección, y la dirección incompleta entra** (1/11/2026, por pedido, con el
+  de Altamarco): columna opcional «Visibilidad dirección» en español (`Exacta` / `Mostrar sólo calle`
+  / `Oculta`), que el adapter `parseAddressVisibility` del `sheet.ts` del producto pasa a
+  `address_visibility`. Sin calle o sin número la fila entra con aviso (antes era error): en
+  Propelia la tabla de Propiedades la marca «Dirección incompleta» y lleva al formulario, que la
+  exige; sin calle no se geocodifica (el centro del municipio inventaría la zona), y el matching
+  sin coordenadas no puntúa la zona en vez de descartar el piso. Hace falta deployar `roadmap-bridge`. Esa guía es el checklist del producto (`onboardingSteps.ts` de
   propelia-frontend) y sale sola: las cuentas del puente nacen con `onboarding_completed_at` vacío.
   Por lo mismo, en el paso 2 **«Configurar la organización con ellos» salió** (29/10/2026, por
   pedido) y entró «Enviar el tutorial de cómo funciona el sistema de leads» (`tutorial-leads`,
