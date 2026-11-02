@@ -753,7 +753,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   **Un SUPERADMIN que entra a `/crm` pelado ve primero el «Dashboard»** (`ResumenCrm`; «resumen» en el código): los importantes de
   todas las carteras (vencidos arriba, descartados al final, `leadsImportantes`), **en columnas desde
   el 26/10/2026, por pedido**: Inmobiliaria, Decisor (`nombresDeDecisores`: los contactos marcados
-  como decisores), Estado y Tarea agendada («No hay tarea» si no tiene ninguna pendiente). Sin
+  como decisores), Estado y Tarea agendada («No hay tarea» si no tiene ninguna pendiente). **La tarea
+  es solo la tuya** (2/11/2026, por pedido: las que crean los triggers del onboarding le caen a quien
+  lleva el alta): `proximasMias` filtra por `assigned_to`, y un lead con tareas solo de otros dice
+  «Sin tareas tuyas», en gris y sin rojo, y se ordena como sin tarea. Sin
   responsable a la vista. **Va en rojo** (fondo y riel) el que no tiene tarea y el que tiene la
   próxima para hoy o vencida (`tocaHoyOVencida`, `lib/tareas.ts`, la misma regla de «Tareas
   vencidas»), salvo el descartado, que no se sigue. y la agenda de hoy y los 6 días siguientes por día (`reunionesPorDia`; «Mías» por

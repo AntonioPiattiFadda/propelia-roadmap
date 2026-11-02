@@ -335,10 +335,14 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
   const headersBase = filtros.conTareas ? HEADERS_TAREAS : HEADERS
   const headers = puedeMarcar ? conEstrella(headersBase) : headersBase
   // El resumen: los importantes de todas las carteras (la RLS de un SUPERADMIN los trae todos),
-  // con estrella o en una etapa con «Dashboard: Sí».
+  // con estrella o en una etapa con «Dashboard: Sí». La tarea que muestra es solo la tuya
+  // (2/11/2026, por pedido): la de otro no se ve, y el lead se ordena como si no la tuviera.
+  const proximasMias = useMemo(
+    () => (resumen ? proximaTareaPorLead(tareas.filter(t => t.assigned_to === agentes.myId)) : proximas),
+    [resumen, tareas, agentes.myId, proximas])
   const importantes = useMemo(
-    () => (resumen ? leadsImportantes(leadsQ.data ?? SIN_LEADS, proximas, cat.etapasPorId) : SIN_LEADS),
-    [resumen, leadsQ.data, proximas, cat.etapasPorId])
+    () => (resumen ? leadsImportantes(leadsQ.data ?? SIN_LEADS, proximasMias, cat.etapasPorId) : SIN_LEADS),
+    [resumen, leadsQ.data, proximasMias, cat.etapasPorId])
   // En columnas, las etapas elegidas en «Estado» dicen qué columnas se ven (agruparPorEtapa).
   const columnas = useMemo(
     () => (enColumnas ? agruparPorEtapa(visibles, cat.etapasPorId, filtros.stageFilter) : []),
@@ -524,7 +528,8 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
             leads={leadsQ.data ?? SIN_LEADS}
             importantes={importantes}
             hayEtapas={hayEtapasEnElDashboard(cat.etapasPorId.values())}
-            proximas={proximas}
+            proximas={proximasMias}
+            conAlgunaTarea={leadIdsConTareas}
             etapas={cat.etapasPorId}
             usuariosPorId={usuariosPorId}
             hoy={hoy}

@@ -64,18 +64,21 @@ export function ProximaTareaDelLead({ proxima, hoy }: { proxima: ProximaTarea | 
    tarea agendada. La misma grilla para la cabecera y cada fila; en el teléfono la fila se apila. */
 const COLUMNAS_DE_LEADS = 'md:grid md:grid-cols-[28px_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,auto)_minmax(0,1.5fr)] md:items-center md:gap-x-3'
 
-/** Un lead del resumen: estrella, inmobiliaria, decisor, etapa y próxima tarea. Tocarlo lo abre.
+/** Un lead del resumen: estrella, inmobiliaria, decisor, etapa y tu próxima tarea. Tocarlo lo abre.
  *  Va en rojo sin tarea pendiente o con la próxima para hoy o vencida (26/10/2026, por pedido),
- *  salvo descartado: ese no se tiene que seguir. */
-function FilaDeLead({ lead: l, proximas, etapas, hoy, onAbrirLead }: {
+ *  salvo descartado: ese no se tiene que seguir. Con tareas solo de otros no va en rojo: el lead
+ *  lo sigue alguien, solo que no sos vos (2/11/2026). */
+function FilaDeLead({ lead: l, proximas, conAlgunaTarea, etapas, hoy, onAbrirLead }: {
   lead: CrmLeadRow
   proximas: ReadonlyMap<string, ProximaTarea>
+  conAlgunaTarea: ReadonlySet<string>
   etapas: ReadonlyMap<string, CrmStage>
   hoy: string
   onAbrirLead: (leadId: string) => void
 }) {
   const proxima = proximas.get(l.id)
-  const enRojo = !esDescartado(l, etapas) && (!proxima || tocaHoyOVencida(proxima.tarea, hoy))
+  const deOtro = !proxima && conAlgunaTarea.has(l.id)
+  const enRojo = !esDescartado(l, etapas) && !deOtro && (!proxima || tocaHoyOVencida(proxima.tarea, hoy))
   const decisores = nombresDeDecisores(l.client)
   return (
     <li className={cn('flex items-start gap-2 px-2 [border-top:1px_solid_var(--line-soft)]', COLUMNAS_DE_LEADS,
@@ -91,7 +94,9 @@ function FilaDeLead({ lead: l, proximas, etapas, hoy, onAbrirLead }: {
           {decisores.length ? decisores.join(', ') : '—'}
         </span>
         <span className="min-w-0"><StageBadge etapa={etapaDelLead(l, etapas)} className="max-w-full" /></span>
-        <ProximaTareaDelLead proxima={proxima} hoy={hoy} />
+        {deOtro
+          ? <span className="whitespace-nowrap text-[12.5px] text-(--fg-muted)">Sin tareas tuyas</span>
+          : <ProximaTareaDelLead proxima={proxima} hoy={hoy} />}
       </button>
     </li>
   )
@@ -103,7 +108,7 @@ function FilaDeLead({ lead: l, proximas, etapas, hoy, onAbrirLead }: {
  * tareas vencidas, pendiente agendar ni recontactar, por pedido: esos son los chips de la lista.
  * Tocar un lead o una reunión abre el lead acá mismo (`?lead=`).
  */
-export function ResumenCrm({ leads, importantes, hayEtapas, proximas, etapas, usuariosPorId, hoy, myId, onAbrirLead }: {
+export function ResumenCrm({ leads, importantes, hayEtapas, proximas, conAlgunaTarea, etapas, usuariosPorId, hoy, myId, onAbrirLead }: {
   /** Todos los que veo: de acá sale el nombre del lead de cada reunión. */
   leads: CrmLeadRow[]
   /** Con estrella o en una etapa con «Dashboard: Sí», ya ordenados (`leadsImportantes`): las
@@ -111,7 +116,10 @@ export function ResumenCrm({ leads, importantes, hayEtapas, proximas, etapas, us
   importantes: CrmLeadRow[]
   /** Si alguna etapa está marcada: cambia lo que dice la caja vacía. */
   hayEtapas: boolean
+  /** Solo tus tareas (`assigned_to`): la de otro no se ve en el Dashboard. */
   proximas: ReadonlyMap<string, ProximaTarea>
+  /** Los leads con alguna tarea pendiente, de quien sea. */
+  conAlgunaTarea: ReadonlySet<string>
   etapas: ReadonlyMap<string, CrmStage>
   usuariosPorId: ReadonlyMap<string, Usuario>
   hoy: string
@@ -119,7 +127,7 @@ export function ResumenCrm({ leads, importantes, hayEtapas, proximas, etapas, us
   onAbrirLead: (leadId: string) => void
 }) {
   const leadsPorId = useMemo(() => new Map(leads.map(l => [l.id, l])), [leads])
-  const fila = { proximas, etapas, hoy, onAbrirLead }
+  const fila = { proximas, conAlgunaTarea, etapas, hoy, onAbrirLead }
 
   // Las mías por defecto: es mi semana. «Todas» mira la del equipo (la RLS de un SUPERADMIN las trae).
   const [todas, setTodas] = useState(false)
