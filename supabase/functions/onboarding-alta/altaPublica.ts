@@ -19,13 +19,15 @@ export type MiembroDeAlta = {
 export type AltaPublica = {
   inmobiliaria: string | null
   web: string | null
+  /** El link de Idealista: el que escribió el cliente o, si todavía nada, el de la ficha del CRM. */
+  idealista: string | null
   enviado: boolean
   miembros: MiembroDeAlta[]
 }
 
 export type AltaPublicaDb = {
   leer(token: string): Promise<{ data: AltaPublica | null; error?: string }>
-  enviar(token: string, inmobiliaria: string, web: string, miembros: unknown[]): Promise<{ error?: string }>
+  enviar(token: string, inmobiliaria: string, web: string, miembros: unknown[], idealista: string): Promise<{ error?: string }>
   reabrir(token: string): Promise<{ error?: string }>
 }
 
@@ -40,7 +42,7 @@ const falla = (status: number, error: string): AltaPublicaResult => ({ ok: false
 const ERRORES_DE_LA_BASE = [
   'alta_no_existe', 'alta_ya_enviada', 'alta_falta_inmobiliaria', 'alta_sin_miembros', 'alta_demasiados_miembros',
   'alta_un_responsable', 'alta_responsable_admin', 'alta_miembro_invalido', 'alta_email_repetido',
-  'alta_telefono_repetido',
+  'alta_telefono_repetido', 'alta_idealista_invalido',
   'alta_ya_importada',
 ] as const
 
@@ -65,9 +67,10 @@ export async function altaPublica(body: Record<string, unknown>, db: AltaPublica
   if (body.accion === 'enviar') {
     const inmobiliaria = typeof body.inmobiliaria === 'string' ? body.inmobiliaria : ''
     const web = typeof body.web === 'string' ? body.web : ''
+    const idealista = typeof body.idealista === 'string' ? body.idealista : ''
     if (!inmobiliaria.trim()) return falla(400, 'alta_falta_inmobiliaria')
     if (!Array.isArray(body.miembros) || body.miembros.length === 0) return falla(400, 'alta_sin_miembros')
-    const r = await db.enviar(token, inmobiliaria, web, body.miembros)
+    const r = await db.enviar(token, inmobiliaria, web, body.miembros, idealista)
     if (r.error) return deLaBase(r.error)
     return { ok: true, status: 200, body: { ok: true } }
   }

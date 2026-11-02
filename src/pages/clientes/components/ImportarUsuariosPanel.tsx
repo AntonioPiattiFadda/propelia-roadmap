@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { ExternalLink, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,6 +73,13 @@ export function ImportarUsuariosPanel({ datos, onCerrar }: { datos: DatosDelAlta
             title={webNormalizada === undefined ? 'No es una web válida (ej. fincasribera.es)' : 'Queda en la configuración de la org en Propelia'}
             className="h-8 w-52 bg-card" />
         </label>
+        {/* El link de Idealista que dejó el cliente en la página de alta: para mirarlo, no viaja a Propelia. */}
+        {datos.o.idealista_url && (
+          <a href={/^https?:\/\//i.test(datos.o.idealista_url) ? datos.o.idealista_url : `https://${datos.o.idealista_url}`}
+            target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary hover:underline">
+            Idealista <ExternalLink className="size-3.5" />
+          </a>
+        )}
       </div>
       <div className="overflow-x-auto rounded-md border border-(--line) bg-card">
         <table className="w-full min-w-[600px] text-[12.5px]">

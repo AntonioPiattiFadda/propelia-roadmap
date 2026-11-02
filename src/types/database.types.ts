@@ -165,6 +165,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          idealista_url: string | null
           lead_id: string
           public_token: string
           submitted_at: string | null
@@ -177,6 +178,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          idealista_url?: string | null
           lead_id: string
           public_token?: string
           submitted_at?: string | null
@@ -189,6 +191,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          idealista_url?: string | null
           lead_id?: string
           public_token?: string
           submitted_at?: string | null
@@ -1598,7 +1601,7 @@ export type Database = {
         Returns: undefined
       }
       onboarding_alta_enviar: {
-        Args: { p_company_name: string; p_miembros: Json; p_token: string; p_website: string }
+        Args: { p_company_name: string; p_idealista_url?: string; p_miembros: Json; p_token: string; p_website: string }
         Returns: undefined
       }
       onboarding_alta_leer: { Args: { p_token: string }; Returns: Json }

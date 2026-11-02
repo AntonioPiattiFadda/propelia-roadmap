@@ -396,6 +396,13 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   lleva su WhatsApp (`reunion_equipo` / `reunion_dueno`) y «Agendar», que abre el form de reunión de la
   Agenda: queda como reunión del CRM del lead, en el Google de quien lleva el alta, marcada con
   `crm_meetings.onboarding_task` (la clave de la tarea). Agendarla tilda la tarea. Pasada la reunión,
+  **«Link de Idealista»** (2/11/2026, por pedido, migración `20261102140112_onboarding_alta_link_de_idealista`,
+  que **la aplica Antonio**): campo opcional en el paso «La inmobiliaria», debajo de la web. Va en
+  `client_onboardings.idealista_url` (no pisa `crm_clients.idealista_url`, que es única por ficha) y la
+  página arranca con el de la ficha del CRM si el cliente no escribió otro. Escrito, tiene que ser de
+  idealista.com/.pt/.it (`alta_idealista_invalido`; espejo en `idealistaInvalido` de la página). En
+  /clientes se ve como enlace en la vista previa de «Importar»; no viaja a Propelia. `onboarding-alta`
+  manda el parámetro solo si vino escrito: sin la migración corrida, un alta con link falla y sin link anda.
   debajo pregunta «¿Se hizo la reunión?» (`tareaReunionHecha`, `preguntaSiSeHizo` en
   `lib/reuniones.ts`): tildarlo la marca hecha también en la Agenda, y **el paso no está hecho hasta
   contestar que sí** (`clavesDeTarea`). **El link de Meet no se genera todavía** (por pedido): sale de

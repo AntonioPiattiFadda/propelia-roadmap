@@ -6,7 +6,7 @@ import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 /* La puerta de la página pública de alta (crm.propelia.es/alta/<token>, en propelia-frontend).
    Sin JWT (`verify_jwt = false`): quien la abre es el cliente, que no tiene cuenta. La llave es el
    token, y las funciones de la base solo las puede correr el service_role.
-   Body: { accion: 'leer', token } | { accion: 'enviar', token, inmobiliaria, web, miembros }
+   Body: { accion: 'leer', token } | { accion: 'enviar', token, inmobiliaria, web, idealista?, miembros }
        | { accion: 'reabrir', token }. */
 
 const cors = {
@@ -21,9 +21,11 @@ function dbDe(admin: SupabaseClient): AltaPublicaDb {
       const { data, error } = await admin.rpc('onboarding_alta_leer', { p_token: token })
       return error ? { data: null, error: error.message } : { data: (data as AltaPublica | null) ?? null }
     },
-    async enviar(token, inmobiliaria, web, miembros) {
+    async enviar(token, inmobiliaria, web, miembros, idealista) {
       const { error } = await admin.rpc('onboarding_alta_enviar', {
         p_token: token, p_company_name: inmobiliaria, p_website: web, p_miembros: miembros,
+        // Solo si vino: sin la migración del link, la función de la base no conoce el parámetro.
+        ...(idealista.trim() ? { p_idealista_url: idealista } : {}),
       })
       return error ? { error: error.message } : {}
     },
