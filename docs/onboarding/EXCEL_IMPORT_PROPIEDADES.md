@@ -157,7 +157,7 @@ fotos»**, al lado del botón «Importar».
 | Código anuncio Idealista | **Sí** | El de la propiedad, igual que en la primera hoja | `111883889` |
 | Orden | **Sí** | 1, 2, 3… dentro de la propiedad. La 1 es la portada | `1` |
 | URL | **Sí** | El enlace a la imagen | `https://img4.idealista.com/…` |
-| Etiqueta | No | Qué se ve: queda como texto de la foto | `Salón` |
+| Etiqueta | No | Qué se ve, con los nombres de Idealista: es la clasificación de la foto en Propelia. «Plano» o un nombre que no conoce queda «Sin clasificar» | `Salón` |
 
 - La propiedad tiene que estar en la primera hoja sin errores, o ya en Propelia.
 - Las fotos **se copian a Propelia**. Las URLs del CDN de Idealista que trae la exportación

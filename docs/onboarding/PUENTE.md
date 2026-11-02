@@ -315,7 +315,9 @@ Baja cada foto de su URL (la del CDN de Idealista, firmada y con vencimiento) y 
   `photoFileName` en `_shared/propertyImport/photos.ts`), y es lo que dice que ya estaba. Sin
   migración. Una que ya estaba no se toca: ni el orden ni la etiqueta.
 - **Lugar en la galería**: `position` = las fotos que subió un agente + `Orden` − 1. La de orden
-  1 es portada solo si la propiedad no tenía portada. La `Etiqueta` va a `alt_text`.
+  1 es portada solo si la propiedad no tenía portada. La `Etiqueta` se traduce al código de
+  Idealista y va a `label`, la clasificación que muestra la grilla («Salón» → `living`;
+  `photoLabelCode`). «Plano» queda sin clasificar. El texto tal cual va además a `alt_text`.
 - Más de 20 filas → `too_many_rows`.
 
 ### `simulated_inbound_scenarios`
