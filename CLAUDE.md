@@ -274,7 +274,8 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   producto; en la base solo las tareas hechas); **los pasos 5 a 8 están en «Próximamente»** y no
   cuentan para el avance ni para «Marcar completo». **Dos pestañas** (27/10/2026, por pedido,
   `?tab=mias`): «Sin asignar» (nadie lleva el alta, de cualquier cartera del CRM) y «Asignadas a
-  mí»; «Tomar» la pasa de una a otra. Tomar escribe solo `client_onboardings.assigned_to`: el lead
+  mí»; «Tomar» la pasa de una a otra. Desde el 2/11/2026 (por pedido) hay una tercera, «Asignadas a
+  otros» (`?tab=otros`): las que lleva otra persona, para verlas. Tomar escribe solo `client_onboardings.assigned_to`: el lead
   no cambia de responsable y sigue en la lista del CRM de quien lo pasó a la etapa. Cada tarea lleva sus acciones al lado: copiar y
   abrir WhatsApp (plantillas de `onboarding_message_templates`), copiar el enlace de alta, importar, etc.
 - **El equipo lo carga el cliente** (ver el punto de la página pública, abajo; hasta el 27/10/2026

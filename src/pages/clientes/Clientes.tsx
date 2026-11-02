@@ -21,12 +21,15 @@ const TAB_PARAM = 'tab'
 
 /* Las dos pestañas (27/10/2026, por pedido). «Sin asignar»: las altas que nadie tomó, de cualquier
    cartera del CRM, no solo de los leads tuyos. «Asignadas a mí»: las que llevás vos. Tomar una solo
-   escribe `client_onboardings.assigned_to`: el lead sigue en la lista del CRM de su responsable. */
-type Pestana = 'sin-asignar' | 'mias'
+   escribe `client_onboardings.assigned_to`: el lead sigue en la lista del CRM de su responsable.
+   «Asignadas a otros» (2/11/2026, por pedido): las que lleva otra persona, para verlas. */
+type Pestana = 'sin-asignar' | 'mias' | 'otros'
 const PESTANAS: { id: Pestana; label: string }[] = [
   { id: 'sin-asignar', label: 'Sin asignar' },
   { id: 'mias', label: 'Asignadas a mí' },
+  { id: 'otros', label: 'Asignadas a otros' },
 ]
+const esPestana = (v: string | null): v is Pestana => PESTANAS.some(p => p.id === v)
 const segmento = (activo: boolean) => cn(
   'inline-flex h-7 cursor-pointer select-none items-center gap-1.5 rounded-full px-3 text-[12.5px] font-medium',
   'transition-[background-color,color,box-shadow] duration-150 outline-none focus-visible:ring-2 focus-visible:ring-(--brand-200)',
@@ -122,8 +125,12 @@ export function Clientes() {
   const altas = useMemo(() => (onboardings.data ?? []).map(o =>
     datosDelAlta(o, plantillas.data ?? [], porId.get(o.assigned_to ?? '')?.nombre ?? yo?.nombre ?? 'el equipo de Propelia')),
   [onboardings.data, plantillas.data, porId, yo])
-  const pestana: Pestana = params.get(TAB_PARAM) === 'mias' ? 'mias' : 'sin-asignar'
-  const dePestana = (p: Pestana) => altas.filter(d => p === 'mias' ? d.o.assigned_to === yo?.id : !d.o.assigned_to)
+  const tab = params.get(TAB_PARAM)
+  const pestana: Pestana = esPestana(tab) ? tab : 'sin-asignar'
+  const dePestana = (p: Pestana) => altas.filter(d =>
+    p === 'mias' ? d.o.assigned_to === yo?.id
+      : p === 'otros' ? !!d.o.assigned_to && d.o.assigned_to !== yo?.id
+      : !d.o.assigned_to)
   const visibles = dePestana(pestana).filter(d => `${d.inmobiliaria} ${d.nombreResponsable}`.toLowerCase().includes(busca.trim().toLowerCase()))
   const abierta = altas.find(d => d.o.lead.id === params.get(LEAD_PARAM)) ?? null
 
@@ -136,7 +143,7 @@ export function Clientes() {
 
   const elegir = (p: Pestana) => setParams(prev => {
     const n = new URLSearchParams(prev)
-    if (p === 'mias') n.set(TAB_PARAM, p)
+    if (p !== 'sin-asignar') n.set(TAB_PARAM, p)
     else n.delete(TAB_PARAM)
     return n
   })
@@ -173,7 +180,8 @@ export function Clientes() {
       ) : visibles.length === 0 ? (
         <p className="text-sm text-(--fg-2)">
           {!altas.length ? 'No hay altas en curso. Un lead aparece acá cuando el comercial lo pasa a «Contratado».'
-            : !dePestana(pestana).length ? (pestana === 'mias' ? 'No llevás ninguna alta. Tomá una desde «Sin asignar».' : 'No hay altas sin asignar.')
+            : !dePestana(pestana).length ? (pestana === 'mias' ? 'No llevás ninguna alta. Tomá una desde «Sin asignar».'
+              : pestana === 'otros' ? 'Nadie más lleva un alta.' : 'No hay altas sin asignar.')
             : 'Nada coincide con la búsqueda.'}
         </p>
       ) : (
