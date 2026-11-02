@@ -2483,12 +2483,12 @@ grant execute on function public.client_onboarding_completar(uuid) to authentica
 -- Lo que la página precarga. null si el token no existe o el alta ya terminó.
 create or replace function public.onboarding_alta_leer(p_token uuid)
 returns jsonb language sql stable security definer set search_path to 'public' as $$
-    -- Lo que escribió el cliente o, si todavía nada, la ficha de Idealista del CRM.
-    'idealista', coalesce(o.idealista_url, nullif(btrim(c.idealista_url), '')),
   select jsonb_build_object(
     'inmobiliaria', coalesce(o.company_name, nullif(btrim(c.company_name), ''),
                              nullif(btrim(concat_ws(' ', c.first_name, c.last_name)), '')),
     'web', o.website,
+    -- Lo que escribió el cliente o, si todavía nada, la ficha de Idealista del CRM.
+    'idealista', coalesce(o.idealista_url, nullif(btrim(c.idealista_url), '')),
     'enviado', o.submitted_at is not null,
     'miembros', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -2523,13 +2523,13 @@ begin
   end if;
   if v_enviado is not null then
     raise exception 'alta_ya_enviada' using errcode = '22023';
-  if nullif(btrim(p_idealista_url), '') is not null
-     and btrim(p_idealista_url) !~* '^(https?://)?([a-z0-9-]+\.)*idealista\.(com|pt|it)(/|$)' then
-    raise exception 'alta_idealista_invalido' using errcode = '22023';
-  end if;
   end if;
   if nullif(btrim(p_company_name), '') is null then
     raise exception 'alta_falta_inmobiliaria' using errcode = '22023';
+  end if;
+  if nullif(btrim(p_idealista_url), '') is not null
+     and btrim(p_idealista_url) !~* '^(https?://)?([a-z0-9-]+\.)*idealista\.(com|pt|it)(/|$)' then
+    raise exception 'alta_idealista_invalido' using errcode = '22023';
   end if;
   if jsonb_typeof(p_miembros) <> 'array' or jsonb_array_length(p_miembros) = 0 then
     raise exception 'alta_sin_miembros' using errcode = '22023';
@@ -2582,9 +2582,9 @@ end;
 $$;
 
 revoke execute on function public.onboarding_alta_leer(uuid) from public, anon, authenticated;
-revoke execute on function public.onboarding_alta_enviar(uuid, text, text, jsonb) from public, anon, authenticated;
+revoke execute on function public.onboarding_alta_enviar(uuid, text, text, jsonb, text) from public, anon, authenticated;
 grant execute on function public.onboarding_alta_leer(uuid) to service_role;
-grant execute on function public.onboarding_alta_enviar(uuid, text, text, jsonb) to service_role;
+grant execute on function public.onboarding_alta_enviar(uuid, text, text, jsonb, text) to service_role;
 
 -- «Quiero editar» en la página pública de alta (27/10/2026, por pedido): el cliente que ya envió
 -- puede volver a abrir el formulario él solo, mientras el equipo de Propelia no lo haya importado.
