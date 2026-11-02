@@ -2239,18 +2239,15 @@ insert into public.onboarding_message_templates (id, body) values
   'Si en algún paso os pide algo que no tenéis a mano, escribidme por aquí y lo vemos juntos.'
 ), (
   'tutorial_leads',
-  E'{nombre}, ya tenéis activado el tutorial de Propelia para todo el equipo de {inmobiliaria} 🎓\n\n'
-  'Al entrar lo veis arriba a la derecha, al lado de «Primeros pasos». Son recorridos guiados de un minuto por la pantalla de verdad:\n\n'
-  '📥 Cómo llegan los leads\n'
-  '⚙️ Idealista\n'
-  '✅ Pendientes\n'
-  '📅 Agendar una visita\n'
-  '🔗 Matching\n'
-  '🏠 Inmuebles y su ficha\n'
-  '🤝 Vendedores\n'
-  '🔔 Avisos a los leads (administradores)\n'
-  '👥 Equipo y visibilidad (administradores)\n\n'
-  'Y cuando queráis repasar algo, en Capacitación tenéis un vídeo corto de cada parte. ¡Cualquier duda, por aquí!'
+  E'¡Hola, chicos! ¿Cómo estáis? ¡Espero que tengáis una gran semana!\n\n'
+  'Os he importado los pisos en Propelia. Algunos quedaron con la dirección cargada a medias o sin agente comercializador, así que el primer paso sería hacer esos ajustes: veréis que es súper sencillo.\n\n'
+  'Por otro lado, he activado una serie de tutoriales muy breves para que podáis empezar a usar el sistema. Algunos son para los administradores y tienen que ver con la configuración del equipo y de la organización (como poner el logo y el manual de marca para los documentos), y otros son para los agentes.\n\n'
+  'Los pasos a seguir son:\n\n'
+  '- Completar la información de los inmuebles: por ahora solo la dirección. Cuando hagamos la integración completa con Idealista, el resto de los datos se traerá solo.\n'
+  '- Completar la información de los miembros del equipo.\n'
+  '- Configurar la entrada de leads desde Idealista.\n\n'
+  'Os adjunto también un vídeo de 20 segundos con cómo va a ser el proceso de onboarding de ahora en adelante 🎥\n\n'
+  'Toda la información la veréis en los tutoriales y, por cualquier duda, me podéis consultar: será un gusto ayudaros 😊'
 ), (
   'accesos_enviados',
   E'¡{nombre}, ya están listos los accesos de {inmobiliaria}! 🎉\n\n'

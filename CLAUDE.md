@@ -348,6 +348,15 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   (`useDesactivarTutorialDeLeads`, acción `deactivate_tour_group` del puente): saca el grupo del
   checklist de todo el equipo, destilda la tarea y no borra lo terminado (volver a activarlo lo
   respeta). Necesita esa acción en el `roadmap-bridge` del producto; sin ella contesta «Acción desconocida».
+  **Desde el 2/11/2026 (por pedido) su WhatsApp es el mensaje de arranque** (migración
+  `20261102124221_onboarding_tutorial_mensaje_de_arranque`, que **la aplica Antonio**): se manda
+  después de activar y dice que la cartera está importada (completar direcciones a medias y agente
+  comercializador), que los tutoriales están prendidos (admins: equipo y organización; agentes: el
+  resto) y los tres primeros pasos: inmuebles (por ahora solo la dirección: el resto lo trae la
+  integración completa con Idealista), miembros del equipo y entrada de leads desde Idealista. Dice
+  que va adjunto un vídeo de 20 s del proceso de onboarding, que se adjunta a mano (el enlace de
+  WhatsApp no lleva archivos, como el Excel de los accesos).
+  Ya no lista los recorridos ni usa `{nombre}`/`{inmobiliaria}` («¡Hola, chicos!»).
   Al lado, **«Desmarcar lo hecho»** (31/10/2026, por pedido; `useReiniciarTutorialDeLeads`,
   acción `reset_tour_group_progress`): no apaga el tutorial, deja sin hacer los recorridos que cada
   uno terminó (en Propelia, una vuelta `reset` que no cuenta; el historial queda). La tarea no cambia. El cierre del WhatsApp dice que el tutorial
