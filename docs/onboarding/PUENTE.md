@@ -252,6 +252,20 @@ error de la fila (`"Agente captador: \"x\" no es nadie de la organización"`).
 `existing_property_id` ≠ null: esa fila ya está en la org (mismo código de Idealista) y se va a
 saltear. Máximo **2000 filas** (`too_many_rows`).
 
+**Fotos** (2/11/2026): con «Importar fotos» tildado el Roadmap manda además `photos`, la hoja
+«Fotos» entera (cabecera `Código anuncio Idealista`, `Orden`, `URL`, `Etiqueta`; detalle en
+[`EXCEL_IMPORT_PROPIEDADES.md`](EXCEL_IMPORT_PROPIEDADES.md)), y la respuesta suma:
+
+```json
+"photos": { "ok": true, "new": 985, "existing": 1, "invalid": 0,
+  "rows": [ { "row_number": 2, "idealista_code": "111883889", "status": "existing", "errors": [] }, … ] }
+// o { "ok": false, "error": "A la hoja «Fotos» le faltan columnas: URL" }
+```
+
+`status`: `new` (se va a importar), `existing` (la propiedad ya tiene esa foto) o `invalid`. Una
+foto entra si su código es de una fila válida de la hoja de propiedades o de una propiedad que ya
+está en la org. Sin `photos` la respuesta no trae la clave. Máximo **10000 fotos**.
+
 ### `import_properties`
 
 Crea las propiedades en la org: completa cada dirección con Google y las guarda con
@@ -275,6 +289,34 @@ de la org (migración `superadmin_import_properties_agentes` del producto; antes
 
 Cada lote es todo o nada del lado de la base: si la respuesta es un error, ninguna fila de ese
 lote quedó creada y se puede reintentar. Más de 50 filas → `too_many_rows`.
+
+### `import_photos`
+
+Baja cada foto de su URL (la del CDN de Idealista, firmada y con vencimiento) y la sube a
+`property-media` de la propiedad, con su fila en `property_images`. Se llama **después** de
+`import_properties`, en lotes de hasta **20 filas** de la hoja «Fotos» (las `new` de
+`check_properties`), con la cabecera de esa hoja:
+
+```json
+// { "action": "import_photos", "org_id": "6f1c…",
+//   "header": ["Código anuncio Idealista","Orden","URL","Etiqueta"],
+//   "rows": [ { "row_number": 2, "cells": ["111883889","1","https://img4.idealista.com/…","Terraza"] }, … ] } →
+{ "results": [
+  { "row_number": 2, "status": "created", "property_id": "p1…" },
+  { "row_number": 3, "status": "skipped_existing", "property_id": "p1…" },
+  { "row_number": 4, "status": "failed", "property_id": "p1…", "errors": ["Idealista no la deja bajar (¿venció el enlace del Excel?)"] },
+  { "row_number": 5, "status": "invalid", "errors": ["La propiedad 555 no está en Propelia"] }
+] }
+```
+
+- **Cada foto va sola**: una que no se puede bajar es `failed` y el resto sigue.
+- **Qué foto es cuál**: la URL **sin** la firma (`?Expires=…&Signature=…` cambia en cada
+  exportación). De ahí sale el nombre fijo del archivo (`<org>/<propiedad>/photos/xl-<hash>.<ext>`,
+  `photoFileName` en `_shared/propertyImport/photos.ts`), y es lo que dice que ya estaba. Sin
+  migración. Una que ya estaba no se toca: ni el orden ni la etiqueta.
+- **Lugar en la galería**: `position` = las fotos que subió un agente + `Orden` − 1. La de orden
+  1 es portada solo si la propiedad no tenía portada. La `Etiqueta` va a `alt_text`.
+- Más de 20 filas → `too_many_rows`.
 
 ### `simulated_inbound_scenarios`
 

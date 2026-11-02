@@ -324,7 +324,17 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   `address_visibility`. Sin calle o sin número la fila entra con aviso (antes era error): en
   Propelia la tabla de Propiedades la marca «Dirección incompleta» y lleva al formulario, que la
   exige; sin calle no se geocodifica (el centro del municipio inventaría la zona), y el matching
-  sin coordenadas no puntúa la zona en vez de descartar el piso. Hace falta deployar `roadmap-bridge`. Esa guía es el checklist del producto (`onboardingSteps.ts` de
+  sin coordenadas no puntúa la zona en vez de descartar el piso. Hace falta deployar `roadmap-bridge`.
+  **Y las fotos, en una hoja «Fotos»** (2/11/2026, por pedido, con el de Altamarco): una por fila
+  (código, orden, URL, etiqueta). Se leen solo con el tilde **«Importar fotos»** al lado de
+  «Importar», elegido antes de subir el Excel. La vista previa dice cuántas se importan, cuántas ya
+  estaban y cuáles tienen error (`photos` de `check_properties`). Después de las propiedades,
+  `import_photos` (lotes de 20, `FOTOS_POR_LOTE`) las baja del CDN de Idealista y las copia a
+  `property-media`: las URLs vienen firmadas y **vencen en un día**, así que guardar el enlace no
+  sirve. **Sin migración**: la foto se reconoce por su URL sin la firma, que da el nombre fijo del
+  archivo (`xl-<hash>`, `_shared/propertyImport/photos.ts` del producto). Reimportar suma solo las
+  que faltan y no toca ni borra las que ya están. Hace falta deployar `roadmap-bridge` (producto) y
+  `propelia-bridge` (acá, por la acción nueva). Esa guía es el checklist del producto (`onboardingSteps.ts` de
   propelia-frontend) y sale sola: las cuentas del puente nacen con `onboarding_completed_at` vacío.
   Por lo mismo, en el paso 2 **«Configurar la organización con ellos» salió** (29/10/2026, por
   pedido) y entró «Enviar el tutorial de cómo funciona el sistema de leads» (`tutorial-leads`,

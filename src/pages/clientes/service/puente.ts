@@ -38,8 +38,19 @@ export type ResultadoDeFila = { row_number: number; status: 'created' | 'skipped
 export type PlanDePago = { id: string; code?: string; name: string; amount_cents: number; currency?: string; individual: boolean }
 export type LinkDePago = { id: string; url: string; status: 'open' | 'paid' | 'linked'; created_at?: string; expires_at?: string; paid_at?: string | null; amount_cents?: number }
 
+/** Una fila de la hoja «Fotos» revisada: `new` se va a importar, `existing` ya estaba en la propiedad. */
+export type FotoRevisada = { row_number: number; idealista_code: string | null; status: 'new' | 'existing' | 'invalid'; errors: string[] }
+export type RevisionDeFotos =
+  | { ok: true; rows: FotoRevisada[]; new: number; existing: number; invalid: number }
+  | { ok: false; error: string }
+export type ResultadoDeFoto = { row_number: number; status: 'created' | 'skipped_existing' | 'failed' | 'invalid'; property_id?: string; errors?: string[] }
+
 /** Máximo de filas por llamada a `import_properties` (PUENTE.md). */
 export const FILAS_POR_LOTE = 50
+/** Máximo de fotos por llamada a `import_photos` (PUENTE.md): cada una es bajarla y subirla. */
+export const FOTOS_POR_LOTE = 20
+/** La hoja del Excel de la cartera con las fotos (una por fila, atada por el código de Idealista). */
+export const HOJA_DE_FOTOS = 'Fotos'
 
 async function invocar<T>(action: string, params: Record<string, unknown> = {}): Promise<T> {
   if (PUENTE_SIMULADO) return simular(action, params) as Promise<T>
@@ -62,10 +73,14 @@ export const getOrganizacion = (org_id: string) =>
   invocar<{ organization: OrgConAgentes }>('get_organization', { org_id }).then(r => r.organization)
 export const getColumnasDeCartera = () =>
   invocar<{ columns: ColumnaDeCartera[] }>('import_template').then(r => r.columns)
-export const revisarCartera = (org_id: string, sheet: string[][]) =>
-  invocar<{ ok: true; rows: FilaRevisada[] } | { ok: false; error: string }>('check_properties', { org_id, sheet })
+/** `photos`: la hoja «Fotos» entera, si se pidió importarlas. Sin ella la respuesta no trae `photos`. */
+export const revisarCartera = (org_id: string, sheet: string[][], photos: string[][] | null = null) =>
+  invocar<{ ok: true; rows: FilaRevisada[]; photos?: RevisionDeFotos } | { ok: false; error: string }>(
+    'check_properties', { org_id, sheet, ...(photos ? { photos } : {}) })
 export const importarLoteDeCartera = (org_id: string, header: string[], rows: { row_number: number; cells: string[] }[]) =>
   invocar<{ results: ResultadoDeFila[] }>('import_properties', { org_id, header, rows }).then(r => r.results)
+export const importarLoteDeFotos = (org_id: string, header: string[], rows: { row_number: number; cells: string[] }[]) =>
+  invocar<{ results: ResultadoDeFoto[] }>('import_photos', { org_id, header, rows }).then(r => r.results)
 export const getPlanes = (org_id: string) =>
   invocar<{ plans: PlanDePago[] }>('list_payment_plans', { org_id }).then(r => r.plans)
 export const crearLinkDePago = (p: { plan_id: string; org_id: string; customer_email: string | null; note: string }) =>
@@ -141,14 +156,23 @@ async function simular(action: string, p: Record<string, unknown>): Promise<unkn
     case 'check_properties': {
       const [cab, ...filas] = p.sheet as string[][]
       if (!cab?.length) return { ok: false, error: 'El archivo está vacío.' }
+      const fotos = (p.photos as string[][] | undefined)?.slice(1)
       return {
         ok: true,
         rows: filas.map((f, i) => {
           const errors = f.slice(1, 4).some(c => !String(c ?? '').trim()) ? ['Faltan tipo, calle o número'] : []
           return { row_number: i + 2, valid: !errors.length, errors, warnings: f[0] ? [] : ['Sin código de Idealista'], existing_property_id: null, summary: { address: `${f[2] ?? ''} ${f[3] ?? ''}, ${f[5] ?? ''}`.trim() } }
         }),
+        ...(fotos ? {
+          photos: {
+            ok: true, new: fotos.length, existing: 0, invalid: 0,
+            rows: fotos.map((f, i) => ({ row_number: i + 2, idealista_code: f[0] || null, status: 'new', errors: [] })),
+          },
+        } : {}),
       }
     }
+    case 'import_photos':
+      return { results: (p.rows as { row_number: number }[]).map(r => ({ row_number: r.row_number, status: 'created' })) }
     case 'import_properties': {
       const rows = p.rows as { row_number: number }[]
       const org = m.orgs[String(p.org_id)]

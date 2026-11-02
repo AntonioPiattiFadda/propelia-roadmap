@@ -146,6 +146,29 @@ nombre de la columna.
 | 108765433 | Casa | Calle Mayor | 12 | 28013 | Madrid | Alquiler | | 1800 | 4 | 3 | No | 160 | Sí |
 | 108765434 | Garaje | Avenida Diagonal | 400 | 08037 | Barcelona | Venta y alquiler | 30000 | 120 | 0 | 0 | Sí | 12 | |
 
+## Hoja «Fotos» (opcional)
+
+Desde el 2/11/2026 (por pedido, con el Excel de Altamarco). Una segunda hoja llamada
+**`Fotos`**, con una foto por fila. Se lee solo si antes de subir el Excel se tilda **«Importar
+fotos»**, al lado del botón «Importar».
+
+| Columna | ¿Obligatoria? | Qué poner | Ejemplo |
+|---|---|---|---|
+| Código anuncio Idealista | **Sí** | El de la propiedad, igual que en la primera hoja | `111883889` |
+| Orden | **Sí** | 1, 2, 3… dentro de la propiedad. La 1 es la portada | `1` |
+| URL | **Sí** | El enlace a la imagen | `https://img4.idealista.com/…` |
+| Etiqueta | No | Qué se ve: queda como texto de la foto | `Salón` |
+
+- La propiedad tiene que estar en la primera hoja sin errores, o ya en Propelia.
+- Las fotos **se copian a Propelia**. Las URLs del CDN de Idealista que trae la exportación
+  **vencen** (`Expires=` en la URL, ~1 día), así que hay que importar el Excel el mismo día que
+  se bajó. Vencido, la vista previa las cuenta igual, pero al importar salen «no entraron»: hay que
+  bajar el Excel de nuevo.
+- **Volver a subir el Excel agrega solo las fotos que faltan**: una foto se reconoce por su URL
+  sin la firma. Las que ya están no se tocan, ni su orden ni su etiqueta, y nada se borra.
+- Si la propiedad ya tenía fotos de un agente, las del Excel van después, y la portada no cambia.
+- La vista previa dice cuántas fotos se importan, cuántas ya estaban y cuáles tienen error.
+
 ## Qué pasa al importar
 
 1. La vista previa marca cada fila como **Lista**, **Lista con aviso** (por ejemplo, sin
@@ -155,3 +178,5 @@ nombre de la columna.
 3. Los leads que ya habían llegado por esos códigos se vinculan en el momento.
 4. Volver a subir el mismo Excel no duplica nada: los códigos que ya existen se saltean. Esto
    no vale para las filas **sin código**: ésas se crean de nuevo cada vez.
+5. Con «Importar fotos», después de las propiedades se suben las fotos, de a 20. Una que falla
+   no frena el resto: al final avisa cuántas no entraron.

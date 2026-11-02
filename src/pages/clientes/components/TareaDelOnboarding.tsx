@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { leerPrimeraHoja } from '@/pages/crm/service/excel'
+import { leerHojaYOtra } from '@/pages/crm/service/excel'
 import { useEmailsQueNoLlegaron } from '@/pages/crm/hooks/useEmails'
 import { motivoLegible, noLlegaronDelLead, rotuloDelEstado } from '@/pages/crm/lib/emails'
 import type { Celda } from '@/pages/crm/lib/importarLote'
@@ -16,7 +16,7 @@ import { listaDeMailsQueNoLlegaron } from '../lib/mensajes'
 import { claveDeTarea, TAREA_CORREGIR_MAILS, TAREA_CREDENCIALES, TAREA_TUTORIAL_LEADS, tareaReunionHecha, type Accion, type Paso, type PlantillaId, type Tarea } from '../lib/pasos'
 import { preguntaSiSeHizo, reunionDeLaTarea } from '../lib/reuniones'
 import { descargarExcel } from '../service/excel'
-import { enviarLeadDePrueba, getColumnasDeCartera, GRUPO_TUTORIAL_DE_LEADS, PUENTE_SIMULADO } from '../service/puente'
+import { enviarLeadDePrueba, getColumnasDeCartera, GRUPO_TUTORIAL_DE_LEADS, HOJA_DE_FOTOS, PUENTE_SIMULADO } from '../service/puente'
 import { ConfirmarAccesosDialog } from './ConfirmarAccesosDialog'
 import { copiarTexto, EnviarPorWhatsapp } from './EnviarPorWhatsapp'
 import { ImportarCarteraPanel } from './ImportarCarteraPanel'
@@ -27,7 +27,7 @@ import type { DatosDelAlta } from './datosDelAlta'
 /** Lo que cuelga debajo de la tarea mientras se usa una acción. */
 type Panel =
   | { tipo: 'usuarios' }
-  | { tipo: 'cartera'; archivo: string; hoja: string[][] }
+  | { tipo: 'cartera'; archivo: string; hoja: string[][]; fotos: string[][] | null }
   | { tipo: 'link' } | { tipo: 'pago' } | { tipo: 'direcciones' }
 
 const SIN_ORG = 'Primero importá el equipo: crea la organización en Propelia'
@@ -54,6 +54,9 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
   const [panel, setPanel] = useState<Panel | null>(null)
   const [confirmando, setConfirmando] = useState(false)
   const [ocupado, setOcupado] = useState<Accion | null>(null)
+  /* «Importar fotos» (2/11/2026, por pedido): se elige ANTES de subir el Excel y hace que se lea
+     también su hoja «Fotos». Apagado, el import es el de siempre. */
+  const [conFotos, setConFotos] = useState(false)
   /* Las capacitaciones (31/10/2026): tildada es «agendada»; pasada la reunión, debajo pregunta si se hizo. */
   const [agendando, setAgendando] = useState(false)
   const reunion = tarea.reunion ? reunionDeLaTarea(datos.o.lead.reuniones ?? [], clave) : null
@@ -152,10 +155,21 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
           </Button>
         )
       case 'importar-cartera':
-        return boton(<Upload className="size-4" />, 'Importar', () => elegirArchivo(f => void ocupar(a, async () => {
-          const hoja = (await leerPrimeraHoja(f)).map(fila => fila.map(celdaATexto))
-          setPanel({ tipo: 'cartera', archivo: f.name, hoja })
-        })), { requiereOrg: true })
+        return (
+          <span key={a} className="flex items-center gap-2">
+            <label className="flex cursor-pointer items-center gap-1.5 text-[12px] text-(--fg-muted)">
+              <Checkbox checked={conFotos} onCheckedChange={v => setConFotos(v === true)} />
+              Importar fotos
+            </label>
+            {boton(<Upload className="size-4" />, 'Importar', () => elegirArchivo(f => void ocupar(a, async () => {
+              const { primera, otra } = await leerHojaYOtra(f, HOJA_DE_FOTOS)
+              const hoja = primera.map(fila => fila.map(celdaATexto))
+              const fotos = conFotos && otra ? otra.map(fila => fila.map(celdaATexto)) : null
+              if (conFotos && !otra) toast.warning(`El Excel no tiene la hoja «${HOJA_DE_FOTOS}»: se importan sólo las propiedades`)
+              setPanel({ tipo: 'cartera', archivo: f.name, hoja, fotos })
+            })), { requiereOrg: true })}
+          </span>
+        )
       case 'link-pago': return boton(<Link2 className="size-4" />, 'Generar link', () => alternar({ tipo: 'link' }), { requiereOrg: true, activo: panel?.tipo === 'link' })
       case 'ver-pago': return boton(<CreditCard className="size-4" />, 'Ver pago', () => alternar({ tipo: 'pago' }), { requiereOrg: true, activo: panel?.tipo === 'pago' })
       case 'direcciones': return boton(<Inbox className="size-4" />, 'Direcciones', () => alternar({ tipo: 'direcciones' }), { requiereOrg: true, activo: panel?.tipo === 'direcciones' })
@@ -274,7 +288,7 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
       {panel && (
         <div className="ml-6.5">
           {panel.tipo === 'usuarios' && <ImportarUsuariosPanel datos={datos} onCerrar={() => setPanel(null)} />}
-          {panel.tipo === 'cartera' && <ImportarCarteraPanel datos={datos} archivo={panel.archivo} hoja={panel.hoja} onCerrar={() => setPanel(null)} />}
+          {panel.tipo === 'cartera' && <ImportarCarteraPanel datos={datos} archivo={panel.archivo} hoja={panel.hoja} fotos={panel.fotos} onCerrar={() => setPanel(null)} />}
           {panel.tipo === 'link' && <LinkDePagoPanel datos={datos} />}
           {panel.tipo === 'pago' && <PagoPanel datos={datos} />}
           {panel.tipo === 'direcciones' && <DireccionesPanel datos={datos} />}

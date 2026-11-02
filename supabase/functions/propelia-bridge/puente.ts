@@ -12,6 +12,7 @@ export const ACCIONES = [
   'import_template',
   'check_properties',
   'import_properties',
+  'import_photos',
   'simulated_inbound_scenarios',
   'send_simulated_inbound',
   'list_payment_plans',
