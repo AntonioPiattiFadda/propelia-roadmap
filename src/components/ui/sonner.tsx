@@ -17,6 +17,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
     ? createPortal(
       <Sonner
         theme="system"
+        // Arriba a la derecha y no abajo (4/11/2026, por pedido): las alarmas de tareas no se van
+        // solas y abajo tapaban los botones de las ventanas, como «Enviar email» de Mensajes.
+        position="top-right"
         closeButton
         className="no-print toaster group fixed z-[999999] pointer-events-auto"
         style={{
