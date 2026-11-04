@@ -8,8 +8,9 @@ import {
 /* La columna izquierda del formulario de la reunión cuando se agenda una demo de un lead (22/10/2026,
    por pedido; a la izquierda desde el 23/10/2026). Mismo orden y mismos renglones que el registro de
    la llamada (`FilasDelRegistro`), para no marear: con quién (acá «Quién asiste»), «¿Es decisor?», el
-   texto, el decisor apuntado y la etapa. Sin «Teléfono contacto»: en una demo no se marcó ningún
-   número. El estado vive en `useRegistroDeDemo`, que también lo guarda; esto solo lo pinta. */
+   texto, el decisor apuntado y la etapa. El «Teléfono seguimiento» es de este mismo registro pero se
+   pinta en la columna de la reunión (4/11/2026, por pedido). El estado vive en `useRegistroDeDemo`,
+   que también lo guarda; esto solo lo pinta. */
 export function RegistroDeDemoPanel({ r, onAbrirContacto }: { r: RegistroDeDemo; onAbrirContacto?: (campo: CampoDecisor) => void }) {
   const enRojo = (k: keyof RegistroDeDemo['falta']) => r.intento && r.falta[k]
 

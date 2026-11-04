@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlignLeft, Bell, CalendarDays, Check, Clock, Mail, TriangleAlert, Users } from 'lucide-react'
+import { AlignLeft, Bell, CalendarDays, Check, Clock, Mail, Phone, TriangleAlert, Users } from 'lucide-react'
 import { es } from 'react-day-picker/locale'
 import { DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,9 @@ import { Calendar } from '@/components/ui/calendar'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { cn } from '@/lib/utils'
+import { FilaDeTelefono } from '@/pages/crm/components/FilasDelRegistro'
 import { RegistroDeDemoPanel } from '@/pages/crm/components/RegistroDeDemoPanel'
+import { pedirPermisoDeAvisos } from '@/pages/crm/hooks/useAlarmasDeTareas'
 import { useRegistroDeDemo } from '@/pages/crm/hooks/useRegistroDeDemo'
 import { TEXTO_DE_DEMO } from '@/pages/crm/lib/actividad'
 import type { DemoAgendada } from '@/pages/crm/lib/avisoDeDemo'
@@ -285,6 +287,9 @@ export function MeetingFormContent({
       return
     }
 
+    // La demo crea tareas con hora para confirmarla (`registrar`): el permiso de avisos se pide acá,
+    // en el gesto del usuario, como al crear una tarea con hora (fuera de un clic no se puede).
+    if (demo) pedirPermisoDeAvisos()
     createMutation.mutate(
       {
         startsAt: starts.toISOString(),
@@ -302,7 +307,7 @@ export function MeetingFormContent({
       {
         onSuccess: (created) => {
           if (demo) {
-            void registro.registrar({ reunionId: created.id, email: clientEmail })
+            void registro.registrar({ reunionId: created.id, email: clientEmail, startsAt: starts.toISOString() })
             const elegibles = [...registro.contactos, ...registro.nuevos]
             const texto = registro.texto.trim()
             onDemoAgendada?.({
@@ -424,6 +429,29 @@ export function MeetingFormContent({
               {(showErrors || !!clientEmail.trim()) && !clientEmailValido && (
                 <span role="alert" className="text-[11.5px] font-semibold text-(--danger)">
                   {clientEmail.trim() ? 'No es un mail válido' : 'Falta el email del cliente'}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+        {demo && (
+          // El «Teléfono seguimiento» (4/11/2026, por pedido): obligatorio, sin ninguno elegido de
+          // entrada y con prefijo de país, que es para WhatsApp. Las reglas viven en `useRegistroDeDemo`.
+          <div className="flex items-start gap-3">
+            <Phone className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <FilaDeTelefono rotulo="Teléfono seguimiento (WhatsApp)" cargados={registro.telefonosCargados}
+                nuevo={registro.telefonoNuevo} elegido={registro.telefono} onElegir={registro.setTelefono}
+                onEscrito={registro.escribirTelefono} onSacarNuevo={registro.sacarTelefonoNuevo}
+                rojo={registro.intento && registro.falta.telefono}
+                tituloNuevo="Se carga en el perfil al agendar" placeholder="600 000 000" conPrefijo />
+              {registro.telefonoSinPrefijo ? (
+                <span role="alert" className="text-[11.5px] font-semibold text-(--danger)">
+                  Tiene que llevar el prefijo de país (+34…) para WhatsApp
+                </span>
+              ) : registro.intento && registro.falta.telefono && (
+                <span role="alert" className="text-[11.5px] font-semibold text-(--danger)">
+                  Elegí o escribí el teléfono de seguimiento
                 </span>
               )}
             </div>
@@ -554,6 +582,7 @@ export function MeetingFormContent({
           fecha={date}
           titulo="Elegí día y hora de la demo"
           horaDeEspana={enEspana}
+          conAnfitrion={demo}
           onElegir={slot => {
             const elegido = horarioDelSlot(slot, { time, endTime })
             setDate(elegido.date)

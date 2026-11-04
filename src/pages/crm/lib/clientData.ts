@@ -268,6 +268,56 @@ export function esTelefonoDeOficina(telefono: string | null | undefined, client:
 export const ETIQUETA_OFICINA = 'Oficina'
 export type TelefonoDelCliente = { numero: string; etiqueta: string }
 
+/** Si el número lleva el prefijo de país (`+34 …`) y alcanza para un número entero: es lo que pide
+ *  el «Teléfono seguimiento» de la demo, que tiene que servir para WhatsApp (4/11/2026, por pedido).
+ *  El `0034` no vale: el enlace de WhatsApp lo leería mal. */
+export function tienePrefijoDePais(numero: string): boolean {
+  const limpio = numero.trim()
+  return limpio.startsWith('+') && limpio.replace(/\D/g, '').length >= 8
+}
+
+/** Los prefijos que ofrece el «Teléfono seguimiento» de la demo al escribir un número nuevo
+ *  (4/11/2026, por pedido). España primero: es el de entrada. Va el código de dos letras y no la
+ *  bandera: en Windows los emojis de bandera se ven como esas dos letras igual. */
+export const PREFIJOS_DE_PAIS = [
+  { pais: 'España', codigo: 'ES', prefijo: '+34' },
+  { pais: 'Portugal', codigo: 'PT', prefijo: '+351' },
+  { pais: 'Andorra', codigo: 'AD', prefijo: '+376' },
+  { pais: 'Francia', codigo: 'FR', prefijo: '+33' },
+  { pais: 'Italia', codigo: 'IT', prefijo: '+39' },
+  { pais: 'Reino Unido', codigo: 'GB', prefijo: '+44' },
+  { pais: 'Alemania', codigo: 'DE', prefijo: '+49' },
+  { pais: 'Argentina', codigo: 'AR', prefijo: '+54' },
+  { pais: 'Venezuela', codigo: 'VE', prefijo: '+58' },
+  { pais: 'México', codigo: 'MX', prefijo: '+52' },
+  { pais: 'Colombia', codigo: 'CO', prefijo: '+57' },
+  { pais: 'Chile', codigo: 'CL', prefijo: '+56' },
+  { pais: 'Uruguay', codigo: 'UY', prefijo: '+598' },
+  { pais: 'Estados Unidos', codigo: 'US', prefijo: '+1' },
+] as const
+
+/** El número escrito con el prefijo elegido. Si ya trae el suyo, manda el escrito: con «+» tal
+ *  cual y con «00» pasado a «+» (el enlace de WhatsApp no lee el «00»). */
+export function conPrefijoDePais(prefijo: string, escrito: string): string {
+  const numero = escrito.trim().replace(/\s+/g, ' ')
+  if (!numero || numero.startsWith('+')) return numero
+  if (numero.startsWith('00')) return `+${numero.slice(2)}`
+  return `${prefijo} ${numero}`
+}
+
+/**
+ * Lo escrito a mano en «Teléfono contacto» (la llamada y la demo): si coincide en dígitos con uno
+ * cargado es ese, si no es un número nuevo, que se carga al perfil al registrar. Con menos de seis
+ * dígitos no es un número (null).
+ */
+export function telefonoEscrito(cargados: readonly TelefonoDelCliente[], escrito: string): { numero: string; nuevo: boolean } | null {
+  const numero = escrito.trim().replace(/\s+/g, ' ')
+  const digitos = (t: string) => t.replace(/\D/g, '')
+  if (digitos(numero).length < 6) return null
+  const existente = cargados.find(t => digitos(t.numero) === digitos(numero))
+  return existente ? { numero: existente.numero, nuevo: false } : { numero, nuevo: true }
+}
+
 /**
  * A qué teléfonos se puede llamar, para preguntar en la llamada a cuál se llamó: el número que se
  * marca y la persona que atiende no siempre coinciden (16/10/2026, por pedido). Cada contacto con

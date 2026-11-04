@@ -3,7 +3,7 @@ import { Plus, X } from 'lucide-react'
 import { Icon } from '@/components/ui/icon'
 import { Select, SelectContent, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import type { CampoDecisor } from '../lib/clientData'
+import { conPrefijoDePais, PREFIJOS_DE_PAIS, type CampoDecisor } from '../lib/clientData'
 import type { CrmStage } from '../types'
 import { OpcionesDeEtapa } from './leadCells'
 
@@ -32,6 +32,101 @@ export const claseDelTexto = (rojo: boolean) => cn(
 /** Un renglón que falta se marca entero en rojo, y su rótulo también. */
 export const filaEnRojo = (rojo: boolean) => rojo && 'rounded-md bg-(--danger-soft) px-2 py-1 [outline:1px_solid_var(--danger)]'
 export const rotuloEnRojo = (rojo: boolean) => rojo ? 'font-semibold text-(--danger)' : 'text-(--fg-muted)'
+
+/* «Teléfono contacto» (la llamada y el contacto fallido desde el 16/10/2026; la demo desde el
+   4/11/2026, por pedido): una pastilla por número cargado, se elige uno. El escrito a mano (uno
+   solo) es una pastilla más, elegida, que se saca con su ✕; el «+» abre el campo. Lo que se hace
+   con lo escrito (elegir el cargado o agregarlo como nuevo, `telefonoEscrito`) es de quien la usa. */
+export function FilaDeTelefono({
+  cargados, nuevo, elegido, onElegir, onEscrito, onSacarNuevo, rojo, rotulo = 'Teléfono contacto', tituloNuevo, placeholder = 'Escribí el número…',
+  conPrefijo = false,
+}: {
+  cargados: readonly { numero: string; etiqueta: string }[]
+  /** El escrito a mano que no estaba cargado, o null. */
+  nuevo: string | null
+  /** El número elegido, o null. */
+  elegido: string | null
+  onElegir: (numero: string | null) => void
+  onEscrito: (escrito: string) => void
+  onSacarNuevo: () => void
+  rojo: boolean
+  rotulo?: string
+  tituloNuevo: string
+  placeholder?: string
+  /** El número nuevo se escribe con un selector de prefijo al lado, España de entrada (la demo,
+   *  que es para WhatsApp: 4/11/2026, por pedido). Lo que llega a `onEscrito` ya lo lleva. */
+  conPrefijo?: boolean
+}) {
+  const [escribiendo, setEscribiendo] = useState(false)
+  const [escrito, setEscrito] = useState('')
+  const [prefijo, setPrefijo] = useState<string>(PREFIJOS_DE_PAIS[0].prefijo)
+  const terminar = () => {
+    setEscribiendo(false)
+    const e = escrito
+    setEscrito('')
+    onEscrito(conPrefijo ? conPrefijoDePais(prefijo, e) : e)
+  }
+  const cancelar = (e: React.KeyboardEvent) => { e.preventDefault(); e.stopPropagation(); setEscrito(''); setEscribiendo(false) }
+  return (
+    <div className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo(rojo))}>
+      <span className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo(rojo))}>{rotulo}</span>
+      <div role="radiogroup" aria-label={rotulo} className="contents">
+        {cargados.map(t => {
+          const on = elegido === t.numero
+          return (
+            <button key={t.numero} type="button" role="radio" aria-checked={on} title={t.numero}
+              onClick={() => onElegir(on ? null : t.numero)} className={pastilla(on)}>
+              <span className="truncate">{t.etiqueta === t.numero ? t.numero : `${t.etiqueta} · ${t.numero}`}</span>
+            </button>
+          )
+        })}
+        {/* El escrito a mano se elige como cualquier otro y se saca con su ✕. Llevó un «+»
+            y tocarlo entero lo sacaba: nacía donde estaba el «+» de escribir, y apretarlo
+            para agregar otro lo borraba (17/10/2026). */}
+        {nuevo && (
+          <span className={cn(pastilla(elegido === nuevo), 'pr-1')}>
+            <button type="button" role="radio" aria-checked={elegido === nuevo} title={tituloNuevo}
+              onClick={() => onElegir(elegido === nuevo ? null : nuevo)}
+              className="min-w-0 cursor-pointer truncate tabular-nums">
+              {nuevo}
+            </button>
+            <button type="button" onClick={onSacarNuevo} aria-label={`Sacar ${nuevo}`} title="Sacar"
+              className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-(--surface-2)">
+              <X size={12} />
+            </button>
+          </span>
+        )}
+      </div>
+      {!nuevo && (escribiendo ? (
+        // Se termina al salir del grupo y no del campo: ir del número al prefijo no lo cierra.
+        <span className="flex min-w-[150px] flex-1 gap-1"
+          onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) terminar() }}>
+          {conPrefijo && (
+            <select value={prefijo} onChange={e => setPrefijo(e.target.value)} aria-label="Prefijo del país"
+              onKeyDown={e => { if (e.key === 'Escape') cancelar(e) }}
+              className="h-7 shrink-0 cursor-pointer rounded-md bg-card px-1.5 text-[12.5px] text-foreground tabular-nums outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] max-md:text-[16px]">
+              {PREFIJOS_DE_PAIS.map(p => (
+                <option key={p.codigo} value={p.prefijo} title={p.pais}>{p.codigo} {p.prefijo}</option>
+              ))}
+            </select>
+          )}
+          <input autoFocus value={escrito} onChange={e => setEscrito(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); terminar() }
+              if (e.key === 'Escape') cancelar(e)
+            }}
+            type="tel" inputMode="tel" aria-label="Escribir el número, si no está entre los cargados"
+            placeholder={placeholder} className={campoEscrito} />
+        </span>
+      ) : (
+        <button type="button" onClick={() => setEscribiendo(true)} className={botonEscribir}
+          title="Escribir otro número" aria-label="Escribir otro número">
+          <Icon icon={Plus} size="xs" />
+        </button>
+      ))}
+    </div>
+  )
+}
 
 /* Con quién (en la llamada «Hablaste con», en la demo «Quién asiste»): una pastilla por contacto,
    que se prenden varias; los escritos a mano se sacan con su ✕ y el «+» abre el campo. Doble clic

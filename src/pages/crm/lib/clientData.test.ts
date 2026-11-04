@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { esTelefonoDeOficina, telefonosDelCliente } from './clientData'
+import { conPrefijoDePais, esTelefonoDeOficina, PREFIJOS_DE_PAIS, telefonoEscrito, tienePrefijoDePais, telefonosDelCliente } from './clientData'
 import {
   campoDelNuevoDecisor, casilleroDelTelefonoNuevo, casilleroParaTelefonoDeGoogle, contactoDelCliente, contactosConDecisor, contactosDelCliente, decisorDelContactoNuevo, decisorSabido, decisoresDeLaLlamada, EMPTY_CLIENT, esTelefonoDeIdealista, copiasDelTelefonoDeIdealista,
   conDecisorApuntado, decisoresQueSeMarcaron, inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, nombresDeDecisores, patchDeContactosNuevos, tieneDecisor, validateClientData,
@@ -370,5 +370,51 @@ describe('decisoresQueSeMarcaron', () => {
     expect(decisoresQueSeMarcaron(
       { alternative_phone_2_is_decision_maker: true }, { alternative_phone_2_is_decision_maker: false },
     )).toEqual([])
+  })
+})
+
+describe('telefonoEscrito', () => {
+  const cargados = [{ numero: '+34 600 111 222', etiqueta: 'Laura' }]
+  it('un número que ya está cargado elige ese, aunque se escriba distinto', () => {
+    expect(telefonoEscrito(cargados, '+34600111222')).toEqual({ numero: '+34 600 111 222', nuevo: false })
+  })
+  it('uno nuevo entra limpio de espacios de más', () => {
+    expect(telefonoEscrito(cargados, '  +34  699  000 111 ')).toEqual({ numero: '+34 699 000 111', nuevo: true })
+  })
+  it('con menos de seis dígitos no es un número', () => {
+    expect(telefonoEscrito(cargados, '123')).toBeNull()
+    expect(telefonoEscrito(cargados, '')).toBeNull()
+  })
+})
+
+describe('conPrefijoDePais', () => {
+  it('le pone el prefijo elegido al número escrito sin él', () => {
+    expect(conPrefijoDePais('+34', ' 600 111 222 ')).toBe('+34 600 111 222')
+    expect(conPrefijoDePais('+58', '412 1234567')).toBe('+58 412 1234567')
+  })
+
+  it('respeta el que ya lo trae, con «+» o con «00»', () => {
+    expect(conPrefijoDePais('+34', '+351 912 345 678')).toBe('+351 912 345 678')
+    expect(conPrefijoDePais('+34', '0039 333 1234567')).toBe('+39 333 1234567')
+  })
+
+  it('vacío sigue vacío', () => {
+    expect(conPrefijoDePais('+34', '   ')).toBe('')
+  })
+
+  it('España va primera: es el de entrada', () => {
+    expect(PREFIJOS_DE_PAIS[0]).toEqual({ pais: 'España', codigo: 'ES', prefijo: '+34' })
+  })
+})
+
+describe('tienePrefijoDePais', () => {
+  it('con el «+» y el número entero sirve para WhatsApp', () => {
+    expect(tienePrefijoDePais('+34 600 111 222')).toBe(true)
+    expect(tienePrefijoDePais(' +58 412 1234567')).toBe(true)
+  })
+  it('sin el «+», o con el «+» y pocos dígitos, no', () => {
+    expect(tienePrefijoDePais('600 111 222')).toBe(false)
+    expect(tienePrefijoDePais('0034 600 111 222')).toBe(false)
+    expect(tienePrefijoDePais('+34 600')).toBe(false)
   })
 })
