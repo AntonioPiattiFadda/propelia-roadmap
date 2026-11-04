@@ -418,12 +418,14 @@ Deno.serve(withoutOAuthClients(async (req: Request) => {
       if (!userData?.user) {
         return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: jsonHeaders })
       }
-      const { data: caller } = await admin.from('users').select('activo').eq('id', userData.user.id).maybeSingle()
+      const { data: caller } = await admin.from('users').select('activo, rol').eq('id', userData.user.id).maybeSingle()
       if (!caller?.activo) {
         return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: jsonHeaders })
       }
       const sinBloques = (estado: string, nombre: string | null = null) =>
         new Response(JSON.stringify({ busy: [], nombre, estado }), { headers: jsonHeaders })
+      // Solo los SDR ven cuándo está ocupado el anfitrión (4/11/2026, por pedido).
+      if (caller.rol !== 'SDR') return sinBloques('no_es_sdr')
       const { data: anfitrion } = await admin.from('users').select('id, nombre')
         .ilike('email', ANFITRION_DE_DEMOS).eq('activo', true).maybeSingle()
       if (!anfitrion) return sinBloques('sin_anfitrion')

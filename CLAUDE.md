@@ -160,7 +160,8 @@ acá son las reuniones del CRM (`crm_meetings`, las demos incluidas). Migración
   **El selector de la demo pinta también cuándo está ocupado quien da las demos** (4/11/2026, por
   pedido): `calendar-sync`, acción `anfitrion-ocupado`, lee con la conexión de Google del anfitrión
   (`ANFITRION_DE_DEMOS`, el email de Lorenzo, fijo en la edge function) y devuelve **solo los bloques
-  de `freeBusy`, sin títulos**, a cualquier usuario activo. En la semana salen como «Ocupado · Lorenzo»
+  de `freeBusy`, sin títulos**, **solo a un SDR** (4/11/2026, por pedido: a cualquier otro contesta
+  `no_es_sdr` sin bloques, y el formulario ni los pide). En la semana salen como «Ocupado · Lorenzo»
   (`ocupadosComoEventos`, `lib/anfitrionDeDemos.ts`; se saca el bloque con el mismo horario que algo ya
   dibujado). Si agenda el propio anfitrión no se piden (ya ve su Google). Sin Google conectado del
   anfitrión el selector lo avisa; sin la edge function desplegada, no se ve nada nuevo.

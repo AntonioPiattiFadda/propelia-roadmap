@@ -1,7 +1,7 @@
 import type { GoogleAgendaItem } from './googleAgenda'
 
 /* Quién da las demos (4/11/2026, por pedido): el selector de día y hora de la demo pinta, además de
-   tu semana, cuándo está ocupado él. Solo los bloques, sin títulos ni detalles: los lee la edge
+   tu semana, cuándo está ocupado él. Solo si quien agenda es SDR (lo corta también el servidor). Solo los bloques, sin títulos ni detalles: los lee la edge
    function `calendar-sync` (acción `anfitrion-ocupado`) con la conexión de Google del anfitrión. */
 
 export type BloqueOcupado = { start: string; end: string }
@@ -9,8 +9,9 @@ export type BloqueOcupado = { start: string; end: string }
 export type OcupadosDelAnfitrion = {
   busy: BloqueOcupado[]
   nombre: string | null
-  /** `es_quien_pide`: el anfitrión agenda su propia demo y ya ve su Google entero. */
-  estado: 'ok' | 'sin_conexion' | 'es_quien_pide' | 'sin_anfitrion'
+  /** `es_quien_pide`: el anfitrión agenda su propia demo y ya ve su Google entero.
+   *  `no_es_sdr`: solo un SDR lo ve (4/11/2026, por pedido). */
+  estado: 'ok' | 'sin_conexion' | 'es_quien_pide' | 'sin_anfitrion' | 'no_es_sdr'
 }
 
 /**

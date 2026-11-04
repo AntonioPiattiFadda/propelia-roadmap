@@ -602,7 +602,7 @@ export function MeetingFormContent({
           fecha={date}
           titulo="Elegí día y hora de la demo"
           horaDeEspana={enEspana}
-          conAnfitrion={demo}
+          conAnfitrion={demo && currentUser?.rol === 'SDR'}
           onElegir={slot => {
             const elegido = horarioDelSlot(slot, { time, endTime })
             setDate(elegido.date)
