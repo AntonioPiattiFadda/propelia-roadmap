@@ -198,11 +198,34 @@ export const actualizarComentario = (id: string, patch: { description: string })
 
 /** La meta (y el lead) de las actividades que `autor` registró en [desde, hasta): de ahí sale el
  *  contador de llamadas. Se filtra por la marca en la base para no traer todos los comentarios. */
-export async function metasDeActividad(autor: string, desde: string, hasta: string): Promise<{ lead_id: string | null; long_description: string | null }[]> {
-  const { data, error } = await supabase.from('crm_comments').select('lead_id, long_description')
+export async function metasDeActividad(autor: string, desde: string, hasta: string): Promise<{ lead_id: string | null; created_at: string; long_description: string | null }[]> {
+  const { data, error } = await supabase.from('crm_comments').select('lead_id, created_at, long_description')
     .eq('created_by', autor).eq('comment_type', 'MANUAL').is('deleted_at', null)
     .gte('created_at', desde).lt('created_at', hasta)
     .like('long_description', '<!--act-->%')
+  if (error) throw error
+  return data ?? []
+}
+
+/** Todas las actividades registradas (de cualquiera) en esos leads antes de `hasta`: de ahí sale si
+ *  un decisor ya se había contactado («Decisores nuevos» de Objetivos). */
+export async function historialDeActividad(leadIds: string[], hasta: string): Promise<{ lead_id: string | null; created_at: string; long_description: string | null }[]> {
+  if (leadIds.length === 0) return []
+  const { data, error } = await supabase.from('crm_comments').select('lead_id, created_at, long_description')
+    .in('lead_id', leadIds).eq('comment_type', 'MANUAL').is('deleted_at', null)
+    .lt('created_at', hasta)
+    .like('long_description', '<!--act-->%')
+  if (error) throw error
+  return data ?? []
+}
+
+/** Los mails «Presentación con vídeo» que `autor` mandó en [desde, hasta). Los que Resend no llegó
+ *  a mandar («No se pudo enviar», «No se envió») no cuentan; los que rebotaron sí: salieron. */
+export async function presentacionesEnviadas(autor: string, desde: string, hasta: string): Promise<{ lead_id: string | null }[]> {
+  const { data, error } = await supabase.from('crm_emails').select('lead_id')
+    .eq('sent_by', autor).eq('plantilla', 'presentacion-video')
+    .not('status', 'in', '(failed,suppressed)')
+    .gte('sent_at', desde).lt('sent_at', hasta)
   if (error) throw error
   return data ?? []
 }
@@ -232,7 +255,7 @@ export async function crearTarea(input: {
 }
 
 /* `due_time` va solo cuando cambió (ver `cambiosDeTarea`): por lo mismo que en `crearTarea`. */
-export type TareaPatch = Pick<TablesUpdate<'crm_tasks'>, 'completed' | 'completed_at' | 'title' | 'due_date' | 'due_time' | 'deleted_at'>
+export type TareaPatch = Pick<TablesUpdate<'crm_tasks'>, 'completed' | 'completed_at' | 'title' | 'due_date' | 'due_time' | 'deleted_at' | 'assigned_to'>
 
 export async function actualizarTarea(id: string, patch: TareaPatch): Promise<CrmTask> {
   const { data, error } = await supabase.from('crm_tasks').update(patch).eq('id', id).select()
