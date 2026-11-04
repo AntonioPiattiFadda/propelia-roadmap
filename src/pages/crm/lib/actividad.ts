@@ -9,7 +9,7 @@ import { esTituloDeDemoDeFabrica } from './reuniones'
    con esto», y la respuesta es en orden. */
 export type ItemActividad = {
   id: string
-  tipo: 'comentario' | 'llamada' | 'sistema' | 'gestion' | 'pospuesto' | 'asignacion' | 'reunion'
+  tipo: 'comentario' | 'llamada' | 'sistema' | 'gestion' | 'pospuesto' | 'asignacion' | 'reunion' | 'demoHecha'
   /** Cuándo pasó (no cuándo vence): lo que ordena la lista. */
   fecha: string
   texto: string
@@ -45,8 +45,9 @@ const MARCA_ACTIVIDAD = '<!--act-->'
 /** Qué pasó en una llamada. Opcional: las llamadas anteriores al 10/10/2026 no lo dicen. */
 export type ResultadoDeLlamada = 'contestada' | 'no_respondida'
 export type MetaDeActividad = {
-  /** `demo` (22/10/2026): el registro que se deja al agendar una demo desde la Agenda. */
-  tipo: 'nota' | 'llamada' | 'demo'
+  /** `demo` (22/10/2026): el registro que se deja al agendar una demo desde la Agenda.
+   *  `demoHecha` (4/11/2026, por pedido): lo anotado durante la demo, desde la pestaña «Demo». */
+  tipo: 'nota' | 'llamada' | 'demo' | 'demoHecha'
   con: string[]
   resultado?: ResultadoDeLlamada
   /** Si quien atendió decide. Solo tiene sentido en una llamada contestada. */
@@ -95,7 +96,7 @@ export function leerMetaDeActividad(guardado: string | null): MetaDeActividad | 
     const m: unknown = JSON.parse(guardado.slice(MARCA_ACTIVIDAD.length))
     if (typeof m !== 'object' || m === null) return null
     const { tipo, con, resultado, decisor, telefono, decisorApuntado, reunion } = m as Record<string, unknown>
-    if (tipo !== 'nota' && tipo !== 'llamada' && tipo !== 'demo') return null
+    if (tipo !== 'nota' && tipo !== 'llamada' && tipo !== 'demo' && tipo !== 'demoHecha') return null
     if (!Array.isArray(con) || !con.every(c => typeof c === 'string')) return null
     if (resultado !== undefined && resultado !== 'contestada' && resultado !== 'no_respondida') return null
     if (decisor !== undefined && typeof decisor !== 'boolean') return null
@@ -187,6 +188,9 @@ export function lineaDeTiempo(detalle: LeadDetalle, usuarios: Usuario[]): ItemAc
     ...detalle.comments.map(c => {
       if (c.comment_type === 'SYSTEM') return { id: c.id, tipo: 'sistema' as const, fecha: c.created_at, texto: c.description, autorId: c.created_by }
       const meta = leerMetaDeActividad(c.long_description)
+      if (meta?.tipo === 'demoHecha') {
+        return { id: c.id, tipo: 'demoHecha' as const, fecha: c.created_at, texto: c.description, autorId: c.created_by }
+      }
       if (meta?.tipo === 'demo') {
         const reunion = meta.reunion ? reuniones.get(meta.reunion) : undefined
         if (reunion) conRegistro.add(reunion.id)

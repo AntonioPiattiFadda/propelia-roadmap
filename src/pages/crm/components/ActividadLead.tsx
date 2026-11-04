@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  CalendarDays, CalendarX, ChevronDown, CircleCheck, Clock, Info, MessageSquare, Pencil, Phone, PhoneMissed, Plus, Trash2, UserRound, X,
+  CalendarDays, CalendarX, ChevronDown, CircleCheck, Clock, Info, MessageSquare, Pencil, Phone, PhoneMissed, Plus, Presentation, Trash2, UserRound,
   type LucideIcon,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,7 @@ import {
 } from '../lib/actividad'
 import {
   campoDelNuevoDecisor, casilleroDelTelefonoNuevo, conDecisorApuntado, contactosConDecisor, tieneDecisor, decisorDelContactoNuevo, decisorSabido,
-  decisoresDeLaLlamada, nombreDelLead, patchDeContactosNuevos, telefonosDelCliente, type CampoDecisor,
+  decisoresDeLaLlamada, nombreDelLead, patchDeContactosNuevos, telefonoEscrito, telefonosDelCliente, type CampoDecisor,
 } from '../lib/clientData'
 import { MeetingFormContent } from '@/pages/agenda/components/meetings/MeetingFormContent'
 import { GUIA_DE_DEMO, GUIA_DE_LLAMADA, type SeccionDeGuia } from '../lib/guiaDeLlamada'
@@ -26,14 +26,14 @@ import { DESCRIPCION_DE_DEMO, invitadosDeLaDemo, RECORDATORIO_DE_DEMO, registroD
 import { actualizarComentario, cancelarReunion, crearComentario, marcarComentarioBorrado } from '../service/crm.service'
 import type { CrmLeadRow, CrmMeeting, LeadDetalle } from '../types'
 import { CancelarDemoDialog } from './CancelarDemoDialog'
+import { GuionDeDemo } from './GuionDeDemo'
 import { InmobiliariaDelLead } from './InmobiliariaDelLead'
 import { DescartarLeadDialog } from './DescartarLeadDialog'
 import { VentanaFlotante } from './VentanaFlotante'
 import { DemoAgendadaDialog } from './DemoAgendadaDialog'
 import type { DemoAgendada } from '../lib/avisoDeDemo'
 import {
-  botonEscribir, CajaDeEtapa, CampoDecisorApuntado, campoEscrito, claseDelTexto, FilaDePersonas, FilaEsDecisor,
-  filaEnRojo as filaRoja, NotaDeDecisorSabido, pastilla, rotuloEnRojo as rotuloRojo,
+  CajaDeEtapa, CampoDecisorApuntado, claseDelTexto, FilaDePersonas, FilaDeTelefono, FilaEsDecisor, NotaDeDecisorSabido,
 } from './FilasDelRegistro'
 
 /* NUEVO. En el producto el chat de actividad vive adentro de LeadAccordion (5.600 líneas); acá
@@ -115,13 +115,13 @@ function GuiaDelCompositor({ titulo, secciones }: { titulo: string; secciones: r
 
 const ICONO: Record<ItemActividad['tipo'], LucideIcon> = {
   comentario: MessageSquare, llamada: Phone, sistema: Info, gestion: CircleCheck, pospuesto: Clock,
-  asignacion: UserRound, reunion: CalendarDays,
+  asignacion: UserRound, reunion: CalendarDays, demoHecha: Presentation,
 }
 
 /* Lo que se registra desde el compositor se titula por qué es —Nota, Tarea, Demo— y lo que pasó va
    abajo, en su recuadro. El resto (gestiones, etapas, responsable) es una línea sola: ya se explica. */
 const TITULO: Partial<Record<ItemActividad['tipo'], string>> = {
-  comentario: 'Nota', llamada: 'Llamada', reunion: 'Demo',
+  comentario: 'Nota', llamada: 'Llamada', reunion: 'Demo', demoHecha: 'Demo realizada',
 }
 
 /** «Laura, Marc y Ana»: la gente se lee como en una frase, no como una lista con comas. */
@@ -177,11 +177,12 @@ function EditarActividad({ item, onCerrar, onGuardar }: {
   )
 }
 
-/* La columna tiene dos pestañas: la actividad y la inmobiliaria. El selector vive en la cabecera
-   del dialog, centrado, y el estado en `CuerpoDelLead`: al cambiar de lead se vuelve a la
-   actividad sola (el cuerpo del dialog va con key = lead). La segunda NO desmonta la primera, la
-   esconde: lo que se estaba escribiendo en el compositor sigue ahí al volver. */
-export type PestanaDelLead = 'actividad' | 'inmobiliaria'
+/* La columna tiene tres pestañas: la actividad, la inmobiliaria y, desde el 4/11/2026 (por pedido),
+   el guion de la demo (`GuionDeDemo`). El selector vive en la cabecera del dialog, centrado, y el
+   estado en `CuerpoDelLead`: al cambiar de lead se vuelve a la actividad sola (el cuerpo del dialog
+   va con key = lead). Las otras NO desmontan la actividad, la esconden: lo que se estaba escribiendo
+   en el compositor sigue ahí al volver. */
+export type PestanaDelLead = 'actividad' | 'inmobiliaria' | 'demo'
 
 export function PestanasDelLead({ lead, pestana, onCambiar }: {
   lead: CrmLeadRow
@@ -189,8 +190,8 @@ export function PestanasDelLead({ lead, pestana, onCambiar }: {
   onCambiar: (p: PestanaDelLead) => void
 }) {
   return (
-    <div role="tablist" aria-label="Actividad e inmobiliaria" className="flex h-9 min-w-0 items-stretch gap-5 max-md:gap-4">
-      {([['actividad', 'Actividad'], ['inmobiliaria', nombreDelLead(lead.client)]] as const).map(([id, label]) => {
+    <div role="tablist" aria-label="Actividad, inmobiliaria y demo" className="flex h-9 min-w-0 items-stretch gap-5 max-md:gap-4">
+      {([['actividad', 'Actividad'], ['inmobiliaria', nombreDelLead(lead.client)], ['demo', 'Demo']] as const).map(([id, label]) => {
         const on = pestana === id
         return (
           <button key={id} type="button" role="tab" id={`pestana-${id}`} aria-selected={on} aria-controls={`panel-${id}`}
@@ -266,20 +267,15 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
      se marcó uno que el perfil no tiene. Entra como una pastilla más, elegida, y al registrar se
      carga en el perfil (`casilleroDelTelefonoNuevo`). Uno solo: se llamó a un número. */
   const [telefonoNuevo, setTelefonoNuevo] = useState<string | null>(null)
-  const [telefonoEscrito, setTelefonoEscrito] = useState('')
   const digitos = (t: string) => t.replace(/\D/g, '')
   const cargados = primeroLosUltimos(telefonosDelCliente(lead.client),
     t => ultimo.telefono !== null && digitos(t.numero) === digitos(ultimo.telefono))
   const telefonos = telefonoNuevo ? [...cargados, { numero: telefonoNuevo, etiqueta: telefonoNuevo }] : cargados
-  const [escribiendoTelefono, setEscribiendoTelefono] = useState(false)
-  const agregarTelefono = () => {
-    setEscribiendoTelefono(false)
-    const numero = telefonoEscrito.trim().replace(/\s+/g, ' ')
-    setTelefonoEscrito('')
-    if (digitos(numero).length < 6) return
-    const existente = cargados.find(t => digitos(t.numero) === digitos(numero))
-    if (!existente) setTelefonoNuevo(numero)
-    setTelefono(existente?.numero ?? numero)
+  const agregarTelefono = (escrito: string) => {
+    const t = telefonoEscrito(cargados, escrito)
+    if (!t) return
+    if (t.nuevo) setTelefonoNuevo(t.numero)
+    setTelefono(t.numero)
   }
   const sacarTelefonoNuevo = () => {
     if (telefono === telefonoNuevo) setTelefono(null)
@@ -400,8 +396,6 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     texto: tipo === 'nota' && !limpio,
   }
   const enRojo = (k: keyof typeof falta) => intento && falta[k]
-  const filaEnRojo = (k: keyof typeof falta) => filaRoja(enRojo(k))
-  const rotuloEnRojo = (k: keyof typeof falta) => rotuloRojo(enRojo(k))
 
   // Los escritos a mano que siguen elegidos se cargan como contactos; `decisor` es el que quedó
   // como decisor, si es uno de ellos. Lo que no entra en el perfil queda solo en la actividad.
@@ -465,7 +459,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
             const decisores = decisoresDeLaLlamada(conDecisor, elegidos, esDecisor, patch)
             if (decisores.length > 0) onDecisorContactado?.(decisores)
           } else cargarAlPerfil(null, [])
-          setTexto(''); limpiarConQuien(); setDecisor(null); setTelefono(null); setTelefonoNuevo(null); setTelefonoEscrito(''); setEscribiendoTelefono(false)
+          setTexto(''); limpiarConQuien(); setDecisor(null); setTelefono(null); setTelefonoNuevo(null)
           setAbierto(false)
           if (nuevoDecisor && lead.client) {
             actualizarCliente.mutate({ clientId: lead.client.id, patch: { [nuevoDecisor]: true } })
@@ -485,7 +479,13 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
-      {!enActividad && (
+      {pestana === 'demo' && (
+        <div role="tabpanel" id="panel-demo" aria-labelledby="pestana-demo" className="flex min-h-0 flex-1 flex-col">
+          <GuionDeDemo leadId={lead.id} puedeEscribir={puedeEscribir} />
+        </div>
+      )}
+
+      {pestana === 'inmobiliaria' && (
         <div role="tabpanel" id="panel-inmobiliaria" aria-labelledby="pestana-inmobiliaria" className="flex min-h-0 flex-1 flex-col">
           <InmobiliariaDelLead lead={lead} puedeEscribir={puedeEscribir} otrosContactos={otrosContactos}
             telefonos={telefonosSueltos} emails={emailsSueltos} />
@@ -505,12 +505,17 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 const quien = autor ? `Registrado por ${autor.nombre}` : i.tipo === 'sistema' ? 'Sistema' : 'Automático'
                 const titulo = tituloDe(i)
                 const verTexto = !!titulo
-                const borrable = puedeEscribir && (i.tipo === 'comentario' || i.tipo === 'llamada')
+                const borrable = puedeEscribir && (i.tipo === 'comentario' || i.tipo === 'llamada' || i.tipo === 'demoHecha')
                 const reunionCancelable = puedeEscribir && i.reunion?.estado === 'scheduled'
                   ? detalle?.meetings.find(m => m.id === i.reunion?.id) : undefined
+                // La demo realizada (4/11/2026, por pedido) va resaltada: es lo más importante que
+                // le pasa a un lead y tiene que encontrarse de un vistazo entre las llamadas.
+                const resaltada = i.tipo === 'demoHecha'
                 return (
-                  <li key={i.id} className="group flex gap-3 py-2.5 not-first:[border-top:1px_solid_var(--line-soft)]">
-                    <span aria-hidden className="mt-px flex size-7 shrink-0 items-center justify-center rounded-md bg-card text-(--fg-2) [border:1px_solid_var(--line)]">
+                  <li key={i.id} className={cn('group flex gap-3 py-2.5 not-first:[border-top:1px_solid_var(--line-soft)]',
+                    resaltada && 'my-1 rounded-lg bg-(--brand-soft) px-2.5 [border:1px_solid_var(--brand-100)]!')}>
+                    <span aria-hidden className={cn('mt-px flex size-7 shrink-0 items-center justify-center rounded-md',
+                      resaltada ? 'bg-(--brand) text-white' : 'bg-card text-(--fg-2) [border:1px_solid_var(--line)]')}>
                       <Icon icon={ICONO[i.tipo]} size="sm" />
                     </span>
                     {/* Qué fue y cuándo a la izquierda, lo escrito a la derecha; en el teléfono no
@@ -519,13 +524,14 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                       {/* Sin texto al lado (un cambio de estado), el registro se lleva el ancho entero. */}
                       <div className={cn('min-w-0 max-md:w-full', verTexto ? 'w-[200px] shrink-0' : 'flex-1')}>
                         <div className="flex items-baseline gap-3">
-                          <p className="min-w-0 flex-1 text-[13px] font-semibold leading-snug text-foreground">{titulo ?? i.texto}</p>
+                          <p className={cn('min-w-0 flex-1 text-[13px] font-semibold leading-snug', resaltada ? 'text-(--brand-soft-fg)' : 'text-foreground')}>{titulo ?? i.texto}</p>
                           <span className="shrink-0 text-[11px] tabular-nums text-(--fg-muted)">{horaDe(i.fecha)}</span>
                         </div>
                         {quien && <p className="text-[12px] leading-snug text-(--fg-2)">{quien}</p>}
                       </div>
                       {verTexto && (
-                        <p className="w-full min-w-0 flex-1 whitespace-pre-wrap rounded-md bg-(--surface-2) px-3 py-2 text-[13px] leading-snug text-foreground [border:1px_solid_var(--line-soft)]">
+                        <p className={cn('w-full min-w-0 flex-1 whitespace-pre-wrap rounded-md px-3 py-2 text-[13px] leading-snug text-foreground',
+                          resaltada ? 'bg-card [border:1px_solid_var(--brand-100)]' : 'bg-(--surface-2) [border:1px_solid_var(--line-soft)]')}>
                           {i.texto}
                         </p>
                       )}
@@ -560,7 +566,8 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       </div>
 
       {puedeEscribir && (
-        // En las dos pestañas (17/10/2026, por pedido): se registra también mirando la inmobiliaria.
+        // En todas las pestañas (17/10/2026, por pedido): se registra también mirando la inmobiliaria
+        // o con el guion de la demo abierto.
         <div className="shrink-0 px-5 pb-4 pt-3 [border-top:1px_solid_var(--line)] max-md:px-3 max-md:pb-3">
           <Button className="w-full" onClick={() => setAbierto(true)}>
             <Icon icon={Plus} size="sm" />
@@ -634,51 +641,9 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 ariaEscribir="Escribir con quién, si no está entre los contactos" />
             )}
             {pideTelefono && (
-              <div className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo('telefono'))}>
-                <span className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo('telefono'))}>Teléfono contacto</span>
-                <div role="radiogroup" aria-label="Teléfono del contacto" className="contents">
-                  {cargados.map(t => {
-                    const on = telefono === t.numero
-                    return (
-                      <button key={t.numero} type="button" role="radio" aria-checked={on} title={t.numero}
-                        onClick={() => setTelefono(on ? null : t.numero)} className={pastilla(on)}>
-                        <span className="truncate">{t.etiqueta === t.numero ? t.numero : `${t.etiqueta} · ${t.numero}`}</span>
-                      </button>
-                    )
-                  })}
-                  {/* El escrito a mano se elige como cualquier otro y se saca con su ✕. Llevó un «+»
-                      y tocarlo entero lo sacaba: nacía donde estaba el «+» de escribir, y apretarlo
-                      para agregar otro lo borraba (17/10/2026). */}
-                  {telefonoNuevo && (
-                    <span className={cn(pastilla(telefono === telefonoNuevo), 'pr-1')}>
-                      <button type="button" role="radio" aria-checked={telefono === telefonoNuevo}
-                        title="Se carga en el perfil al registrar"
-                        onClick={() => setTelefono(telefono === telefonoNuevo ? null : telefonoNuevo)}
-                        className="min-w-0 cursor-pointer truncate tabular-nums">
-                        {telefonoNuevo}
-                      </button>
-                      <button type="button" onClick={sacarTelefonoNuevo} aria-label={`Sacar ${telefonoNuevo}`} title="Sacar"
-                        className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-full hover:bg-(--surface-2)">
-                        <X size={12} />
-                      </button>
-                    </span>
-                  )}
-                </div>
-                {!telefonoNuevo && (escribiendoTelefono ? (
-                  <input autoFocus value={telefonoEscrito} onChange={e => setTelefonoEscrito(e.target.value)} onBlur={agregarTelefono}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') { e.preventDefault(); agregarTelefono() }
-                      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setTelefonoEscrito(''); setEscribiendoTelefono(false) }
-                    }}
-                    type="tel" inputMode="tel" aria-label="Escribir el número, si no está entre los cargados"
-                    placeholder="Escribí el número…" className={campoEscrito} />
-                ) : (
-                  <button type="button" onClick={() => setEscribiendoTelefono(true)} className={botonEscribir}
-                    title="Escribir otro número" aria-label="Escribir otro número">
-                    <Icon icon={Plus} size="xs" />
-                  </button>
-                ))}
-              </div>
+              <FilaDeTelefono cargados={cargados} nuevo={telefonoNuevo} elegido={telefono}
+                onElegir={setTelefono} onEscrito={agregarTelefono} onSacarNuevo={sacarTelefonoNuevo}
+                rojo={!!enRojo('telefono')} tituloNuevo="Se carga en el perfil al registrar" />
             )}
             {/* Si es decisor queda en la llamada y, desde el 12/10/2026, también en el contacto (al
                 lado del rol en el perfil): se pregunta solo mientras el perfil no lo sepa. Aparece

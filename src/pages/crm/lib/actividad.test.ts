@@ -61,6 +61,23 @@ describe('lineaDeTiempo', () => {
   })
 })
 
+describe('lineaDeTiempo · demo realizada', () => {
+  const meta = armarMetaDeActividad({ tipo: 'demoHecha', con: [] })
+  const items = lineaDeTiempo({ ...vacio, comments: [
+    { id: 'd1', lead_id: 'x', description: 'Son 4, decide Ana.', long_description: meta, comment_type: 'MANUAL', created_by: 'l', created_at: '2026-11-04T10:00:00Z', deleted_at: null },
+  ] }, usuarios)
+
+  it('la meta se guarda y se vuelve a leer', () => {
+    expect(leerMetaDeActividad(meta)).toEqual({ tipo: 'demoHecha', con: [] })
+  })
+  it('es un renglón propio, no una nota ni la demo agendada', () => {
+    expect(items).toEqual([expect.objectContaining({ id: 'd1', tipo: 'demoHecha', texto: 'Son 4, decide Ana.', autorId: 'l' })])
+  })
+  it('vaciada al editarla no se guarda, como una nota', () => {
+    expect(textoEditado({ tipo: 'demoHecha' }, '  ')).toBeNull()
+  })
+})
+
 const reunion = (id: string, extra: Partial<CrmMeeting> = {}): CrmMeeting => ({
   id, lead_id: 'x', assigned_to: 'l', title: 'Demo', description: null, status: 'scheduled', cancel_reason: null,
   sync_status: 'disabled', sync_error: null, sync_attempts: 0, external_event_id: null, external_provider: null, ics_sequence: 0, color_id: null, reminder_minutes: null, guest_user_ids: [], guest_emails: [], onboarding_task: null,
