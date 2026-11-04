@@ -157,6 +157,13 @@ acá son las reuniones del CRM (`crm_meetings`, las demos incluidas). Migración
   dibuja la semana del reloj de España (`horaDeEspana` en `useSemanaDeAgenda` y `WeekGrid`): los
   eventos se reescriben sin zona con `eventosEnHoraDeEspana`, así la grilla no sabe de zonas. **Solo
   la demo**: la página /agenda y editar una reunión siguen en la hora de cada uno.
+  **El selector de la demo pinta también cuándo está ocupado quien da las demos** (4/11/2026, por
+  pedido): `calendar-sync`, acción `anfitrion-ocupado`, lee con la conexión de Google del anfitrión
+  (`ANFITRION_DE_DEMOS`, el email de Lorenzo, fijo en la edge function) y devuelve **solo los bloques
+  de `freeBusy`, sin títulos**, a cualquier usuario activo. En la semana salen como «Ocupado · Lorenzo»
+  (`ocupadosComoEventos`, `lib/anfitrionDeDemos.ts`; se saca el bloque con el mismo horario que algo ya
+  dibujado). Si agenda el propio anfitrión no se piden (ya ve su Google). Sin Google conectado del
+  anfitrión el selector lo avisa; sin la edge function desplegada, no se ve nada nuevo.
   Con `demo` el formulario suma el **«Email del cliente»** arriba de los invitados (cambiarlo cambia
   ese invitado; si la inmobiliaria no tenía email, se le guarda) y una **columna «Registro de
   actividad»** (`RegistroDeDemoPanel` + `useRegistroDeDemo`). **Desde el 23/10/2026 (por pedido) va a
@@ -164,12 +171,29 @@ acá son las reuniones del CRM (`crm_meetings`, las demos incluidas). Migración
   con los mismos renglones (`FilasDelRegistro.tsx`, que usan los dos): «Quién asiste» (doble clic abre
   la ficha), «¿Es decisor?» (mismas reglas: `decisorSabido`, `campoDelNuevoDecisor`; obligatoria
   cuando se pregunta), el texto, el «Decisor» apuntado y «El lead queda en» (obligatoria, sin
-  Descartado). Sin «Teléfono contacto»: en una demo no se marcó ningún número. **Es para el equipo,
+  Descartado). **Desde el 4/11/2026 (por pedido) lleva «Teléfono seguimiento (WhatsApp)», obligatorio**,
+  en la columna de la reunión (debajo del «Email del cliente»), sin ninguno elegido de entrada y
+  **con prefijo de país** (`tienePrefijoDePais`: «+» y al menos 8 dígitos; el `0034` no vale): es
+  para escribirle por WhatsApp. El número nuevo se escribe con un **selector de prefijo** al lado,
+  **España (+34) de entrada** (4/11/2026, por pedido; `conPrefijo` de `FilaDeTelefono`,
+  `PREFIJOS_DE_PAIS` y `conPrefijoDePais` en `lib/clientData.ts`): si lo escrito ya trae «+» manda
+  eso, y el «00» se pasa a «+». La llamada no lo lleva. Es la misma fila de la llamada (`FilaDeTelefono`, compartida en `FilasDelRegistro.tsx`; lo escrito a
+  mano pasa por `telefonoEscrito`), uno de los cargados o uno nuevo, que al agendar se carga en el
+  perfil como en la llamada (`casilleroDelTelefonoNuevo`) y queda en la meta como `telefono`.
+  **Y la demo nace con su Google Meet** (`pedidoDeMeet`, `_shared/googleCalendar.ts`: toda reunión con
+  lead, solo al insertar el evento, `conferenceDataVersion=1`): la invitación de Google que le llega
+  a cada invitado trae «Unirse con Google Meet». Las demos de antes no lo ganan. Vive en
+  `calendar-sync`: sin desplegarla, la demo sale sin Meet. **Es para el equipo,
   no llega al cliente ni al evento de Google**. Con la reunión guardada deja en el lead un comentario con meta `tipo: 'demo'` (con
   quién, `decisorApuntado` y el id de la `reunion`), carga al perfil a los escritos a mano y al
   decisor, y mueve la etapa. La actividad pinta registro y reunión como **un renglón** con el día y
   la hora de la reunión de hoy (`lineaDeTiempo`). La Agenda ya no lee `demo=1`; `?leadId=&title=`
-  sigue andando. **Guardada la demo, `DemoAgendadaDialog` ofrece «Avisar por WhatsApp»** (23/10/2026,
+  sigue andando. **Y nacen las tareas para confirmarla** (4/11/2026, por pedido; contra el «no vino»):
+  a quien agenda, a las 10:00 de España del día de la demo («Confirmar la demo de hoy a las HH:MM») y,
+  si arranca antes de las 11:30, también del día anterior («… de mañana …», salvo que ya haya pasado),
+  con hora para que suene la alarma (`tareasDeConfirmacionDeDemo`, `lib/confirmacionDeDemo.ts`). Se
+  crean después de mover la etapa (el trigger mira la final); si fallan, la demo queda y un toast
+  avisa. Reprogramar o cancelar la demo no las toca. **Guardada la demo, `DemoAgendadaDialog` ofrece «Avisar por WhatsApp»** (23/10/2026,
   por pedido): abre el chat con `+34 675 24 91 46` (`WHATSAPP_AVISO_DE_DEMO`) y un mensaje festivo con
   inmobiliaria, día y hora **de España**, responsable, quién la agendó, invitación, asistentes, decisor,
   etapa y notas (`mensajeDeDemoAgendada`, `lib/avisoDeDemo.ts`). No manda nada solo: lo envía quien agenda.
@@ -548,6 +572,21 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   `crm_meetings` no tiene columnas para eso, van a `description` (`descripcionDeDemo()`,
   `lib/reuniones.ts`): **sin migración, a propósito**. El título queda siempre «Demo». Si la
   inmobiliaria no tenía email, se le guarda el escrito; si falla, la demo queda igual.
+- **Pestaña «Demo» del lead** (4/11/2026, por pedido): tercera pestaña al lado de Actividad e
+  Inmobiliaria (`GuionDeDemo`). Arriba, el botón «Material para la demo», un popover que se abre
+  solo cuando se lo usa (`MATERIAL_DE_DEMO`: propelia.es y los HTML de `public/demo/planes.html` y
+  `onboarding.html`, con el deploy y **URL pública**; el bot al `TELEFONO_DEL_BOT`; el usuario demo
+  con copiar, `CUENTA_DEMO`, en el bundle a propósito). Después, la guía: cinco pasos en fila
+  (`ETAPAS_DEL_GUION`, `lib/guionDeDemo.ts`; no confundir con `GUIA_DE_DEMO`, que es la de agendarla):
+  Encuadre y storytelling, Diagnóstico y Demo muestran su detalle (qué decir, las preguntas, qué
+  mostrar) **al pasar el cursor**, en un tooltip; Planes y precios y Prueba gratis 15 días son solo
+  el recordatorio del paso. Abajo, **un solo cuadro de notas** para toda la demo (por pedido: hubo
+  unas horas una pestaña por etapa con campos para llenar, y se simplificó el mismo día). **Sin
+  migración**: el texto vive en `roadmap_notas`, fila `demo-guion-<lead>` (`useNotasDeDemo`), y se
+  guarda solo a los 700 ms, al salir del campo y al salir de la pestaña. Ojo: esa fila la lee
+  cualquier `es_usuario()` por la API, no solo quien ve la cartera; y dos personas escribiendo a la
+  vez en la misma demo se pisan (gana el último guardado). En el teléfono no hay cursor: el detalle
+  sale al enfocar el paso, no al tocarlo.
 - **Playbook en la cabecera** (16/10/2026): botón «Playbook» (`PlaybookDialog`) para todos. Los dos
   PDF de fábrica viven en `public/playbook/` y van con el deploy (**URL pública**, sin login); los
   que se suben van al bucket `roadmap-adjuntos` bajo `playbook/`, firmados al listar. Sin
@@ -577,6 +616,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
 - **«Pendiente agendar tarea»** (20/10/2026, por pedido): chip siempre visible, `?agendar=1`.
   Deja los leads en una etapa de «Seguimiento» (`management_type = 'por_tarea'`) sin ninguna tarea
   pendiente (`esPendienteAgendar`, `lib/leadFilters.ts`). Con alguno, el chip va en rojo sutil.
+  **Desde el 4/11/2026 (por pedido) cuentan solo las tareas del «yo» de pantalla** (el tuyo o el de
+  «Ver como», `leadIdsConTareasMias`): una tarea de otro no te saca la obligación. Un SUPERADMIN
+  mirando varias carteras ve todo lead de «Seguimiento» donde él no tenga tarea, sea de quien sea.
+  «Tareas», «Sin tareas», «Tareas vencidas» y el orden siguen contando las de todos.
   Al lado, **«Tareas vencidas»** (23/10/2026, por pedido): chip siempre visible, `?hoy=1`. Deja los
   leads con alguna tarea pendiente **para hoy o vencida** (`idsConTareasParaHoy`, `lib/tareas.ts`;
   la de hoy entra, al revés que `estaVencida`), sin descartados. Mismo rojo sutil con alguno. No
@@ -602,7 +645,15 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   escritura) abre la misma ventana de «Nueva tarea», titulada «Editar tarea» y precargada con
   título, día y hora. Se manda solo lo que cambió (`cambiosDeTarea`, `lib/tareas.ts`): `due_time`
   va solo si cambió (sacarle la hora la manda en null, que si la tenía la columna existe) y sin día
-  la hora se cae, como al crearla.
+  la hora se cae, como al crearla. **Y se reasigna** (4/11/2026, por pedido): «Asignada a» en esa
+  ventana, precargado con el dueño; las opciones son los activos que ven la cartera del lead
+  (`quienesVenLaCartera`, `lib/permisos.ts`: dueño, SUPERADMIN y filas de `crm_data_access`; a un
+  SDR, que solo lee sus filas, le salen el dueño, los SUPERADMIN y él). `assigned_to` va solo si
+  cambió. Sin migración: la RLS de `crm_tasks` mira el lead, no el dueño de la tarea.
+- **Las tareas son de cada uno** (4/11/2026, por pedido): la que se crea desde el lead es de quien la
+  anota (`assigned_to` = la sesión, nunca el «Ver como»; hasta ese día era del responsable del lead).
+  Las que crea el sistema (alta, triggers del onboarding) siguen como estaban. Todos ven todas las
+  del lead, cada una con el avatar de su dueño (`TareasDelLead`); tildar y editar, como antes.
 - **El texto de una actividad escrita a mano se edita** (20/10/2026, por pedido): nota, llamada y
   contacto fallido llevan un lápiz al lado del tacho, que abre la ventana flotante «Editar
   actividad». **Solo el texto** (`actualizarComentario`): la meta —con quién, teléfono, resultado— y
@@ -626,7 +677,18 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   vez no avisa nada, y lo agendado con la app cerrada avisa al abrirla. Sin push, como las alarmas.
 - **«Objetivos semanales»** (17/10/2026; fue «Objetivos hoy»): el contador de la cabecera y su filtro
   `?objetivo=` cuentan desde el lunes (`startOfWeekIso`) y vuelven a cero al terminar el domingo.
-  El diálogo sigue mostrando hoy, semana y mes. «No respondidas» es la primera columna.
+  «No respondidas» es la primera columna. **Desde el 4/11/2026 (por pedido)** suma **«Decisores
+  nuevos»** (la contestada con decisor en la que se habló con un decisor con quien nadie del equipo
+  había hablado antes en ese lead, por nombre de `con`; sin nombre, solo si el lead nunca tuvo una
+  con decisor: `esDecisorNuevo`, `lib/objetivos.ts`, que lee el historial de esos leads con
+  `historialDeActividad`) y **«Mails de presentación»** (`crm_emails` con `plantilla =
+  'presentacion-video'`, sin los que no salieron: `failed`/`suppressed`). Los dos filtran la lista
+  como el resto. **El diálogo es grande y compara** (`ObjetivosDialog`): uno o varios períodos (Hoy,
+  Este mes y cualquier semana, de a seis con flechas hacia atrás, `semanasHaciaAtras`) y, quien ve
+  otras carteras, una o varias personas (`puedeVerComo` + uno mismo); con varias, una fila por
+  persona y el total. Abajo, «Pendiente ahora» por persona: tareas suyas vencidas (la de hoy no) y
+  leads de su cartera en «Seguimiento» sin tarea suya (`pendientesDePersona`). Los números de otro
+  salen de lo que la RLS deja leer, como «Ver como». Sin migración.
 - **Las etapas que había el 27/10/2026 están fijas** (por pedido, migración
   `20261027131725_crm_funnel_stages_bloqueadas`, que **la aplica Antonio**): `allow_rename`,
   `allow_reorder` y `allow_delete` en false, así la configuración del funnel las muestra con candado.
@@ -774,11 +836,18 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   el 26/10/2026, por pedido**: Inmobiliaria, Decisor (`nombresDeDecisores`: los contactos marcados
   como decisores), Estado y Tarea agendada («No hay tarea» si no tiene ninguna pendiente). **La tarea
   es solo la tuya** (2/11/2026, por pedido: las que crean los triggers del onboarding le caen a quien
-  lleva el alta): `proximasMias` filtra por `assigned_to`, y un lead con tareas solo de otros dice
-  «Sin tareas tuyas», en gris y sin rojo, y se ordena como sin tarea. Sin
+  lleva el alta): `proximasMias` filtra por `assigned_to` y un lead con tareas solo de otros se
+  ordena como sin tarea; **desde el 4/11/2026 (por pedido) además va en rojo, «Sin tarea»** (el
+  «Sin tareas tuyas» / «De otro» del 2/11 salió). Sin
   responsable a la vista. **Va en rojo** (fondo y riel) el que no tiene tarea y el que tiene la
   próxima para hoy o vencida (`tocaHoyOVencida`, `lib/tareas.ts`, la misma regla de «Tareas
-  vencidas»), salvo el descartado, que no se sigue. y la agenda de hoy y los 6 días siguientes por día (`reunionesPorDia`; «Mías» por
+  vencidas»), salvo el descartado, que no se sigue. **Desde el 3/11/2026 (por pedido)**: columnas
+  Inmobiliaria, Decisor, Estado, **Seguimiento** (pastilla Sin tarea / Vencida / Hoy / Al día,
+  `seguimientoDelLead`) y Próxima tarea; **el estado se cambia desde la fila** (`EtapaEditable`,
+  el mismo select del perfil, ancho fijo; Descartado abre su dialog), y **por defecto se ordena por
+  estado** (`OrdenDeImportantes`: etapas anteriores arriba por `position`, descartados al final;
+  «Próxima tarea» es el otro orden, desde la cabecera). El orden vive en `CrmLeadList` porque las
+  flechas del dialog lo recorren. La agenda va a la derecha en 272px, solo hora y evento. y la agenda de hoy y los 6 días siguientes por día (`reunionesPorDia`; «Mías» por
   defecto, «Todas» las del equipo). **La agenda suma todo tu Google Calendar** (23/10/2026, por
   pedido): `eventosDeGoogleSueltos` saca los eventos que ya son una reunión del CRM (por
   `external_event_id`) y pasa los de todo el día a la medianoche local. Es solo **tu** Google (la
