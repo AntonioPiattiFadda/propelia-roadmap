@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
+import { VerAvisoDeDemo } from '@/pages/crm/components/VerAvisoDeDemo'
 import { useGoogleConnection } from '../../hooks/useCalendarConnection'
 import { useCancelMeeting } from '../../hooks/useMeetings'
 import { notifyNoGoogleConnection } from '../../lib/googleConnectionToast'
@@ -20,7 +21,9 @@ import type { Meeting } from '../../lib/meetings.types'
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  meeting: Pick<Meeting, 'id' | 'ics_sequence' | 'sync_status'>
+  meeting: Pick<Meeting, 'id' | 'ics_sequence' | 'sync_status'> & Partial<Pick<Meeting, 'starts_at' | 'guest_emails'>> & { assigned_to?: string | null }
+  /** El lead de la reunión: con él, «Ver email» del aviso de cancelación que le llega. */
+  leadId?: string | null
   /** Se dispara sólo si la cancelación se guardó — la agenda lo usa para cerrar el form de atrás. */
   onCancelled?: () => void
   /** z-index del velo Y del contenido juntos. Radix dibuja en z-50; abierto desde el popover
@@ -30,7 +33,7 @@ type Props = {
 
 /** Confirmación de cancelar una reunión (Google les avisa a los invitados y borra el evento).
  * `CancelVisitDialog` de `propelia-frontend` (21/10/2026). Lo usa el form de la agenda. */
-export function CancelMeetingDialog({ open, onOpenChange, meeting, onCancelled, zIndexClassName }: Props) {
+export function CancelMeetingDialog({ open, onOpenChange, meeting, leadId, onCancelled, zIndexClassName }: Props) {
   const [reason, setReason] = useState('')
   const navigate = useNavigate()
   const { data: connection } = useGoogleConnection()
@@ -66,6 +69,10 @@ export function CancelMeetingDialog({ open, onOpenChange, meeting, onCancelled, 
           onChange={(e) => setReason(e.target.value)}
           placeholder="Motivo (opcional)"
         />
+        {leadId && meeting.starts_at && new Date(meeting.starts_at) > new Date() && (
+          <VerAvisoDeDemo tipo="demo_cancelled" leadId={leadId} responsableId={meeting.assigned_to}
+            inicio={meeting.starts_at} invitados={meeting.guest_emails ?? []} />
+        )}
         <AlertDialogFooter>
           <AlertDialogCancel>Volver</AlertDialogCancel>
           <AlertDialogAction onClick={handleConfirm}>

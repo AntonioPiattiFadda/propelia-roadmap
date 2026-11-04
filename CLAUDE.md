@@ -311,7 +311,7 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   (solo SUPERADMIN, siempre al email de la cuenta): HTML con la marca armado en el servidor por
   `renderEmailDeAcceso` (`_shared/plantillasEmail.ts`), con usuario y contraseña cada uno en su caja
   para copiar y el aviso de que es temporal y se cambia al terminar el onboarding. Sin «Darse de
-  baja»: es de servicio. «Ver cómo les llega» lo muestra en el diálogo; `docs/onboarding/mail-de-acceso.html`
+  baja»: es de servicio. «Ver email» lo muestra en el diálogo; `docs/onboarding/mail-de-acceso.html`
   es una copia generada con datos de ejemplo. Va a `crm_emails` con `plantilla = 'acceso'`, así los
   rebotes se avisan como los demás. Con todos enviados, además completa la tarea del CRM «Revisar e
   importar el equipo de …» del lead (`completarTareasDeRevisarEquipo`, por prefijo del título;
@@ -785,6 +785,18 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   botón armado solo (WhatsApp/`mailto:`); un enlace escrito a mano sí (`plantillaGuardable`,
   `conGuardada`). El texto de fábrica de `plantillasEmail.ts` queda solo para la primera vez o
   sin la migración corrida.
+- **«Ver email» en todo mail con plantilla** (4/11/2026, por pedido; copiado de `EmailPreviewDialog` de
+  `propelia-frontend`): un enlace que abre `EmailPreviewDialog` (`src/components/EmailPreviewDialog.tsx`,
+  con `VerEmail`, el botón): asunto, «De:», «Para:» y el HTML en un iframe sin scripts. **Siempre con
+  el render del servidor**, nunca un HTML aparte. Está en la pestaña Email de «Mensajes» (al lado de
+  «Vista previa», `renderEmail`), en los accesos de /clientes (`renderEmailDeAcceso`; reemplazó al
+  desplegable «Ver cómo les llega»), en Ajustes › Avisos a leads (los tres de demo, con vos como
+  responsable y una inmobiliaria de ejemplo) y en el formulario de reunión con lead («Demo agendada»
+  al crear, «reprogramada» al cambiarle el horario), `CancelMeetingDialog` y `CancelarDemoDialog`
+  («cancelada»), con los datos del lead (`VerAvisoDeDemo`, solo si ese aviso está prendido por email).
+  Firmante, destinatario y render salen de las piezas del dispatcher (`firmaDeLaDemo`, exportada de
+  `handlers/demoScheduled.ts`; `lib/emailDeAvisoDeDemo.ts`). El «Email de prueba» no lo lleva: es texto
+  libre, sin plantilla.
 - **El WhatsApp de «Mensajes»** (23/10/2026, por pedido): es un enlace con el texto escrito, **nunca un
   archivo** (el vídeo nativo pediría la API de WhatsApp Business). En el ordenador abre
   `web.whatsapp.com/send` directo y en el móvil `wa.me` (`enlaceDeWhatsapp(…, { web })`, `esMovil`):

@@ -17,6 +17,7 @@ import { FilaDeTelefono } from '@/pages/crm/components/FilasDelRegistro'
 import { RegistroDeDemoPanel } from '@/pages/crm/components/RegistroDeDemoPanel'
 import { pedirPermisoDeAvisos } from '@/pages/crm/hooks/useAlarmasDeTareas'
 import { useRegistroDeDemo } from '@/pages/crm/hooks/useRegistroDeDemo'
+import { VerAvisoDeDemo } from '@/pages/crm/components/VerAvisoDeDemo'
 import { TEXTO_DE_DEMO } from '@/pages/crm/lib/actividad'
 import type { DemoAgendada } from '@/pages/crm/lib/avisoDeDemo'
 import { nombreDelLead, type CampoDecisor } from '@/pages/crm/lib/clientData'
@@ -61,6 +62,8 @@ export type EditableMeeting = {
   guest_user_ids: string[]
   guest_emails: string[]
   lead_id: string | null
+  /** De quién es: firma el aviso al lead del «Ver email». Sin él, quien edita. */
+  assigned_to?: string | null
 }
 
 type Props = {
@@ -230,6 +233,17 @@ export function MeetingFormContent({
 
   const isInvalid = date === '' || time === '' || endTime === '' || endTime <= time
   const isSaving = createMutation.isPending || updateMutation.isPending
+
+  /* «Ver email» del aviso al lead (4/11/2026, por pedido): toda reunión con lead que se crea le avisa
+     «Demo agendada»; editar una agendada a futuro y cambiarle el horario, «Demo reprogramada». */
+  const leadDelAviso = meeting?.lead_id ?? leadId ?? null
+  const inicioElegido = date && time ? instanteDelFormulario(date, time, enEspana).toISOString() : null
+  const avisoAlLead = !leadDelAviso ? null
+    : !isEditing ? 'demo_scheduled' as const
+    : meeting.status === 'scheduled' && inicioElegido && !isInvalid
+        && new Date(inicioElegido).getTime() !== new Date(meeting.starts_at).getTime()
+        && new Date(inicioElegido) > new Date() ? 'demo_rescheduled' as const
+    : null
 
   // Al mover el "desde", el "hasta" lo sigue preservando la misma duración —
   // si todavía no había un rango cargado, arranca en 60 min por defecto.
@@ -553,6 +567,12 @@ export function MeetingFormContent({
             </div>
           </>
         )}
+        {avisoAlLead && (
+          <VerAvisoDeDemo tipo={avisoAlLead} leadId={leadDelAviso}
+            responsableId={(isEditing ? meeting.assigned_to : assignedTo) ?? userSession?.user.id}
+            inicio={inicioElegido} inicioAnterior={meeting?.starts_at ?? null} invitados={guestEmails}
+            className="ml-7" />
+        )}
         {!connectionPending && connection?.status !== 'active' && (
           <Button asChild className="mb-2 bg-red-500 text-white hover:bg-red-600">
             <Link to="/ajustes?tab=integraciones&highlight=google-calendar">
@@ -600,6 +620,7 @@ export function MeetingFormContent({
           open={cancelOpen}
           onOpenChange={setCancelOpen}
           meeting={meeting}
+          leadId={meeting.lead_id}
           onCancelled={onClose}
           zIndexClassName="z-[260]"
         />

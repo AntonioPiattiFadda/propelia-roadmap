@@ -132,6 +132,7 @@ export function Agenda() {
         guest_user_ids: full.guest_user_ids,
         guest_emails: full.guest_emails,
         lead_id: full.lead_id,
+        assigned_to: full.assigned_to,
       },
       x: clientX,
       y: clientY,

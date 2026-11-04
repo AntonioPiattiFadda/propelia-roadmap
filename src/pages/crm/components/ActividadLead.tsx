@@ -693,7 +693,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       )}
       <DemoAgendadaDialog demo={demoAgendada} onCerrar={() => setDemoAgendada(null)} />
       {demoACancelar && (
-        <CancelarDemoDialog key={demoACancelar.id} cuando={cuandoEs(demoACancelar)}
+        <CancelarDemoDialog key={demoACancelar.id} cuando={cuandoEs(demoACancelar)} reunion={demoACancelar}
           opciones={opcionesEtapa} actual={actual} cancelando={cancelarDemo.isPending}
           onCerrar={() => setDemoACancelar(null)}
           onConfirmar={({ motivo, etapaId }) => cancelarDemo.mutate({ reunion: demoACancelar, motivo }, {

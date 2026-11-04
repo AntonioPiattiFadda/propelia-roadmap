@@ -2,7 +2,7 @@ import type { ChannelConfig, LeadNotificationEvent, LeadNotificationHandler, Loa
 import type { LeadNotificationChannel } from '../channels.ts'
 import type { EmailMessage } from '../../emailMessage.ts'
 import { nombreEnBandeja, remitenteDe, replyToDe } from '../../plantillasEmail.ts'
-import { demoRecipientEmail, type DemoScheduledRow } from '../demoQuery.ts'
+import { demoRecipientEmail, type DemoAgentRow, type DemoScheduledRow } from '../demoQuery.ts'
 import {
   PROPELIA_ORG,
   renderDemoCancelledEmail,
@@ -47,22 +47,35 @@ function peopleSkip(row: DemoScheduledRow): string | null {
   return null
 }
 
-function demoCtx(row: DemoScheduledRow, recipient: string | null, deps: DemoDeps, event: LeadNotificationEvent): Ctx {
-  const remitente = remitenteDe(row.agent)
-  const fullName = row.agent!.firma_nombre?.trim()
+type FirmanteDeLaDemo = Pick<DemoAgentRow, 'nombre' | 'last_name' | 'email' | 'phone' | 'firma_nombre' | 'firma_cargo' | 'firma_telefono'>
+
+/**
+ * Quién firma el aviso (la fila de `users` del responsable de la demo): cómo se lo nombra en el mail,
+ * el nombre en la bandeja y a dónde van las respuestas. Exportado para el «Ver email» del front
+ * (4/11/2026), que arma la vista previa con la misma regla.
+ */
+export function firmaDeLaDemo(agent: FirmanteDeLaDemo | null | undefined): Pick<Ctx, 'agent' | 'fromName' | 'replyTo'> {
+  const remitente = remitenteDe(agent)
+  const fullName = agent?.firma_nombre?.trim()
     ? remitente.nombre
-    : [row.agent!.nombre, row.agent!.last_name].filter(p => p && p.trim()).join(' ')
+    : [agent?.nombre, agent?.last_name].filter(p => p && p.trim()).join(' ')
+  return {
+    agent: { firstName: fullName, lastName: '', email: remitente.email, phone: remitente.telefono || null },
+    replyTo: replyToDe(remitente),
+    fromName: nombreEnBandeja(remitente),
+  }
+}
+
+function demoCtx(row: DemoScheduledRow, recipient: string | null, deps: DemoDeps, event: LeadNotificationEvent): Ctx {
   return {
     startsAt: row.starts_at,
     companyName: row.client!.company_name,
     clientFirstName: row.client!.first_name,
     clientEmail: recipient,
-    agent: { firstName: fullName, lastName: '', email: remitente.email, phone: remitente.telefono || null },
     org: PROPELIA_ORG,
     assetsBaseUrl: deps.assetsBaseUrl,
     event,
-    replyTo: replyToDe(remitente),
-    fromName: nombreEnBandeja(remitente),
+    ...firmaDeLaDemo(row.agent),
   }
 }
 

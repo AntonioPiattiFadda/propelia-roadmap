@@ -2,15 +2,18 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import type { CrmStage } from '../types'
+import type { CrmMeeting, CrmStage } from '../types'
 import { CajaDeEtapa } from './FilasDelRegistro'
+import { VerAvisoDeDemo } from './VerAvisoDeDemo'
 
 /* Cancelar una demo desde su renglón de la actividad (23/10/2026, por pedido). Una demo que se cae
    cambia dónde está el lead, así que «El lead queda en» es obligatorio y arranca vacío, con la
    misma regla que al registrar una actividad: precargada, se confirmaría sin leerla. */
-export function CancelarDemoDialog({ cuando, opciones, actual, cancelando, onCerrar, onConfirmar }: {
+export function CancelarDemoDialog({ cuando, reunion, opciones, actual, cancelando, onCerrar, onConfirmar }: {
   /** «el 07/10 a las 12:00»: para qué demo es, dicho en el título. */
   cuando: string
+  /** La demo: con ella, «Ver email» del aviso de cancelación que le llega al cliente. */
+  reunion: Pick<CrmMeeting, 'lead_id' | 'starts_at' | 'guest_emails' | 'assigned_to'>
   opciones: CrmStage[]
   actual: CrmStage | undefined
   cancelando: boolean
@@ -41,6 +44,10 @@ export function CancelarDemoDialog({ cuando, opciones, actual, cancelando, onCer
           <CajaDeEtapa valor={etapa} onCambiar={v => { setEtapa(v); setFaltaEtapa(false) }}
             opciones={opciones} actual={actual} rojo={faltaEtapa}
             aviso="Elegí en qué etapa queda antes de cancelar" />
+          {new Date(reunion.starts_at) > new Date() && (
+            <VerAvisoDeDemo tipo="demo_cancelled" leadId={reunion.lead_id} responsableId={reunion.assigned_to}
+              inicio={reunion.starts_at} invitados={reunion.guest_emails ?? []} />
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onCerrar} disabled={cancelando}>Volver</Button>

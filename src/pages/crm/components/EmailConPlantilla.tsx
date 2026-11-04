@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Clock, Loader2, MailX, Paperclip, RotateCcw, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { VerEmail } from '@/components/EmailPreviewDialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { useUserSession } from '@/hooks/useUserSession'
@@ -245,7 +246,17 @@ export function EmailConPlantilla({ id, client, leadId, onEnviado }: {
 
       {/* La vista previa: 640px son los 600 del mail más su margen, así se ve como en el escritorio. */}
       <div className="flex min-w-0 flex-col gap-1.5 bg-(--surface-2) p-3 max-xl:[border-top:1px_solid_var(--line)] xl:min-h-0 xl:[border-left:1px_solid_var(--line)]">
-        <span className={cn(ETIQUETA, 'px-1')}>Vista previa</span>
+        {/* «Ver email» (4/11/2026, por pedido): el mismo mail en la ventana de los demás flows, con
+            el asunto y la bandeja (de, para), que la columna no muestra. */}
+        <div className="flex items-center justify-between gap-2 px-1">
+          <span className={ETIQUETA}>Vista previa</span>
+          <VerEmail className="text-[12px]"
+            render={() => renderEmail(id, campos, remitente, { assets: `${window.location.origin}/email` })}
+            title={`Así le llega «${plantilla.nombre}»`}
+            description="Con el texto de los campos y tu firma: es el mismo HTML que arma el servidor al enviar. Los adjuntos no se ven."
+            from={`${nombreEnBandeja(remitente)} <info@propelia.es>`}
+            to={para.trim() || 'Falta la casilla en «Para»'} />
+        </div>
         <div className="relative h-[70vh] w-full overflow-hidden rounded-lg bg-white [border:1px_solid_var(--line)] xl:h-auto xl:min-h-0 xl:flex-1">
           <iframe title="Vista previa del email" srcDoc={htmlEnVista}
             // Sin scripts; solo abrir enlaces en otra pestaña, y que esa pestaña no herede el sandbox.

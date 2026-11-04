@@ -14,6 +14,11 @@ import {
   type LeadNotificationEventType,
 } from '../lib/leadNotifications'
 import { useUserSession } from '@/hooks/useUserSession'
+import { useYo } from '@/hooks/useYo'
+import { VerEmail } from '@/components/EmailPreviewDialog'
+import {
+  assetsDeLosAvisos, CLIENTE_DE_EJEMPLO, deLaBandeja, esAvisoDeDemo, muestraDeAvisoDeDemo, type FirmanteDeAviso,
+} from '@/pages/crm/lib/emailDeAvisoDeDemo'
 import { cn } from '@/lib/utils'
 import {
   type LeadNotificationPreferenceChange,
@@ -48,6 +53,8 @@ const PREFERENCES_KEY = ['lead-notification-preferences']
 export function LeadNotificationsCard() {
   const { userSession } = useUserSession()
   const user = userSession?.user
+  // Quien mira firma el mail de ejemplo del «Ver email», como el agente en el producto.
+  const yo = useYo(user?.id).data ?? null
   const queryClient = useQueryClient()
   const { data: rows, isLoading: prefsLoading } = useQuery({
     queryKey: PREFERENCES_KEY,
@@ -140,6 +147,7 @@ export function LeadNotificationsCard() {
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="font-medium">{ev.label}</span>
                       {!ev.configurable && <Badge variant="secondary" className="text-[10px]">Próximamente</Badge>}
+                      {ev.configurable && esAvisoDeDemo(ev.type) && <VerEmailDelAviso tipo={ev.type} label={ev.label} firmante={yo} />}
                     </div>
                   </td>
                   {LEAD_NOTIFICATION_CHANNELS.map((channel) => {
@@ -181,6 +189,22 @@ export function LeadNotificationsCard() {
         </div>
       )}
     </section>
+  )
+}
+
+/* «Ver email» de cada aviso (4/11/2026, por pedido; `LeadNotificationEmailPreview` de propelia-frontend):
+   el mail con la plantilla REAL del dispatcher, vos como responsable y una inmobiliaria de ejemplo.
+   Los «Próximamente» no tienen plantilla todavía: no lo llevan. */
+function VerEmailDelAviso({ tipo, label, firmante }: { tipo: Parameters<typeof muestraDeAvisoDeDemo>[0]; label: string; firmante: FirmanteDeAviso }) {
+  return (
+    <VerEmail
+      className="ml-auto text-xs"
+      render={() => muestraDeAvisoDeDemo(tipo, firmante, assetsDeLosAvisos(window.location.origin))}
+      title={`Demos · ${label}`}
+      description="Con vos como responsable y datos de ejemplo: el real lleva los de la inmobiliaria y el horario de la demo."
+      from={deLaBandeja(firmante)}
+      to={CLIENTE_DE_EJEMPLO.email}
+    />
   )
 }
 

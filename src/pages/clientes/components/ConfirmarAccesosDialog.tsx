@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -8,7 +8,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { sendEmail } from '@/pages/crm/service/email.service'
-import { remitenteDe, renderEmailDeAcceso } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
+import { nombreEnBandeja, remitenteDe, renderEmailDeAcceso } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
+import { VerEmail } from '@/components/EmailPreviewDialog'
 import { CRM_KEYS } from '@/pages/crm/hooks/keys'
 import { CLIENTES_KEYS, useMarcarTarea } from '../hooks/useClientes'
 import { completarTareasDeRevisarEquipo } from '../service/clientes.service'
@@ -21,7 +22,7 @@ import type { DatosDelAlta } from './datosDelAlta'
    acá. Los mails no se deshacen, así que la pregunta va antes: sin tildar «Verifiqué que todas las
    cuentas entran correctamente» no se habilita «Enviar». Sale uno por persona desde
    info@propelia.es por `send-email` con `acceso` (solo SUPERADMIN): el HTML lo arma el servidor con
-   `renderEmailDeAcceso` (`_shared/plantillasEmail.ts`), el mismo que pinta «Ver cómo les llega», y
+   `renderEmailDeAcceso` (`_shared/plantillasEmail.ts`), el mismo que pinta «Ver email», y
    va siempre al email de la cuenta. Recién con todos enviados se tilda la tarea y se completa la
    del CRM «Revisar e importar el equipo de …» (27/10/2026, por pedido). La contraseña no
    se guarda en ningún lado: se vuelve a armar igual que al crear la cuenta, con el año de cuando se
@@ -42,9 +43,8 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
   /* La vista previa, con la primera persona. La firma real la pone el servidor con la fila de
      `users` de quien manda (cargo y teléfono incluidos); acá va solo el nombre de quien lleva el alta. */
   const primero = miembros[0]
-  const vistaPrevia = primero
-    ? renderEmailDeAcceso(accesoDe(primero), remitenteDe({ nombre: datos.soporte }), { assets: `${window.location.origin}/email` }).html
-    : null
+  const remitente = remitenteDe({ nombre: datos.soporte })
+  const vistaPrevia = () => renderEmailDeAcceso(accesoDe(primero), remitente, { assets: `${window.location.origin}/email` })
 
   const cerrar = () => { setVerifique(false); onCerrar() }
 
@@ -93,15 +93,14 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
             </li>
           ))}
         </ul>
-        {vistaPrevia && (
-          <details className="group text-[13px]">
-            <summary className="flex w-max cursor-pointer list-none items-center gap-1 text-(--fg-2) hover:text-foreground">
-              <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" /> Ver cómo les llega
-            </summary>
-            {/* Sin `allow-scripts`: es el HTML del mail, no tiene nada que correr. */}
-            <iframe title="Vista previa del mail de accesos" srcDoc={vistaPrevia} sandbox=""
-              className="mt-2 h-[460px] w-full rounded-md border border-(--line) bg-white" />
-          </details>
+        {/* «Ver email» (4/11/2026, por pedido): fue un desplegable «Ver cómo les llega» con el iframe
+            adentro; ahora es la ventana de todos los mails con plantilla, con asunto, de y para. */}
+        {primero && (
+          <p className="text-[13px] text-(--fg-2)">
+            Así le llega a {primero.first_name}: <VerEmail render={vistaPrevia} title="Así les llega el mail de accesos"
+              description="Con los datos de la primera persona. La firma real la pone el servidor con tu fila de usuario (cargo y teléfono incluidos)."
+              from={`${nombreEnBandeja(remitente)} <info@propelia.es>`} to={primero.email!} />
+          </p>
         )}
         {PUENTE_SIMULADO && <p className="text-[12.5px] text-(--fg-muted)">Puente simulado: las cuentas todavía no existen en Propelia, así que no se manda ningún mail.</p>}
         <label className="flex cursor-pointer items-start gap-3 rounded-md bg-warning/10 p-3 text-[13px]">
