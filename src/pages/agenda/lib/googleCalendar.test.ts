@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mapMeetingToGoogleEvent, planGoogleSync, mapGoogleEventsToAgenda, stripLeadLink, buildGuestAttendees, mapGuestResponses } from '../../../../supabase/functions/_shared/googleCalendar'
+import { mapMeetingToGoogleEvent, planGoogleSync, mapGoogleEventsToAgenda, stripLeadLink, buildGuestAttendees, mapGuestResponses, pedidoDeMeet } from '../../../../supabase/functions/_shared/googleCalendar'
 
 const meeting = {
   id: 'abc123',
@@ -243,5 +243,16 @@ describe('mapGoogleEventsToAgenda', () => {
       { id: 'sola', ...horario },
     ])
     expect(events.filter(e => e.sinAceptar).map(e => e.id)).toEqual(['pendiente'])
+  })
+})
+
+describe('pedidoDeMeet', () => {
+  it('la reunión con un lead (la demo) pide un Google Meet, con el id de la reunión como requestId', () => {
+    expect(pedidoDeMeet({ id: 'm1', lead_id: 'l1' })).toEqual({
+      conferenceData: { createRequest: { requestId: 'meet-m1', conferenceSolutionKey: { type: 'hangoutsMeet' } } },
+    })
+  })
+  it('la que no es de ningún lead no lleva Meet', () => {
+    expect(pedidoDeMeet({ id: 'm1', lead_id: null })).toEqual({})
   })
 })

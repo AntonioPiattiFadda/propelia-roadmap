@@ -9,6 +9,7 @@ import {
   getGoogleAgenda,
   getGoogleAuthUrl,
   getGoogleConnection,
+  getOcupadosDelAnfitrion,
   stopCalendarWatch,
 } from '../service/calendar.service'
 import { invalidarReuniones } from './useMeetings'
@@ -64,6 +65,15 @@ export const useGoogleAgenda = (fromIso: string, toIso: string, enabled: boolean
     queryFn: () => getGoogleAgenda(fromIso, toIso),
     enabled,
     staleTime: 60_000,
+  })
+
+export const useOcupadosDelAnfitrion = (fromIso: string, toIso: string, enabled: boolean) =>
+  useQuery({
+    queryKey: ['anfitrion-ocupado', fromIso, toIso],
+    queryFn: () => getOcupadosDelAnfitrion(fromIso, toIso),
+    enabled,
+    staleTime: 60_000,
+    retry: false,
   })
 
 export const useDisconnectGoogle = () => {

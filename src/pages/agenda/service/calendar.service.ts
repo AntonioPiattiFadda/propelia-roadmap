@@ -2,6 +2,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { Tables } from '@/types/database.types'
 import type { GoogleAgendaItem } from '../lib/googleAgenda'
+import type { OcupadosDelAnfitrion } from '../lib/anfitrionDeDemos'
 
 /* `calendar_connections.service` de `propelia-frontend` (21/10/2026). El backfill ofrece las
    reuniones del CRM en vez de las visitas. */
@@ -66,6 +67,16 @@ export const getGoogleAgenda = async (fromIso: string, toIso: string): Promise<G
     throw new Error(message)
   }
   return data?.events ?? []
+}
+
+// Cuándo está ocupado quien da las demos (4/11/2026): solo bloques, sin títulos. Sin la edge
+// function desplegada contesta un error y el selector sigue sin esos bloques.
+export const getOcupadosDelAnfitrion = async (fromIso: string, toIso: string): Promise<OcupadosDelAnfitrion> => {
+  const { data, error } = await supabase.functions.invoke('calendar-sync', {
+    body: { action: 'anfitrion-ocupado', from: fromIso, to: toIso },
+  })
+  if (error) throw error
+  return { busy: data?.busy ?? [], nombre: data?.nombre ?? null, estado: data?.estado ?? 'sin_anfitrion' }
 }
 
 export const registerCalendarWatch = async (): Promise<void> => {

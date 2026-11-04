@@ -1,6 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
-import { planGoogleSync, mapMeetingToGoogleEvent, mapGoogleEventsToAgenda, buildGuestAttendees, mapGuestResponses, type GoogleAttendee, type RawGoogleEvent } from '../_shared/googleCalendar.ts'
+import { planGoogleSync, mapMeetingToGoogleEvent, mapGoogleEventsToAgenda, buildGuestAttendees, mapGuestResponses, pedidoDeMeet, type GoogleAttendee, type RawGoogleEvent } from '../_shared/googleCalendar.ts'
 import { refreshAccessToken } from '../_shared/googleTokens.ts'
 import { encryptToken, decryptToken } from '../_shared/tokenCrypto.ts'
 import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
@@ -19,6 +19,9 @@ const jsonHeaders = { ...corsHeaders, 'Content-Type': 'application/json' }
 
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3'
 const MAX_SYNC_ATTEMPTS = 5
+/** Quién da las demos: el selector de la demo muestra cuándo está ocupado (`anfitrion-ocupado`).
+ *  Es la cuenta de `users` con este email y su Google conectado en Ajustes. */
+const ANFITRION_DE_DEMOS = 'lorenzopiattifadda@gmail.com'
 
 // El access_token puede estar en claro (conexiones pre-Plan 3, sin '.') o cifrado.
 const readStoredToken = async (stored: string | null, key: string): Promise<string | null> => {
@@ -306,10 +309,10 @@ const processGoogleFlow = async (admin: SupabaseClient, meeting: MeetingRow, enc
     return 'synced'
   }
 
-  // insert
-  const res = await googleFetch(token, `/calendars/${calendarId}/events?${SEND_UPDATES}`, {
+  // insert: la demo nace con su Google Meet (`pedidoDeMeet`).
+  const res = await googleFetch(token, `/calendars/${calendarId}/events?${SEND_UPDATES}&conferenceDataVersion=1`, {
     method: 'POST',
-    body: JSON.stringify(buildPayload()),
+    body: JSON.stringify({ ...buildPayload(), ...pedidoDeMeet(meeting) }),
   })
   if (!res.ok) {
     await markSyncError(admin, meeting, `insert ${res.status}: ${(await res.text()).slice(0, 200)}`)
@@ -397,6 +400,49 @@ Deno.serve(withoutOAuthClients(async (req: Request) => {
       const data = (await res.json()) as { calendars?: Record<string, { busy?: { start: string; end: string }[] }> }
       const busy = data.calendars?.[connection.calendar_id]?.busy ?? []
       return new Response(JSON.stringify({ busy }), { headers: jsonHeaders })
+    }
+
+    // --- anfitrion-ocupado: cuándo está ocupado quien da las demos (4/11/2026, por pedido) ---
+    // Para el selector de día y hora de la demo. Lee el Google del anfitrión con SU conexión y
+    // devuelve solo los bloques ocupados, sin títulos ni detalles, a cualquier usuario activo.
+    if (body.action === 'anfitrion-ocupado') {
+      if (typeof body.from !== 'string' || typeof body.to !== 'string') {
+        return new Response(JSON.stringify({ error: 'from and to are required' }), { status: 400, headers: jsonHeaders })
+      }
+      const userClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+        { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } } },
+      )
+      const { data: userData } = await userClient.auth.getUser()
+      if (!userData?.user) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: jsonHeaders })
+      }
+      const { data: caller } = await admin.from('users').select('activo').eq('id', userData.user.id).maybeSingle()
+      if (!caller?.activo) {
+        return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: jsonHeaders })
+      }
+      const sinBloques = (estado: string, nombre: string | null = null) =>
+        new Response(JSON.stringify({ busy: [], nombre, estado }), { headers: jsonHeaders })
+      const { data: anfitrion } = await admin.from('users').select('id, nombre')
+        .ilike('email', ANFITRION_DE_DEMOS).eq('activo', true).maybeSingle()
+      if (!anfitrion) return sinBloques('sin_anfitrion')
+      // El anfitrión ya ve su Google entero en la semana: sus bloques saldrían dos veces.
+      if (anfitrion.id === userData.user.id) return sinBloques('es_quien_pide', anfitrion.nombre)
+      const connection = await getActiveConnection(admin, anfitrion.id)
+      if (!connection || connection.status !== 'active') return sinBloques('sin_conexion', anfitrion.nombre)
+      const token = await getValidAccessToken(admin, connection, encryptionKey)
+      if (typeof token !== 'string') return sinBloques('sin_conexion', anfitrion.nombre)
+      const res = await googleFetch(token, '/freeBusy', {
+        method: 'POST',
+        body: JSON.stringify({ timeMin: body.from, timeMax: body.to, items: [{ id: connection.calendar_id }] }),
+      })
+      if (!res.ok) {
+        return new Response(JSON.stringify({ error: `google_error_${res.status}` }), { status: 502, headers: jsonHeaders })
+      }
+      const data = (await res.json()) as { calendars?: Record<string, { busy?: { start: string; end: string }[] }> }
+      const busy = data.calendars?.[connection.calendar_id]?.busy ?? []
+      return new Response(JSON.stringify({ busy, nombre: anfitrion.nombre, estado: 'ok' }), { headers: jsonHeaders })
     }
 
     // --- agenda: eventos del calendario del caller autenticado en [from, to) (debug de disponibilidad) ---

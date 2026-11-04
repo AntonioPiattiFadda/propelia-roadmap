@@ -134,7 +134,18 @@ export const mapMeetingToGoogleEvent = (
   }
 }
 
-export type GoogleSyncAction = 'disable' | 'insert' | 'patch' | 'delete' | 'complete'
+/**
+ * El Google Meet de la demo (4/11/2026, por pedido): la reunión con un lead nace con su videollamada,
+ * y la invitación que Google le manda a cada invitado ya trae «Unirse con Google Meet». Va solo al
+ * crear el evento (con `conferenceDataVersion=1`): un PATCH sin `conferenceData` deja el Meet como
+ * está. El `requestId` es por reunión, así un reintento no crea otra videollamada.
+ */
+export const pedidoDeMeet = (meeting: { id: string; lead_id: string | null }) =>
+  meeting.lead_id
+    ? { conferenceData: { createRequest: { requestId: `meet-${meeting.id}`, conferenceSolutionKey: { type: 'hangoutsMeet' as const } } } }
+    : {}
+
+export type GoogleSyncAction ='disable' | 'insert' | 'patch' | 'delete' | 'complete'
 
 export const planGoogleSync = (
   meeting: SyncMeeting,

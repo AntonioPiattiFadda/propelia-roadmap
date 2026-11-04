@@ -19,18 +19,20 @@ export type HorarioElegido = { ymd: string; startTime: string; endTime: string }
    en z 400: por encima de la ventana flotante (z 50), del popover de la Agenda (z 250) y de los
    menús (z 300). No lleva `.ui-scale`: está portaleada a `body` como el formulario que la abre, y
    `slotAtPointer` mide el zoom real de la columna, así que el horario sale bien con o sin él. */
-export function SelectorDeHorario({ fecha, titulo = 'Elegí día y hora', horaDeEspana = false, onElegir, onCerrar }: {
+export function SelectorDeHorario({ fecha, titulo = 'Elegí día y hora', horaDeEspana = false, conAnfitrion = false, onElegir, onCerrar }: {
   /** El día ya elegido en el formulario (`YYYY-MM-DD`), o vacío. */
   fecha: string
   titulo?: string
   /** La semana en el reloj de España (la demo, 26/10/2026): el horario que vuelve es de allá. */
   horaDeEspana?: boolean
+  /** Pinta también cuándo está ocupado quien da las demos (la demo, 4/11/2026). */
+  conAnfitrion?: boolean
   onElegir: (horario: HorarioElegido) => void
   onCerrar: () => void
 }) {
   const isMobile = useIsMobile()
   const [referencia, setReferencia] = useState(() => fechaParaAbrir(fecha, new Date()))
-  const { start, end, days, isCurrentWeek, eventsByDay } = useSemanaDeAgenda(referencia, { horaDeEspana })
+  const { start, end, days, isCurrentWeek, eventsByDay, anfitrion } = useSemanaDeAgenda(referencia, { horaDeEspana, conAnfitrion })
   const correr = (dias: number) =>
     setReferencia(r => new Date(r.getFullYear(), r.getMonth(), r.getDate() + dias, 12))
 
@@ -60,6 +62,16 @@ export function SelectorDeHorario({ fecha, titulo = 'Elegí día y hora', horaDe
             </div>
             {horaDeEspana && (
               <HoraDeEspana className="rounded-full bg-(--surface-2) px-2.5 py-1 text-[12.5px] font-semibold text-(--fg-2)" />
+            )}
+            {anfitrion?.nombre && anfitrion.estado === 'ok' && (
+              <span className="rounded-full bg-(--brand-soft) px-2.5 py-1 text-[12.5px] font-semibold text-(--brand-soft-fg)">
+                Con la agenda de {anfitrion.nombre}
+              </span>
+            )}
+            {anfitrion?.nombre && anfitrion.estado === 'sin_conexion' && (
+              <span className="rounded-full bg-(--warning-soft) px-2.5 py-1 text-[12.5px] font-semibold text-(--warning-fg)">
+                {anfitrion.nombre} no tiene Google conectado
+              </span>
             )}
             <DialogPrimitive.Close aria-label="Cerrar"
               className="ml-auto flex size-8 cursor-pointer items-center justify-center rounded-md text-(--fg-2) hover:bg-(--surface-2)">
