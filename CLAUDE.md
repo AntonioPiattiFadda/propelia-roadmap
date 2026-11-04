@@ -931,7 +931,14 @@ conversión de filas a personas es `personasDesdeUsuarios()`, en `equipo.js`, co
   (`supabase/functions/crear-miembro/`, tests con `deno test` ahí adentro): un SUPERADMIN activo
   crea la cuenta de auth y su fila. Iniciales y color salen solos y **`caja` nace en false**, que
   entrar al reparto mueve los saldos de todos. No hay trigger sobre `auth.users`: si la fila falla,
-  la función borra la cuenta. **La baja** (13/10/2026) es el ícono de cada fila de `/equipo`
+  la función borra la cuenta. **Y le manda sus accesos por mail** (4/11/2026, por pedido, copiado de
+  `create-org-user` del producto): usuario y contraseña temporal, con la marca y la firma de quien da
+  el alta (`renderEmailDeAccesoAlEquipo`, `_shared/plantillasEmail.ts`, el mismo diseño que el de
+  /clientes) y el botón a `APP_BASE_URL` (o `URL_DEL_EQUIPO`). Queda en `crm_emails` sin lead
+  (`plantilla = 'acceso-equipo'`), así un rebote suena en la campana. Si el mail falla el miembro
+  queda creado y el toast pide pasarle los datos a mano (`access_email_sent: false`). Debajo de la
+  contraseña, «Ver el mail» lo muestra con lo cargado en el formulario (`VerEmail`). Hace falta
+  deployar `crear-miembro`. **La baja** (13/10/2026) es el ícono de cada fila de `/equipo`
   (`BajaMiembroDialog`), que llama a la RPC `crm_dar_de_baja_miembro`: solo SUPERADMIN, nunca a
   uno mismo. En una transacción pone `activo = false` y le pasa a un sucesor sus leads, sus tareas
   del CRM sin completar, sus reuniones futuras y su lugar en `pend`/`resp` (y en los pasos) de las

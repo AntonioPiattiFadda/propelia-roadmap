@@ -2,6 +2,8 @@ import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { crearMiembro, type CrearMiembroDb } from './crearMiembro.ts'
 import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
+import { sendEmail } from '../_shared/email.ts'
+import { nombreEnBandeja, remitenteDe, renderEmailDeAccesoAlEquipo, replyToDe, URL_DEL_EQUIPO } from '../_shared/plantillasEmail.ts'
 
 /* Alta de un miembro desde /equipo. Existe porque crear una cuenta en auth.users pide el
    service_role, que no puede ir al navegador. Quién puede llamarla lo decide `crearMiembro`
@@ -35,6 +37,25 @@ function dbDe(admin: SupabaseClient): CrearMiembroDb {
     async borrarCuenta(id) {
       await admin.auth.admin.deleteUser(id)
     },
+    /* El mail de accesos (4/11/2026, copiado de `create-org-user` del producto). La firma es la de
+       quien da el alta, como los mails de /clientes. Queda en `crm_emails` (sin lead) para que un
+       rebote se avise en la campana de quien lo mandó. */
+    async mandarAcceso({ userId, callerId, nombre, email, contrasena }) {
+      // `*` y no la lista: así no rompe si las columnas `firma_*` todavía no están en la base.
+      const { data: yo } = await admin.from('users').select('*').eq('id', callerId).maybeSingle()
+      const remitente = remitenteDe(yo)
+      const url = Deno.env.get('APP_BASE_URL')?.replace(/\/+$/, '') || URL_DEL_EQUIPO
+      const { subject, html, text } = renderEmailDeAccesoAlEquipo({ nombre, email, contrasena }, remitente, { url })
+      const replyTo = replyToDe(remitente)
+      const { id } = await sendEmail({
+        fromName: nombreEnBandeja(remitente), to: email, subject, html, text,
+        idempotencyKey: `crear-miembro-acceso:${userId}`, ...(replyTo ? { replyTo } : {}),
+      })
+      const { error } = await admin.from('crm_emails').insert({
+        resend_id: id, lead_id: null, sent_by: callerId, to_email: email, subject, plantilla: 'acceso-equipo',
+      })
+      if (error) console.error('crm_emails: no se pudo registrar el envío', id, error.message)
+    },
   }
 }
 
@@ -62,6 +83,6 @@ Deno.serve(withoutOAuthClients(async req => {
     dbDe(admin),
   )
   return r.ok
-    ? new Response(JSON.stringify({ user: r.user }), { headers: json })
+    ? new Response(JSON.stringify({ user: r.user, access_email_sent: r.accesoEnviado }), { headers: json })
     : new Response(JSON.stringify({ error: r.error }), { status: r.status, headers: json })
 }))

@@ -9,11 +9,18 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { requiredPhoneError, toE164 } from '@/lib/phone'
 import { CRM_KEYS } from '@/pages/crm/hooks/keys'
+import { VerEmail } from '@/components/EmailPreviewDialog'
+import { useYo } from '@/hooks/useYo'
+import { useUserSession } from '@/hooks/useUserSession'
+import { nombreEnBandeja, remitenteDe, renderEmailDeAccesoAlEquipo } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 import { crearMiembro, type Rol } from '../service/miembros.service'
 
 /* `CreateOrgUserDialog` del producto, adaptado a nuestra `users`: rol SDR/SUPERADMIN. Nombre,
    apellido y teléfono son obligatorios, como allá (19/10/2026). `nombre` es el corto de los
-   avatares. Iniciales y color los calcula la edge function; `caja` nace en false. */
+   avatares. Iniciales y color los calcula la edge function; `caja` nace en false. Al crearlo,
+   `crear-miembro` le manda su usuario y contraseña por mail; «Ver el mail» lo muestra armado con la
+   misma plantilla (`renderEmailDeAccesoAlEquipo`) y lo cargado en el formulario (4/11/2026, copiado
+   de `CreateOrgUserDialog` + `NewMemberEmailPreviewDialog` del producto). */
 type Form = { email: string; password: string; password_confirm: string; nombre: string; apellido: string; telefono: string; rol: Rol }
 
 const VACIO: Form = { email: '', password: '', password_confirm: '', nombre: '', apellido: '', telefono: '', rol: 'SDR' }
@@ -24,15 +31,27 @@ type Props = { open: boolean; onOpenChange: (open: boolean) => void }
 export function NuevoMiembroDialog({ open, onOpenChange }: Props) {
   const qc = useQueryClient()
   const [form, setForm] = useState<Form>(VACIO)
+  const { userSession } = useUserSession()
+  const { data: yo } = useYo(userSession?.user.id)
+  // La firma real la pone el servidor con la fila de quien da el alta: es la misma.
+  const remitente = remitenteDe(yo)
+  const emailDestino = form.email.trim() || 'email@delmiembro.com'
+  // Mientras falta algo, va un texto de ejemplo en su lugar, como en el producto.
+  const vistaPrevia = () => renderEmailDeAccesoAlEquipo(
+    { nombre: form.nombre.trim() || 'Nombre', email: emailDestino, contrasena: form.password || 'contraseña temporal' },
+    remitente, { assets: `${window.location.origin}/email` },
+  )
 
   const cerrar = () => { onOpenChange(false); setForm(VACIO) }
 
   const crear = useMutation({
     mutationFn: crearMiembro,
-    onSuccess: () => {
+    onSuccess: user => {
       // Las carteras de Equipo y del CRM salen de esta lista.
       void qc.invalidateQueries({ queryKey: CRM_KEYS.usuarios })
-      toast.success('Miembro creado')
+      if (user.accessEmailSent) toast.success('Miembro creado', { description: `Le enviamos sus accesos a ${user.email}` })
+      // La cuenta quedó creada: lo que falta es pasarle los datos por otro lado.
+      else toast.warning('Miembro creado, pero no le llegó el mail de accesos', { description: 'Pásale su email y contraseña a mano.', duration: Infinity, closeButton: true })
       cerrar()
     },
     onError: (e: Error) => { toast.error(e.message || 'No se pudo crear el miembro') },
@@ -90,6 +109,16 @@ export function NuevoMiembroDialog({ open, onOpenChange }: Props) {
             <Label htmlFor="nuevo-miembro-password">Contraseña temporal</Label>
             <Input id="nuevo-miembro-password" type="password" autoComplete="new-password" value={form.password}
               onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+            {form.password.length > 0 && form.password.length < 6
+              ? <p className="text-xs text-destructive">Mínimo 6 caracteres</p>
+              : (
+                <p className="text-xs text-muted-foreground">
+                  Le llega por mail junto con su usuario.{' '}
+                  <VerEmail render={vistaPrevia} label="Ver el mail" title="Así le llega el mail"
+                    description="Se manda al crear el miembro, con lo que cargaste en el formulario."
+                    from={`${nombreEnBandeja(remitente)} <info@propelia.es>`} to={emailDestino} />
+                </p>
+              )}
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="nuevo-miembro-password-confirm">Confirmar contraseña</Label>

@@ -16,10 +16,12 @@ export type CrearMiembroDb = {
     rol: Rol; caja: false; activo: true
   }): Promise<{ error?: string }>
   borrarCuenta(id: string): Promise<void>
+  /** El mail con usuario y contraseña temporal a la cuenta recién creada (4/11/2026). Tira si no sale. */
+  mandarAcceso(input: { userId: string; callerId: string; nombre: string; email: string; contrasena: string }): Promise<void>
 }
 
 export type CrearMiembroResult =
-  | { ok: true; user: { id: string; email: string } }
+  | { ok: true; user: { id: string; email: string }; accesoEnviado: boolean }
   | { ok: false; status: number; error: string }
 
 // Tonos apagados como los de las cuentas que ya existen (#6E6BA0, #4F7F79): con blanco encima.
@@ -84,5 +86,14 @@ export async function crearMiembro(callerId: string, input: CrearMiembroInput, d
     await db.borrarCuenta(cuenta.id)
     return falla(500, `No se pudo crear el miembro: ${fila.error}`)
   }
-  return { ok: true, user: { id: cuenta.id, email } }
+  // La cuenta ya existe: si el mail falla, el alta no se deshace. El front avisa que hay que
+  // pasarle los datos a mano (`access_email_sent: false`), como `create-org-user` del producto.
+  let accesoEnviado = true
+  try {
+    await db.mandarAcceso({ userId: cuenta.id, callerId, nombre: `${nombre} ${apellido}`, email, contrasena: input.password })
+  } catch (e) {
+    accesoEnviado = false
+    console.error('crear-miembro: no se pudo mandar el mail de accesos', e instanceof Error ? e.message : e)
+  }
+  return { ok: true, user: { id: cuenta.id, email }, accesoEnviado }
 }

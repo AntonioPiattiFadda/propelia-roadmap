@@ -5,15 +5,17 @@ import type { CrearMiembroDb, CrearMiembroInput } from './crearMiembro.ts'
 const VALIDO: CrearMiembroInput = { email: 'Nuevo@Example.com ', password: 'Test1234!', nombre: 'Juan', apellido: ' Pérez ', telefono: ' +34 661 28 68 71 ', rol: 'SDR' }
 
 type Fila = Parameters<CrearMiembroDb['crearFila']>[0]
+type Acceso = Parameters<CrearMiembroDb['mandarAcceso']>[0]
 
 function fakeDb(over: Partial<CrearMiembroDb> = {}) {
-  const llamadas = { filas: [] as Fila[], borradas: [] as string[], cuentas: [] as string[] }
+  const llamadas = { filas: [] as Fila[], borradas: [] as string[], cuentas: [] as string[], accesos: [] as Acceso[] }
   const db: CrearMiembroDb = {
     quienLlama: async () => ({ rol: 'SUPERADMIN', activo: true }),
     coloresUsados: async () => [],
     crearCuenta: async ({ email }) => { llamadas.cuentas.push(email); return { id: 'nuevo-id' } },
     crearFila: async fila => { llamadas.filas.push(fila); return {} },
     borrarCuenta: async id => { llamadas.borradas.push(id) },
+    mandarAcceso: async a => { llamadas.accesos.push(a) },
     ...over,
   }
   return { db, llamadas }
@@ -76,7 +78,7 @@ Deno.test('crearMiembro: un email con ñ o tildes se rechaza antes de crear nada
 Deno.test('crearMiembro: crea la cuenta y la fila, con caja en false', async () => {
   const { db, llamadas } = fakeDb({ coloresUsados: async () => [PALETA[0]] })
   const r = await crearMiembro('c', VALIDO, db)
-  assertEquals(r, { ok: true, user: { id: 'nuevo-id', email: 'nuevo@example.com' } })
+  assertEquals(r, { ok: true, user: { id: 'nuevo-id', email: 'nuevo@example.com' }, accesoEnviado: true })
   assertEquals(llamadas.cuentas, ['nuevo@example.com'])
   assertEquals(llamadas.filas, [{
     id: 'nuevo-id', email: 'nuevo@example.com', nombre: 'Juan', last_name: 'Pérez', phone: '+34 661 28 68 71', iniciales: 'JP',
@@ -95,4 +97,28 @@ Deno.test('crearMiembro: si la fila falla, borra la cuenta recién creada', asyn
   const r = await crearMiembro('c', VALIDO, db)
   assertEquals(r.ok ? 0 : r.status, 500)
   assertEquals(llamadas.borradas, ['nuevo-id'])
+})
+
+Deno.test('crearMiembro: le manda el mail de accesos a la cuenta recién creada', async () => {
+  const { db, llamadas } = fakeDb()
+  await crearMiembro('c', VALIDO, db)
+  assertEquals(llamadas.accesos, [{ userId: 'nuevo-id', callerId: 'c', nombre: 'Juan Pérez', email: 'nuevo@example.com', contrasena: 'Test1234!' }])
+})
+
+Deno.test('crearMiembro: si el mail falla, el miembro queda creado y lo dice', async () => {
+  const { db, llamadas } = fakeDb({ mandarAcceso: async () => { throw new Error('resend caído') } })
+  const r = await crearMiembro('c', VALIDO, db)
+  assertEquals(r, { ok: true, user: { id: 'nuevo-id', email: 'nuevo@example.com' }, accesoEnviado: false })
+  assertEquals(llamadas.borradas, [])
+})
+
+Deno.test('crearMiembro: sin cuenta o sin fila no manda ningún mail', async () => {
+  for (const over of [
+    { crearCuenta: async () => ({ error: 'boom' }) },
+    { crearFila: async () => ({ error: 'boom' }) },
+  ] as Partial<CrearMiembroDb>[]) {
+    const { db, llamadas } = fakeDb(over)
+    await crearMiembro('c', VALIDO, db)
+    assertEquals(llamadas.accesos, [])
+  }
 })
