@@ -31,7 +31,7 @@ import { useReasignar } from '../hooks/useLeadMutaciones'
 import { useObjetivos } from '../hooks/useObjetivos'
 import { useVisibleAgents } from '../hooks/useVisibleAgents'
 import { nombreDe, puedeMarcarImportante } from '../lib/permisos'
-import { hayEtapasEnElDashboard, leadsImportantes } from '../lib/resumen'
+import { hayEtapasEnElDashboard, leadsImportantes, type OrdenDeImportantes } from '../lib/resumen'
 import type { ReassignCandidate } from '../lib/reassignCollisions'
 import type { CrmLeadRow, CrmStage, CrmTask, Usuario } from '../types'
 import { BulkActionBar } from './BulkActionBar'
@@ -297,6 +297,14 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
   const leadIdsParaHoy = useMemo(() => idsConTareasParaHoy(tareas, hoy), [tareas, hoy])
   const proximas = useMemo(() => proximaTareaPorLead(tareas), [tareas])
   const leadIdsConTareas = useMemo(() => new Set(proximas.keys()), [proximas])
+  // Las tareas son de cada uno (4/11/2026, por pedido): la obligación de «Seguimiento» («Pendiente
+  // agendar tarea») y el Dashboard miran solo las del «yo» de pantalla (el tuyo, o el de «Ver como»;
+  // el Dashboard no se ve con «Ver como», así que ahí es siempre el tuyo). «Tareas», «Sin tareas»,
+  // «Tareas vencidas» y el orden siguen contando las de todos: dicen qué tiene el lead.
+  const proximasMias = useMemo(
+    () => proximaTareaPorLead(tareas.filter(t => t.assigned_to === agentes.perspectivaId)),
+    [tareas, agentes.perspectivaId])
+  const leadIdsConTareasMias = useMemo(() => new Set(proximasMias.keys()), [proximasMias])
   // Un solo «ahora» por pintada (ver LeadFilterContext). `dataUpdatedAt` va en las dependencias a
   // propósito: cada vez que llegan datos nuevos (realtime, mutación) se toma un «ahora» nuevo, así
   // un descartado que llega a su fecha de recontactar con la pantalla abierta aparece en el
@@ -305,9 +313,9 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
   const objetivosQ = useObjetivos(startOfWeekIso(hoy), filtros.objetivo !== null)
   const leadsDelObjetivo = filtros.objetivo ? objetivosQ.data?.leads[filtros.objetivo] : undefined
   const ctx = useMemo<LeadFilterContext>(
-    () => ({ overdueLeadIds, leadIdsParaHoy, leadIdsConTareas, etapas: cat.etapasPorId, now: Date.now(), leadsDelObjetivo }),
+    () => ({ overdueLeadIds, leadIdsParaHoy, leadIdsConTareas, leadIdsConTareasMias, etapas: cat.etapasPorId, now: Date.now(), leadsDelObjetivo }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [overdueLeadIds, leadIdsParaHoy, leadIdsConTareas, cat.etapasPorId, leadsQ.dataUpdatedAt, leadsDelObjetivo],
+    [overdueLeadIds, leadIdsParaHoy, leadIdsConTareas, leadIdsConTareasMias, cat.etapasPorId, leadsQ.dataUpdatedAt, leadsDelObjetivo],
   )
 
   const deCarteras = useMemo(
@@ -336,13 +344,14 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
   const headers = puedeMarcar ? conEstrella(headersBase) : headersBase
   // El resumen: los importantes de todas las carteras (la RLS de un SUPERADMIN los trae todos),
   // con estrella o en una etapa con «Dashboard: Sí». La tarea que muestra es solo la tuya
-  // (2/11/2026, por pedido): la de otro no se ve, y el lead se ordena como si no la tuviera.
-  const proximasMias = useMemo(
-    () => (resumen ? proximaTareaPorLead(tareas.filter(t => t.assigned_to === agentes.myId)) : proximas),
-    [resumen, tareas, agentes.myId, proximas])
+  // (2/11/2026, por pedido; `proximasMias`): la de otro no se ve, y el lead se ordena y se pinta en
+  // rojo como si no la tuviera (4/11/2026).
+  // Por estado de fábrica (3/11/2026, por pedido); vive acá y no en el resumen porque las flechas
+  // del dialog recorren los importantes en el orden en que se ven.
+  const [ordenImportantes, setOrdenImportantes] = useState<OrdenDeImportantes>('estado')
   const importantes = useMemo(
-    () => (resumen ? leadsImportantes(leadsQ.data ?? SIN_LEADS, proximasMias, cat.etapasPorId) : SIN_LEADS),
-    [resumen, leadsQ.data, proximasMias, cat.etapasPorId])
+    () => (resumen ? leadsImportantes(leadsQ.data ?? SIN_LEADS, proximasMias, cat.etapasPorId, ordenImportantes) : SIN_LEADS),
+    [resumen, leadsQ.data, proximasMias, cat.etapasPorId, ordenImportantes])
   // En columnas, las etapas elegidas en «Estado» dicen qué columnas se ven (agruparPorEtapa).
   const columnas = useMemo(
     () => (enColumnas ? agruparPorEtapa(visibles, cat.etapasPorId, filtros.stageFilter) : []),
@@ -527,9 +536,10 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
           <ResumenCrm
             leads={leadsQ.data ?? SIN_LEADS}
             importantes={importantes}
+            orden={ordenImportantes}
+            onOrden={setOrdenImportantes}
             hayEtapas={hayEtapasEnElDashboard(cat.etapasPorId.values())}
             proximas={proximasMias}
-            conAlgunaTarea={leadIdsConTareas}
             etapas={cat.etapasPorId}
             usuariosPorId={usuariosPorId}
             hoy={hoy}

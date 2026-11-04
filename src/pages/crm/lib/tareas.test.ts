@@ -136,6 +136,15 @@ describe('cambiosDeTarea', () => {
     const sinHora = { title: 'x', due_date: '2026-10-20' }
     expect(cambiosDeTarea(sinHora, { title: 'x', dueDate: '2026-10-22', dueTime: null })).toEqual({ due_date: '2026-10-22' })
   })
+  it('reasignarla manda solo el dueño nuevo (4/11/2026)', () => {
+    const deMarc = { ...antes, assigned_to: 'marc' }
+    expect(cambiosDeTarea(deMarc, { title: 'Llamar a Marc', dueDate: '2026-10-20', dueTime: '10:30', assignedTo: 'ana' }))
+      .toEqual({ assigned_to: 'ana' })
+    expect(cambiosDeTarea(deMarc, { title: 'Llamar a Marc', dueDate: '2026-10-20', dueTime: '10:30', assignedTo: 'marc' })).toEqual({})
+  })
+  it('sin dueño elegido no lo toca', () => {
+    expect(cambiosDeTarea({ ...antes, assigned_to: 'marc' }, { title: 'Llamar a Marc', dueDate: '2026-10-20', dueTime: '10:30' })).toEqual({})
+  })
 })
 
 describe('ordenarPorEstado', () => {

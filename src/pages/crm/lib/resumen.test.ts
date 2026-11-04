@@ -3,6 +3,7 @@ import type { CrmLeadRow, CrmMeeting, CrmStage } from '../types'
 import {
   RESUMEN_PARAM, escribirResumen, fijarResumenEnLaUrl, hayEtapasEnElDashboard,
   eventosDeGoogleSueltos, invitacionesSinAceptar, leadsImportantes, muestraResumen, reunionesMias, reunionesPorDia,
+  seguimientoDelLead,
 } from './resumen'
 import type { ProximaTarea } from './tareas'
 
@@ -83,7 +84,27 @@ describe('leadsImportantes', () => {
       lead('vencida'),
     ]
     const proximas = new Map([['manana', tarea('2026-10-24')], ['vencida', tarea('2026-10-01')], ['descartado', tarea('2026-09-01')]])
-    expect(leadsImportantes(leads, proximas, etapas).map(l => l.id)).toEqual(['vencida', 'manana', 'sin-tarea', 'descartado'])
+    expect(leadsImportantes(leads, proximas, etapas, 'tarea').map(l => l.id)).toEqual(['vencida', 'manana', 'sin-tarea', 'descartado'])
+  })
+  describe('por estado (el de fábrica)', () => {
+    const embudo = new Map([
+      ['nuevo', etapa('nuevo', { position: 1 })],
+      ['demo', etapa('demo', { position: 3 })],
+      ['contacto', etapa('contacto', { position: 2 })],
+      ['desc', etapa('desc', { value: 'DISCARDED', is_out_of_funnel: true, position: 0 })],
+    ])
+    it('las etapas anteriores arriba y las posteriores abajo; descartados al final aunque vayan primero', () => {
+      const leads = [
+        lead('d', { funnel_stage_id: 'demo' }), lead('x', { funnel_stage_id: 'desc' }),
+        lead('n', { funnel_stage_id: 'nuevo' }), lead('c', { funnel_stage_id: 'contacto' }),
+      ]
+      expect(leadsImportantes(leads, new Map(), embudo).map(l => l.id)).toEqual(['n', 'c', 'd', 'x'])
+    })
+    it('adentro de la misma etapa, por la tarea (vencida arriba, sin tarea abajo) y después por nombre', () => {
+      const leads = [lead('sin'), lead('b-tarde'), lead('a-pronto'), lead('aa-sin')]
+      const proximas = new Map([['b-tarde', tarea('2026-10-24')], ['a-pronto', tarea('2026-10-01')]])
+      expect(leadsImportantes(leads, proximas, embudo).map(l => l.id)).toEqual(['a-pronto', 'b-tarde', 'aa-sin', 'sin'])
+    })
   })
   it('a igualdad, por nombre', () => {
     const leads = [lead('Zeta'), lead('alfa')]
@@ -106,6 +127,23 @@ describe('leadsImportantes', () => {
     it('los eliminados no van', () => {
       expect(leadsImportantes([lead('a', { funnel_stage_id: 'demo', deleted_at: '2026-10-22T00:00:00Z' })], new Map(), conEtapas)).toEqual([])
     })
+  })
+})
+
+describe('seguimientoDelLead', () => {
+  const hoy = '2026-10-23'
+  const t = (due_date: string | null) => tarea(due_date)
+  // `proxima` es la próxima tarea MÍA: sin ninguna mía es «sin tarea», aunque otro tenga (4/11/2026).
+  it('sin tarea, vencida, hoy o al día', () => {
+    expect(seguimientoDelLead({ proxima: undefined, descartado: false, hoy })).toBe('sin-tarea')
+    expect(seguimientoDelLead({ proxima: t('2026-10-20'), descartado: false, hoy })).toBe('vencida')
+    expect(seguimientoDelLead({ proxima: t(hoy), descartado: false, hoy })).toBe('hoy')
+    expect(seguimientoDelLead({ proxima: t('2026-10-30'), descartado: false, hoy })).toBe('al-dia')
+    expect(seguimientoDelLead({ proxima: t(null), descartado: false, hoy })).toBe('al-dia')
+  })
+  it('el descartado no se sigue, tenga o no tarea', () => {
+    expect(seguimientoDelLead({ proxima: undefined, descartado: true, hoy })).toBe('descartado')
+    expect(seguimientoDelLead({ proxima: t('2026-10-01'), descartado: true, hoy })).toBe('descartado')
   })
 })
 

@@ -13,7 +13,7 @@ const ETAPAS = new Map<string, CrmStage>([
   ['descartado', etapa('descartado', { value: 'DISCARDED', is_out_of_funnel: true, management_tolerance_hours: null })],
 ])
 const ctx = (over: Partial<LeadFilterContext> = {}): LeadFilterContext =>
-  ({ overdueLeadIds: new Set(), leadIdsParaHoy: new Set(), leadIdsConTareas: new Set(), etapas: ETAPAS, now: NOW, ...over })
+  ({ overdueLeadIds: new Set(), leadIdsParaHoy: new Set(), leadIdsConTareas: new Set(), leadIdsConTareasMias: new Set(), etapas: ETAPAS, now: NOW, ...over })
 const cliente = (over: Partial<CrmClient> = {}): CrmClient => ({
   id: 'c', first_name: null, last_name: null, company_name: null, email: null, phone: null,
   alternative_phone_1: null, alternative_phone_1_note: null, alternative_phone_2: null, alternative_phone_2_note: null,
@@ -133,10 +133,15 @@ describe('pendiente agendar tarea', () => {
   const conTarea = lead('c', { funnel_stage_id: 'seguimiento' })
   const primerContacto = lead('p', { funnel_stage_id: 'primer' })
   const todos = [sinTarea, conTarea, primerContacto, lead('n')]
-  const c = ctx({ etapas, leadIdsConTareas: new Set(['c']) })
+  // `s` tiene tareas, pero de otro: para la obligación cuentan solo las mías (4/11/2026).
+  const c = ctx({ etapas, leadIdsConTareas: new Set(['c', 's']), leadIdsConTareasMias: new Set(['c']) })
 
-  it('deja solo los de seguimiento sin tarea pendiente', () => {
+  it('deja solo los de seguimiento sin tarea pendiente mía', () => {
     expect(filterLeads(todos, f({ pendienteAgendar: true }), c).map(l => l.id)).toEqual(['s'])
+  })
+  it('una tarea de otro no lo saca: la obligación es de cada uno', () => {
+    const soloDeOtro = ctx({ etapas, leadIdsConTareas: new Set(['c']), leadIdsConTareasMias: new Set() })
+    expect(filterLeads(todos, f({ pendienteAgendar: true }), soloDeOtro).map(l => l.id)).toEqual(['s', 'c'])
   })
   it('apagado no cambia nada', () => {
     expect(filterLeads(todos, f({}), c)).toHaveLength(4)

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { CalendarPlus, Pencil, Plus } from 'lucide-react'
+import { AvatarUsuario } from '@/components/AvatarUsuario'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
@@ -8,12 +9,14 @@ import { TaskDueDatePicker } from '@/components/tasks/TaskDueDatePicker'
 import { fmtDueLabel, localTodayIso } from '@/lib/calendarDate'
 import { cn } from '@/lib/utils'
 import { pedirPermisoDeAvisos } from '../hooks/useAlarmasDeTareas'
+import { useCarteras } from '../hooks/useCarteras'
 import { useMutacionDelDetalle } from '../hooks/useLeadMutaciones'
 import { horaCorta, horaEnVenezuela, opcionesConLaEscrita, rotuloConHora, textoVenezuela } from '../lib/alarmas'
+import { quienesVenLaCartera } from '../lib/permisos'
 import { cambiosDeTarea, type CambiosDeTarea } from '../lib/tareas'
 import { opcionesDeVencimiento } from '../lib/vencimientos'
 import { actualizarTarea, crearTarea } from '../service/crm.service'
-import type { CrmTask, LeadDetalle } from '../types'
+import type { CrmTask, LeadDetalle, Usuario } from '../types'
 import { VentanaFlotante } from './VentanaFlotante'
 
 /* Las tareas del lead, compactas, en la columna del perfil. Fue una pestaña entera
@@ -76,16 +79,18 @@ export function ChipsDeVencimiento({ value, onChange, compacto = false }: {
   )
 }
 
-type CamposTarea = { title: string; dueDate: string | null; dueTime: string }
+type CamposTarea = { title: string; dueDate: string | null; dueTime: string; assignedTo?: string }
 
 /** Crear tarea en la ventana flotante (`VentanaFlotante`): se escribe mirando el lead. Enter crea.
  *  Con `editando` es la misma ventana, «Editar tarea», precargada con la tarea (20/10/2026). */
-function NewTaskSheet({ open, onOpenChange, onGuardar, isPending, editando }: {
+function NewTaskSheet({ open, onOpenChange, onGuardar, isPending, editando, asignables }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onGuardar: (title: string, dueDate: string | null, dueTime: string | null) => void
+  onGuardar: (title: string, dueDate: string | null, dueTime: string | null, assignedTo?: string) => void
   isPending: boolean
   editando?: CamposTarea
+  /** Solo al editar: a quién se le puede pasar (`quienesVenLaCartera`). Una nueva es siempre tuya. */
+  asignables?: Usuario[]
 }) {
   const today = localTodayIso()
   const inicial = editando ?? { title: '', dueDate: today, dueTime: '' }
@@ -94,7 +99,8 @@ function NewTaskSheet({ open, onOpenChange, onGuardar, isPending, editando }: {
   // La hora es opcional (17/10/2026, por pedido): vacía es la tarea de todo el día de siempre.
   // Con hora, suena una alarma 5 minutos antes (`useAlarmasDeTareas`).
   const [dueTime, setDueTime] = useState(inicial.dueTime)
-  const reset = () => { setTitle(inicial.title); setDueDate(inicial.dueDate); setDueTime(inicial.dueTime) }
+  const [assignedTo, setAssignedTo] = useState(inicial.assignedTo)
+  const reset = () => { setTitle(inicial.title); setDueDate(inicial.dueDate); setDueTime(inicial.dueTime); setAssignedTo(inicial.assignedTo) }
   const cerrar = (next: boolean) => { onOpenChange(next); if (!next) reset() }
   const listo = title.trim() !== '' && !isPending
   // Sin día la hora no significa nada: el campo se apaga y lo escrito no se manda.
@@ -110,7 +116,7 @@ function NewTaskSheet({ open, onOpenChange, onGuardar, isPending, editando }: {
           if (!listo) return
           // Es el gesto del usuario: fuera de un clic el navegador no deja pedir el permiso.
           if (hora) pedirPermisoDeAvisos()
-          onGuardar(title.trim(), dueDate, hora)
+          onGuardar(title.trim(), dueDate, hora, assignedTo)
           cerrar(false)
         }}>
         <Input autoFocus aria-label="Qué hay que hacer" placeholder="Qué hay que hacer…" value={title}
@@ -154,6 +160,25 @@ function NewTaskSheet({ open, onOpenChange, onGuardar, isPending, editando }: {
             <span className="text-[12px] text-(--fg-muted)">En Venezuela: {textoVenezuela(veDeLaElegida)}</span>
           )}
         </div>
+        {/* Reasignarla (4/11/2026, por pedido): a alguien que ve la cartera del lead. */}
+        {asignables && assignedTo && (
+          <div className="flex flex-col gap-2">
+            <span className="text-[12px] font-medium text-(--fg-2)">Asignada a</span>
+            <Select value={assignedTo} onValueChange={setAssignedTo}>
+              <SelectTrigger aria-label="Asignada a" className="h-9 w-64 text-base md:text-[13.5px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="max-h-72">
+                {asignables.map(u => (
+                  <SelectItem key={u.id} value={u.id}>
+                    <AvatarUsuario usuario={u} titulo={u.nombre} className="size-5 text-[9px]" />
+                    {u.nombre}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => cerrar(false)}>Cancelar</Button>
           <Button type="submit" disabled={!listo}>{editando ? 'Guardar' : 'Crear tarea'}</Button>
@@ -163,8 +188,12 @@ function NewTaskSheet({ open, onOpenChange, onGuardar, isPending, editando }: {
   )
 }
 
-function FilaTarea({ task, today, onToggle, onEditar, disabled }: {
-  task: CrmTask; today: string; onToggle: (t: CrmTask) => void
+function FilaTarea({ task, duena, esMia, today, onToggle, onEditar, disabled }: {
+  task: CrmTask
+  /** De quién es (`assigned_to`): todos ven todas las tareas del lead, cada una con su dueño. */
+  duena: Usuario | undefined
+  esMia: boolean
+  today: string; onToggle: (t: CrmTask) => void
   /** Sin permiso de escritura no se ofrece el lápiz. */
   onEditar?: (t: CrmTask) => void
   disabled: boolean
@@ -197,6 +226,10 @@ function FilaTarea({ task, today, onToggle, onEditar, disabled }: {
         vencida ? '[color:var(--danger-strong)]' : 'text-(--fg-muted)')}>
         {rotuloVencimiento(task, today)}
       </span>
+      {/* De quién es (4/11/2026, por pedido): las tareas son de cada uno. El avatar de siempre, chico,
+          con el nombre en el `title`. */}
+      <AvatarUsuario usuario={duena} className="size-[18px] text-[8.5px]"
+        titulo={duena ? `Tarea de ${duena.nombre}${esMia ? ' (vos)' : ''}` : 'Tarea de alguien que ya no está'} />
       {/* Editar título, día y hora (20/10/2026, por pedido): aparece con el hover, como el tacho de la actividad. */}
       {onEditar && (
         <button type="button" onClick={() => onEditar(task)} aria-label={`Editar "${task.title}"`} title="Editar tarea"
@@ -212,7 +245,7 @@ function FilaTarea({ task, today, onToggle, onEditar, disabled }: {
    nueva tarea se controla desde afuera: también la abre el «+ Tarea» del encabezado. */
 export function TareasDelLead({ leadId, responsableId, puedeEscribir, puedeAgendar, etapa, tareas, cargando, creando, onCreando }: {
   leadId: string
-  /** Una tarea nueva es del responsable del lead, no de quien la anota: es su trabajo. */
+  /** La cartera del lead: a quién se le puede pasar una tarea sale de quién la ve. */
   responsableId: string
   puedeEscribir: boolean
   /** Si la etapa del lead deja agendar tareas (`permiteAgendarTarea`, 23/10/2026). Con false no
@@ -227,10 +260,16 @@ export function TareasDelLead({ leadId, responsableId, puedeEscribir, puedeAgend
 }) {
   const today = localTodayIso()
   const ofreceCrear = puedeEscribir && puedeAgendar
+  // `myId` es la sesión de verdad y no el «yo» de «Ver como»: lo que se escribe es siempre tuyo.
+  const { myId, usuarios, accesos } = useCarteras()
+  const usuariosPorId = new Map(usuarios.map(u => [u.id, u]))
 
-  const agregar = useMutacionDelDetalle(leadId, (v: { title: string; dueDate: string | null; dueTime: string | null }) =>
-    crearTarea({ lead_id: leadId, title: v.title, due_date: v.dueDate, due_time: v.dueTime, assigned_to: responsableId }),
-  { exito: 'Tarea creada' })
+  // Una tarea nueva es de quien la anota (4/11/2026, por pedido; hasta ese día era del responsable
+  // del lead). Editarla no le cambia el dueño. Las que crea el sistema siguen como estaban.
+  const agregar = useMutacionDelDetalle(leadId, (v: { title: string; dueDate: string | null; dueTime: string | null }) => {
+    if (!myId) throw new Error('Todavía no se sabe quién sos: probá de nuevo en un momento.')
+    return crearTarea({ lead_id: leadId, title: v.title, due_date: v.dueDate, due_time: v.dueTime, assigned_to: myId })
+  }, { exito: 'Tarea creada' })
   const alternar = useMutacionDelDetalle(leadId,
     (t: CrmTask) => actualizarTarea(t.id, { completed: !t.completed, completed_at: t.completed ? null : new Date().toISOString() }),
     { optimista: (d: LeadDetalle, t: CrmTask) => ({ ...d, tasks: d.tasks.map(x => x.id === t.id ? { ...x, completed: !t.completed } : x) }) },
@@ -245,8 +284,8 @@ export function TareasDelLead({ leadId, responsableId, puedeEscribir, puedeAgend
 
   const pendientes = tareas.filter(t => !t.completed).sort(porVencimiento)
   const alternarTarea = (t: CrmTask) => alternar.mutate(t)
-  const guardarEdicion = (t: CrmTask, title: string, dueDate: string | null, dueTime: string | null) => {
-    const cambios = cambiosDeTarea(t, { title, dueDate, dueTime })
+  const guardarEdicion = (t: CrmTask, title: string, dueDate: string | null, dueTime: string | null, assignedTo?: string) => {
+    const cambios = cambiosDeTarea(t, { title, dueDate, dueTime, assignedTo })
     if (Object.keys(cambios).length > 0) editar.mutate({ id: t.id, cambios })
   }
 
@@ -270,7 +309,8 @@ export function TareasDelLead({ leadId, responsableId, puedeEscribir, puedeAgend
         )
       ) : (
         <ul className="flex flex-col">
-          {pendientes.map(t => <FilaTarea key={t.id} task={t} today={today} onToggle={alternarTarea}
+          {pendientes.map(t => <FilaTarea key={t.id} task={t} duena={usuariosPorId.get(t.assigned_to)} esMia={t.assigned_to === myId}
+            today={today} onToggle={alternarTarea}
             onEditar={puedeEscribir ? setEditando : undefined} disabled={!puedeEscribir} />)}
         </ul>
       )}
@@ -301,8 +341,9 @@ export function TareasDelLead({ leadId, responsableId, puedeEscribir, puedeAgend
       {editando && (
         <NewTaskSheet key={editando.id} open onOpenChange={abierto => { if (!abierto) setEditando(null) }}
           isPending={editar.isPending}
-          editando={{ title: editando.title, dueDate: editando.due_date?.slice(0, 10) ?? null, dueTime: horaCorta(editando.due_time) ?? '' }}
-          onGuardar={(title, dueDate, dueTime) => guardarEdicion(editando, title, dueDate, dueTime)} />
+          editando={{ title: editando.title, dueDate: editando.due_date?.slice(0, 10) ?? null, dueTime: horaCorta(editando.due_time) ?? '', assignedTo: editando.assigned_to }}
+          asignables={quienesVenLaCartera(responsableId, usuarios, accesos, editando.assigned_to)}
+          onGuardar={(title, dueDate, dueTime, assignedTo) => guardarEdicion(editando, title, dueDate, dueTime, assignedTo)} />
       )}
     </div>
   )

@@ -67,6 +67,17 @@ export function comoValido(yo: YoPermisos, comoId: string | null, usuarios: Usua
   return puedeVerComo(yo, usuarios, accesos).find(x => x.id === comoId) ?? null
 }
 
+/** Quiénes ven la cartera de `owner` (el otro lado de `crm_puede`): el dueño, los SUPERADMIN y
+ *  quien tiene una fila en `crm_data_access` sobre ella. Solo activos, por nombre. Es a quién se
+ *  le puede pasar una tarea de un lead de esa cartera (4/11/2026). Ojo: un SDR solo lee sus propias
+ *  filas de `crm_data_access`, así que a él le salen el dueño, los SUPERADMIN y él mismo. `actual`
+ *  (el dueño de hoy) se queda aunque no califique, como `elegibles()`: si no, no se vería elegido. */
+export function quienesVenLaCartera(owner: string, usuarios: Usuario[], accesos: readonly Acceso[], actual?: string): Usuario[] {
+  const ven = (x: Usuario) => x.activo && (x.id === owner || x.rol === 'SUPERADMIN'
+    || accesos.some(a => a.viewer_id === x.id && a.subject_id === owner))
+  return usuarios.filter(x => ven(x) || x.id === actual).sort(porNombre)
+}
+
 export function nombreDe(usuarios: Usuario[], id: string | null): string {
   return (id && usuarios.find(x => x.id === id)?.nombre) || 'Sin responsable'
 }

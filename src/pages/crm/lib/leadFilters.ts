@@ -26,8 +26,8 @@ export type LeadFilterState = {
   sinTareas: boolean
   /** Solo los descartados que «podrían calificar» y ya llegaron a su fecha de volver a llamar. */
   paraRecontactar: boolean
-  /** Solo los leads en una etapa de «Seguimiento» (`por_tarea`) sin ninguna tarea pendiente:
-   *  hay que agendarles la próxima (20/10/2026). */
+  /** Solo los leads en una etapa de «Seguimiento» (`por_tarea`) sin ninguna tarea pendiente
+   *  de quien mira: hay que agendarles la próxima (20/10/2026; solo las tuyas desde el 4/11/2026). */
   pendienteAgendar: boolean
   /** Solo los leads con alguna tarea pendiente para hoy o vencida (23/10/2026). */
   paraHoy: boolean
@@ -52,6 +52,9 @@ export type LeadFilterContext = {
   /** Los leads con alguna tarea pendiente para hoy o vencida (`idsConTareasParaHoy`). */
   leadIdsParaHoy: ReadonlySet<string>
   leadIdsConTareas: ReadonlySet<string>
+  /** Los leads con alguna tarea pendiente de quien mira (`assigned_to` = el «yo» de pantalla). Es
+   *  lo que mira «Pendiente agendar tarea»: la obligación es de cada uno (4/11/2026). */
+  leadIdsConTareasMias: ReadonlySet<string>
   etapas: ReadonlyMap<string, CrmStage>
   /** Un solo «ahora» por pintada: si cada fila leyera su propio Date.now(), dos leads idénticos
    *  podrían caer de lados distintos del día de recontactar. */
@@ -63,13 +66,14 @@ export type LeadFilterContext = {
 
 export type FilterDimension = 'overdue' | 'tareas' | 'stage' | 'recontactar' | 'objetivo' | 'agendar' | 'hoy'
 
-/** En una etapa de «Seguimiento» y sin ninguna tarea pendiente: nadie va a volver a llamarlo.
+/** En una etapa de «Seguimiento» y sin ninguna tarea pendiente tuya: vos no lo vas a volver a
+ *  llamar. Una tarea de otro no te saca la obligación (4/11/2026, por pedido).
  *  Si la etapa no deja agendar tareas, no: el chip pediría algo imposible. */
-export function esPendienteAgendar(l: CrmLeadRow, ctx: Pick<LeadFilterContext, 'etapas' | 'leadIdsConTareas'>): boolean {
+export function esPendienteAgendar(l: CrmLeadRow, ctx: Pick<LeadFilterContext, 'etapas' | 'leadIdsConTareasMias'>): boolean {
   const e = etapaDelLead(l, ctx.etapas)
   return !!e && !e.is_out_of_funnel && gestionDeEtapa(e.management_type) === 'por_tarea'
     && permiteAgendarTarea(e)
-    && !ctx.leadIdsConTareas.has(l.id)
+    && !ctx.leadIdsConTareasMias.has(l.id)
 }
 
 export function esDescartado(l: CrmLeadRow, etapas: ReadonlyMap<string, CrmStage>): boolean {

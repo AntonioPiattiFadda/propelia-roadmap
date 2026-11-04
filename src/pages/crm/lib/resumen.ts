@@ -6,7 +6,7 @@ import { nombreDelLead } from './clientData'
 import { etapaDelLead } from './effectiveStage'
 import { esDescartado } from './leadFilters'
 import { COMO_PARAM, LEAD_FILTER_PARAMS_WITH_QUERY, LEAD_PARAM, OWNERS_PARAM, VISTA_PARAM } from './leadFilterParams'
-import type { ProximaTarea } from './tareas'
+import { estaVencida, tocaHoyOVencida, type ProximaTarea } from './tareas'
 
 /* El resumen del CRM (23/10/2026, por pedido): lo primero que ve un SUPERADMIN al entrar a /crm.
    Los leads marcados como importantes (de todas las carteras) y la agenda de los próximos días. Un SDR no lo ve nunca: sigue entrando a la
@@ -51,20 +51,46 @@ export function fijarResumenEnLaUrl(params: URLSearchParams, quien: QuienMiraRes
   return escribirResumen(params, muestraResumen(params, quien))
 }
 
+/** Cómo se ordenan los importantes: por etapa del funnel (el de fábrica, 3/11/2026, por pedido) o
+ *  por la próxima tarea. */
+export type OrdenDeImportantes = 'estado' | 'tarea'
+
 /**
  * Los importantes: los de la estrella y los de las etapas con «Dashboard: Sí» (23/10/2026, por
- * pedido: son la misma caja, no dos). Sin las columnas en la base (undefined) no hay ninguno. Primero los que tienen la tarea más próxima (lo vencido arriba), después los sin
- * tarea, y los descartados al final; a igualdad, por nombre.
+ * pedido: son la misma caja, no dos). Sin las columnas en la base (undefined) no hay ninguno.
+ * Por estado: las etapas anteriores del funnel arriba (`position`), los sin etapa después y los
+ * descartados al final; adentro de cada etapa, por tarea. Por tarea: primero los que tienen la
+ * más próxima (lo vencido arriba), después los sin tarea, y los descartados al final. A igualdad,
+ * por nombre.
  */
 export function leadsImportantes(
   leads: readonly CrmLeadRow[], proximas: ReadonlyMap<string, ProximaTarea>, etapas: ReadonlyMap<string, CrmStage>,
+  orden: OrdenDeImportantes = 'estado',
 ): CrmLeadRow[] {
   const rango = (l: CrmLeadRow) => (esDescartado(l, etapas) ? 2 : proximas.has(l.id) ? 0 : 1)
   const vence = (l: CrmLeadRow) => proximas.get(l.id)?.tarea.due_date ?? '9999-12-31'
+  const tramo = (l: CrmLeadRow) => (esDescartado(l, etapas) ? 2 : etapaDelLead(l, etapas) ? 0 : 1)
+  const paso = (l: CrmLeadRow) => etapaDelLead(l, etapas)?.position ?? 0
+  const porEstado = (a: CrmLeadRow, b: CrmLeadRow) => (orden === 'estado' ? tramo(a) - tramo(b) || paso(a) - paso(b) : 0)
   return leads
     .filter(l => l.deleted_at == null && (l.importante === true || enElDashboard(etapaDelLead(l, etapas))))
-    .sort((a, b) => rango(a) - rango(b) || vence(a).localeCompare(vence(b))
+    .sort((a, b) => porEstado(a, b) || rango(a) - rango(b) || vence(a).localeCompare(vence(b))
       || nombreDelLead(a.client).localeCompare(nombreDelLead(b.client), 'es', { sensitivity: 'base' }))
+}
+
+/** En qué anda el seguimiento de un importante: la columna «Seguimiento» del Dashboard. */
+export type Seguimiento = 'sin-tarea' | 'vencida' | 'hoy' | 'al-dia' | 'descartado'
+
+/** `proxima` es tu próxima tarea: sin ninguna tuya es «sin tarea», aunque otro tenga las suyas
+ *  (4/11/2026, por pedido: las tareas son de cada uno; hasta ese día eso era «De otro»). El
+ *  descartado no se sigue. */
+export function seguimientoDelLead({ proxima, descartado, hoy }: {
+  proxima: ProximaTarea | undefined; descartado: boolean; hoy: string
+}): Seguimiento {
+  if (descartado) return 'descartado'
+  if (!proxima) return 'sin-tarea'
+  if (estaVencida(proxima.tarea, hoy)) return 'vencida'
+  return tocaHoyOVencida(proxima.tarea, hoy) ? 'hoy' : 'al-dia'
 }
 
 /** Si la etapa se ve en el Dashboard (`crm_funnel_stages.show_in_dashboard`). Sin la columna en la

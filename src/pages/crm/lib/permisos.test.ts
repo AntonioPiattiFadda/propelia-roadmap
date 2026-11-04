@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Usuario } from '../types'
 import {
-  carterasConEscritura, carterasVisibles, comoValido, esSuperadmin, nivelSobre, nombreDe, puedeEscribir, puedeLeer, puedeMarcarImportante, puedeVerComo,
+  carterasConEscritura, carterasVisibles, comoValido, esSuperadmin, nivelSobre, nombreDe, puedeEscribir, quienesVenLaCartera, puedeLeer, puedeMarcarImportante, puedeVerComo,
   type Acceso,
 } from './permisos'
 
@@ -98,5 +98,22 @@ describe('nombreDe', () => {
     expect(nombreDe(USUARIOS, 'ana')).toBe('ana')
     expect(nombreDe(USUARIOS, 'nadie')).toBe('Sin responsable')
     expect(nombreDe(USUARIOS, null)).toBe('Sin responsable')
+  })
+})
+
+describe('quienesVenLaCartera (a quién se le puede pasar una tarea)', () => {
+  const CARLA = u('carla')
+  const TODOS = [...USUARIOS, CARLA]
+  it('el dueño, los SUPERADMIN y quien tiene fila sobre esa cartera; activos y por nombre', () => {
+    const acc: Acceso[] = [
+      { viewer_id: 'sdr', subject_id: 'ana', access: 'read' }, { viewer_id: 'carla', subject_id: 'sdr', access: 'write' },
+    ]
+    expect(quienesVenLaCartera('ana', TODOS, acc).map(x => x.id)).toEqual(['admin', 'ana', 'sdr'])
+  })
+  it('un inactivo no, aunque sea el dueño', () => {
+    expect(quienesVenLaCartera('beto', TODOS, []).map(x => x.id)).toEqual(['admin'])
+  })
+  it('el dueño actual de la tarea se queda en la lista aunque ya no califique, para que se vea elegido', () => {
+    expect(quienesVenLaCartera('ana', TODOS, [], 'beto').map(x => x.id)).toEqual(['admin', 'ana', 'beto'])
   })
 })

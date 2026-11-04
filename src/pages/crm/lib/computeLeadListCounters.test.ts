@@ -13,6 +13,7 @@ const ctx: LeadFilterContext = {
   overdueLeadIds: new Set(['p']),
   leadIdsParaHoy: new Set(['g', 'p', 'd']),
   leadIdsConTareas: new Set(['g', 'p', 'd']),
+  leadIdsConTareasMias: new Set(['g', 'p', 'd']),
   etapas: new Map([['n', etapa('n')], ['d', etapa('d', { value: 'DISCARDED', is_out_of_funnel: true })]]),
   now: NOW,
 }
