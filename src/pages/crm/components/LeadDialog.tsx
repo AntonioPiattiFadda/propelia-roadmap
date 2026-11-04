@@ -14,7 +14,7 @@ import { useLeadDetalle } from '../hooks/useLeadDetalle'
 import { useActualizarCliente, useActualizarLead } from '../hooks/useLeadMutaciones'
 import {
   contactosConDecisor, copiasDelTelefonoDeIdealista, esTelefonoDeIdealista, esTelefonoDeOficina, ETIQUETA_OFICINA, inicialesDe,
- decisoresQueSeMarcaron, nombreDelLead, telefonosDelCliente, type CampoDecisor, type ClientData } from '../lib/clientData'
+ decisoresQueSeMarcaron, emailsParecidos, nombreDelLead, telefonosDelCliente, type CampoDecisor, type ClientData } from '../lib/clientData'
 import { toIsoDate } from '@/lib/calendarDate'
 import { decisorContactado } from '../lib/actividad'
 import { etapaDelLead } from '../lib/effectiveStage'
@@ -347,6 +347,25 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
   const datosArriba = [...telefonosSueltos, ...emailsSueltos].filter(d => datosFijados.includes(d.clave))
   // El próximo que se agrega: el principal primero, después los alternativos en orden.
   const libre = CONTACTOS.find(c => !contactos.includes(c))
+  /* Sin casillero vacío, se reusa el de un alternativo que solo tiene un email repetido (o mal
+     tipeado) de otro contacto (4/11/2026, por pedido): sin esto «Agregar contacto» desaparecía y
+     «Personas» decía «Sin contactos.» sin forma de cargar a nadie. El principal nunca: su email es
+     el de la inmobiliaria. */
+  const emailRepetido = (c: Contacto) => c !== 'principal' && esSoloEmail(c)
+    && CONTACTOS.some(o => o !== c && emailsParecidos(lead.client?.[camposDe(c).email], lead.client?.[camposDe(o).email]))
+  const reusable = libre ? undefined : [...contactos].reverse().find(emailRepetido)
+  const casilleroNuevo = libre ?? reusable
+  const SIN_CASILLERO = 'No hay lugar para otro contacto: los tres casilleros están ocupados. Quitá uno o borrá un email repetido.'
+  const agregarNuevo = (fijado: boolean) => {
+    if (!casilleroNuevo) return
+    if (casilleroNuevo === reusable && lead.client) {
+      const col = camposDe(reusable).email
+      editando.current = false
+      setBorrador(b => ({ ...b, [col]: '' }))
+      actualizarCliente.mutate({ clientId: lead.client.id, patch: { [col]: null } as ClientePatch })
+    }
+    agregar(casilleroNuevo, fijado)
+  }
   /* El contacto abierto en la ventanita de edición. Agregar uno lo abre ahí: la fila no dibuja
      campos vacíos, así que un contacto recién nacido no tendría dónde escribirse. */
   const [contactoEnEditor, setContactoEnEditor] = useState<Contacto | null>(null)
@@ -679,9 +698,10 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
       {personas.length > 0
         ? <ul className={LISTA_CONTACTOS}>{personas.map(c => filaContacto(c))}</ul>
         : <p className="py-1 text-[12.5px] text-(--fg-muted)">Sin contactos.</p>}
-      {escribe && libre && (
-        <button type="button" onClick={() => agregar(libre, false)}
-          className="mt-1.5 flex cursor-pointer items-center gap-1.5 self-start rounded-md px-2 py-1 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground">
+      {escribe && (
+        <button type="button" onClick={() => agregarNuevo(false)} disabled={!casilleroNuevo}
+          title={casilleroNuevo ? undefined : SIN_CASILLERO}
+          className="mt-1.5 flex cursor-pointer items-center gap-1.5 self-start rounded-md px-2 py-1 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent">
           <UserPlus size={14} />Agregar contacto
         </button>
       )}
@@ -812,9 +832,10 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
               )}
               {/* Sin nadie fijado, en vez de una ficha vacía, la puerta para cargar uno: nace fijado,
                   que es lo que se vino a hacer acá. */}
-              {arriba.length === 0 && escribe && libre && (
-                <button type="button" onClick={() => agregar(libre, true)}
-                  className="mt-1.5 flex cursor-pointer items-center gap-1.5 self-start rounded-md px-2 py-1 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground">
+              {arriba.length === 0 && escribe && (
+                <button type="button" onClick={() => agregarNuevo(true)} disabled={!casilleroNuevo}
+                  title={casilleroNuevo ? undefined : SIN_CASILLERO}
+                  className="mt-1.5 flex cursor-pointer items-center gap-1.5 self-start rounded-md px-2 py-1 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent">
                   <UserPlus size={14} />Agregar contacto
                 </button>
               )}

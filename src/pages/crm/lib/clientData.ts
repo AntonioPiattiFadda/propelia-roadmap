@@ -373,3 +373,33 @@ export function copiasDelTelefonoDeIdealista(client: ClienteConCopias | null | u
 export function nombreDelLead(client: ClienteNombrable | null | undefined): string {
   return client?.company_name?.trim() || contactoDelCliente(client) || client?.email || client?.phone || 'Sin nombre'
 }
+
+/* Distancia de edición entre dos textos cortos (dominios de email). */
+function distancia(a: string, b: string): number {
+  let fila = Array.from({ length: b.length + 1 }, (_, j) => j)
+  for (let i = 1; i <= a.length; i++) {
+    const nueva = [i]
+    for (let j = 1; j <= b.length; j++) {
+      nueva[j] = Math.min(fila[j] + 1, nueva[j - 1] + 1, fila[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1))
+    }
+    fila = nueva
+  }
+  return fila[b.length]
+}
+
+/**
+ * Dos emails que son el mismo, o el mismo mal tipeado (4/11/2026, por pedido): misma parte antes
+ * de la @ y el dominio, sin la terminación, a dos letras o menos («info@cuatrocases» y
+ * «info@quatrecases.com»). Sirve para reusar el casillero de un contacto que solo tiene un email
+ * repetido: «Agregar contacto» no desaparece por un email cargado dos veces.
+ */
+export function emailsParecidos(a: string | null | undefined, b: string | null | undefined): boolean {
+  const partes = (e: string | null | undefined) => {
+    const [local, dominio] = (e ?? '').trim().toLowerCase().split('@')
+    if (!local || !dominio) return null
+    return { local, base: dominio.replace(/\.[a-z]{2,}$/, '') }
+  }
+  const x = partes(a), y = partes(b)
+  if (!x || !y || x.local !== y.local) return false
+  return distancia(x.base, y.base) <= 2
+}

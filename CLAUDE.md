@@ -527,6 +527,11 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   contacto sigue saliendo de `decisorContactado()` (`lib/actividad.ts`). El 16/10/2026 salió del perfil el bloque del motivo de descarte
   (`discard_reason`/`recontact_at` siguen en la base y en el `DescartarLeadDialog`), y también la
   cruz de «cerrar sin guardar» del encabezado: la salida es «Guardar y cerrar».
+- **«Agregar contacto» no desaparece** (4/11/2026, por pedido): son tres casilleros (principal y
+  dos alternativos) y la oficina y los contactos con solo email los ocupan sin dibujarse. Sin
+  casillero vacío se reusa el de un alternativo que solo tiene un email repetido o mal tipeado de
+  otro (`emailsParecidos`, `lib/clientData.ts`; ese email se borra); si no hay ninguno, el botón
+  queda deshabilitado y dice por qué.
 - **El teléfono de Google Maps es «Teléfono oficina»** (16/10/2026): el contacto cuyo número
   coincide en dígitos con `google_maps_phone` y no tiene nombre se rotula así, sin rol ni decisor
   (`esTelefonoDeOficina`), y no cuenta como persona en «con quién» (`contactosConDecisor`). Con un

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { conPrefijoDePais, esTelefonoDeOficina, PREFIJOS_DE_PAIS, telefonoEscrito, tienePrefijoDePais, telefonosDelCliente } from './clientData'
 import {
   campoDelNuevoDecisor, casilleroDelTelefonoNuevo, casilleroParaTelefonoDeGoogle, contactoDelCliente, contactosConDecisor, contactosDelCliente, decisorDelContactoNuevo, decisorSabido, decisoresDeLaLlamada, EMPTY_CLIENT, esTelefonoDeIdealista, copiasDelTelefonoDeIdealista,
-  conDecisorApuntado, decisoresQueSeMarcaron, inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, nombresDeDecisores, patchDeContactosNuevos, tieneDecisor, validateClientData,
+  conDecisorApuntado, decisoresQueSeMarcaron, emailsParecidos, inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, nombresDeDecisores, patchDeContactosNuevos, tieneDecisor, validateClientData,
 } from './clientData'
 
 describe('validateClientData', () => {
@@ -416,5 +416,23 @@ describe('tienePrefijoDePais', () => {
     expect(tienePrefijoDePais('600 111 222')).toBe(false)
     expect(tienePrefijoDePais('0034 600 111 222')).toBe(false)
     expect(tienePrefijoDePais('+34 600')).toBe(false)
+  })
+})
+
+describe('emailsParecidos', () => {
+  it('el mismo email, sin importar mayúsculas ni espacios', () => {
+    expect(emailsParecidos('Info@Inmo.com ', 'info@inmo.com')).toBe(true)
+  })
+  it('un dominio mal tipeado o sin terminación es el mismo', () => {
+    expect(emailsParecidos('info@cuatrocases', 'info@quatrecases.com')).toBe(true)
+    expect(emailsParecidos('info@quatrecases.es', 'info@quatrecases.com')).toBe(true)
+  })
+  it('otra persona o un dominio distinto no lo son', () => {
+    expect(emailsParecidos('ana@quatrecases.com', 'info@quatrecases.com')).toBe(false)
+    expect(emailsParecidos('info@otraagencia.com', 'info@quatrecases.com')).toBe(false)
+  })
+  it('vacío nunca se parece', () => {
+    expect(emailsParecidos('', '')).toBe(false)
+    expect(emailsParecidos(null, 'info@inmo.com')).toBe(false)
   })
 })
