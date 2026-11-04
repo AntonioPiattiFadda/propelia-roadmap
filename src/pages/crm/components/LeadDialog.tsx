@@ -14,7 +14,7 @@ import { useLeadDetalle } from '../hooks/useLeadDetalle'
 import { useActualizarCliente, useActualizarLead } from '../hooks/useLeadMutaciones'
 import {
   contactosConDecisor, copiasDelTelefonoDeIdealista, esTelefonoDeIdealista, esTelefonoDeOficina, ETIQUETA_OFICINA, inicialesDe,
- decisoresQueSeMarcaron, emailsParecidos, nombreDelLead, telefonosDelCliente, type CampoDecisor, type ClientData } from '../lib/clientData'
+ decisoresQueSeMarcaron, casilleroParaReusar, emailsParecidos, nombreDelLead, telefonosDelCliente, type CampoDecisor, type ClientData } from '../lib/clientData'
 import { toIsoDate } from '@/lib/calendarDate'
 import { decisorContactado } from '../lib/actividad'
 import { etapaDelLead } from '../lib/effectiveStage'
@@ -347,22 +347,27 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
   const datosArriba = [...telefonosSueltos, ...emailsSueltos].filter(d => datosFijados.includes(d.clave))
   // El próximo que se agrega: el principal primero, después los alternativos en orden.
   const libre = CONTACTOS.find(c => !contactos.includes(c))
-  /* Sin casillero vacío, se reusa el de un alternativo que solo tiene un email repetido (o mal
-     tipeado) de otro contacto (4/11/2026, por pedido): sin esto «Agregar contacto» desaparecía y
-     «Personas» decía «Sin contactos.» sin forma de cargar a nadie. El principal nunca: su email es
-     el de la inmobiliaria. */
-  const emailRepetido = (c: Contacto) => c !== 'principal' && esSoloEmail(c)
-    && CONTACTOS.some(o => o !== c && emailsParecidos(lead.client?.[camposDe(c).email], lead.client?.[camposDe(o).email]))
-  const reusable = libre ? undefined : [...contactos].reverse().find(emailRepetido)
-  const casilleroNuevo = libre ?? reusable
-  const SIN_CASILLERO = 'No hay lugar para otro contacto: los tres casilleros están ocupados. Quitá uno o borrá un email repetido.'
+  /* Sin casillero vacío, se reusa uno ocupado por algo que no es una persona (4/11/2026, por
+     pedido; `casilleroParaReusar`): sin esto «Agregar contacto» desaparecía y «Personas» decía
+     «Sin contactos.» sin forma de cargar a nadie. */
+  const emailRepetido = (c: Contacto) =>
+    CONTACTOS.some(o => o !== c && emailsParecidos(lead.client?.[camposDe(c).email], lead.client?.[camposDe(o).email]))
+  const reusable = libre ? null : casilleroParaReusar(contactos.map(c => ({
+    contacto: c, principal: c === 'principal', oficina: esOficina(c), soloEmail: esSoloEmail(c), emailRepetido: emailRepetido(c),
+  })))
+  const casilleroNuevo = libre ?? reusable?.contacto
+  const SIN_CASILLERO = 'No hay lugar para otro contacto: los tres casilleros tienen una persona. Quitá una para cargar otra.'
   const agregarNuevo = (fijado: boolean) => {
     if (!casilleroNuevo) return
-    if (casilleroNuevo === reusable && lead.client) {
-      const col = camposDe(reusable).email
+    if (!libre && reusable?.vaciar && lead.client) {
+      const f = camposDe(reusable.contacto)
+      const cols = reusable.vaciar === 'telefono' ? [f.telefono, f.origen] : [f.email]
       editando.current = false
-      setBorrador(b => ({ ...b, [col]: '' }))
-      actualizarCliente.mutate({ clientId: lead.client.id, patch: { [col]: null } as ClientePatch })
+      setBorrador(b => ({ ...b, ...Object.fromEntries(cols.map(col => [col, ''])) }))
+      // De a una columna, y solo si tiene algo: `*_source` puede no existir sin su migración.
+      for (const col of cols) {
+        if (lead.client[col]) actualizarCliente.mutate({ clientId: lead.client.id, patch: { [col]: null } as ClientePatch })
+      }
     }
     agregar(casilleroNuevo, fijado)
   }

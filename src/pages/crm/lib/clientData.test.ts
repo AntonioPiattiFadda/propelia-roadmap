@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { conPrefijoDePais, esTelefonoDeOficina, PREFIJOS_DE_PAIS, telefonoEscrito, tienePrefijoDePais, telefonosDelCliente } from './clientData'
 import {
   campoDelNuevoDecisor, casilleroDelTelefonoNuevo, casilleroParaTelefonoDeGoogle, contactoDelCliente, contactosConDecisor, contactosDelCliente, decisorDelContactoNuevo, decisorSabido, decisoresDeLaLlamada, EMPTY_CLIENT, esTelefonoDeIdealista, copiasDelTelefonoDeIdealista,
-  conDecisorApuntado, decisoresQueSeMarcaron, emailsParecidos, inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, nombresDeDecisores, patchDeContactosNuevos, tieneDecisor, validateClientData,
+  conDecisorApuntado, decisoresQueSeMarcaron, casilleroParaReusar, emailsParecidos, inicialesDe, MISSING_CONTACT_ERROR, nombreDelLead, nombresDeDecisores, patchDeContactosNuevos, tieneDecisor, validateClientData,
 } from './clientData'
 
 describe('validateClientData', () => {
@@ -434,5 +434,32 @@ describe('emailsParecidos', () => {
   it('vacío nunca se parece', () => {
     expect(emailsParecidos('', '')).toBe(false)
     expect(emailsParecidos(null, 'info@inmo.com')).toBe(false)
+  })
+})
+
+describe('casilleroParaReusar', () => {
+  const c = (contacto: string, o: Partial<{ principal: boolean; oficina: boolean; soloEmail: boolean; emailRepetido: boolean }> = {}) =>
+    ({ contacto, principal: false, oficina: false, soloEmail: false, emailRepetido: false, ...o })
+  it('una persona de verdad no se reusa nunca', () => {
+    expect(casilleroParaReusar([c('principal', { principal: true }), c('a1'), c('a2')])).toBeNull()
+  })
+  it('la copia del teléfono de la oficina se vacía primero: ya vive en google_maps_phone', () => {
+    expect(casilleroParaReusar([c('a1', { soloEmail: true }), c('a2', { oficina: true })]))
+      .toEqual({ contacto: 'a2', vaciar: 'telefono' })
+  })
+  it('después, un email repetido se borra', () => {
+    expect(casilleroParaReusar([c('a1', { soloEmail: true }), c('a2', { soloEmail: true, emailRepetido: true })]))
+      .toEqual({ contacto: 'a2', vaciar: 'email' })
+  })
+  it('un email que no se repite se queda: pasa a ser de la persona nueva', () => {
+    expect(casilleroParaReusar([c('a1', { soloEmail: true })])).toEqual({ contacto: 'a1', vaciar: null })
+  })
+  it('los alternativos antes que el principal, y al principal nunca se le borra el email', () => {
+    expect(casilleroParaReusar([c('principal', { principal: true, oficina: true }), c('a1', { soloEmail: true })]))
+      .toEqual({ contacto: 'a1', vaciar: null })
+    expect(casilleroParaReusar([c('principal', { principal: true, soloEmail: true, emailRepetido: true })]))
+      .toEqual({ contacto: 'principal', vaciar: null })
+    expect(casilleroParaReusar([c('principal', { principal: true, oficina: true })]))
+      .toEqual({ contacto: 'principal', vaciar: 'telefono' })
   })
 })

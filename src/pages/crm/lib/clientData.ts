@@ -403,3 +403,27 @@ export function emailsParecidos(a: string | null | undefined, b: string | null |
   if (!x || !y || x.local !== y.local) return false
   return distancia(x.base, y.base) <= 2
 }
+
+/** Un casillero de contacto ocupado por algo que no es una persona, visto por «Agregar contacto». */
+export type CasilleroOcupado<C> = { contacto: C; principal: boolean; oficina: boolean; soloEmail: boolean; emailRepetido: boolean }
+
+/**
+ * Sin casillero vacío, cuál reusar para un contacto nuevo (4/11/2026, por pedido): son tres, y la
+ * oficina y los contactos con solo un email los ocupan sin dibujarse, así que «Personas» podía
+ * decir «Sin contactos.» sin dejar cargar a nadie. Una persona de verdad no se reusa nunca.
+ * Primero los alternativos y después el principal; adentro, la copia del teléfono de la oficina
+ * (se vacía: ya vive en `google_maps_phone`), un email repetido (se borra) y un email suelto (se
+ * queda: pasa a ser de la persona nueva). Al principal nunca se le borra el email: es el de la
+ * inmobiliaria.
+ */
+export function casilleroParaReusar<C>(casilleros: CasilleroOcupado<C>[]): { contacto: C; vaciar: 'telefono' | 'email' | null } | null {
+  for (const grupo of [casilleros.filter(c => !c.principal), casilleros.filter(c => c.principal)]) {
+    const oficina = grupo.find(c => c.oficina)
+    if (oficina) return { contacto: oficina.contacto, vaciar: 'telefono' }
+    const repetido = grupo.find(c => c.soloEmail && c.emailRepetido && !c.principal)
+    if (repetido) return { contacto: repetido.contacto, vaciar: 'email' }
+    const suelto = grupo.find(c => c.soloEmail)
+    if (suelto) return { contacto: suelto.contacto, vaciar: null }
+  }
+  return null
+}
