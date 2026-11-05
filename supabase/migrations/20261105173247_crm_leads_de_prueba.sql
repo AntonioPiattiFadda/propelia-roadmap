@@ -58,16 +58,19 @@ begin
   end if;
   -- El nombre que muestra /clientes es el que escribió el cliente en el alta pública
   -- (client_onboardings.company_name) y, si no, el del CRM: se busca en los dos.
+  -- Borrados incluidos: el 5/11/2026 los dos ya estaban eliminados desde el CRM y la migración
+  -- fallaba contando 0. Marcados igual, si alguien los restaura siguen siendo solo para Antonio.
   update public.crm_leads l set solo_para = v_antonio
-   where l.deleted_at is null
-     and (exists (select 1 from public.crm_clients c
+   where (exists (select 1 from public.crm_clients c
                    where c.id = l.client_id
                      and lower(trim(c.company_name)) in ('test lead pre onboardding', 'inmobiliaria test onboarding'))
           or exists (select 1 from public.client_onboardings o
                       where o.lead_id = l.id
                         and lower(trim(o.company_name)) in ('test lead pre onboardding', 'inmobiliaria test onboarding')));
   get diagnostics v_n = row_count;
-  if v_n <> 2 then
+  -- Al menos 2: además de los dos del onboarding hay copias viejas con el mismo nombre (de
+  -- octubre, también borradas), y marcarlas también está bien: son de prueba.
+  if v_n < 2 then
     select string_agg(format('%s | crm=%L | alta=%L | %s %s', l.id, c.company_name, o.company_name,
                              c.first_name, c.last_name), E'\n')
       into v_hay
@@ -76,7 +79,7 @@ begin
       left join public.client_onboardings o on o.lead_id = l.id
      where l.deleted_at is null
        and (c.company_name ilike '%test%' or o.company_name ilike '%test%');
-    raise exception E'crm_leads_de_prueba: se esperaban 2 leads de prueba y hay %. Con «test» en el nombre:\n%',
+    raise exception E'crm_leads_de_prueba: se esperaban al menos 2 leads de prueba y hay %. Con «test» en el nombre:\n%',
       v_n, coalesce(v_hay, '(ninguno)');
   end if;
 end $$;
