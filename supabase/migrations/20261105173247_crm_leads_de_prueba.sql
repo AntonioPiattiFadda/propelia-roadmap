@@ -82,4 +82,17 @@ begin
     raise exception E'crm_leads_de_prueba: se esperaban al menos 2 leads de prueba y hay %. Con «test» en el nombre:\n%',
       v_n, coalesce(v_hay, '(ninguno)');
   end if;
+
+  -- Los dos del onboarding (los que tienen alta) se restauran, como el «Deshacer» de eliminar:
+  -- el lead y las tareas pendientes que se borraron con él (mismo minuto). Así a Antonio le
+  -- vuelven a aparecer en /clientes y el CRM, y al resto no. Las copias viejas siguen borradas.
+  update public.crm_tasks t set deleted_at = null
+    from public.crm_leads l
+   where t.lead_id = l.id and l.solo_para = v_antonio and l.deleted_at is not null
+     and exists (select 1 from public.client_onboardings o where o.lead_id = l.id)
+     and not t.completed and t.deleted_at is not null
+     and t.deleted_at between l.deleted_at - interval '1 minute' and l.deleted_at + interval '1 minute';
+  update public.crm_leads l set deleted_at = null
+   where l.solo_para = v_antonio and l.deleted_at is not null
+     and exists (select 1 from public.client_onboardings o where o.lead_id = l.id);
 end $$;
