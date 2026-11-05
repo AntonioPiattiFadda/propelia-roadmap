@@ -52,10 +52,16 @@ begin
   if v_antonio is null then
     raise exception 'crm_leads_de_prueba: no existe el usuario antonio.piattifadda@gmail.com';
   end if;
+  -- El nombre que muestra /clientes es el que escribió el cliente en el alta pública
+  -- (client_onboardings.company_name) y, si no, el del CRM: se busca en los dos.
   update public.crm_leads l set solo_para = v_antonio
-    from public.crm_clients c
-   where c.id = l.client_id and l.deleted_at is null
-     and c.company_name in ('Test Lead Pre onboardding', 'Inmobiliaria test Onboarding');
+   where l.deleted_at is null
+     and (exists (select 1 from public.crm_clients c
+                   where c.id = l.client_id
+                     and lower(trim(c.company_name)) in ('test lead pre onboardding', 'inmobiliaria test onboarding'))
+          or exists (select 1 from public.client_onboardings o
+                      where o.lead_id = l.id
+                        and lower(trim(o.company_name)) in ('test lead pre onboardding', 'inmobiliaria test onboarding')));
   get diagnostics v_n = row_count;
   if v_n <> 2 then
     raise exception 'crm_leads_de_prueba: se esperaban 2 leads de prueba y hay %', v_n;
