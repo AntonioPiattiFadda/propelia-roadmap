@@ -133,7 +133,13 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
         )
       }
       case 'importar-usuarios': {
-        if (datos.orgId) return <span key={a} className="text-[12px] font-medium text-success">{datos.o.miembros.length} cuentas · org vinculada</span>
+        if (datos.orgId) {
+          const yaTenian = datos.o.miembros.filter(m => m.existing_account).length
+          const nuevas = datos.o.miembros.length - yaTenian
+          return <span key={a} className="text-[12px] font-medium text-success">
+            {yaTenian ? `${nuevas} ${nuevas === 1 ? 'cuenta nueva' : 'cuentas nuevas'}, ${yaTenian} ya ${yaTenian === 1 ? 'existía' : 'existían'}` : `${nuevas} cuentas`} · org vinculada
+          </span>
+        }
         const enviado = !!datos.o.submitted_at
         return (
           <Button key={a} size="sm" variant={panel?.tipo === 'usuarios' ? 'secondary' : 'outline'} className="h-8"

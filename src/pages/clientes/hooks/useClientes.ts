@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import {
   asignarOnboarding, completarOnboarding, getOnboardings, getPlantillas, importarEquipo, marcarTarea, reabrirAlta,
 } from '../service/clientes.service'
-import { activarTutorialDeLeads, desactivarTutorialDeLeads, getLinksDePago, reiniciarTutorialDeLeads, getOrganizacion, getPlanes } from '../service/puente'
+import { activarTutorialDeLeads, desactivarTutorialDeLeads, getLinksDePago, reiniciarTutorialDeLeads, getOrganizacion, getPlanes, listarOrganizaciones } from '../service/puente'
 import type { Onboarding } from '../types'
 
 export const CLIENTES_KEYS = {
@@ -14,6 +14,7 @@ export const CLIENTES_KEYS = {
   org: (orgId: string) => ['clientes', 'puente', 'org', orgId] as const,
   planes: (orgId: string) => ['clientes', 'puente', 'planes', orgId] as const,
   links: (orgId: string) => ['clientes', 'puente', 'links', orgId] as const,
+  orgs: ['clientes', 'puente', 'orgs'] as const,
 }
 
 export const useOnboardings = (enabled: boolean) =>
@@ -21,6 +22,10 @@ export const useOnboardings = (enabled: boolean) =>
 
 export const usePlantillas = (enabled: boolean) =>
   useQuery({ queryKey: CLIENTES_KEYS.plantillas, queryFn: getPlantillas, enabled, staleTime: 5 * 60_000 })
+
+/** Las orgs de Propelia, para «Usar una que ya existe» en el import del equipo. */
+export const useOrganizacionesDePropelia = (enabled: boolean) =>
+  useQuery({ queryKey: CLIENTES_KEYS.orgs, queryFn: listarOrganizaciones, enabled, staleTime: 60_000 })
 
 export const useOrganizacion = (orgId: string | null | undefined) =>
   useQuery({ queryKey: CLIENTES_KEYS.org(orgId ?? ''), queryFn: () => getOrganizacion(orgId!), enabled: !!orgId, retry: false })

@@ -95,6 +95,34 @@ lado que auth.
   `organization_settings.website` **después** de las cuentas y no deshace nada si falla: la
   respuesta trae `website: null` y el Roadmap avisa que se cargue a mano.
 
+### `add_users_to_org`
+
+Desde el 5/11/2026: el paso 1 cuando el cliente **ya tenía org en Propelia** («Usar una que ya
+existe» en Importar). Suma el equipo a esa org con el mismo criterio que `import_properties`: lo
+que falta se crea y lo que ya está se saltea **sin tocarlo**.
+
+```json
+// { "action": "add_users_to_org", "org_id": "6f1c…", "dry_run": true,
+//   "users": [ …mismo formato que create_org_with_users… ] } →
+{ "organization": { "id": "6f1c…", "name": "Fincas Ribera", "slug": "fincas-ribera" },
+  "results": [
+    { "email": "marta@fincasribera.es", "status": "skipped_existing", "user_id": "a1…" },
+    { "email": "pablo@fincasribera.es", "status": "created", "user_id": "b2…" },
+    { "email": "ana@otra.es", "status": "failed", "error": "ya tiene cuenta en otra organización de Propelia" }
+  ] }
+```
+
+- Por persona: ya es de esa org → `skipped_existing` (ni contraseña, ni nombre, ni rol); cuenta en
+  otra org o borrada → `failed`; sin cuenta → se crea (`created`) con la contraseña que manda el
+  Roadmap.
+- **No es todo o nada**: lo creado queda aunque otra falle, y repetir la llamada saltea lo creado.
+- Misma validación del equipo que `create_org_with_users` **salvo el responsable**: la org ya
+  tiene sus admins. La org tiene que existir (`not_found`).
+- **`dry_run: true`** no crea nada: lo que se crearía vuelve `new`. Es la vista previa de Importar.
+- Del lado del Roadmap, `client_onboarding_importar_equipo` guarda a los salteados con
+  `existing_account` (no reciben mail de accesos) y rechaza una org ya atada a otro lead
+  (`crm_onboarding_org_de_otro_lead`).
+
 ### `get_organization`
 
 ```json

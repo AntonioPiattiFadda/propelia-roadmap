@@ -441,6 +441,19 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   idealista.com/.pt/.it (`alta_idealista_invalido`; espejo en `idealistaInvalido` de la página). En
   /clientes se ve como enlace en la vista previa de «Importar»; no viaja a Propelia. `onboarding-alta`
   manda el parámetro solo si vino escrito: sin la migración corrida, un alta con link falla y sin link anda.
+- **Vincular una org que ya existe** (5/11/2026, por pedido; migración
+  `20261105134748_onboarding_vincular_org_existente`, que **la aplica Antonio**): el panel de
+  «Importar» (`ImportarUsuariosPanel`) elige entre «Crear organización nueva» y «Usar una que ya
+  existe» (`list_organizations`). Con una existente, el puente suma al equipo con
+  `add_users_to_org` (`roadmap-bridge` del producto, contrato en `PUENTE.md`), **como las
+  propiedades**: crea las cuentas que faltan y saltea sin tocar las que ya son de esa org; una
+  persona con cuenta en otra org es error de esa fila. Antes de confirmar corre el simulacro
+  (`dry_run`) y la tabla dice «Se crea» / «Ya tiene cuenta» / el error; con algún error no deja
+  vincular. Los salteados quedan con `client_onboarding_members.existing_account`: no reciben mail
+  de accesos y «Ver cuentas» no muestra su contraseña. Una org ya atada a otro lead la rechaza
+  `client_onboarding_importar_equipo` (`crm_onboarding_org_de_otro_lead`). Hace falta deployar
+  `roadmap-bridge` (producto) y `propelia-bridge` (acá). Sin la migración, la vinculación anda pero
+  los que ya tenían cuenta recibirían el mail de accesos con una contraseña que no es la suya.
 - **Dos capacitaciones por Google Meet en el paso 2** (31/10/2026, por pedido, migración
   `20261031173059_onboarding_reuniones_de_capacitacion`, que **la aplica Antonio**): arriba del
   tutorial de leads, «con el equipo» y «con el dueño» (`Tarea.reunion` en `lib/pasos.ts`). Cada una
@@ -893,6 +906,14 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   la lista. Decidido, se escribe en la URL (`fijarResumenEnLaUrl`): abrir un lead desde el resumen o
   limpiar filtros no cambian de vista solos. Se alterna con **un solo botón en el mismo lugar de la
   cabecera**: «Ver lista de leads» en el Dashboard, «Dashboard» en la lista (solo SUPERADMIN, sin «Ver como»). Un SDR (y «Ver como») ve la lista como siempre, aunque ponga `?resumen=1`.
+- **Leads de prueba** (5/11/2026, por pedido; migración `20261105173247_crm_leads_de_prueba`, que
+  **la aplica Antonio**): `crm_leads.solo_para` (uuid de `users`, null = normal). Con alguien puesto,
+  el lead lo ve y lo toca solo esa persona, SUPERADMIN incluidos: policy restrictiva
+  `crm_leads_solo_para` y el mismo corte en `crm_puede_lead()` y `crm_puede_cliente()`, así se van
+  también sus tareas, reuniones, comentarios y su alta de /clientes (join `!inner`). Sin pantalla:
+  se marca por SQL. La migración marca para Antonio «Test Lead Pre onboardding» e «Inmobiliaria test
+  Onboarding» (falla si no encuentra exactamente esos dos). Las vistas `mcp_*` y la service role no
+  lo miran.
 - **Un SUPERADMIN elimina un lead desde el menú `⋯`** (23/10/2026, por pedido): «Eliminar», directo y
   sin confirmar, con «Deshacer» en el aviso (`useEliminarLead`). Es soft delete (`deleted_at`) y se
   lleva sus tareas pendientes, para que no sigan sonando las alarmas (`eliminarLead`, `restaurarLead`

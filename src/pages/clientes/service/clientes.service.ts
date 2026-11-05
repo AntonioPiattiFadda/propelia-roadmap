@@ -70,7 +70,9 @@ export async function reabrirAlta(onboardingId: string) {
   if (e2) throw e2
 }
 
-export type MiembroAImportar = { first_name: string; last_name: string; email: string; phone: string; role: 'admin' | 'agent'; is_owner: boolean }
+/** `existing_account`: ya tenía cuenta en la org (org existente vinculada): no se le mandan accesos.
+ *  Sin la migración `20261105134748_onboarding_vincular_org_existente` la base lo ignora. */
+export type MiembroAImportar = { first_name: string; last_name: string; email: string; phone: string; role: 'admin' | 'agent'; is_owner: boolean; existing_account?: boolean }
 
 /** Guarda el equipo importado, vincula la org al lead y tilda las dos tareas del import. Todo o nada. */
 export async function importarEquipo(p: { onboardingId: string; organizationId: string; miembros: MiembroAImportar[] }) {

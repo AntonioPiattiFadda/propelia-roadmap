@@ -43,7 +43,8 @@ export function CuentasCreadas({ datos }: { datos: DatosDelAlta }) {
         : ultima && new Date(ultima) > new Date(borrado) ? ultima : null
       return {
         id: m.id, nombre: `${m.first_name} ${m.last_name}`.trim(), responsable: m.is_owner, usuario: m.email ?? '',
-        contrasena: contrasenaInicial(m.first_name, m.last_name, new Date(m.created_at).getFullYear()),
+        // Ya tenía cuenta en la org (org existente vinculada): su contraseña es la suya, no la sabemos.
+        contrasena: m.existing_account ? null : contrasenaInicial(m.first_name, m.last_name, new Date(m.created_at).getFullYear()),
         entro, ultima, borrado,
         probada: probadas.has(tareaCuentaProbada(m.id)),
         calendario: agente?.calendar_connected === true,
@@ -55,7 +56,7 @@ export function CuentasCreadas({ datos }: { datos: DatosDelAlta }) {
     ? ([['name', 'nombre'], ['website', 'web'], ['logo', 'logo'], ['colors', 'colores']] as const).filter(([k]) => !setup[k]).map(([, r]) => r)
     : []
   const nProbadas = cuentas.filter(c => c.probada).length
-  const todo = cuentas.map(c => `${c.nombre}\nUsuario: ${c.usuario}\nContraseña: ${c.contrasena}`).join('\n\n')
+  const todo = cuentas.map(c => `${c.nombre}\nUsuario: ${c.usuario}\nContraseña: ${c.contrasena ?? 'la suya (ya tenía cuenta)'}`).join('\n\n')
   const copiar = (texto: string, aviso: string, rotulo: string) => (
     <Button size="icon" variant="ghost" className="size-6 shrink-0" title={`Copiar ${rotulo}`} aria-label={`Copiar ${rotulo}`}
       onClick={() => void copiarTexto(texto, aviso)}>
@@ -93,7 +94,9 @@ export function CuentasCreadas({ datos }: { datos: DatosDelAlta }) {
                   <span className="flex items-center gap-1">{c.usuario}{c.usuario && copiar(c.usuario, 'Usuario copiado', `el usuario de ${c.nombre}`)}</span>
                 </td>
                 <td className="px-2.5 py-1.5 font-mono text-[12px]">
-                  <span className="flex items-center gap-1">{c.contrasena}{copiar(c.contrasena, 'Contraseña copiada', `la contraseña de ${c.nombre}`)}</span>
+                  {c.contrasena
+                    ? <span className="flex items-center gap-1">{c.contrasena}{copiar(c.contrasena, 'Contraseña copiada', `la contraseña de ${c.nombre}`)}</span>
+                    : <span className="font-sans text-(--fg-muted)" title="Ya tenía cuenta en la org: no se le cambió la contraseña">Ya tenía cuenta</span>}
                 </td>
                 <td className="px-2.5 py-1.5">
                   <Checkbox checked={c.probada} title="Entré con este usuario y anda" aria-label={`Probé la cuenta de ${c.nombre}`}

@@ -100,3 +100,11 @@ Deno.test('create_org_with_users pasa (el paso 1 del onboarding)', async () => {
   assertEquals(llamadas[0].body.action, 'create_org_with_users')
   assertEquals(llamadas[0].body.organization_name, 'Fincas')
 })
+
+Deno.test('add_users_to_org pasa (vincular una org que ya existe)', async () => {
+  const { d, llamadas } = deps()
+  const r = await reenviar('u1', { action: 'add_users_to_org', org_id: 'o1', users: [] }, d)
+  assertEquals(r.status, 200)
+  assertEquals(llamadas[0].body.action, 'add_users_to_org')
+  assertEquals(llamadas[0].body.org_id, 'o1')
+})

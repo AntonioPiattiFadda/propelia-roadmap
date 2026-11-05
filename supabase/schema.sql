@@ -453,6 +453,12 @@ alter table public.crm_leads add column if not exists recontact_at date;
 -- a cualquiera con write sobre la cartera. Migración `20261023135323_crm_leads_importante`.
 alter table public.crm_leads add column if not exists importante boolean not null default false;
 
+-- Leads de prueba (5/11/2026, por pedido): con `solo_para`, el lead y lo que cuelga de él lo ve
+-- solo esa persona. Lo cortan la policy restrictiva crm_leads_solo_para, crm_puede_lead() y
+-- crm_puede_cliente(). Migración `20261105173247_crm_leads_de_prueba`.
+alter table public.crm_leads
+  add column if not exists solo_para uuid references public.users(id) on delete set null;
+
 create table if not exists public.crm_meetings (
   id            uuid primary key default gen_random_uuid(),
   lead_id       uuid references public.crm_leads(id) on delete cascade,
@@ -727,7 +733,9 @@ $$;
 create or replace function public.crm_puede_lead(p_lead_id uuid, p_nivel text)
 returns boolean language sql stable security definer set search_path to 'public' as $$
   select coalesce(
-    (select public.crm_puede(l.assigned_to, p_nivel) from public.crm_leads l where l.id = p_lead_id),
+    (select public.crm_puede(l.assigned_to, p_nivel)
+            and (l.solo_para is null or l.solo_para = auth.uid())
+       from public.crm_leads l where l.id = p_lead_id),
     false);
 $$;
 
@@ -739,6 +747,7 @@ returns boolean language sql stable security definer set search_path to 'public'
   select exists (
     select 1 from public.crm_leads l
     where l.client_id = p_client_id and l.deleted_at is null
+      and (l.solo_para is null or l.solo_para = auth.uid())
       and public.crm_puede(l.assigned_to, p_nivel));
 $$;
 
@@ -789,6 +798,12 @@ create policy crm_leads_leer on public.crm_leads for select
   using (public.crm_puede(assigned_to, 'read'));
 create policy crm_leads_escribir on public.crm_leads for all
   using (public.crm_puede(assigned_to, 'write')) with check (public.crm_puede(assigned_to, 'write'));
+-- Leads de prueba: restrictiva, se suma con AND a las dos de arriba (ver `solo_para`).
+drop policy if exists crm_leads_solo_para on public.crm_leads;
+create policy crm_leads_solo_para on public.crm_leads
+  as restrictive for all to authenticated
+  using (solo_para is null or solo_para = auth.uid())
+  with check (solo_para is null or solo_para = auth.uid());
 
 -- Tareas y reuniones: con lead, por el lead; sin lead (las dos columnas son nullable), por su responsable.
 create policy crm_tasks_leer on public.crm_tasks for select using (
@@ -2176,6 +2191,8 @@ create table if not exists public.client_onboarding_members (
   role          text not null default 'agent' check (role in ('agent', 'admin')),
   is_owner      boolean not null default false,
   is_contact    boolean not null default false,
+  -- Ya tenía cuenta en la org de Propelia (org existente vinculada): no se le mandan accesos.
+  existing_account boolean not null default false,
   created_at    timestamptz not null default now()
 );
 create unique index if not exists client_onboarding_members_one_owner
@@ -2410,8 +2427,9 @@ create trigger crm_funnel_stages_arranca_onboarding after update of starts_onboa
 
 -- ---------- RPCs de la página ----------
 -- El import del equipo (paso 1): reemplaza el equipo por el importado, deja la org de Propelia que
--- creó el puente en el lead y tilda «Recibir el equipo» e «Importar el equipo». Todo o
--- nada. `p_miembros`: [{first_name, last_name, email, phone, role, is_owner}], uno con is_owner.
+-- creó (o eligió, si ya existía) el puente en el lead y tilda «Recibir el equipo» e «Importar el
+-- equipo». Todo o nada. `p_miembros`: [{first_name, last_name, email, phone, role, is_owner,
+-- existing_account}], uno con is_owner. Una org atada a otro lead: `crm_onboarding_org_de_otro_lead`.
 create or replace function public.client_onboarding_importar_equipo(
   p_onboarding_id uuid, p_organization_id uuid, p_miembros jsonb
 ) returns void language plpgsql security invoker set search_path to 'public' as $$
@@ -2431,14 +2449,21 @@ begin
   if (select count(*) from jsonb_array_elements(p_miembros) m where coalesce((m->>'is_owner')::boolean, false)) <> 1 then
     raise exception 'crm_onboarding_un_responsable' using errcode = '22023';
   end if;
+  if exists (
+    select 1 from public.crm_leads
+    where propelia_organization_id = p_organization_id and id <> v_lead and deleted_at is null
+  ) then
+    raise exception 'crm_onboarding_org_de_otro_lead' using errcode = '23505';
+  end if;
 
   delete from public.client_onboarding_members where onboarding_id = p_onboarding_id;
   insert into public.client_onboarding_members
-    (onboarding_id, first_name, last_name, email, phone, role, is_owner, is_contact)
+    (onboarding_id, first_name, last_name, email, phone, role, is_owner, is_contact, existing_account)
   select p_onboarding_id, btrim(m->>'first_name'), coalesce(btrim(m->>'last_name'), ''),
          nullif(btrim(m->>'email'), ''), nullif(btrim(m->>'phone'), ''),
          coalesce(m->>'role', 'agent'),
-         coalesce((m->>'is_owner')::boolean, false), coalesce((m->>'is_owner')::boolean, false)
+         coalesce((m->>'is_owner')::boolean, false), coalesce((m->>'is_owner')::boolean, false),
+         coalesce((m->>'existing_account')::boolean, false)
   from jsonb_array_elements(p_miembros) m;
 
   update public.crm_leads set propelia_organization_id = p_organization_id where id = v_lead;
