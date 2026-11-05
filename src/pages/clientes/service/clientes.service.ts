@@ -82,6 +82,15 @@ export async function importarEquipo(p: { onboardingId: string; organizationId: 
   if (error) throw error
 }
 
+/** Ata la org de Propelia al lead antes de importar el equipo (null la desata). La base lo rechaza
+ *  si el equipo ya se importó (`crm_onboarding_equipo_ya_importado`) o si la org es de otro lead. */
+export async function vincularOrg(p: { onboardingId: string; organizationId: string | null }) {
+  const { error } = await supabase.rpc('client_onboarding_vincular_org', {
+    p_onboarding_id: p.onboardingId, p_organization_id: p.organizationId as string,
+  })
+  if (error) throw error
+}
+
 /** Termina el alta: el lead pasa a CLIENT y sale de la lista. */
 export async function completarOnboarding(onboardingId: string) {
   const { error } = await supabase.rpc('client_onboarding_completar', { p_onboarding_id: onboardingId })

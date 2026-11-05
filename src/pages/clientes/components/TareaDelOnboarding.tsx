@@ -20,17 +20,18 @@ import { enviarLeadDePrueba, getColumnasDeCartera, GRUPO_TUTORIAL_DE_LEADS, HOJA
 import { ConfirmarAccesosDialog } from './ConfirmarAccesosDialog'
 import { copiarTexto, EnviarPorWhatsapp } from './EnviarPorWhatsapp'
 import { ImportarCarteraPanel } from './ImportarCarteraPanel'
-import { ImportarUsuariosPanel } from './ImportarUsuariosPanel'
+import { ImportarUsuariosPanel, OrgVinculada, VincularOrgPanel } from './ImportarUsuariosPanel'
 import { DireccionesPanel, LinkDePagoPanel, PagoPanel } from './PanelesDelPuente'
 import type { DatosDelAlta } from './datosDelAlta'
 
 /** Lo que cuelga debajo de la tarea mientras se usa una acción. */
 type Panel =
-  | { tipo: 'usuarios' }
+  | { tipo: 'usuarios' } | { tipo: 'vincular' }
   | { tipo: 'cartera'; archivo: string; hoja: string[][]; fotos: string[][] | null }
   | { tipo: 'link' } | { tipo: 'pago' } | { tipo: 'direcciones' }
 
-const SIN_ORG = 'Primero importá el equipo: crea la organización en Propelia'
+const SIN_ORG = 'Primero vinculá una org existente o importá el equipo, que crea la organización en Propelia'
+const SIN_EQUIPO = 'Primero importá el equipo: todavía no hay cuentas a las que mandarles los accesos'
 const SIN_ENVIAR = 'Todavía no lo envió: el cliente carga su equipo en la página de alta'
 const fecha = (iso: string) => new Date(iso).toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 const celdaATexto = (c: Celda) => (c == null ? '' : c instanceof Date ? c.toISOString().slice(0, 10) : String(c))
@@ -80,7 +81,11 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
   const mensaje = texto && pedidoDeMails ? `${texto}\n\n${pedidoDeMails}` : texto
 
   const tildar = (v: boolean) => {
-    if (clave === TAREA_CREDENCIALES && v) { setConfirmando(true); return }
+    if (clave === TAREA_CREDENCIALES && v) {
+      if (!datos.equipoImportado) toast.error(SIN_EQUIPO)
+      else setConfirmando(true)
+      return
+    }
     // Tildar el tutorial lo prende en Propelia: se tilda recién cuando Propelia contestó.
     if (clave === TAREA_TUTORIAL_LEADS && v) {
       if (!datos.orgId) toast.error(SIN_ORG)
@@ -123,7 +128,7 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
           <span key={a} className="flex items-center gap-1.5">
             <span className="text-[12px] font-medium text-success">Enviado el {fecha(e.el)} · {e.personas} {e.personas === 1 ? 'persona' : 'personas'}</span>
             {/* Una vez importado, el equipo ya son cuentas en Propelia: corregirlo ahí, no acá. */}
-            {!datos.orgId && (
+            {!datos.equipoImportado && (
               <Button size="icon" variant="ghost" className="size-7" title="Reabrir el enlace para que lo corrijan" aria-label="Reabrir el enlace"
                 disabled={reabrir.isPending} onClick={() => reabrir.mutate(datos.o.id)}>
                 {reabrir.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RotateCcw className="size-3.5" />}
@@ -133,7 +138,7 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
         )
       }
       case 'importar-usuarios': {
-        if (datos.orgId) {
+        if (datos.equipoImportado) {
           const yaTenian = datos.o.miembros.filter(m => m.existing_account).length
           const nuevas = datos.o.miembros.length - yaTenian
           return <span key={a} className="text-[12px] font-medium text-success">
@@ -141,15 +146,33 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
           </span>
         }
         const enviado = !!datos.o.submitted_at
+        /* La org se puede vincular antes del equipo (5/11/2026, por pedido): sin esperar la página de
+           alta, para importar la cartera o generar el link de pago. «Importar» suma después al equipo a esa org. */
         return (
-          <Button key={a} size="sm" variant={panel?.tipo === 'usuarios' ? 'secondary' : 'outline'} className="h-8"
-            disabled={!enviado} title={enviado ? undefined : SIN_ENVIAR} onClick={() => alternar({ tipo: 'usuarios' })}>
-            <Users className="size-4" /> Importar
-          </Button>
+          <span key={a} className="flex items-center gap-2">
+            {datos.orgId
+              ? <OrgVinculada orgId={datos.orgId} onboardingId={datos.o.id} />
+              : (
+                <Button size="sm" variant={panel?.tipo === 'vincular' ? 'secondary' : 'outline'} className="h-8"
+                  title="Atar una org que ya existe en Propelia, sin esperar al equipo" onClick={() => alternar({ tipo: 'vincular' })}>
+                  <Link2 className="size-4" /> Vincular org existente
+                </Button>
+              )}
+            <Button size="sm" variant={panel?.tipo === 'usuarios' ? 'secondary' : 'outline'} className="h-8"
+              disabled={!enviado} title={enviado ? undefined : SIN_ENVIAR} onClick={() => alternar({ tipo: 'usuarios' })}>
+              <Users className="size-4" /> Importar
+            </Button>
+          </span>
         )
       }
       case 'mails':
-        return boton(<Mail className="size-4" />, 'Enviar mails', () => setConfirmando(true), { requiereOrg: true })
+        // Con la org vinculada pero sin el equipo importado no hay cuentas: no se ofrece mandar accesos.
+        return (
+          <Button key={a} size="sm" variant="outline" className="h-8" disabled={!datos.equipoImportado}
+            title={datos.equipoImportado ? undefined : SIN_EQUIPO} onClick={() => setConfirmando(true)}>
+            <Mail className="size-4" /> Enviar mails
+          </Button>
+        )
       case 'plantilla-cartera':
         return (
           <Button key={a} size="icon" variant="outline" className="size-8" title="Descargar la plantilla de la cartera" aria-label="Descargar la plantilla de la cartera"
@@ -294,6 +317,7 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
       {panel && (
         <div className="ml-6.5">
           {panel.tipo === 'usuarios' && <ImportarUsuariosPanel datos={datos} onCerrar={() => setPanel(null)} />}
+          {panel.tipo === 'vincular' && <VincularOrgPanel datos={datos} onCerrar={() => setPanel(null)} />}
           {panel.tipo === 'cartera' && <ImportarCarteraPanel datos={datos} archivo={panel.archivo} hoja={panel.hoja} fotos={panel.fotos} onCerrar={() => setPanel(null)} />}
           {panel.tipo === 'link' && <LinkDePagoPanel datos={datos} />}
           {panel.tipo === 'pago' && <PagoPanel datos={datos} />}

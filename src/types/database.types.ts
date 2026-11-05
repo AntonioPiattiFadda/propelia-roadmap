@@ -1603,6 +1603,10 @@ export type Database = {
         Args: { p_miembros: Json; p_onboarding_id: string; p_organization_id: string }
         Returns: undefined
       }
+      client_onboarding_vincular_org: {
+        Args: { p_onboarding_id: string; p_organization_id: string }
+        Returns: undefined
+      }
       onboarding_alta_enviar: {
         Args: { p_company_name: string; p_idealista_url?: string; p_miembros: Json; p_token: string; p_website: string }
         Returns: undefined
