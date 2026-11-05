@@ -56,6 +56,10 @@ export function Crm() {
       <header className="flex items-center justify-end gap-2 px-4 pb-2 pt-3 max-md:px-2">
         <h1 className="mr-auto text-lg font-semibold text-foreground">CRM</h1>
         <MenuDeHerramientas>
+          {/* De qué personas se ven los leads (5/11/2026, por pedido: se mudó de la cabecera acá).
+              Mirando como alguien, la vista es su cartera: el selector sobra (y `?owners=` sigue
+              andando). En el resumen tampoco: muestra todas las carteras. Solo sale si ves a alguien más. */}
+          {!como && !resumen && <AgentFilterButton />}
           {/* Para todos, SDR incluido: es la jornada contra la que se trabaja la lista. */}
           <PlanningDiarioDialog />
           <PlaybookDialog />
@@ -73,9 +77,6 @@ export function Crm() {
             </div>
           )}
         </MenuDeHerramientas>
-        {/* Mirando como alguien, la vista es su cartera: el selector sobra (y `?owners=` sigue andando). */}
-        {/* En el resumen tampoco: muestra todas las carteras. */}
-        {!como && !resumen && <AgentFilterButton />}
         {/* Dashboard ⇄ lista: solo SUPERADMIN (y no con «Ver como», que no tiene Dashboard). */}
         {decidido && esSuperadmin && !como && (
           <Button variant="outline" onClick={alternarVista}

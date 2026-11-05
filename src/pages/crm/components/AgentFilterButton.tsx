@@ -24,9 +24,10 @@ export function AgentFilterButton() {
     setSelectedIds(next)
   }
 
+  // Vive adentro de «Herramientas» (5/11/2026, por pedido): el rótulo tiene que decir qué hace.
   const label = selectedIds.length === 1
-    ? (visibles.find(u => u.id === selectedIds[0])?.nombre ?? 'Mis leads')
-    : `${selectedIds.length} carteras`
+    ? `Leads de ${visibles.find(u => u.id === selectedIds[0])?.nombre ?? 'vos'}`
+    : `Leads de ${selectedIds.length} personas`
 
   // Un inactivo no se ofrece (23/10/2026, por pedido), salvo que ya esté marcado: así se lo puede sacar.
   const opciones = visibles.filter(u => u.activo || selectedIds.includes(u.id))

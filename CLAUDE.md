@@ -834,6 +834,9 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   Reglas en `lib/emails.ts`. Ojo: después de un rebote duro
   Resend suprime la dirección y no le vuelve a mandar («No se envió») hasta sacarla a mano de su
   lista de supresión.
+- **El selector de carteras vive en «Herramientas»** (5/11/2026, por pedido): «Leads de Lorenzo» /
+  «Leads de N personas» (`AgentFilterButton`, el mismo menú de tildes), ya no suelto en la cabecera.
+  Mismas reglas: solo si ves a alguien más, ni con «Ver como» ni en el Dashboard.
 - **«Ver como»** (23/10/2026, por pedido): botón de la cabecera del CRM (`VerComoButton`,
   `components/VerComo.tsx`) que abre en **otra ventana** `/crm?como=<id>` (`COMO_PARAM`,
   `enlaceAlCrm({ como })`). Lista a los activos cuya cartera ves, sin vos (`puedeVerComo`,
