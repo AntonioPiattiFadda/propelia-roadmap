@@ -112,7 +112,7 @@ function Cuerpo({ datos, lleva, yo, onCerrar }: { datos: DatosDelAlta; lleva: Us
             </p>
           )}
           {/* Las cuentas del equipo, abajo de todo y en cualquier paso (29/10/2026, por pedido). */}
-          {datos.orgId && datos.o.miembros.length > 0 && (
+          {datos.equipoImportado && datos.orgId && datos.o.miembros.length > 0 && (
             <div className="mt-auto pt-4"><CuentasCreadas datos={datos} /></div>
           )}
         </section>

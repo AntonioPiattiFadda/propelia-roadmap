@@ -106,6 +106,10 @@ export const claveDeTarea = (pasoId: string, tareaId: string) => `${pasoId}.${ta
 /** La tilda la base cuando el cliente envía la página de alta (`onboarding_alta_enviar`). */
 export const TAREA_EQUIPO_RECIBIDO = claveDeTarea('contacto', 'excel-recibido')
 
+/** La tilda `client_onboarding_importar_equipo`. Hecha = el equipo ya son cuentas en Propelia. Desde
+ *  el 5/11/2026 es la única marca de «importado»: la org se puede vincular antes (`vincularOrg`). */
+export const TAREA_IMPORTAR_USUARIOS = claveDeTarea('contacto', 'importar-usuarios')
+
 /** La tarea que no se tilda a mano: manda mails, pasa por `ConfirmarAccesosDialog`. */
 export const TAREA_CREDENCIALES = claveDeTarea('contacto', 'credenciales')
 

@@ -2500,6 +2500,42 @@ revoke execute on function public.client_onboarding_completar(uuid) from public,
 grant execute on function public.client_onboarding_importar_equipo(uuid, uuid, jsonb) to authenticated;
 grant execute on function public.client_onboarding_completar(uuid) to authenticated;
 
+-- Vincular la org antes de importar el equipo (5/11/2026, por pedido): ata (o con null, desata) la
+-- org de Propelia al lead del alta. Solo SUPERADMIN y solo mientras el equipo no se importó (después
+-- las cuentas ya están en esa org). Después, «Importar» suma al equipo a esa misma org.
+create or replace function public.client_onboarding_vincular_org(
+  p_onboarding_id uuid, p_organization_id uuid
+) returns void language plpgsql security invoker set search_path to 'public' as $$
+declare
+  v_lead uuid;
+begin
+  if not public.crm_es_superadmin() then
+    raise exception 'crm_solo_superadmin' using errcode = '42501';
+  end if;
+  select lead_id into v_lead from public.client_onboardings where id = p_onboarding_id;
+  if v_lead is null then
+    raise exception 'crm_onboarding_no_existe' using errcode = 'P0002';
+  end if;
+  if exists (
+    select 1 from public.client_onboarding_tasks
+    where onboarding_id = p_onboarding_id and task_id = 'contacto.importar-usuarios'
+  ) then
+    raise exception 'crm_onboarding_equipo_ya_importado' using errcode = '22023';
+  end if;
+  if p_organization_id is not null and exists (
+    select 1 from public.crm_leads
+    where propelia_organization_id = p_organization_id and id <> v_lead and deleted_at is null
+  ) then
+    raise exception 'crm_onboarding_org_de_otro_lead' using errcode = '23505';
+  end if;
+
+  update public.crm_leads set propelia_organization_id = p_organization_id where id = v_lead;
+end;
+$$;
+
+revoke execute on function public.client_onboarding_vincular_org(uuid, uuid) from public, anon;
+grant execute on function public.client_onboarding_vincular_org(uuid, uuid) to authenticated;
+
 -- La página pública de alta (reemplaza al Excel de usuarios): la llama la edge function
 -- `onboarding-alta` con el service_role. Mock en docs/onboarding/alta-publica.html.
 -- Lo que la página precarga. null si el token no existe o el alta ya terminó.
@@ -2610,9 +2646,10 @@ grant execute on function public.onboarding_alta_enviar(uuid, text, text, jsonb,
 
 -- «Quiero editar» en la página pública de alta (27/10/2026, por pedido): el cliente que ya envió
 -- puede volver a abrir el formulario él solo, mientras el equipo de Propelia no lo haya importado.
--- Importado = el lead ya tiene su org en Propelia (`propelia_organization_id`, lo deja
--- `client_onboarding_importar_equipo`): las cuentas existen y cambiar el equipo acá no las tocaría,
--- así que se corta con `alta_ya_importada` y la página lo avisa amablemente.
+-- Importado = la tarea `contacto.importar-usuarios` hecha (la tilda `client_onboarding_importar_equipo`;
+-- hasta el 5/11/2026 era «el lead tiene org», pero la org ahora se puede vincular antes): las cuentas
+-- existen y cambiar el equipo acá no las tocaría, así que se corta con `alta_ya_importada` y la
+-- página lo avisa amablemente.
 --
 -- Hace lo mismo que «Reabrir» de /clientes (`reabrirAlta`): borra `submitted_at` y destilda
 -- «Recibir el equipo». Al reenviar, la base vuelve a tildarla y el trigger
@@ -2622,10 +2659,9 @@ grant execute on function public.onboarding_alta_enviar(uuid, text, text, jsonb,
 create or replace function public.onboarding_alta_reabrir(p_token uuid)
 returns void language plpgsql security definer set search_path to 'public' as $$
 declare
-  v_id  uuid;
-  v_org uuid;
+  v_id uuid;
 begin
-  select o.id, l.propelia_organization_id into v_id, v_org
+  select o.id into v_id
   from public.client_onboardings o
   join public.crm_leads l on l.id = o.lead_id and l.deleted_at is null
   where o.public_token = p_token and o.completed_at is null
@@ -2633,7 +2669,10 @@ begin
   if v_id is null then
     raise exception 'alta_no_existe' using errcode = 'P0002';
   end if;
-  if v_org is not null then
+  if exists (
+    select 1 from public.client_onboarding_tasks
+    where onboarding_id = v_id and task_id = 'contacto.importar-usuarios'
+  ) then
     raise exception 'alta_ya_importada' using errcode = '22023';
   end if;
 

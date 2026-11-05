@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronsUpDown, ExternalLink, Loader2 } from 'lucide-react'
+import { Check, ChevronsUpDown, ExternalLink, Loader2, Unlink } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { crearOrgConUsuarios, PUENTE_SIMULADO, sumarUsuariosAOrg, type OrgEnLista, type ResultadoDeUsuario, type UsuarioParaCrear } from '../service/puente'
-import { useImportarEquipo, useOrganizacionesDePropelia } from '../hooks/useClientes'
+import { useImportarEquipo, useOrganizacion, useOrganizacionesDePropelia, useVincularOrg } from '../hooks/useClientes'
 import { contrasenaInicial, normalizarWeb } from '../lib/equipo'
 import type { DatosDelAlta } from './datosDelAlta'
 
@@ -29,11 +29,18 @@ type Modo = 'nueva' | 'existente'
    (`dry_run`) que dice persona por persona qué va a pasar; alguien con cuenta en otra org frena el
    import. Las que ya tenían cuenta quedan con `existing_account` y no reciben mail de accesos. */
 export function ImportarUsuariosPanel({ datos, onCerrar }: { datos: DatosDelAlta; onCerrar: () => void }) {
-  const [modo, setModo] = useState<Modo>('nueva')
+  const [modoElegido, setModo] = useState<Modo>('nueva')
   const [nombreOrg, setNombreOrg] = useState(datos.inmobiliaria)
   const [web, setWeb] = useState(datos.o.website ?? '')
   const webNormalizada = normalizarWeb(web)
-  const [orgElegida, setOrgElegida] = useState<OrgEnLista | null>(null)
+  const [elegida, setOrgElegida] = useState<OrgEnLista | null>(null)
+  /* Con la org ya vinculada («Vincular org existente», 5/11/2026) no se elige nada: el equipo se suma a esa. */
+  const infoDeLaVinculada = useOrganizacion(datos.orgId)
+  const orgFija: OrgEnLista | null = datos.orgId
+    ? { id: datos.orgId, name: infoDeLaVinculada.data?.name ?? 'la org vinculada', slug: '', created_at: '' }
+    : null
+  const modo: Modo = orgFija ? 'existente' : modoElegido
+  const orgElegida = orgFija ?? elegida
   const [revision, setRevision] = useState<{ orgId: string; porEmail: Map<string, ResultadoDeUsuario> } | null>(null)
   const [fallaDeRevision, setFallaDeRevision] = useState<{ orgId: string; mensaje: string } | null>(null)
   const [enCurso, setEnCurso] = useState(false)
@@ -150,7 +157,7 @@ export function ImportarUsuariosPanel({ datos, onCerrar }: { datos: DatosDelAlta
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-(--line) bg-(--surface-2) p-3">
       <div className="flex flex-wrap items-center gap-2 text-[13px]">
-        <div className="inline-flex rounded-md border border-(--line) bg-card p-0.5" role="radiogroup" aria-label="Organización en Propelia">
+        {!orgFija && <div className="inline-flex rounded-md border border-(--line) bg-card p-0.5" role="radiogroup" aria-label="Organización en Propelia">
           {([['nueva', 'Crear organización nueva'], ['existente', 'Usar una que ya existe']] as const).map(([valor, rotulo]) => (
             <button key={valor} type="button" role="radio" aria-checked={modo === valor} disabled={enCurso}
               onClick={() => setModo(valor)}
@@ -159,7 +166,7 @@ export function ImportarUsuariosPanel({ datos, onCerrar }: { datos: DatosDelAlta
               {rotulo}
             </button>
           ))}
-        </div>
+        </div>}
         {/* El link de Idealista que dejó el cliente en la página de alta: para mirarlo, no viaja a Propelia. */}
         {datos.o.idealista_url && (
           <a href={/^https?:\/\//i.test(datos.o.idealista_url) ? datos.o.idealista_url : `https://${datos.o.idealista_url}`}
@@ -185,10 +192,14 @@ export function ImportarUsuariosPanel({ datos, onCerrar }: { datos: DatosDelAlta
             </label>
           </>
         ) : (
-          <label className="ml-auto flex items-center gap-2 text-(--fg-2)">
-            Organización
-            <SelectorDeOrg valor={orgElegida} onElegir={setOrgElegida} deshabilitado={enCurso} />
-          </label>
+          orgFija
+            ? <span className="ml-auto text-(--fg-2)">Se suma a <b className="text-foreground">{orgFija.name}</b>, ya vinculada al lead</span>
+            : (
+              <label className="ml-auto flex items-center gap-2 text-(--fg-2)">
+                Organización
+                <SelectorDeOrg valor={orgElegida} onElegir={setOrgElegida} deshabilitado={enCurso} />
+              </label>
+            )
         )}
       </div>
       {modo === 'existente' && orgElegida && (
@@ -247,6 +258,46 @@ export function ImportarUsuariosPanel({ datos, onCerrar }: { datos: DatosDelAlta
         </span>
       </div>
     </div>
+  )
+}
+
+/** «Vincular org existente» (5/11/2026, por pedido): ata una org de Propelia al lead sin esperar al
+ *  equipo, para importar la cartera o generar el link de pago antes. No crea ni toca cuentas:
+ *  eso lo hace «Importar» después, sumando al equipo a esta org. */
+export function VincularOrgPanel({ datos, onCerrar }: { datos: DatosDelAlta; onCerrar: () => void }) {
+  const [org, setOrg] = useState<OrgEnLista | null>(null)
+  const vincular = useVincularOrg()
+  const confirmar = () => {
+    if (!org) return
+    vincular.mutate({ onboardingId: datos.o.id, organizationId: org.id }, {
+      onSuccess: () => { toast.success(`${org.name} vinculada al lead`, { description: 'Al importar el equipo, se suma a esta org.' }); onCerrar() },
+    })
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-(--line) bg-(--surface-2) p-3 text-[13px]">
+      <span className="text-(--fg-2)">Organización</span>
+      <SelectorDeOrg valor={org} onElegir={setOrg} deshabilitado={vincular.isPending} />
+      <Button size="sm" disabled={!org || vincular.isPending} onClick={confirmar}>
+        {vincular.isPending && <Loader2 className="size-4 animate-spin" />} Vincular
+      </Button>
+      <Button size="sm" variant="outline" disabled={vincular.isPending} onClick={onCerrar}>Cancelar</Button>
+      <span className="text-[12px] text-(--fg-muted)">No crea cuentas: el equipo se suma después con «Importar».</span>
+    </div>
+  )
+}
+
+/** La org ya vinculada y sin equipo importado: su nombre y cómo desatarla. */
+export function OrgVinculada({ orgId, onboardingId }: { orgId: string; onboardingId: string }) {
+  const org = useOrganizacion(orgId)
+  const vincular = useVincularOrg()
+  return (
+    <span className="flex items-center gap-1 text-[12px]">
+      <span className="font-medium text-success">Org vinculada: {org.data?.name ?? (org.isLoading ? '…' : orgId.slice(0, 8))}</span>
+      <Button size="icon" variant="ghost" className="size-7" title="Desvincular la org" aria-label="Desvincular la org"
+        disabled={vincular.isPending} onClick={() => vincular.mutate({ onboardingId, organizationId: null }, { onSuccess: () => toast.success('Org desvinculada') })}>
+        {vincular.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <Unlink className="size-3.5" />}
+      </Button>
+    </span>
   )
 }
 

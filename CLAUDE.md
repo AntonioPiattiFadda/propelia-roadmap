@@ -454,6 +454,15 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   `client_onboarding_importar_equipo` (`crm_onboarding_org_de_otro_lead`). Hace falta deployar
   `roadmap-bridge` (producto) y `propelia-bridge` (acá). Sin la migración, la vinculación anda pero
   los que ya tenían cuenta recibirían el mail de accesos con una contraseña que no es la suya.
+  **Y se vincula antes del equipo** (5/11/2026, por pedido; migración
+  `20261105182656_onboarding_vincular_org_antes_del_equipo`, que **la aplica Antonio**): en la tarea
+  «Importar el equipo», «Vincular org existente» (`VincularOrgPanel`) ata la org al lead sin esperar la
+  página de alta, por la RPC `client_onboarding_vincular_org` (con null desvincula; la rechaza con el
+  equipo ya importado, `crm_onboarding_equipo_ya_importado`). Así se importa la cartera o se genera el
+  link de pago antes. Después «Importar» suma al equipo a esa org, sin elegir. **Tener org ya no es
+  tener el equipo importado**: eso es la tarea `contacto.importar-usuarios` hecha
+  (`TAREA_IMPORTAR_USUARIOS`, `datos.equipoImportado`), y de ahí leen «Cuentas del equipo», «Enviar
+  mails», «Reabrir» y `onboarding_alta_reabrir` (el «Quiero editar» de la página pública).
 - **Dos capacitaciones por Google Meet en el paso 2** (31/10/2026, por pedido, migración
   `20261031173059_onboarding_reuniones_de_capacitacion`, que **la aplica Antonio**): arriba del
   tutorial de leads, «con el equipo» y «con el dueño» (`Tarea.reunion` en `lib/pasos.ts`). Cada una

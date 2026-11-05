@@ -1,6 +1,6 @@
 import { linkDeAlta } from '../lib/equipo'
 import { llenarPlantilla, nombreDePila } from '../lib/mensajes'
-import type { PlantillaId } from '../lib/pasos'
+import { TAREA_IMPORTAR_USUARIOS, type PlantillaId } from '../lib/pasos'
 import type { ClienteDelOnboarding, MiembroDelOnboarding, Onboarding, PlantillaDeMensaje } from '../types'
 
 /** A qué número va el WhatsApp del alta: el del responsable del equipo y, si no tiene, el primero
@@ -32,8 +32,11 @@ export type DatosDelAlta = {
   email: string | null
   /** Quien firma los WhatsApp y los mails: quien lleva el alta o, si nadie, yo. */
   soporte: string
-  /** La org del cliente en Propelia: la deja el import de usuarios. */
+  /** La org del cliente en Propelia: la deja el import de usuarios o, desde el 5/11/2026, «Vincular
+   *  org existente» antes del equipo. Tener org NO es tener el equipo importado: eso es `equipoImportado`. */
   orgId: string | null
+  /** El equipo ya son cuentas en Propelia (`TAREA_IMPORTAR_USUARIOS` hecha). */
+  equipoImportado: boolean
   /** La página pública donde el cliente carga a su equipo. */
   linkAlta: string
   /** El WhatsApp de esa plantilla ya completado; null si la plantilla no está en la base. */
@@ -54,6 +57,7 @@ export function datosDelAlta(o: Onboarding, plantillas: PlantillaDeMensaje[], so
     telefono: telefonoDelAlta(responsable, c),
     email: responsable?.email ?? c?.email ?? null,
     orgId: o.lead.propelia_organization_id,
+    equipoImportado: o.tareas.some(t => t.task_id === TAREA_IMPORTAR_USUARIOS),
     linkAlta,
     mensaje: (id, extra) => {
       const cuerpo = porId.get(id)
