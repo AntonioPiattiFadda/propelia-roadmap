@@ -47,7 +47,11 @@ do $$
 declare
   v_antonio uuid;
   v_n int;
+  v_hay text;
 begin
+  -- Sin RLS: el rol del CLI no es un usuario de la app y la policy de escritura le filtraría todo.
+  -- Si el rol no puede saltear la RLS, esto falla con un error claro en vez de contar 0.
+  perform set_config('row_security', 'off', true);
   select id into v_antonio from public.users where email = 'antonio.piattifadda@gmail.com';
   if v_antonio is null then
     raise exception 'crm_leads_de_prueba: no existe el usuario antonio.piattifadda@gmail.com';
@@ -64,6 +68,15 @@ begin
                         and lower(trim(o.company_name)) in ('test lead pre onboardding', 'inmobiliaria test onboarding')));
   get diagnostics v_n = row_count;
   if v_n <> 2 then
-    raise exception 'crm_leads_de_prueba: se esperaban 2 leads de prueba y hay %', v_n;
+    select string_agg(format('%s | crm=%L | alta=%L | %s %s', l.id, c.company_name, o.company_name,
+                             c.first_name, c.last_name), E'\n')
+      into v_hay
+      from public.crm_leads l
+      join public.crm_clients c on c.id = l.client_id
+      left join public.client_onboardings o on o.lead_id = l.id
+     where l.deleted_at is null
+       and (c.company_name ilike '%test%' or o.company_name ilike '%test%');
+    raise exception E'crm_leads_de_prueba: se esperaban 2 leads de prueba y hay %. Con «test» en el nombre:\n%',
+      v_n, coalesce(v_hay, '(ninguno)');
   end if;
 end $$;
