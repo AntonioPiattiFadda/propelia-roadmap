@@ -129,3 +129,15 @@ export function sumarResumenes(resumenes: readonly Record<Objetivo, number>[]): 
   for (const r of resumenes) for (const k of OBJETIVOS) total[k] += r[k]
   return total
 }
+
+/**
+ * Decisores por contactado (5/11/2026, por pedido): de las inmobiliarias que contestaron una
+ * llamada en el período, en cuántas se habló con alguien que decide. Cuenta inmobiliarias y no
+ * llamadas (dos llamadas al mismo lead son una), y con varias personas la misma inmobiliaria
+ * cuenta una vez. Sin contestadas no hay tasa.
+ */
+export function tasaDeDecisor(periodos: readonly Pick<ObjetivosDelPeriodo, 'leads'>[]): { contestadas: number; conDecisor: number; tasa: number | null } {
+  const contestadas = new Set(periodos.flatMap(p => [...p.leads.contestadas]))
+  const conDecisor = new Set(periodos.flatMap(p => [...p.leads.decisores]))
+  return { contestadas: contestadas.size, conDecisor: conDecisor.size, tasa: contestadas.size ? conDecisor.size / contestadas.size : null }
+}

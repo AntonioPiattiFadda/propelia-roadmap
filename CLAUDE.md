@@ -697,6 +697,12 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   persona y el total. Abajo, «Pendiente ahora» por persona: tareas suyas vencidas (la de hoy no) y
   leads de su cartera en «Seguimiento» sin tarea suya (`pendientesDePersona`). Los números de otro
   salen de lo que la RLS deja leer, como «Ver como». Sin migración.
+  **«Decisor por contactado»** (5/11/2026, por pedido), al lado de «Con decisor» en el contador y
+  en el diálogo: de las inmobiliarias que contestaron en el período, qué parte tuvo una llamada con
+  decisor (`tasaDeDecisor`, `lib/objetivos.ts`: cuenta leads y no llamadas, y con varias personas
+  la misma inmobiliaria va una vez). No filtra: tocarla la explica. **Cada encabezado del diálogo
+  se toca y dice qué es el número y de qué tabla y columnas sale** (`Explicacion`, textos en
+  `COLUMNAS` de `ContadorDeLlamadas.tsx`): si cambia una consulta de `useObjetivos`, cambia el texto.
 - **Las etapas que había el 27/10/2026 están fijas** (por pedido, migración
   `20261027131725_crm_funnel_stages_bloqueadas`, que **la aplica Antonio**): `allow_rename`,
   `allow_reorder` y `allow_delete` en false, así la configuración del funnel las muestra con candado.

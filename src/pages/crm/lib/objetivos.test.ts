@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { armarMetaDeActividad } from './actividad'
-import { esObjetivo, objetivosDe, pendientesDePersona, semanasHaciaAtras, sumarResumenes } from './objetivos'
+import { esObjetivo, objetivosDe, pendientesDePersona, semanasHaciaAtras, sumarResumenes, tasaDeDecisor } from './objetivos'
 import type { CrmLeadRow, CrmStage, CrmTask } from '../types'
 
 const llamada = (lead_id: string, resultado: 'contestada' | 'no_respondida', decisor?: boolean, con: string[] = [], created_at = '2026-11-03T10:00:00Z') => ({
@@ -134,5 +134,22 @@ describe('pendientesDePersona', () => {
 
   it('cuenta sus tareas vencidas y los leads de su cartera en seguimiento sin tarea suya', () => {
     expect(pendientesDePersona('u', leads, tareas, etapas, '2026-11-04')).toEqual({ vencidas: 2, sinTarea: 1 })
+  })
+})
+
+describe('tasaDeDecisor', () => {
+  const periodo = (contestadas: string[], decisores: string[]) => {
+    const vacio = objetivosDe([], [])
+    return { ...vacio, leads: { ...vacio.leads, contestadas: new Set(contestadas), decisores: new Set(decisores) } }
+  }
+  it('cuenta inmobiliarias, no llamadas: de las que contestaron, en cuántas se habló con un decisor', () => {
+    expect(tasaDeDecisor([periodo(['a', 'b', 'c', 'd'], ['a'])])).toEqual({ contestadas: 4, conDecisor: 1, tasa: 0.25 })
+  })
+  it('con varias personas, la misma inmobiliaria cuenta una vez', () => {
+    expect(tasaDeDecisor([periodo(['a', 'b'], ['a']), periodo(['a', 'c'], ['c'])]))
+      .toEqual({ contestadas: 3, conDecisor: 2, tasa: 2 / 3 })
+  })
+  it('sin contestadas no hay tasa', () => {
+    expect(tasaDeDecisor([periodo([], [])])).toEqual({ contestadas: 0, conDecisor: 0, tasa: null })
   })
 })
