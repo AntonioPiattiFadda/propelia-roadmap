@@ -453,6 +453,12 @@ alter table public.crm_leads add column if not exists recontact_at date;
 -- a cualquiera con write sobre la cartera. Migración `20261023135323_crm_leads_importante`.
 alter table public.crm_leads add column if not exists importante boolean not null default false;
 
+-- Leads de prueba (5/11/2026, por pedido): con `solo_para`, el lead y lo que cuelga de él lo ve
+-- solo esa persona. Lo cortan la policy restrictiva crm_leads_solo_para, crm_puede_lead() y
+-- crm_puede_cliente(). Migración `20261105173247_crm_leads_de_prueba`.
+alter table public.crm_leads
+  add column if not exists solo_para uuid references public.users(id) on delete set null;
+
 create table if not exists public.crm_meetings (
   id            uuid primary key default gen_random_uuid(),
   lead_id       uuid references public.crm_leads(id) on delete cascade,
@@ -727,7 +733,9 @@ $$;
 create or replace function public.crm_puede_lead(p_lead_id uuid, p_nivel text)
 returns boolean language sql stable security definer set search_path to 'public' as $$
   select coalesce(
-    (select public.crm_puede(l.assigned_to, p_nivel) from public.crm_leads l where l.id = p_lead_id),
+    (select public.crm_puede(l.assigned_to, p_nivel)
+            and (l.solo_para is null or l.solo_para = auth.uid())
+       from public.crm_leads l where l.id = p_lead_id),
     false);
 $$;
 
@@ -739,6 +747,7 @@ returns boolean language sql stable security definer set search_path to 'public'
   select exists (
     select 1 from public.crm_leads l
     where l.client_id = p_client_id and l.deleted_at is null
+      and (l.solo_para is null or l.solo_para = auth.uid())
       and public.crm_puede(l.assigned_to, p_nivel));
 $$;
 
@@ -789,6 +798,12 @@ create policy crm_leads_leer on public.crm_leads for select
   using (public.crm_puede(assigned_to, 'read'));
 create policy crm_leads_escribir on public.crm_leads for all
   using (public.crm_puede(assigned_to, 'write')) with check (public.crm_puede(assigned_to, 'write'));
+-- Leads de prueba: restrictiva, se suma con AND a las dos de arriba (ver `solo_para`).
+drop policy if exists crm_leads_solo_para on public.crm_leads;
+create policy crm_leads_solo_para on public.crm_leads
+  as restrictive for all to authenticated
+  using (solo_para is null or solo_para = auth.uid())
+  with check (solo_para is null or solo_para = auth.uid());
 
 -- Tareas y reuniones: con lead, por el lead; sin lead (las dos columnas son nullable), por su responsable.
 create policy crm_tasks_leer on public.crm_tasks for select using (
