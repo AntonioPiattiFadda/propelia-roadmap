@@ -12,7 +12,7 @@ import { listoParaCompletar, PASOS, pasoActual, pasoHecho } from '../lib/pasos'
 import { PUENTE_SIMULADO } from '../service/puente'
 import type { DatosDelAlta } from './datosDelAlta'
 import { ComentariosDelLead } from './ComentariosDelLead'
-import { CuentasCreadas } from './CuentasCreadas'
+import { CuentasCreadas, UsuariosDeLaOrg } from './CuentasCreadas'
 import { TareaDelOnboarding } from './TareaDelOnboarding'
 
 const fmtFecha = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -114,6 +114,10 @@ function Cuerpo({ datos, lleva, yo, onCerrar }: { datos: DatosDelAlta; lleva: Us
           {/* Las cuentas del equipo, abajo de todo y en cualquier paso (29/10/2026, por pedido). */}
           {datos.equipoImportado && datos.orgId && datos.o.miembros.length > 0 && (
             <div className="mt-auto pt-4"><CuentasCreadas datos={datos} /></div>
+          )}
+          {/* Org vinculada antes del equipo: los usuarios que ya tiene en Propelia (5/11/2026, por pedido). */}
+          {!datos.equipoImportado && datos.orgId && (
+            <div className="mt-auto pt-4"><UsuariosDeLaOrg orgId={datos.orgId} /></div>
           )}
         </section>
         <div className="flex min-h-0 flex-col max-lg:col-span-2 max-md:col-span-1">
