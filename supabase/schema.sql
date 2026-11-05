@@ -2176,6 +2176,8 @@ create table if not exists public.client_onboarding_members (
   role          text not null default 'agent' check (role in ('agent', 'admin')),
   is_owner      boolean not null default false,
   is_contact    boolean not null default false,
+  -- Ya tenía cuenta en la org de Propelia (org existente vinculada): no se le mandan accesos.
+  existing_account boolean not null default false,
   created_at    timestamptz not null default now()
 );
 create unique index if not exists client_onboarding_members_one_owner
@@ -2410,8 +2412,9 @@ create trigger crm_funnel_stages_arranca_onboarding after update of starts_onboa
 
 -- ---------- RPCs de la página ----------
 -- El import del equipo (paso 1): reemplaza el equipo por el importado, deja la org de Propelia que
--- creó el puente en el lead y tilda «Recibir el equipo» e «Importar el equipo». Todo o
--- nada. `p_miembros`: [{first_name, last_name, email, phone, role, is_owner}], uno con is_owner.
+-- creó (o eligió, si ya existía) el puente en el lead y tilda «Recibir el equipo» e «Importar el
+-- equipo». Todo o nada. `p_miembros`: [{first_name, last_name, email, phone, role, is_owner,
+-- existing_account}], uno con is_owner. Una org atada a otro lead: `crm_onboarding_org_de_otro_lead`.
 create or replace function public.client_onboarding_importar_equipo(
   p_onboarding_id uuid, p_organization_id uuid, p_miembros jsonb
 ) returns void language plpgsql security invoker set search_path to 'public' as $$
@@ -2431,14 +2434,21 @@ begin
   if (select count(*) from jsonb_array_elements(p_miembros) m where coalesce((m->>'is_owner')::boolean, false)) <> 1 then
     raise exception 'crm_onboarding_un_responsable' using errcode = '22023';
   end if;
+  if exists (
+    select 1 from public.crm_leads
+    where propelia_organization_id = p_organization_id and id <> v_lead and deleted_at is null
+  ) then
+    raise exception 'crm_onboarding_org_de_otro_lead' using errcode = '23505';
+  end if;
 
   delete from public.client_onboarding_members where onboarding_id = p_onboarding_id;
   insert into public.client_onboarding_members
-    (onboarding_id, first_name, last_name, email, phone, role, is_owner, is_contact)
+    (onboarding_id, first_name, last_name, email, phone, role, is_owner, is_contact, existing_account)
   select p_onboarding_id, btrim(m->>'first_name'), coalesce(btrim(m->>'last_name'), ''),
          nullif(btrim(m->>'email'), ''), nullif(btrim(m->>'phone'), ''),
          coalesce(m->>'role', 'agent'),
-         coalesce((m->>'is_owner')::boolean, false), coalesce((m->>'is_owner')::boolean, false)
+         coalesce((m->>'is_owner')::boolean, false), coalesce((m->>'is_owner')::boolean, false),
+         coalesce((m->>'existing_account')::boolean, false)
   from jsonb_array_elements(p_miembros) m;
 
   update public.crm_leads set propelia_organization_id = p_organization_id where id = v_lead;

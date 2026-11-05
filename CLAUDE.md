@@ -441,6 +441,19 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   idealista.com/.pt/.it (`alta_idealista_invalido`; espejo en `idealistaInvalido` de la página). En
   /clientes se ve como enlace en la vista previa de «Importar»; no viaja a Propelia. `onboarding-alta`
   manda el parámetro solo si vino escrito: sin la migración corrida, un alta con link falla y sin link anda.
+- **Vincular una org que ya existe** (5/11/2026, por pedido; migración
+  `20261105134748_onboarding_vincular_org_existente`, que **la aplica Antonio**): el panel de
+  «Importar» (`ImportarUsuariosPanel`) elige entre «Crear organización nueva» y «Usar una que ya
+  existe» (`list_organizations`). Con una existente, el puente suma al equipo con
+  `add_users_to_org` (`roadmap-bridge` del producto, contrato en `PUENTE.md`), **como las
+  propiedades**: crea las cuentas que faltan y saltea sin tocar las que ya son de esa org; una
+  persona con cuenta en otra org es error de esa fila. Antes de confirmar corre el simulacro
+  (`dry_run`) y la tabla dice «Se crea» / «Ya tiene cuenta» / el error; con algún error no deja
+  vincular. Los salteados quedan con `client_onboarding_members.existing_account`: no reciben mail
+  de accesos y «Ver cuentas» no muestra su contraseña. Una org ya atada a otro lead la rechaza
+  `client_onboarding_importar_equipo` (`crm_onboarding_org_de_otro_lead`). Hace falta deployar
+  `roadmap-bridge` (producto) y `propelia-bridge` (acá). Sin la migración, la vinculación anda pero
+  los que ya tenían cuenta recibirían el mail de accesos con una contraseña que no es la suya.
 - **Dos capacitaciones por Google Meet en el paso 2** (31/10/2026, por pedido, migración
   `20261031173059_onboarding_reuniones_de_capacitacion`, que **la aplica Antonio**): arriba del
   tutorial de leads, «con el equipo» y «con el dueño» (`Tarea.reunion` en `lib/pasos.ts`). Cada una
