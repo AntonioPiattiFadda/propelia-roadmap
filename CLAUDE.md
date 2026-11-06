@@ -463,6 +463,15 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   tener el equipo importado**: eso es la tarea `contacto.importar-usuarios` hecha
   (`TAREA_IMPORTAR_USUARIOS`, `datos.equipoImportado`), y de ahí leen «Cuentas del equipo», «Enviar
   mails», «Reabrir» y `onboarding_alta_reabrir` (el «Quiero editar» de la página pública).
+- **El cliente ve su avance en crm.propelia.es/onboarding** (6/11/2026, por pedido; la página es de
+  propelia-frontend, solo para los admins de la org, y solo mira). Son siete hitos (el diseño de
+  `public/demo/onboarding.html`): cinco de la prueba (equipo, Google, leads de Idealista, portales, IA)
+  y dos de después (migración, bot), en `_shared/hitosDeOnboarding.ts`. Cada uno está hecho por sus
+  tareas del alta o con el tilde a mano de /clientes › «Lo que ve el cliente» (`HitosDelCliente`,
+  `hito.<id>` en `client_onboarding_tasks`, sin migración); «Google», además, cuando todo el equipo
+  conectó el calendario. Lo pide la edge `onboarding-progress` del producto a `onboarding-progreso`
+  de acá, con el secreto del puente (`verify_jwt = false`; contrato en `PUENTE.md` › «La vuelta»).
+  Hace falta deployar las dos. Los vídeos vistos, después.
 - **Dos capacitaciones por Google Meet en el paso 2** (31/10/2026, por pedido, migración
   `20261031173059_onboarding_reuniones_de_capacitacion`, que **la aplica Antonio**): arriba del
   tutorial de leads, «con el equipo» y «con el dueño» (`Tarea.reunion` en `lib/pasos.ts`). Cada una
