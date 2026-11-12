@@ -30,6 +30,14 @@ export type ConfiguracionDeLaOrg = { name: boolean; website: boolean; logo: bool
 export type OrgConAgentes = OrgDePropelia & {
   agents: AgenteDePropelia[]; org_inbound_address: string | null; properties_count: number; setup?: ConfiguracionDeLaOrg
 }
+/** Una org de Propelia en el selector «Usar una que ya existe» (`list_organizations`). */
+export type OrgEnLista = { id: string; name: string; slug: string; created_at: string }
+/** Qué pasó con cada persona al sumarla a una org que ya existía (`add_users_to_org`). */
+export type ResultadoDeUsuario =
+  | { email: string; status: 'created' | 'skipped_existing'; user_id: string }
+  /** Sólo en el simulacro: se crearía. */
+  | { email: string; status: 'new' }
+  | { email: string; status: 'failed'; error: string }
 export type UsuarioParaCrear = { first_name: string; last_name: string; email: string; phone: string; role: 'admin' | 'agent'; is_owner: boolean; password: string }
 export type ColumnaDeCartera = { key: string; header: string; example: string | number }
 export type FilaRevisada = { row_number: number; valid: boolean; errors: string[]; warnings: string[]; existing_property_id: string | null; summary: Record<string, unknown> }
@@ -69,6 +77,14 @@ async function invocar<T>(action: string, params: Record<string, unknown> = {}):
 /** `website` (opcional) queda en la configuración de la org en Propelia (Ajustes › Marca). */
 export const crearOrgConUsuarios = (organization_name: string, users: UsuarioParaCrear[], website: string | null = null) =>
   invocar<{ organization: OrgDePropelia }>('create_org_with_users', { organization_name, users, ...(website ? { website } : {}) })
+export const listarOrganizaciones = () =>
+  invocar<{ organizations: OrgEnLista[] }>('list_organizations').then(r => r.organizations)
+/** Suma el equipo a una org que ya existe: crea las cuentas que faltan y saltea, sin tocarlas, las
+ *  que ya son de esa org (como las propiedades). Una persona con cuenta en otra org vuelve `failed`.
+ *  No es todo o nada: lo creado queda aunque otra falle. `simulacro`: no crea nada y las que se
+ *  crearían vuelven `new` (la vista previa). */
+export const sumarUsuariosAOrg = (org_id: string, users: UsuarioParaCrear[], simulacro = false) =>
+  invocar<{ organization: OrgEnLista; results: ResultadoDeUsuario[] }>('add_users_to_org', { org_id, users, ...(simulacro ? { dry_run: true } : {}) })
 export const getOrganizacion = (org_id: string) =>
   invocar<{ organization: OrgConAgentes }>('get_organization', { org_id }).then(r => r.organization)
 export const getColumnasDeCartera = () =>
@@ -146,6 +162,22 @@ async function simular(action: string, p: Record<string, unknown>): Promise<unkn
       }
       guardar(m)
       return { organization: { id, name, website: (p.website as string | undefined) ?? null } }
+    }
+    case 'list_organizations':
+      return { organizations: Object.values(m.orgs).map(o => ({ id: o.id, name: o.name, slug: slug(o.name), created_at: new Date().toISOString() })) }
+    case 'add_users_to_org': {
+      const org = m.orgs[String(p.org_id)]
+      if (!org) throw new Error('La organización no existe en Propelia (simulado: se creó en otro navegador).')
+      const results = (p.users as UsuarioParaCrear[]).map(u => {
+        const ya = org.agents.find(a => a.email === u.email.toLowerCase())
+        if (ya) return { email: u.email, status: 'skipped_existing', user_id: ya.id }
+        if (p.dry_run) return { email: u.email, status: 'new' }
+        const id = crypto.randomUUID()
+        org.agents.push({ id, name: `${u.first_name} ${u.last_name}`.trim(), email: u.email.toLowerCase(), role: u.role, slug: slug(u.first_name), inbound_address: null })
+        return { email: u.email, status: 'created', user_id: id }
+      })
+      guardar(m)
+      return { organization: { id: org.id, name: org.name, slug: slug(org.name), created_at: new Date().toISOString() }, results }
     }
     case 'get_organization': {
       const org = m.orgs[String(p.org_id)]

@@ -70,12 +70,23 @@ export async function reabrirAlta(onboardingId: string) {
   if (e2) throw e2
 }
 
-export type MiembroAImportar = { first_name: string; last_name: string; email: string; phone: string; role: 'admin' | 'agent'; is_owner: boolean }
+/** `existing_account`: ya tenía cuenta en la org (org existente vinculada): no se le mandan accesos.
+ *  Sin la migración `20261105134748_onboarding_vincular_org_existente` la base lo ignora. */
+export type MiembroAImportar = { first_name: string; last_name: string; email: string; phone: string; role: 'admin' | 'agent'; is_owner: boolean; existing_account?: boolean }
 
 /** Guarda el equipo importado, vincula la org al lead y tilda las dos tareas del import. Todo o nada. */
 export async function importarEquipo(p: { onboardingId: string; organizationId: string; miembros: MiembroAImportar[] }) {
   const { error } = await supabase.rpc('client_onboarding_importar_equipo', {
     p_onboarding_id: p.onboardingId, p_organization_id: p.organizationId, p_miembros: p.miembros as unknown as Json,
+  })
+  if (error) throw error
+}
+
+/** Ata la org de Propelia al lead antes de importar el equipo (null la desata). La base lo rechaza
+ *  si el equipo ya se importó (`crm_onboarding_equipo_ya_importado`) o si la org es de otro lead. */
+export async function vincularOrg(p: { onboardingId: string; organizationId: string | null }) {
+  const { error } = await supabase.rpc('client_onboarding_vincular_org', {
+    p_onboarding_id: p.onboardingId, p_organization_id: p.organizationId as string,
   })
   if (error) throw error
 }

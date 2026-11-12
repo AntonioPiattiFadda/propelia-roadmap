@@ -85,6 +85,7 @@ export type Database = {
         Row: {
           created_at: string
           email: string | null
+          existing_account: boolean
           first_name: string
           id: string
           is_contact: boolean
@@ -97,6 +98,7 @@ export type Database = {
         Insert: {
           created_at?: string
           email?: string | null
+          existing_account?: boolean
           first_name: string
           id?: string
           is_contact?: boolean
@@ -109,6 +111,7 @@ export type Database = {
         Update: {
           created_at?: string
           email?: string | null
+          existing_account?: boolean
           first_name?: string
           id?: string
           is_contact?: boolean
@@ -1598,6 +1601,10 @@ export type Database = {
       }
       client_onboarding_importar_equipo: {
         Args: { p_miembros: Json; p_onboarding_id: string; p_organization_id: string }
+        Returns: undefined
+      }
+      client_onboarding_vincular_org: {
+        Args: { p_onboarding_id: string; p_organization_id: string }
         Returns: undefined
       }
       onboarding_alta_enviar: {

@@ -34,8 +34,10 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
   const [enCurso, setEnCurso] = useState(false)
   const marcar = useMarcarTarea()
   const qc = useQueryClient()
+  // Los que ya tenían cuenta en la org vinculada no reciben accesos: su contraseña no es la nuestra.
+  const yaTenian = datos.o.miembros.filter(m => m.existing_account)
   const miembros = datos.o.miembros
-    .filter(m => m.email)
+    .filter(m => m.email && !m.existing_account)
     .map(m => ({ ...m, contrasena: contrasenaInicial(m.first_name, m.last_name, new Date(m.created_at).getFullYear()) }))
   const accesoDe = (m: (typeof miembros)[number]) =>
     ({ nombre: `${m.first_name} ${m.last_name}`.trim(), email: m.email!, contrasena: m.contrasena, inmobiliaria: datos.inmobiliaria })
@@ -71,7 +73,8 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
         qc.invalidateQueries({ queryKey: CRM_KEYS.detalle(datos.o.lead.id) }),
       ]))
       .catch(() => toast.warning('Los mails salieron, pero no se completó la tarea «Revisar e importar el equipo» del CRM'))
-    toast.success(PUENTE_SIMULADO ? 'Tarea hecha (puente simulado: no se mandó ningún mail)' : `${miembros.length} mails de acceso enviados`)
+    toast.success(PUENTE_SIMULADO ? 'Tarea hecha (puente simulado: no se mandó ningún mail)'
+      : miembros.length ? `${miembros.length} mails de acceso enviados` : 'Tarea hecha: todos ya tenían cuenta')
     cerrar()
   }
 
@@ -83,6 +86,7 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
           <AlertDialogDescription>
             A cada persona le llega un mail desde info@propelia.es con su usuario, su contraseña temporal y el enlace para
             entrar a Propelia. Se envían {miembros.length} mails y no se pueden deshacer.
+            {yaTenian.length > 0 && <> No van a {yaTenian.map(m => m.first_name).join(', ')}: ya {yaTenian.length === 1 ? 'tenía' : 'tenían'} cuenta en la organización.</>}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <ul className="max-h-56 overflow-y-auto rounded-md border border-(--line) text-[13px]">
@@ -109,9 +113,10 @@ export function ConfirmarAccesosDialog({ datos, abierto, onCerrar }: { datos: Da
         </label>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={enCurso}>Cancelar</AlertDialogCancel>
-          <Button disabled={!verifique || enCurso || !miembros.length} onClick={() => void enviar()}>
+          {/* Con todos ya en la org no hay nada que mandar: el botón solo tilda la tarea. */}
+          <Button disabled={!verifique || enCurso} onClick={() => void enviar()}>
             {enCurso && <Loader2 className="size-4 animate-spin" />}
-            Enviar {miembros.length} mails
+            {miembros.length ? `Enviar ${miembros.length} mails` : 'Marcar hecha (no hay mails que mandar)'}
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

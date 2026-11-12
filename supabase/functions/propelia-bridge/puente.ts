@@ -9,6 +9,7 @@ export const ACCIONES = [
   'list_organizations',
   'get_organization',
   'create_org_with_users',
+  'add_users_to_org',
   'import_template',
   'check_properties',
   'import_properties',

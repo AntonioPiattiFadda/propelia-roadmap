@@ -43,7 +43,8 @@ export function CuentasCreadas({ datos }: { datos: DatosDelAlta }) {
         : ultima && new Date(ultima) > new Date(borrado) ? ultima : null
       return {
         id: m.id, nombre: `${m.first_name} ${m.last_name}`.trim(), responsable: m.is_owner, usuario: m.email ?? '',
-        contrasena: contrasenaInicial(m.first_name, m.last_name, new Date(m.created_at).getFullYear()),
+        // Ya tenía cuenta en la org (org existente vinculada): su contraseña es la suya, no la sabemos.
+        contrasena: m.existing_account ? null : contrasenaInicial(m.first_name, m.last_name, new Date(m.created_at).getFullYear()),
         entro, ultima, borrado,
         probada: probadas.has(tareaCuentaProbada(m.id)),
         calendario: agente?.calendar_connected === true,
@@ -55,7 +56,7 @@ export function CuentasCreadas({ datos }: { datos: DatosDelAlta }) {
     ? ([['name', 'nombre'], ['website', 'web'], ['logo', 'logo'], ['colors', 'colores']] as const).filter(([k]) => !setup[k]).map(([, r]) => r)
     : []
   const nProbadas = cuentas.filter(c => c.probada).length
-  const todo = cuentas.map(c => `${c.nombre}\nUsuario: ${c.usuario}\nContraseña: ${c.contrasena}`).join('\n\n')
+  const todo = cuentas.map(c => `${c.nombre}\nUsuario: ${c.usuario}\nContraseña: ${c.contrasena ?? 'la suya (ya tenía cuenta)'}`).join('\n\n')
   const copiar = (texto: string, aviso: string, rotulo: string) => (
     <Button size="icon" variant="ghost" className="size-6 shrink-0" title={`Copiar ${rotulo}`} aria-label={`Copiar ${rotulo}`}
       onClick={() => void copiarTexto(texto, aviso)}>
@@ -93,7 +94,9 @@ export function CuentasCreadas({ datos }: { datos: DatosDelAlta }) {
                   <span className="flex items-center gap-1">{c.usuario}{c.usuario && copiar(c.usuario, 'Usuario copiado', `el usuario de ${c.nombre}`)}</span>
                 </td>
                 <td className="px-2.5 py-1.5 font-mono text-[12px]">
-                  <span className="flex items-center gap-1">{c.contrasena}{copiar(c.contrasena, 'Contraseña copiada', `la contraseña de ${c.nombre}`)}</span>
+                  {c.contrasena
+                    ? <span className="flex items-center gap-1">{c.contrasena}{copiar(c.contrasena, 'Contraseña copiada', `la contraseña de ${c.nombre}`)}</span>
+                    : <span className="font-sans text-(--fg-muted)" title="Ya tenía cuenta en la org: no se le cambió la contraseña">Ya tenía cuenta</span>}
                 </td>
                 <td className="px-2.5 py-1.5">
                   <Checkbox checked={c.probada} title="Entré con este usuario y anda" aria-label={`Probé la cuenta de ${c.nombre}`}
@@ -125,6 +128,81 @@ export function CuentasCreadas({ datos }: { datos: DatosDelAlta }) {
           </tbody>
         </table>
       </div>
+    </section>
+  )
+}
+
+const ROLES: Record<string, string> = { admin: 'Administrador', agent: 'Agente', superadmin: 'Superadmin', owner: 'Dueño' }
+
+/* Los usuarios que la org ya tiene en Propelia (5/11/2026, por pedido): con la org vinculada antes
+   del equipo («Vincular org existente») todavía no hay `client_onboarding_members`, así que en lugar
+   de «Cuentas del equipo» se lista lo que trae `get_organization` del puente. Sin contraseñas: son
+   cuentas suyas. Al importar el equipo, esta tabla deja lugar a `CuentasCreadas`. */
+export function UsuariosDeLaOrg({ orgId }: { orgId: string }) {
+  const org = useOrganizacion(orgId)
+  const agentes = [...(org.data?.agents ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+  const sabeLogins = agentes.some(a => a.last_sign_in_at !== undefined)
+  const sabeCalendarios = agentes.some(a => a.calendar_connected !== undefined)
+  const setup = org.data?.setup
+  const faltaDeLaOrg = setup
+    ? ([['name', 'nombre'], ['website', 'web'], ['logo', 'logo'], ['colors', 'colores']] as const).filter(([k]) => !setup[k]).map(([, r]) => r)
+    : []
+  const entraron = agentes.filter(a => a.first_sign_in_at).length
+  const conCalendario = agentes.filter(a => a.calendar_connected).length
+
+  return (
+    <section className="flex w-fit max-w-full flex-col gap-2 rounded-md border border-(--line) bg-(--surface-2) p-3 text-[12.5px]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <h4 className="text-[13px] font-semibold">Usuarios de {org.data?.name ?? 'la org'} en Propelia</h4>
+        {org.isLoading ? <Loader2 className="size-3.5 animate-spin text-(--fg-muted)" aria-label="Cargando" /> : (
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-[12px]">
+            <Resumen ok rotulo="Usuarios" valor={String(agentes.length)} />
+            {sabeLogins && <Resumen ok={entraron === agentes.length} rotulo="Entraron" valor={`${entraron} de ${agentes.length}`} />}
+            {sabeCalendarios && <Resumen ok={conCalendario === agentes.length} rotulo="Calendario conectado" valor={`${conCalendario} de ${agentes.length}`} />}
+            {setup && <Resumen ok={setup.done} rotulo="Organización" valor={setup.done ? 'configurada' : `falta ${faltaDeLaOrg.join(', ')}`} />}
+            {org.data && <Resumen ok rotulo="Propiedades" valor={String(org.data.properties_count)} />}
+          </ul>
+        )}
+      </div>
+      {org.isError && <p className="text-destructive">No se pudo traer la org de Propelia: {org.error instanceof Error ? org.error.message : 'error'}</p>}
+      {agentes.length > 0 && (
+        <div className="w-fit max-w-full overflow-x-auto rounded-md border border-(--line) bg-card">
+          <table className="w-fit">
+            <thead className="bg-(--surface-2) text-left text-[11px] uppercase tracking-wide text-(--fg-muted)">
+              <tr>{['Nombre', 'Usuario', 'Rol', 'Entró', 'Calendario'].map(h => <th key={h} className="px-2.5 py-2 font-medium">{h}</th>)}</tr>
+            </thead>
+            <tbody>
+              {agentes.map(a => (
+                <tr key={a.id} className="whitespace-nowrap border-t border-(--line)">
+                  <td className="px-2.5 py-1.5">{a.name}</td>
+                  <td className="px-2.5 py-1.5">
+                    <span className="flex items-center gap-1">{a.email ?? '—'}
+                      {a.email && (
+                        <Button size="icon" variant="ghost" className="size-6 shrink-0" title={`Copiar el usuario de ${a.name}`} aria-label={`Copiar el usuario de ${a.name}`}
+                          onClick={() => void copiarTexto(a.email!, 'Usuario copiado')}>
+                          <Copy className="size-3" />
+                        </Button>
+                      )}
+                    </span>
+                  </td>
+                  <td className="px-2.5 py-1.5">{ROLES[a.role.toLowerCase()] ?? a.role}</td>
+                  <td className="px-2.5 py-1.5">
+                    {!sabeLogins ? <span className="text-(--fg-muted)">—</span>
+                      : a.first_sign_in_at ? <span className="font-medium text-success" title={a.last_sign_in_at ? `Última vez: ${fecha(a.last_sign_in_at)}` : undefined}>{fecha(a.first_sign_in_at)}</span>
+                      : <span className="text-(--fg-muted)">Todavía no</span>}
+                  </td>
+                  <td className="px-2.5 py-1.5">
+                    {!sabeCalendarios ? <span className="text-(--fg-muted)">—</span>
+                      : a.calendar_connected ? <span className="font-medium text-success">Conectado</span>
+                      : <span className="text-(--fg-muted)">Todavía no</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {!org.isLoading && !org.isError && agentes.length === 0 && <p className="text-(--fg-muted)">La org no tiene usuarios todavía.</p>}
     </section>
   )
 }
