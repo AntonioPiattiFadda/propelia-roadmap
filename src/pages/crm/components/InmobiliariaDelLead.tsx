@@ -5,7 +5,8 @@ import { PhoneInput } from '@/components/ui/phone-input'
 import { cn } from '@/lib/utils'
 import { useActualizarCliente } from '../hooks/useLeadMutaciones'
 import { enlaceDeWeb, parsearAgentes, webALaVista } from '../lib/inmobiliaria'
-import { investigacionDeClaude } from '../lib/investigacion'
+import { conInvestigacionEditada, investigacionDeClaude } from '../lib/investigacion'
+import { Textarea } from '@/components/ui/textarea'
 import type { ClientePatch } from '../service/crm.service'
 import type { CrmLeadRow } from '../types'
 
@@ -55,7 +56,7 @@ const borradorDe = (l: CrmLeadRow): Borrador => ({
 })
 
 /* Cada sección se edita por su lado: «Editar» en una no vuelve campos a las otras. */
-type Bloque = 'empresa' | 'online' | 'telefonos'
+type Bloque = 'empresa' | 'online' | 'telefonos' | 'investigacion'
 type Dato = { c: Campo; rotulo: string; placeholder: string; inputMode?: 'numeric' }
 
 const DATOS_EMPRESA: Dato[] = [
@@ -140,6 +141,21 @@ export function InmobiliariaDelLead({ lead, puedeEscribir, otrosContactos, telef
   const botonEditar = (b: Bloque) => puedeEscribir &&
     <BotonEditar editando={enEdicion === b} onClick={() => enEdicion === b ? setEnEdicion(null) : editar(b, null)} />
 
+  /* La investigación se edita entera en un cuadro (12/11/2026, por pedido) y se guarda al salir:
+     se vuelve a meter en el `sdr_advice` sin tocar lo que no se muestra (`conInvestigacionEditada`). */
+  const [investigacionBorrador, setInvestigacionBorrador] = useState(investigacion ?? '')
+  useEffect(() => {
+    if (enEdicion !== 'investigacion') setInvestigacionBorrador(investigacion ?? '')
+  }, [investigacion, enEdicion])
+  const guardarInvestigacion = () => {
+    const client = lead.client
+    if (!client || investigacionBorrador.trim() === (investigacion ?? '').trim()) return
+    actualizarCliente.mutate({
+      clientId: client.id,
+      patch: { sdr_advice: conInvestigacionEditada(client.sdr_advice, investigacionBorrador) },
+    })
+  }
+
   const cambiar = (campo: Campo, valor: string) => { editando.current = true; setBorrador(b => ({ ...b, [campo]: valor })) }
   /* Un campo por guardado, siempre: si la base todavía no tiene la columna, falla ese dato solo
      (con el aviso de `FALTA_MIGRACION`) y no arrastra a otro que sí podía guardarse. */
@@ -220,10 +236,14 @@ export function InmobiliariaDelLead({ lead, puedeEscribir, otrosContactos, telef
 
           {otrosContactos && <Seccion titulo="Personas">{otrosContactos}</Seccion>}
 
-          {/* Solo lectura: es lo que trajo la importación, no un dato del perfil. */}
-          {investigacion && (
-            <Seccion titulo="Investigación de Claude">
-              <p className="whitespace-pre-wrap py-1 text-[13px] leading-snug text-foreground">{investigacion}</p>
+          {/* Lo que trajo la importación; con permiso de escritura, «Editar» lo vuelve un cuadro. */}
+          {(investigacion || enEdicion === 'investigacion') && (
+            <Seccion titulo="Investigación de Claude" accion={botonEditar('investigacion')}>
+              {enEdicion === 'investigacion'
+                ? <Textarea aria-label="Investigación de Claude" autoFocus value={investigacionBorrador}
+                    onChange={e => setInvestigacionBorrador(e.target.value)} onBlur={guardarInvestigacion}
+                    className="my-1 min-h-40 text-[13px] leading-snug md:text-[13px]" />
+                : <p className="whitespace-pre-wrap py-1 text-[13px] leading-snug text-foreground">{investigacion}</p>}
             </Seccion>
           )}
         </div>
