@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Bell, Check, ChevronDown, MailX, RotateCcw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -96,6 +97,19 @@ export function CampanaDeEmails() {
   )
 }
 
+/** Los avisos del lead que se sacaron con la cruz, por navegador. */
+const CLAVE_OCULTOS = 'crm-emails-ocultos'
+function leerOcultos(): Set<string> {
+  try {
+    const crudo = JSON.parse(localStorage.getItem(CLAVE_OCULTOS) ?? '[]') as unknown
+    if (Array.isArray(crudo)) return new Set(crudo.filter((c): c is string => typeof c === 'string'))
+  } catch { /* sin storage: no queda nada oculto */ }
+  return new Set()
+}
+function guardarOcultos(ids: Set<string>) {
+  try { localStorage.setItem(CLAVE_OCULTOS, JSON.stringify([...ids])) } catch { /* idem */ }
+}
+
 /** El cartel del perfil del lead, debajo de «Mensajes». Plegado de entrada (20/10/2026, por pedido):
  *  el título ya dice cuántos no llegaron, y desplegado ocupaba media columna del perfil. Cada línea
  *  lleva «Listo» (el mismo `seen_at` que apaga la campana): se pone gris, y con todas en gris el
@@ -109,10 +123,18 @@ export function EmailsQueNoLlegaronDelLead({ leadId, client, puedeEscribir }: {
   const yo = userSession?.user.id ?? null
   const emails = useEmailsQueNoLlegaron()
   const visto = useMarcarEmailVisto()
+  const [ocultos, setOcultos] = useState(leerOcultos)
   const fallidos = noLlegaronDelLead(emails.data ?? [], leadId)
-  if (fallidos.length === 0) return null
+  // Con la cruz se saca (12/11/2026, por pedido); un rebote nuevo lo vuelve a mostrar.
+  if (fallidos.length === 0 || fallidos.every(e => ocultos.has(e.id))) return null
   const pendientes = fallidos.filter(e => !e.seen_at).length
   const apagado = pendientes === 0
+  const sacar = () => {
+    for (const e of fallidos) if (!e.seen_at && (puedeEscribir || e.sent_by === yo)) visto.mutate({ id: e.id })
+    const nuevos = new Set([...ocultos, ...fallidos.map(e => e.id)])
+    setOcultos(nuevos)
+    guardarOcultos(nuevos)
+  }
   return (
     <details className={cn('group mt-2 rounded-lg border px-3 py-2',
       apagado ? 'border-(--line) bg-(--surface-2)' : 'border-red-200 bg-red-50')}>
@@ -123,6 +145,11 @@ export function EmailsQueNoLlegaronDelLead({ leadId, client, puedeEscribir }: {
         {apagado ? <span className="font-normal">· listo</span>
           : pendientes < fallidos.length && <span className="font-normal">· {pendientes} sin revisar</span>}
         <ChevronDown size={14} className="ml-auto shrink-0 transition-transform group-open:rotate-180" />
+        <button type="button" onClick={ev => { ev.preventDefault(); sacar() }}
+          aria-label="Sacar el aviso" title="Ya lo leí: sacar el aviso"
+          className="grid size-6 shrink-0 cursor-pointer place-items-center rounded-md hover:bg-black/5">
+          <X size={14} />
+        </button>
       </summary>
       <ul className="mt-1.5 flex flex-col gap-1.5">
         {fallidos.map(e => {

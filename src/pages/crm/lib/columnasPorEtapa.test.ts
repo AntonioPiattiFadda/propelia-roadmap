@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmStage } from '../types'
-import { agruparPorEtapa, SIN_ETAPA, type ColumnaDeEtapa } from './columnasPorEtapa'
+import { agruparPorEtapa, etapaDondeSoltar, SIN_ETAPA, type ColumnaDeEtapa } from './columnasPorEtapa'
 import { catalogoDeEtapas } from './effectiveStage'
 
 const etapa = (id: string, position: number, over: Partial<CrmStage> = {}): CrmStage => ({
@@ -51,5 +51,23 @@ describe('agruparPorEtapa', () => {
   it('con etapas elegidas en el filtro: solo esas columnas, vacías o no', () => {
     const cols = agruparPorEtapa([lead('a', 'nuevo')], ETAPAS, new Set(['contactado', 'descartado']))
     expect(resumen(cols)).toEqual([['contactado', []], ['descartado', []]])
+  })
+})
+
+describe('etapaDondeSoltar', () => {
+  const columnaDe = (id: string) => agruparPorEtapa([lead('x', 'vieja'), lead('y', null), lead('z', 'descartado')], ETAPAS)
+    .find(c => c.id === id)!
+  it('una etapa viva distinta de la del lead es destino', () => {
+    expect(etapaDondeSoltar(columnaDe('contactado'), 'nuevo')?.id).toBe('contactado')
+  })
+  it('Descartado también es destino (quien llama abre el motivo)', () => {
+    expect(etapaDondeSoltar(columnaDe('descartado'), 'nuevo')?.id).toBe('descartado')
+  })
+  it('soltar en la misma columna no mueve nada', () => {
+    expect(etapaDondeSoltar(columnaDe('nuevo'), 'nuevo')).toBeNull()
+  })
+  it('ni a una etapa borrada ni a «Sin etapa»', () => {
+    expect(etapaDondeSoltar(columnaDe('vieja'), 'nuevo')).toBeNull()
+    expect(etapaDondeSoltar(columnaDe(SIN_ETAPA), 'nuevo')).toBeNull()
   })
 })

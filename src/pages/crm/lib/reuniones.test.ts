@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmMeeting } from '../types'
-import { agruparReuniones, armarReunion, datosDeLaDemo, descripcionDeDemo, DESCRIPCION_DE_DEMO, esEmailValido, esInvitadoFijo, INVITADOS_DE_TODA_DEMO, invitadosDeLaDemo, leerDescripcionDeDemo, RECORDATORIO_DE_DEMO, registroDeDemoDesdeLaActividad, esTituloDeDemoDeFabrica, tituloDeLaDemo } from './reuniones'
+import { agruparReuniones, armarReunion, datosDeLaDemo, descripcionDeDemo, DESCRIPCION_DE_DEMO, esEmailValido, esInvitadoFijo, INVITADOS_DE_TODA_DEMO, invitadosDeLaDemo, leerDescripcionDeDemo, RECORDATORIO_DE_DEMO, registroDeDemoDesdeLaActividad, registrosPorReunion, esTituloDeDemoDeFabrica, tituloDeLaDemo } from './reuniones'
+import { armarMetaDeActividad } from './actividad'
 
 describe('tituloDeLaDemo', () => {
   it('nombra a Propelia y a la inmobiliaria', () => {
@@ -152,5 +153,18 @@ describe('datosDeLaDemo', () => {
   })
   it('sin registro (las de antes del 22/10/2026), lo de la descripción', () => {
     expect(datosDeLaDemo(reunion, null)).toEqual({ email: 'vieja@inmo.es', asistentes: ['Ana'], notas: 'Notas viejas' })
+  })
+})
+
+describe('registrosPorReunion', () => {
+  it('toma solo los registros de demo con su reunión', () => {
+    const m = registrosPorReunion([
+      { description: 'Va el dueño', long_description: armarMetaDeActividad({ tipo: 'demo', con: ['Ana'], reunion: 'r1', decisorApuntado: 'Luis' }) },
+      { description: 'Sin reunión', long_description: armarMetaDeActividad({ tipo: 'demo', con: ['Ana'] }) },
+      { description: 'Llamada', long_description: armarMetaDeActividad({ tipo: 'llamada', con: ['Ana'], reunion: 'r2' }) },
+      { description: 'Nota', long_description: null },
+    ])
+    expect([...m.keys()]).toEqual(['r1'])
+    expect(m.get('r1')).toEqual({ con: ['Ana'], decisorApuntado: 'Luis', texto: 'Va el dueño' })
   })
 })

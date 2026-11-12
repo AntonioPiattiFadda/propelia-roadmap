@@ -1,7 +1,9 @@
 import { supabase } from '@/lib/supabase'
 import type { Json, TablesInsert, TablesUpdate } from '@/types/database.types'
 import { cancelMeeting, requestMeetingSync } from '@/pages/agenda/service/meetings.service'
+import { PREFIJO_CONFIRMAR, type ReunionDelSdr, type TareaDeConfirmar } from '../lib/dashboardSdr'
 import type { FilaDelLote } from '../lib/importarLote'
+import { registrosPorReunion, type RegistroDeLaDemo } from '../lib/reuniones'
 import type { NivelAcceso } from '../lib/permisos'
 import type {
   CrmChannel, CrmClient, CrmComment, CrmDataAccess, CrmLead, CrmLeadRow, CrmMeeting, CrmStage, CrmTask,
@@ -237,6 +239,51 @@ export async function demosAgendadas(autor: string, desde: string, hasta: string
     .gte('created_at', desde).lt('created_at', hasta)
   if (error) throw error
   return data ?? []
+}
+
+// ---------- Dashboard SDR (11/11/2026) ----------
+/** De a tantos ids por `.in()`: con cientos, la URL del GET se pasaría de largo. */
+const IDS_POR_PEDIDO = 100
+
+async function porTandas<T>(ids: string[], pedir: (tanda: string[]) => Promise<T[]>): Promise<T[]> {
+  const tandas: string[][] = []
+  for (let i = 0; i < ids.length; i += IDS_POR_PEDIDO) tandas.push(ids.slice(i, i + IDS_POR_PEDIDO))
+  return (await Promise.all(tandas.map(pedir))).flat()
+}
+
+/** Las demos que `autor` agendó desde `desde` (cuenta cuándo se agendaron, como `demosAgendadas`),
+ *  con la etapa y el tipo del lead (para «Contratado») y la inmobiliaria. El lead va con `*`:
+ *  `lead_type` puede no existir todavía en la base y nombrarlo rompería la consulta. */
+export async function demosDelSdr(autor: string, desde: string): Promise<ReunionDelSdr[]> {
+  const { data, error } = await supabase.from('crm_meetings')
+    .select('id, lead_id, starts_at, created_at, status, cancel_reason, lead:crm_leads(*, client:crm_clients(company_name, first_name, last_name))')
+    .eq('created_by', autor).is('deleted_at', null).gte('created_at', desde)
+    .order('created_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as unknown as ReunionDelSdr[]
+}
+
+/** Los registros de demo de esos leads (de quien sea), por id de reunión. */
+export async function registrosDeDemos(leadIds: string[]): Promise<Map<string, RegistroDeLaDemo>> {
+  const filas = await porTandas(leadIds, async tanda => {
+    const { data, error } = await supabase.from('crm_comments').select('description, long_description')
+      .in('lead_id', tanda).eq('comment_type', 'MANUAL').is('deleted_at', null)
+      .like('long_description', '%"tipo":"demo"%')
+    if (error) throw error
+    return data ?? []
+  })
+  return registrosPorReunion(filas)
+}
+
+/** Las tareas «Confirmar la demo…» completadas de esos leads (`tareasDeConfirmacionDeDemo`). */
+export async function tareasDeConfirmarCompletadas(leadIds: string[]): Promise<TareaDeConfirmar[]> {
+  return porTandas(leadIds, async tanda => {
+    const { data, error } = await supabase.from('crm_tasks').select('lead_id, title, due_date, completed')
+      .in('lead_id', tanda).eq('completed', true).is('deleted_at', null)
+      .like('title', `${PREFIJO_CONFIRMAR}%`)
+    if (error) throw error
+    return data ?? []
+  })
 }
 
 // ---------- Tareas y reuniones ----------

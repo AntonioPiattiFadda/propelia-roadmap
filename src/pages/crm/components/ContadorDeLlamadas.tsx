@@ -1,25 +1,25 @@
 import { Fragment, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
+import { ChartColumnIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
 import { localTodayIso, shiftIsoDate, startOfMonthIso, startOfWeekIso } from '@/lib/calendarDate'
 import { cn } from '@/lib/utils'
 import { AvatarUsuario } from '@/components/AvatarUsuario'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DashboardSdrDialog } from './DashboardSdrDialog'
+import { Explicacion, type Explicado } from './Explicacion'
 import { useCarteras } from '../hooks/useCarteras'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
 import { useObjetivos, useObjetivosDeVarios } from '../hooks/useObjetivos'
 import { useVerComo } from '../hooks/useVerComo'
-import { escribirFiltros, filtrosDesdeUrl } from '../lib/leadFilterParams'
+import { escribirFiltros, escribirLeadAbierto, filtrosDesdeUrl } from '../lib/leadFilterParams'
 import { pendientesDePersona, semanasHaciaAtras, sumarResumenes, tasaDeDecisor, type Objetivo, type PeriodoDeObjetivos } from '../lib/objetivos'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { puedeVerComo } from '../lib/permisos'
 import type { Usuario } from '../types'
 
 /* Qué es cada número y de dónde sale (5/11/2026, por pedido): tocar el encabezado en el diálogo lo
    explica. Si cambia una consulta de `useObjetivos` / `crm.service`, cambia el texto acá. */
-type Explicado = { label: string; title: string; explicacion: string; fuente: string }
 
 const LLAMADAS_DE_LA_PERSONA = 'Tabla crm_comments: las actividades escritas a mano (comment_type = MANUAL, sin borrar) que registró la persona (created_by) en el período (created_at), con la meta de la actividad (long_description que empieza con <!--act-->)'
 
@@ -73,28 +73,6 @@ const porciento =(t: ReturnType<typeof tasaDeDecisor> | undefined) => (
     <span className="ml-1 text-[11px] font-normal text-(--fg-muted)">{t.conDecisor}/{t.contestadas}</span>
   </span> : numero(undefined)
 )
-
-/** El encabezado que, tocado, explica qué es el número y de qué parte de la base sale. */
-function Explicacion({ c, children, align = 'end', className }: {
-  c: Explicado; children: React.ReactNode; align?: 'start' | 'end'; className?: string
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button type="button" title={`${c.title}. Tocá para ver qué es y de dónde sale.`}
-          className={className ?? 'cursor-pointer uppercase underline decoration-dotted underline-offset-4 hover:text-foreground'}>
-          {children}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align={align} className="w-80 text-left text-[13px] font-normal normal-case tracking-normal">
-        <p className="font-semibold text-foreground">{c.label}</p>
-        <p className="mt-1 text-(--fg-2)">{c.explicacion}</p>
-        <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.08em] text-(--fg-muted)">De dónde sale</p>
-        <p className="mt-0.5 text-[12px] text-(--fg-2)">{c.fuente}</p>
-      </PopoverContent>
-    </Popover>
-  )
-}
 
 /** Cuántas semanas se ven a la vez en el selector; las flechas saltan de a tantas. */
 const SEMANAS_A_LA_VEZ = 6
@@ -174,6 +152,14 @@ function ObjetivosDialog({ onClose }: { onClose: () => void }) {
   const hoy = localTodayIso()
   const { yo, usuarios, accesos } = useCarteras()
   const { perspectivaId } = useVerComo()
+  const [, setSearchParams] = useSearchParams()
+  // El Dashboard SDR (11/11/2026, por pedido): «Abrir lead» cierra los dos diálogos y abre el lead.
+  const [dashboard, setDashboard] = useState(false)
+  const abrirLead = (leadId: string) => {
+    setDashboard(false)
+    onClose()
+    setSearchParams(prev => escribirLeadAbierto(prev, leadId))
+  }
 
   const elegibles = useMemo(() => {
     const otros = puedeVerComo(yo, usuarios, accesos)
@@ -211,9 +197,16 @@ function ObjetivosDialog({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={o => { if (!o) onClose() }}>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[min(1180px,96vw)]">
         <DialogHeader>
-          <DialogTitle>Objetivos</DialogTitle>
+          <div className="flex flex-wrap items-center justify-between gap-2 pr-8">
+            <DialogTitle>Objetivos</DialogTitle>
+            <Button variant="outline" size="sm" onClick={() => setDashboard(true)}
+              title="Demos realizadas, asistencia, embudo y forecast de quien agenda demos">
+              <ChartColumnIcon className="size-4" />Dashboard SDR
+            </Button>
+          </div>
           <DialogDescription>Elegí uno o varios períodos{elegibles.length > 1 && ' y una o varias personas'} para compararlos.</DialogDescription>
         </DialogHeader>
+        <DashboardSdrDialog open={dashboard} onOpenChange={setDashboard} onAbrirLead={abrirLead} />
 
         <div className="flex flex-col gap-3">
           {elegibles.length > 1 && (

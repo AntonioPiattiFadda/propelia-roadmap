@@ -1,6 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { Toaster } from '@/components/ui/sonner'
+import { AvisosPlegables } from '@/components/AvisosPlegables'
 import { AppLayout } from '@/layouts/AppLayout'
 import { AuthPageShell } from '@/pages/auth/AuthPageShell'
 import { SignIn } from '@/pages/auth/SignIn'
@@ -32,7 +32,7 @@ const queryClient = new QueryClient({
 const App = () => (
   <QueryClientProvider client={queryClient}>
     {/* Sin TooltipProvider acá: lo pone `SidebarProvider` (components/ui/sidebar), igual que en el producto. */}
-    <Toaster />
+    <AvisosPlegables />
     <BrowserRouter>
       <Routes>
         <Route element={<PublicRoutesAuthCheck />}>

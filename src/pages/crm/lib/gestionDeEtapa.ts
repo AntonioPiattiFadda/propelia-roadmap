@@ -33,6 +33,19 @@ export function alternarGrupo(elegidas: Set<string>, ids: string[]): Set<string>
 
 type EtapaAgrupable = { management_type: string | null; is_out_of_funnel: boolean }
 
+/** Los ids de las etapas de «Primer contacto» (`sin_contactar`) dentro del funnel: lo que filtra el
+    chip «Por contactar» (12/11/2026). */
+export function etapasDePrimerContacto<T extends EtapaAgrupable & { id: string }>(etapas: T[]): string[] {
+  return etapas
+    .filter(e => !e.is_out_of_funnel && gestionDeEtapa(e.management_type) === 'sin_contactar')
+    .map(e => e.id)
+}
+
+/** Si el filtro «Estado» tiene exactamente estas etapas, ni una más ni una menos. */
+export function esSoloEstas(elegidas: ReadonlySet<string>, ids: string[]): boolean {
+  return ids.length > 0 && elegidas.size === ids.length && ids.every(id => elegidas.has(id))
+}
+
 /** Los subgrupos del menú de estados: uno por gestión, en el orden de `GESTIONES_DE_ETAPA`, y al
     final «Otros» con las sin clasificar y las fuera del funnel (Descartado). Dentro de cada grupo
     se respeta el orden de entrada; los grupos vacíos no se devuelven. */

@@ -1,4 +1,4 @@
-import { ArrowDownWideNarrow, ChevronDown, Columns3, Layers, List, Search, X } from 'lucide-react'
+import { ArrowDownWideNarrow, ChevronDown, Columns3, Layers, List, ListChecks, PhoneCall, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup,
@@ -7,7 +7,7 @@ import {
 import { Icon } from '@/components/ui/icon'
 import { cn } from '@/lib/utils'
 import type { LeadListCounters } from '../lib/computeLeadListCounters'
-import { alternarGrupo, etapasPorGestion } from '../lib/gestionDeEtapa'
+import { alternarGrupo, esSoloEstas, etapasDePrimerContacto, etapasPorGestion } from '../lib/gestionDeEtapa'
 import type { VistaCrm } from '../lib/leadFilterParams'
 import type { LeadFilterState, OrdenLeads } from '../lib/leadFilters'
 import type { CrmStage } from '../types'
@@ -86,6 +86,9 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
     || filtros.objetivo !== null
   const columnas = vista === 'columnas'
   const ordenVigente = filtros.orden ?? (filtros.conTareas ? 'tarea' : null)
+  const primerContacto = etapasDePrimerContacto(etapas)
+  const porContactar = esSoloEstas(filtros.stageFilter, primerContacto)
+  const porContactarCount = primerContacto.reduce((n, id) => n + contadores.stageCount(id), 0)
 
   const alternar = <T,>(set: Set<T>, v: T) => {
     const next = new Set(set)
@@ -182,6 +185,34 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
           )
         )}
 
+        {/* Los de «Seguimiento» sin tarea pendiente (20/10/2026, por pedido): nadie los va a volver
+            a llamar. Va siempre. Desde el 12/11/2026 (por pedido) prendido y apagado no se confunden:
+            apagado es solo el contorno rojo (si hay alguno), prendido es relleno rojo lleno. */}
+        <button type="button" aria-pressed={filtros.pendienteAgendar}
+          className={filtros.pendienteAgendar
+            ? cn(chip(false), 'font-semibold text-white bg-(--danger) [border:1px_solid_var(--danger)] shadow-(--shadow-sm) hover:text-white hover:bg-(--danger-strong) hover:[border-color:var(--danger-strong)]')
+            : contadores.pendienteAgendarCount > 0
+              ? cn(chip(false), 'text-(--danger-fg) [border:1px_solid_var(--danger)] hover:text-(--danger-fg) hover:bg-(--danger-soft) hover:[border-color:var(--danger)]')
+              : chip(false)}
+          onClick={() => onCambiar({ pendienteAgendar: !filtros.pendienteAgendar })}>
+          Pendiente agendar tarea <span className="tabular-nums">{contadores.pendienteAgendarCount}</span>
+        </button>
+
+        {/* «Gestionar tareas» (fue «Tareas», a la derecha, al lado de la vista; 12/11/2026 por pedido
+            se mudó acá). Convierte la lista en la planilla de tareas: además de filtrar, ordena por
+            la próxima tarea y cambia las columnas (ver CrmLeadList). Apagarla apaga también sus
+            subfiltros, que si no quedarían prendidos y escondidos. En columnas no va: ahí las tareas
+            son el grupo Todas / Con / Sin. */}
+        {!columnas && (
+          <button type="button" aria-pressed={filtros.conTareas} className={chip(filtros.conTareas)}
+            onClick={() => onCambiar(filtros.conTareas
+              ? { conTareas: false, overdueOnly: false }
+              : { conTareas: true })}>
+            <Icon icon={ListChecks} size="xs" />
+            Gestionar tareas <span className="tabular-nums">{contadores.conTareasCount}</span>
+          </button>
+        )}
+
         {/* «Vencidas» es subfiltro de «Tareas» (12/10/2026): aparece cuando está prendida, o si un
             enlace viejo trae solo `overdue=1`, para que se pueda apagar. Con alguna tarea vencida el
             chip se pone rojo: es el aviso que antes daba la agenda roja de cada renglón. Apagado es
@@ -195,6 +226,24 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
               : chip(filtros.overdueOnly)}
             onClick={() => onCambiar({ overdueOnly: !filtros.overdueOnly })}>
             Vencidas <span className="tabular-nums">{contadores.overdueLeadCount}</span>
+          </button>
+        )}
+
+        {/* «Por contactar» (12/11/2026, por pedido): el modo de trabajo del primer contacto. Es un
+            atajo y no un filtro nuevo: pone en «Estado» las etapas de «Primer contacto» y ordena por
+            última actividad. Se ve prendido mientras «Estado» tenga exactamente esas etapas; tocarlo
+            prendido limpia las dos cosas. Apaga los chips de tareas, que con él darían cero. */}
+        {primerContacto.length > 0 && (
+          <button type="button" aria-pressed={porContactar} className={chip(porContactar)}
+            title="Leads de las etapas de «Primer contacto», ordenados por última actividad"
+            onClick={() => onCambiar(porContactar
+              ? { stageFilter: new Set(), orden: null }
+              : {
+                  stageFilter: new Set(primerContacto), orden: 'actividad',
+                  pendienteAgendar: false, conTareas: false, sinTareas: false, overdueOnly: false, paraHoy: false,
+                })}>
+            <Icon icon={PhoneCall} size="xs" />
+            Por contactar <span className="tabular-nums">{porContactarCount}</span>
           </button>
         )}
 
@@ -212,27 +261,14 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
           </button>
         )}
 
-        {/* Los de «Seguimiento» sin tarea pendiente (20/10/2026, por pedido): nadie los va a volver
-            a llamar. Va siempre; con alguno, rojo sutil (contorno y fondo suave), como aviso. */}
-        <button type="button" aria-pressed={filtros.pendienteAgendar}
-          className={contadores.pendienteAgendarCount > 0
-            ? cn(chip(false), 'text-(--danger-fg) bg-(--danger-soft) [border:1px_solid_var(--danger)] hover:text-(--danger-fg) hover:bg-(--danger-soft) hover:[border-color:var(--danger)]',
-              filtros.pendienteAgendar && 'font-semibold shadow-none [border-width:1.5px]')
-            : chip(filtros.pendienteAgendar)}
-          onClick={() => onCambiar({ pendienteAgendar: !filtros.pendienteAgendar })}>
-          Pendiente agendar tarea <span className="tabular-nums">{contadores.pendienteAgendarCount}</span>
-        </button>
-
-        {/* Lo que hay que hacer hoy (23/10/2026, por pedido): leads con alguna tarea pendiente para hoy
-            o vencida. Va siempre; con alguno, el mismo rojo sutil que «Pendiente agendar tarea». */}
-        <button type="button" aria-pressed={filtros.paraHoy} title="Leads con tareas pendientes para hoy o vencidas"
-          className={contadores.paraHoyCount > 0
-            ? cn(chip(false), 'text-(--danger-fg) bg-(--danger-soft) [border:1px_solid_var(--danger)] hover:text-(--danger-fg) hover:bg-(--danger-soft) hover:[border-color:var(--danger)]',
-              filtros.paraHoy && 'font-semibold shadow-none [border-width:1.5px]')
-            : chip(filtros.paraHoy)}
-          onClick={() => onCambiar({ paraHoy: !filtros.paraHoy })}>
-          Tareas vencidas <span className="tabular-nums">{contadores.paraHoyCount}</span>
-        </button>
+        {/* «Tareas vencidas» (`?hoy=1`) salió de los chips el 12/11/2026, por pedido. Un enlace que
+            la traiga puesta la muestra, para que no filtre escondida y se pueda apagar. */}
+        {filtros.paraHoy && (
+          <button type="button" aria-pressed className={chip(true)}
+            onClick={() => onCambiar({ paraHoy: false })}>
+            Tareas vencidas <span className="tabular-nums">{contadores.paraHoyCount}</span>
+          </button>
+        )}
 
         {hayFiltros && (
           <Button variant="ghost" size="sm" onClick={onLimpiar}>
@@ -273,19 +309,6 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-        )}
-
-        {/* «Tareas» va al lado de la vista porque convierte la lista en la planilla de tareas.
-            Además de filtrar, ordena por la próxima tarea y cambia las columnas (ver CrmLeadList).
-            Apagarla apaga también sus subfiltros, que si no quedarían prendidos y escondidos.
-            En columnas no va: ahí las tareas son el grupo Todas / Con / Sin. */}
-        {!columnas && (
-          <button type="button" aria-pressed={filtros.conTareas} className={chip(filtros.conTareas)}
-            onClick={() => onCambiar(filtros.conTareas
-              ? { conTareas: false, overdueOnly: false }
-              : { conTareas: true })}>
-            Tareas <span className="tabular-nums">{contadores.conTareasCount}</span>
-          </button>
         )}
 
         {/* La vista no es un filtro: «Limpiar filtros» no la toca. */}

@@ -494,13 +494,23 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   (`vecinosEnRecorrido`, `lib/recorrido.ts`, 17/10/2026): antes se apagaban.
 - **La lista no se mueve debajo de quien la trabaja** (23/10/2026, por pedido): un lead que deja de
   coincidir con los filtros porque se lo tocó (descartado, otra etapa u otro responsable, una tarea
-  que lo saca de «Pendiente agendar tarea») se queda, con sus datos nuevos y donde lo pone el orden,
-  hasta que se cambian los filtros o se recarga. `fijarLista` (`lib/listaFija.ts`) guarda en un ref
-  los ids vistos por clave de filtros (`claveDeFiltros`: toda la URL menos `?lead=`, así abrir y
+  que lo saca de «Pendiente agendar tarea») se queda, con sus datos nuevos, hasta que se cambian los
+  filtros o se recarga. **Y desde el 12/11/2026 (por pedido) se queda en el mismo lugar**: registrar
+  una actividad lo subía arriba de todo y las flechas ↑/↓ saltaban al principio. Lo ya visto no se
+  reordena; lo nuevo entra donde lo pone el orden, debajo de su vecino de arriba. Vale también para
+  el Dashboard (se rearma al cambiar su orden o al volver a entrar) y para **las flechas** en
+  columnas: ahí el lead sí se dibuja en la columna de su etapa nueva (arrastrarlo es cambiarle la
+  etapa), pero ↑/↓ siguen el recorrido de antes. `fijarLista`
+  (`lib/listaFija.ts`, que recibe el `ordenar`; `ordenarComo` para un orden ya calculado) guarda en un ref los ids vistos, en orden, por clave de filtros (`claveDeFiltros`: toda la URL menos `?lead=`, así abrir y
   pasar de lead no la cambia; cambiar orden o vista sí). Lo nuevo que coincide aparece; lo que ya no
   devuelve la base se va. Los contadores de los chips siguen saliendo de los datos reales; el «N
   leads» de la tabla y el total del dialog cuentan lo que se ve. En columnas con «Estado» filtrado,
   el que pasa a una etapa no elegida se va igual: no hay columna donde dibujarlo.
+- **En la vista en columnas un lead se arrastra a otra columna y pasa a esa etapa** (12/11/2026, por
+  pedido; hasta ese día no se arrastraba a propósito). Solo con permiso de escritura sobre su cartera
+  y fuera del modo selección. Destino válido: una etapa viva distinta (`etapaDondeSoltar`,
+  `lib/columnasPorEtapa.ts`), nunca una borrada ni «Sin etapa». Mismo patch que el select del
+  Dashboard (`useActualizarLead`, optimista); Descartado abre `DescartarLeadDialog`. No registra actividad.
 - **Sin prioridades ni gestión en el front desde el 10/10/2026** (se sacaron para rediseñarlas de
   cero): ni el color de prioridad de la etapa, ni el catálogo `crm_priorities`, ni las columnas de
   prioridad y tiempo de gestión del funnel, ni Pendiente/Gestionado/Pospuesto, ni «Posponer», ni
@@ -599,6 +609,30 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   PDF de fábrica viven en `public/playbook/` y van con el deploy (**URL pública**, sin login); los
   que se suben van al bucket `roadmap-adjuntos` bajo `playbook/`, firmados al listar. Sin
   migración: el bucket y su RLS ya estaban. Subir, cualquiera; borrar, solo SUPERADMIN (solo el front).
+- **Capacitaciones** (5/11/2026, por pedido; copiado de la Capacitación de `propelia-frontend`, sin sus
+  tablas): botón «Capacitaciones» en Herramientas del CRM, **para todos** (SDR incluido), que abre un
+  dialog casi a pantalla completa (`components/capacitaciones/`, reglas puras en
+  `lib/capacitaciones.ts`). Tres columnas: módulos numerados con «vistos/total», la guía del módulo
+  (texto libre, plegable) y sus videos, y el reproductor con «Ampliar» y «Marcar como visto»; arriba
+  «N de M vistos», buscador (título y descripción) y «Seguir con 1.2» (el primero sin ver con algo
+  para mirar). **Sin migración**: todo en `roadmap_notas` — fila `crm-capacitaciones` con el JSON
+  `{modulos:[{id,titulo,guia,videos:[{id,titulo,descripcion,duracion,archivo?,url?}]}]}` (se lee a la
+  defensiva: vacío o roto es sin módulos) y una fila por persona `crm-capacitaciones-vistos-<userId>`
+  con `{videoId: fecha}`. Los videos subidos van al bucket `roadmap-adjuntos` bajo `capacitaciones/`
+  (firmados al reproducir, tope 50 MB) y borrar el video o su módulo borra el archivo; también vale un
+  enlace (YouTube, Loom y Drive embebidos, `.mp4`/`.webm` directo, otro se abre aparte:
+  `fuenteDeVideo`). **Edita solo un SUPERADMIN** con «Modo edición» (badge SA), y es solo del front:
+  la fila y el bucket los escribe cualquier `es_usuario()`, que además lee las filas de vistos de
+  todos. Se guarda el JSON entero, optimista: dos editando a la vez se pisan (gana el último).
+- **12/11/2026, por pedido**: (1) registrar un **contacto fallido con detalle escrito pide confirmar**
+  («¿Fue un contacto fallido?», con «Era una llamada», que cambia la pastilla sin perder el texto);
+  sin detalle no pregunta. (2) **Los avisos (toasts) van abajo a la derecha y se pliegan**
+  (`components/AvisosPlegables.tsx`, que envuelve al `Toaster` sin tocar `ui/sonner.tsx`): «Plegar
+  avisos» los deja en una pastilla con el número que se arrastra (posición en `localStorage`,
+  `avisos-pastilla-posicion`) y tocarla los despliega. Plegar no los cierra. (3) **El contacto con
+  solo email se edita** desde el lápiz de su email en «Emails» (sigue sin dibujarse en «Personas»).
+  (4) **El cartel «Un email no llegó» del lead tiene cruz**: marca listo lo que se pueda y lo oculta
+  en ese navegador (`crm-emails-ocultos`); un rebote nuevo lo vuelve a mostrar.
 - **Lo registrado a mano se puede borrar** (12/10/2026): nota, llamada y contacto fallido llevan
   un tacho al pasar el mouse. Es soft delete de `crm_comments` (la RLS ya deja: write sobre el
   lead), sin confirmar y con «Deshacer» en el aviso. Lo del sistema (etapa, responsable, tareas,
@@ -632,6 +666,12 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   leads con alguna tarea pendiente **para hoy o vencida** (`idsConTareasParaHoy`, `lib/tareas.ts`;
   la de hoy entra, al revés que `estaVencida`), sin descartados. Mismo rojo sutil con alguno. No
   confundir con el subchip «Vencidas» de «Tareas» (`?overdue=1`), que no cuenta las de hoy.
+  **Desde el 12/11/2026 (por pedido) los chips van: Estado, «Pendiente agendar tarea» (apagado es
+  contorno rojo, prendido relleno rojo lleno), «Gestionar tareas» (el «Tareas» que estaba a la derecha,
+  `?tareas=1`), «Por contactar» y «Para recontactar».** «Tareas vencidas» salió (solo se ve si un
+  enlace trae `?hoy=1`, para apagarlo). «Por contactar» es un atajo, no un filtro nuevo: pone en
+  «Estado» las etapas de «Primer contacto» (`etapasDePrimerContacto`) y ordena por última actividad;
+  se ve prendido mientras «Estado» tenga exactamente esas (`esSoloEstas`, `lib/gestionDeEtapa.ts`).
 - **«¿Se puede agendar tarea?» por etapa** (23/10/2026, por pedido, migración
   `20261023160156_crm_funnel_stages_allows_tasks`): columna «Tareas» (Sí/No) de la configuración del
   funnel, `crm_funnel_stages.allows_tasks` (default true). Con No, a un lead en esa etapa no se le
@@ -703,6 +743,24 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   la misma inmobiliaria va una vez). No filtra: tocarla la explica. **Cada encabezado del diálogo
   se toca y dice qué es el número y de qué tabla y columnas sale** (`Explicacion`, textos en
   `COLUMNAS` de `ContadorDeLlamadas.tsx`): si cambia una consulta de `useObjetivos`, cambia el texto.
+- **«Dashboard SDR»** (11/11/2026, por pedido; inspirado en un «SDR Pro Dashboard» de afuera, sin su
+  marca): botón del diálogo de Objetivos que abre un diálogo casi a pantalla completa
+  (`DashboardSdrDialog`, reglas puras en `lib/dashboardSdr.ts`, datos en `useDashboardSdr`). Una
+  persona por vez (el «yo» de pantalla; quien ve otras carteras elige), últimos 12 meses, pestañas
+  Mes / Trimestre / Últimos 12 meses / Second Chance. **Todo sale de la base, nada se carga a mano**:
+  llamadas y decisores de la actividad registrada (como Objetivos); demos = `crm_meetings` que creó la
+  persona, del mes en que **se agendaron**; asistentes = los nombres de «Quién asiste» del registro de
+  la demo (sin registro, uno); confirmada = una tarea «Confirmar la demo de hoy…» completada del día
+  de la demo o «… de mañana…» del anterior (`demoConfirmada`, hora de España); «Contratado» = la etapa
+  tiene `starts_onboarding` o el lead es `ONBOARDING`/`CLIENT`. **Los estados son los de la base**
+  (Agendada, Realizada = `completed`, Cancelada) **más «Sin marcar»** (agendada cuya hora pasó y nadie
+  marcó hecha): no hay No Show, Postponed ni VAR. Tarjetas de meta, asistencia, decisor/pitch y
+  forecast (solo el mes en curso; días hábiles calculados), tabla de demos con «Copiar recordatorio»
+  y «Abrir lead», «Informe» (prescripciones, matrices, mes a mes, «Copiar resumen», CSV con `;`), y
+  cada número dice de dónde sale (`Explicacion`, ahora en su propio archivo). **La meta** (demos
+  realizadas por mes, del equipo, 15 de fábrica) vive en `roadmap_notas`, fila `crm-meta-sdr`
+  (`{"demosRealizadasPorMes":15}`, leída a la defensiva) y la edita solo un SUPERADMIN (solo del
+  front). **Sin comisiones ni plata, sin localStorage y sin migración.**
 - **Las etapas que había el 27/10/2026 están fijas** (por pedido, migración
   `20261027131725_crm_funnel_stages_bloqueadas`, que **la aplica Antonio**): `allow_rename`,
   `allow_reorder` y `allow_delete` en false, así la configuración del funnel las muestra con candado.

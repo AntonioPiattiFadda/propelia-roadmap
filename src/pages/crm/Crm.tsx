@@ -15,6 +15,7 @@ import { NewLeadDialog } from './components/NewLeadDialog'
 import { TestEmailDialog } from './components/TestEmailDialog'
 import { PlanningDiarioDialog } from './components/PlanningDiarioDialog'
 import { PlaybookDialog } from './components/PlaybookDialog'
+import { CapacitacionesDialog } from './components/capacitaciones/CapacitacionesDialog'
 import { CartelVerComo, VerComoButton } from './components/VerComo'
 import { useCarteras } from './hooks/useCarteras'
 import { useVerComo } from './hooks/useVerComo'
@@ -63,6 +64,8 @@ export function Crm() {
           {/* Para todos, SDR incluido: es la jornada contra la que se trabaja la lista. */}
           <PlanningDiarioDialog />
           <PlaybookDialog />
+          {/* Para todos: módulos con guía y videos (editar, solo SUPERADMIN adentro). */}
+          <CapacitacionesDialog />
           <VerComoButton />
           {/* Solo SUPERADMIN (la RLS lo exige igual): un SDR que renombra una etapa desarma el
               funnel de todos. En el teléfono no: se configura una vez al mes, desde el escritorio. */}

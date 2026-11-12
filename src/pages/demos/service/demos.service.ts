@@ -1,6 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import { leerMetaDeActividad } from '@/pages/crm/lib/actividad'
-import type { RegistroDeLaDemo } from '@/pages/crm/lib/reuniones'
+import { registrosPorReunion, type RegistroDeLaDemo } from '@/pages/crm/lib/reuniones'
 import type { CrmMeeting } from '@/pages/crm/types'
 
 export type Demo = CrmMeeting & {
@@ -31,13 +30,7 @@ export async function getDemos(): Promise<Demo[]> {
   ])
   if (reuniones.error) throw reuniones.error
   if (registros.error) throw registros.error
-  const porReunion = new Map<string, RegistroDeLaDemo>()
-  for (const r of registros.data ?? []) {
-    const meta = leerMetaDeActividad(r.long_description)
-    if (meta?.tipo === 'demo' && meta.reunion) {
-      porReunion.set(meta.reunion, { con: meta.con, decisorApuntado: meta.decisorApuntado, texto: r.description })
-    }
-  }
+  const porReunion = registrosPorReunion(registros.data ?? [])
   return ((reuniones.data ?? []) as unknown as Omit<Demo, 'registro'>[])
     .map(d => ({ ...d, registro: porReunion.get(d.id) ?? null }))
 }

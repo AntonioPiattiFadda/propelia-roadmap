@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { GESTIONES_DE_ETAPA, alternarGrupo, etapasPorGestion, gestionDeEtapa, permiteAgendarTarea } from './gestionDeEtapa'
+import {
+  GESTIONES_DE_ETAPA, alternarGrupo, esSoloEstas, etapasDePrimerContacto, etapasPorGestion, gestionDeEtapa, permiteAgendarTarea,
+} from './gestionDeEtapa'
 
 describe('alternarGrupo', () => {
   it('si falta alguna del grupo, las agrega todas sin tocar las de otros grupos', () => {
@@ -58,6 +60,26 @@ describe('gestionDeEtapa', () => {
   it('cada gestión tiene su rótulo', () => {
     expect(GESTIONES_DE_ETAPA.map(g => g.value)).toEqual(['sin_contactar', 'por_tarea'])
     expect(GESTIONES_DE_ETAPA.every(g => g.label.length > 0)).toBe(true)
+  })
+})
+
+describe('etapasDePrimerContacto', () => {
+  it('trae las de «Primer contacto» dentro del funnel, sin las demás', () => {
+    expect(etapasDePrimerContacto([
+      e('a', 'sin_contactar'), e('b', 'por_tarea'), e('c', null), e('d', 'sin_contactar', true), e('f', 'sin_contactar'),
+    ])).toEqual(['a', 'f'])
+  })
+})
+
+describe('esSoloEstas', () => {
+  it('es true solo si el filtro tiene exactamente esas etapas', () => {
+    expect(esSoloEstas(new Set(['a', 'b']), ['b', 'a'])).toBe(true)
+    expect(esSoloEstas(new Set(['a']), ['a', 'b'])).toBe(false)
+    expect(esSoloEstas(new Set(['a', 'b', 'x']), ['a', 'b'])).toBe(false)
+  })
+
+  it('sin etapas no hay nada que igualar', () => {
+    expect(esSoloEstas(new Set(), [])).toBe(false)
   })
 })
 

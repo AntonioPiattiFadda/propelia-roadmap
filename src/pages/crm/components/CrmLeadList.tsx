@@ -14,7 +14,7 @@ import { computeLeadListCounters } from '../lib/computeLeadListCounters'
 import { etapaDelLead } from '../lib/effectiveStage'
 import { estadoDeLista } from '../lib/estadoDeLista'
 import { vecinoMarcable } from '../lib/seleccionConFlechas'
-import { claveDeFiltros, fijarLista, type FotoDeLista } from '../lib/listaFija'
+import { claveDeFiltros, fijarLista, ordenarComo, type FotoDeLista } from '../lib/listaFija'
 import { vecinosEnRecorrido, type UltimaPosicion } from '../lib/recorrido'
 import { fmtUltimaActividad, ordenarPorUltimaActividad } from '../lib/ultimaActividad'
 import { fmtIngresoDate, fmtShortDate } from '../lib/leadCellFormat'
@@ -27,7 +27,7 @@ import { filterLeads, leadsDeCarteras, type LeadFilterContext, type LeadFilterSt
 import { estaVencida, idsConTareasParaHoy, idsConTareasVencidas, ordenarPorEstado, ordenarPorProximaTarea, proximaTareaPorLead, type ProximaTarea } from '../lib/tareas'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
-import { useReasignar } from '../hooks/useLeadMutaciones'
+import { useActualizarLead, useReasignar } from '../hooks/useLeadMutaciones'
 import { useObjetivos } from '../hooks/useObjetivos'
 import { useVisibleAgents } from '../hooks/useVisibleAgents'
 import { nombreDe, puedeMarcarImportante } from '../lib/permisos'
@@ -36,6 +36,7 @@ import type { ReassignCandidate } from '../lib/reassignCollisions'
 import type { CrmLeadRow, CrmStage, CrmTask, Usuario } from '../types'
 import { BulkActionBar } from './BulkActionBar'
 import { ColumnasCrm, type FichaProps } from './ColumnasCrm'
+import { DescartarLeadDialog } from './DescartarLeadDialog'
 import { BuscadorLeads, FiltrosCrm } from './FiltrosCrm'
 import { LeadDialog } from './LeadDialog'
 import { LeadRowActions } from './LeadRowActions'
@@ -323,20 +324,23 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
   // El orden (el chip «Ordenar» o las cabeceras de la tabla): última actividad, estado o tarea (por
   // vencimiento). Sin elegir, con «Tareas» va por la próxima tarea (lo vencido arriba). Las flechas
   // del dialog recorren `visibles`, así que siguen este orden solas.
-  // Lo que se vio con estos filtros se queda aunque deje de coincidir (fijarLista): se va al
-  // cambiar los filtros o al recargar. La foto vive en un ref; con la misma entrada da lo mismo,
-  // así que pintar dos veces no la corre.
+  // Lo que se vio con estos filtros se queda aunque deje de coincidir, y en el mismo lugar
+  // (fijarLista): registrar una actividad o cambiar la etapa no lo mueve, así las flechas siguen
+  // con el de abajo. Se reacomoda al cambiar los filtros o el orden, o al recargar. La foto vive en
+  // un ref; con la misma entrada da lo mismo, así que pintar dos veces no la corre.
   const claveFiltros = claveDeFiltros(searchParams)
   const fotoDeLista = useRef<FotoDeLista | null>(null)
   const visibles = useMemo(() => {
-    const fijada = fijarLista(fotoDeLista.current, claveFiltros, leadsQ.data ?? SIN_LEADS, filterLeads(deCarteras, filtros, ctx))
-    fotoDeLista.current = fijada.foto
-    const filtrados = fijada.leads
     const orden = filtros.orden ?? (filtros.conTareas ? 'tarea' : null)
-    if (orden === 'estado') return ordenarPorEstado(filtrados, proximas, l => etapaDelLead(l, cat.etapasPorId))
-    if (orden === 'actividad') return ordenarPorUltimaActividad(filtrados)
-    if (orden === 'tarea') return ordenarPorProximaTarea(filtrados, proximas)
-    return filtrados
+    const ordenar = (leads: CrmLeadRow[]) => {
+      if (orden === 'estado') return ordenarPorEstado(leads, proximas, l => etapaDelLead(l, cat.etapasPorId))
+      if (orden === 'actividad') return ordenarPorUltimaActividad(leads)
+      if (orden === 'tarea') return ordenarPorProximaTarea(leads, proximas)
+      return leads
+    }
+    const fijada = fijarLista(fotoDeLista.current, claveFiltros, leadsQ.data ?? SIN_LEADS, filterLeads(deCarteras, filtros, ctx), ordenar)
+    fotoDeLista.current = fijada.foto
+    return fijada.leads
   }, [deCarteras, filtros, ctx, proximas, cat.etapasPorId, claveFiltros, leadsQ.data])
   // Solo SUPERADMIN ve (y toca) la columna de la estrella: un SDR no sabe ni que existe.
   const puedeMarcar = puedeMarcarImportante(agentes.yo)
@@ -349,19 +353,35 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
   // Por estado de fábrica (3/11/2026, por pedido); vive acá y no en el resumen porque las flechas
   // del dialog recorren los importantes en el orden en que se ven.
   const [ordenImportantes, setOrdenImportantes] = useState<OrdenDeImportantes>('estado')
-  const importantes = useMemo(
-    () => (resumen ? leadsImportantes(leadsQ.data ?? SIN_LEADS, proximasMias, cat.etapasPorId, ordenImportantes) : SIN_LEADS),
-    [resumen, leadsQ.data, proximasMias, cat.etapasPorId, ordenImportantes])
+  // Como la lista (12/11/2026, por pedido): cambiarle el estado o la tarea a un importante no lo
+  // mueve de lugar, y el que deja de serlo se queda. Se reacomoda al cambiar el orden o al volver
+  // a entrar al Dashboard (salir lo olvida).
+  const fotoImportantes = useRef<FotoDeLista | null>(null)
+  const importantes = useMemo(() => {
+    if (!resumen) { fotoImportantes.current = null; return SIN_LEADS }
+    const ordenados = leadsImportantes(leadsQ.data ?? SIN_LEADS, proximasMias, cat.etapasPorId, ordenImportantes)
+    const fijada = fijarLista(fotoImportantes.current, ordenImportantes, leadsQ.data ?? SIN_LEADS, ordenados, ordenarComo(ordenados))
+    fotoImportantes.current = fijada.foto
+    return fijada.leads
+  }, [resumen, leadsQ.data, proximasMias, cat.etapasPorId, ordenImportantes])
   // En columnas, las etapas elegidas en «Estado» dicen qué columnas se ven (agruparPorEtapa).
   const columnas = useMemo(
     () => (enColumnas ? agruparPorEtapa(visibles, cat.etapasPorId, filtros.stageFilter) : []),
     [enColumnas, visibles, cat.etapasPorId, filtros.stageFilter])
   // Las flechas del dialog recorren los leads en el orden en que se ven: en columnas, columna por
-  // columna de izquierda a derecha.
-  // En el resumen, los importantes.
-  const recorrido = useMemo(
-    () => (resumen ? importantes : enColumnas ? columnas.flatMap(c => c.leads) : visibles),
-    [resumen, importantes, enColumnas, columnas, visibles])
+  // columna de izquierda a derecha. En el resumen, los importantes.
+  // En columnas el lead que cambia de etapa se dibuja en su columna nueva (arrastrarlo es cambiarle
+  // la etapa), pero las flechas siguen el orden de antes (12/11/2026, por pedido): siguen con el de
+  // abajo. Se rearma con los filtros, como la lista.
+  const fotoRecorrido = useRef<FotoDeLista | null>(null)
+  const recorrido = useMemo(() => {
+    if (resumen) return importantes
+    if (!enColumnas) { fotoRecorrido.current = null; return visibles }
+    const enOrden = columnas.flatMap(c => c.leads)
+    const fijada = fijarLista(fotoRecorrido.current, claveFiltros, leadsQ.data ?? SIN_LEADS, enOrden, ordenarComo(enOrden))
+    fotoRecorrido.current = fijada.foto
+    return fijada.leads
+  }, [resumen, importantes, enColumnas, columnas, visibles, claveFiltros, leadsQ.data])
   const contadores = useMemo(() => computeLeadListCounters(deCarteras, filtros, ctx), [deCarteras, filtros, ctx])
   // Lo marcado sobrevive a los filtros, la búsqueda y el cambio de cartera, pero reasignar mueve
   // leads de cartera: solo cuenta y solo se manda lo que se está viendo. Si no, la barra dice «5 de
@@ -407,7 +427,20 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
   })
   const fichaDe = (lead: CrmLeadRow): FichaProps => {
     const { etapa: _etapa, proxima: _proxima, hoy: _hoy, modoTareas: _modo, ultimo: _ultimo, estrella: _estrella, ...resto } = propsDe(lead)
-    return { ...resto, pendientes: proximas.get(lead.id)?.pendientes ?? 0, conVencidas: overdueLeadIds.has(lead.id) }
+    return {
+      ...resto,
+      pendientes: proximas.get(lead.id)?.pendientes ?? 0,
+      conVencidas: overdueLeadIds.has(lead.id),
+      arrastrable: !seleccionando && agentes.puedeEscribir(lead.assigned_to),
+    }
+  }
+  // Soltar una ficha en otra columna la pasa a esa etapa, como el select del Dashboard:
+  // Descartado abre su diálogo del motivo y cancelarlo deja al lead donde estaba.
+  const actualizarLead = useActualizarLead()
+  const [descartandoId, setDescartandoId] = useState<string | null>(null)
+  const moverDeEtapa = (lead: CrmLeadRow, etapa: CrmStage) => {
+    if (etapa.id === cat.descartada?.id) setDescartandoId(lead.id)
+    else actualizarLead.mutate({ id: lead.id, patch: { funnel_stage_id: etapa.id, discard_reason: null, recontact_at: null } })
   }
 
   // El lead abierto sale de TODOS los leads y no de los visibles: un enlace a `?lead=` tiene que
@@ -464,7 +497,7 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
     filtros.stageFilter.size > 0 && 'Estado',
     filtros.overdueOnly && 'Tareas vencidas',
     filtros.paraHoy && 'Tareas para hoy o vencidas',
-    filtros.conTareas && 'Tareas',
+    filtros.conTareas && 'Gestionar tareas',
     filtros.sinTareas && 'Sin tareas',
     filtros.objetivo && 'el objetivo elegido',
   ].filter((v): v is string => typeof v === 'string' && !!v)
@@ -593,7 +626,10 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
 
       {estado === 'sin-resultados' && (isMobile || enColumnas) && sinResultados}
 
-      {estado === 'ok' && enColumnas && <ColumnasCrm columnas={columnas} fichaDe={fichaDe} />}
+      {estado === 'ok' && enColumnas && <ColumnasCrm columnas={columnas} fichaDe={fichaDe} onMover={moverDeEtapa} />}
+      {descartandoId && cat.descartada && (
+        <DescartarLeadDialog leadId={descartandoId} etapa={cat.descartada} onClose={() => setDescartandoId(null)} />
+      )}
 
       {estado === 'ok' && isMobile && !enColumnas && (
         <div className="flex flex-col">

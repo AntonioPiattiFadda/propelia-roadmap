@@ -28,4 +28,8 @@ export const CRM_KEYS = {
   llamadas: ['crm', 'llamadas'] as const,
   /** Las llamadas de `autor` desde el día `desde` (incluido) hasta `hasta` (excluido). */
   llamadasEntre: (autor: string, desde: string, hasta: string) => ['crm', 'llamadas', autor, desde, hasta] as const,
+  /** El Dashboard SDR de `persona`: los últimos 12 meses desde `desde`. */
+  dashboardSdr: (persona: string, desde: string) => ['crm', 'dashboard-sdr', persona, desde] as const,
+  /** La meta de demos realizadas por mes (fila `crm-meta-sdr` de `roadmap_notas`). */
+  metaSdr: ['crm', 'meta-sdr'] as const,
 }

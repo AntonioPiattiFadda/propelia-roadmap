@@ -22,12 +22,15 @@ const SEPARADOR = '__'
 
 /* Supabase valida las claves con un regex ASCII: «Guión.pdf» falla la subida entera con 400.
    El momento adelante evita pisar un archivo con el mismo nombre. */
-export function clavePlaybook(nombre: string, ahora: number): string {
-  const limpio = nombre
+export function nombreLimpio(nombre: string): string {
+  return nombre
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^A-Za-z0-9._-]+/g, '_')
-  return `${CARPETA_PLAYBOOK}/${ahora}${SEPARADOR}${limpio}`
+}
+
+export function clavePlaybook(nombre: string, ahora: number): string {
+  return `${CARPETA_PLAYBOOK}/${ahora}${SEPARADOR}${nombreLimpio(nombre)}`
 }
 
 export function nombreDeClave(nombreEnBucket: string): string {

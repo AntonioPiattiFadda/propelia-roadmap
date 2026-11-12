@@ -92,7 +92,8 @@ function guardarFijados(clientId: string | undefined, fijados: Contacto[]) {
 /* Los teléfonos y emails sueltos de la pestaña de la inmobiliaria también se fijan (17/10/2026, por
    pedido): fijado, se ve en el perfil. Misma regla que los contactos: preferencia del navegador.
    La clave es `tel:<dígitos>` o `mail:<email>`, para que un cambio de formato no lo desfije. */
-type DatoSuelto = { clave: string; valor: string; google?: boolean }
+/** `contacto`: el casillero de un contacto con solo el email, que se edita desde acá. */
+type DatoSuelto = { clave: string; valor: string; google?: boolean; contacto?: Contacto }
 const claveDatosFijados = (clientId: string) => `crm-datos-fijados:${clientId}`
 /** `null` si este navegador nunca fijó nada para el cliente: quien llama pone el de fábrica. */
 function leerDatosFijados(clientId: string | undefined): string[] | null {
@@ -328,11 +329,19 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
   const telefonosSueltos: DatoSuelto[] = telefonosDelCliente(lead.client).map(t => ({
     clave: `tel:${digitosDe(t.numero)}`, valor: t.numero, google: t.etiqueta === ETIQUETA_OFICINA,
   }))
-  // Los de todas las personas, sin repetir.
-  const emailsSueltos: DatoSuelto[] = [...new Set(
-    [lead.client?.email, lead.client?.alternative_phone_1_email, lead.client?.alternative_phone_2_email]
-      .map(e => e?.trim() ?? '').filter(Boolean),
-  )].map(e => ({ clave: `mail:${e.toLowerCase()}`, valor: e }))
+  /* Los de todas las personas, sin repetir. El de un contacto con solo el email lleva su casillero
+     (12/11/2026, por pedido): ese contacto no se dibuja en «Personas», así que el lápiz del email es
+     la única forma de editarlo. */
+  const emailsSueltos: DatoSuelto[] = []
+  for (const c of CONTACTOS) {
+    const e = (lead.client?.[camposDe(c).email] ?? '').trim()
+    if (!e) continue
+    const clave = `mail:${e.toLowerCase()}`
+    const contacto = esSoloEmail(c) ? c : undefined
+    const ya = emailsSueltos.find(d => d.clave === clave)
+    if (!ya) emailsSueltos.push({ clave, valor: e, contacto })
+    else if (!ya.contacto && contacto) ya.contacto = contacto
+  }
   const [datosFijados, setDatosFijados] = useState<string[]>(() => {
     const guardados = leerDatosFijados(lead.client?.id)
     if (guardados) return guardados
@@ -721,6 +730,13 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
       {d.clave.startsWith('tel:') && <BotonCopiar texto={d.valor} />}
       {d.google && <span className="shrink-0 text-[11px] text-(--fg-faint)">Google Maps</span>}
       <span className="flex-1" />
+      {escribe && d.contacto && (
+        <button type="button" onClick={() => setContactoEnEditor(d.contacto!)} aria-label="Editar contacto"
+          title="Editar contacto (nombre, teléfono, email…)"
+          className="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-(--fg-faint) hover:bg-(--surface-2) hover:text-foreground">
+          <Pencil size={14} />
+        </button>
+      )}
       {botonPin(datosFijados.includes(d.clave), () => alternarDato(d.clave))}
     </li>
   )

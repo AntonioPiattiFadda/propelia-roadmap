@@ -3,6 +3,10 @@ import {
   CalendarDays, CalendarX, ChevronDown, CircleCheck, Clock, Info, MessageSquare, Pencil, Phone, PhoneMissed, Plus, Presentation, Trash2, UserRound,
   type LucideIcon,
 } from 'lucide-react'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { Textarea } from '@/components/ui/textarea'
@@ -430,13 +434,18 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   }
   const cargarContactosNuevos = (decisor: string | null) => cargarAlPerfil(decisor, nuevosElegidos)
 
-  const enviar = () => {
+  /* Contacto fallido con texto escrito pide confirmar (12/11/2026, por pedido): muchas veces se
+     elige «Contacto fallido» por error y se escribe lo que se habló. Con el detalle vacío no pregunta. */
+  const [confirmandoFallido, setConfirmandoFallido] = useState(false)
+
+  const enviar = (fallidoConfirmado = false) => {
     if (enviando || esDemo) return
     if (!listo || (pideEtapa && !etapaFinal)) {
       setIntento(true)
       if (pideEtapa && !etapaFinal) setFaltaEtapa(true)
       return
     }
+    if (tipo === 'fallido' && limpio && !fallidoConfirmado) { setConfirmandoFallido(true); return }
     if (tipo === 'llamada' || tipo === 'fallido') {
       const resultado: ResultadoDeLlamada = tipo === 'llamada' ? 'contestada' : 'no_respondida'
       // Se guardan solo los que siguen siendo contactos: alguien pudo borrar un teléfono mientras tanto.
@@ -680,7 +689,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
               {intento && Object.values(falta).some(Boolean) && (
                 <span role="alert" className="self-center text-[11.5px] font-semibold text-(--danger)">Completá lo marcado en rojo</span>
               )}
-              <Button onClick={enviar} disabled={enviando}>
+              <Button onClick={() => enviar()} disabled={enviando}>
                 {enviando ? 'Registrando…' : 'Registrar'}
               </Button>
             </div>
@@ -692,6 +701,20 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
         <DescartarLeadDialog leadId={lead.id} etapa={descartada} onClose={() => setDescartando(false)} />
       )}
       <DemoAgendadaDialog demo={demoAgendada} onCerrar={() => setDemoAgendada(null)} />
+      <AlertDialog open={confirmandoFallido} onOpenChange={setConfirmandoFallido}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Fue un contacto fallido?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Escribiste un detalle: «{limpio}». Si hablaste con alguien, registralo como «Llamada».
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setTipo('llamada'); setIntento(false) }}>Era una llamada</AlertDialogCancel>
+            <AlertDialogAction onClick={() => enviar(true)}>Sí, contacto fallido</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       {demoACancelar && (
         <CancelarDemoDialog key={demoACancelar.id} cuando={cuandoEs(demoACancelar)} reunion={demoACancelar}
           opciones={opcionesEtapa} actual={actual} cancelando={cancelarDemo.isPending}

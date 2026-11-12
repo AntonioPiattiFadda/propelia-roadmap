@@ -1,5 +1,5 @@
 import type { CrmMeeting } from '../types'
-import { TEXTO_DE_DEMO } from './actividad'
+import { leerMetaDeActividad, TEXTO_DE_DEMO } from './actividad'
 
 /** Día y hora que eligió quien agenda, en SU zona, a instantes para las columnas timestamptz. */
 export function armarReunion(fecha: string, hora: string, minutos: number): { starts_at: string; ends_at: string } {
@@ -137,4 +137,17 @@ export function datosDeLaDemo(
       registro.texto !== TEXTO_DE_DEMO && registro.texto,
     ].filter(Boolean).join('\n'),
   }
+}
+
+/** Los registros de demo (`tipo: 'demo'` en la meta) por id de reunión: de ahí salen quién asiste,
+ *  el decisor y las notas. Lo usan la página Demos y el Dashboard SDR. */
+export function registrosPorReunion(filas: readonly { description: string; long_description: string | null }[]): Map<string, RegistroDeLaDemo> {
+  const porReunion = new Map<string, RegistroDeLaDemo>()
+  for (const r of filas) {
+    const meta = leerMetaDeActividad(r.long_description)
+    if (meta?.tipo === 'demo' && meta.reunion) {
+      porReunion.set(meta.reunion, { con: meta.con, decisorApuntado: meta.decisorApuntado, texto: r.description })
+    }
+  }
+  return porReunion
 }

@@ -60,3 +60,14 @@ export function agruparPorEtapa<T extends { funnel_stage_id: string | null }>(
   if (sinEtapa.length > 0) columnas.push({ id: SIN_ETAPA, etapa: null, titulo: 'Sin etapa', leads: sinEtapa })
   return columnas
 }
+
+/**
+ * Arrastrar un lead a otra columna (12/11/2026, por pedido) lo pasa a esa etapa. Solo es destino
+ * una etapa viva distinta de la que ya tiene: ni una borrada (los menús tampoco la ofrecen) ni
+ * «Sin etapa». Devuelve la etapa destino o null si soltar ahí no hace nada.
+ */
+export function etapaDondeSoltar<T>(columna: ColumnaDeEtapa<T>, etapaActualId: string | null): CrmStage | null {
+  const e = columna.etapa
+  if (!e || e.deleted_at != null || e.id === etapaActualId) return null
+  return e
+}
