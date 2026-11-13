@@ -253,6 +253,15 @@ Antonio**. Todo en `docs/mcp/README.md`, con la tabla de tools.
   preparar la demo. La misma migración saca `crm_puede()` por fila de las vistas del CRM
   (`mcp_carteras_visibles()`, una vez por consulta): si cambia `crm_puede()`, cambia esa función.
 
+- **El MCP lee lo que muestran las páginas** (6/11/2026, por pedido; migración `20261106185846_mcp_crm_flujos`,
+  que **la aplica Antonio**). Empezó por el CRM: `list_crm_leads` con los chips de la lista, `get_crm_dashboard`,
+  `get_crm_goals` (Objetivos), `list_crm_email_problems` (la campana), las notas de la pestaña Demo en `get_crm_lead`
+  y, desde el 13/11/2026 (por pedido), `list_crm_activity`: la actividad por fecha y persona (o solo SDR), con resumen
+  por día. El contacto fallido es la llamada `no_respondida` (`actividadDe`, `_shared/mcp/crm.ts`), como en el lead.
+  Las reglas son **espejo** de `src/pages/crm/lib/` en `_shared/mcp/crmReglas.ts`: si cambia una allá, cambia acá.
+  Sin teléfonos ni emails, y sin lo que vive fuera de la base (Google Calendar, el puente), por pedido. Faltan
+  Roadmap, Clientes, Equipo, Caja y Ajustes (`docs/mcp/README.md`).
+
 - **El token del conector solo sirve para el MCP**: es un JWT del usuario con `client_id`, y la
   base (guard de PostgREST + RLS restrictiva en todas las tablas + Storage) y las edge functions
   (`withoutOAuthClients`) lo cortan en todo lo demás. **Una tabla nueva** termina su migración con
@@ -997,8 +1006,8 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   `crm_leads_solo_para` y el mismo corte en `crm_puede_lead()` y `crm_puede_cliente()`, así se van
   también sus tareas, reuniones, comentarios y su alta de /clientes (join `!inner`). Sin pantalla:
   se marca por SQL. La migración marca para Antonio «Test Lead Pre onboardding» e «Inmobiliaria test
-  Onboarding» (falla si no encuentra exactamente esos dos). Las vistas `mcp_*` y la service role no
-  lo miran.
+  Onboarding» (falla si no encuentra exactamente esos dos). La service role no lo mira; las vistas
+  `mcp_*` sí, desde `20261106185846_mcp_crm_flujos` (antes el conector de un SUPERADMIN los traía).
 - **Un SUPERADMIN elimina un lead desde el menú `⋯`** (23/10/2026, por pedido): «Eliminar», directo y
   sin confirmar, con «Deshacer» en el aviso (`useEliminarLead`). Es soft delete (`deleted_at`) y se
   lleva sus tareas pendientes, para que no sigan sonando las alarmas (`eliminarLead`, `restaurarLead`

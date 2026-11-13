@@ -210,3 +210,156 @@ Deno.test('tareasDelAlta: los tildes «Probé» por cuenta van contados, no como
     { tareas_hechas: ['contacto.excel-recibido', 'accesos.enviar-mails'], cuentas_probadas: 2 },
   )
 })
+
+// ─── el CRM como las páginas (6/11/2026) ───────────────────────────────────
+
+const ETAPAS_CRM: Row[] = [
+  { id: 'seg', label: 'Seguimiento', value: 'CUSTOM', position: 2, is_out_of_funnel: false, management_type: 'por_tarea', allows_tasks: true, show_in_dashboard: true },
+  { id: 'nuevo', label: 'Nuevo', value: 'CUSTOM', position: 1, is_out_of_funnel: false, management_type: 'sin_contactar', allows_tasks: true, show_in_dashboard: false },
+  { id: 'desc', label: 'Descartado', value: 'DISCARDED', position: 9, is_out_of_funnel: true, management_type: null, allows_tasks: true, show_in_dashboard: false },
+]
+
+Deno.test('list_crm_leads: pendiente agendar mira sólo las tareas de quien mira, y buscar levanta el descarte', async () => {
+  const { ctx } = base({
+    mcp_crm_stages: ETAPAS_CRM,
+    mcp_crm_leads: [
+      { id: 'l1', company_name: 'Sin tarea', funnel_stage_id: 'seg' },
+      { id: 'l2', company_name: 'Con la mía', funnel_stage_id: 'seg' },
+      { id: 'l3', company_name: 'Con la de otro', funnel_stage_id: 'seg' },
+      { id: 'l4', company_name: 'Primer contacto', funnel_stage_id: 'nuevo' },
+    ],
+    mcp_crm_tasks: [
+      { lead_id: 'l2', title: 'Llamar', due_date: '2099-01-01', completed: false, assigned_to: 'u1' },
+      { lead_id: 'l3', title: 'Llamar', due_date: '2000-01-01', completed: false, assigned_to: 'u2' },
+    ],
+  })
+  const out = (await run('list_crm_leads', ctx, { pendiente_agendar: true })) as Record<string, any>
+  assertEquals(out.leads.map((l: Row) => l.id), ['l1', 'l3'])
+  assertEquals(out.total, 2)
+  assertEquals(out.leads[1].proxima_tarea.responsable, 'Ana')
+  const b = base()
+  await run('list_crm_leads', b.ctx, { buscar: 'sol' })
+  assert(!b.de('mcp_crm_leads').filters!.some((f) => f.column === 'descartado'))
+})
+
+Deno.test('list_crm_leads: tareas_hoy deja los de hoy o vencidas, sin descartados; orden por estado', async () => {
+  const { ctx } = base({
+    mcp_crm_stages: ETAPAS_CRM,
+    mcp_crm_leads: [
+      { id: 'n', funnel_stage_id: 'nuevo' }, { id: 's', funnel_stage_id: 'seg' }, { id: 'd', funnel_stage_id: 'desc', descartado: true },
+      { id: 'futuro', funnel_stage_id: 'seg' },
+    ],
+    mcp_crm_tasks: [
+      { lead_id: 'n', due_date: '2000-01-01', completed: false, assigned_to: 'u1' },
+      { lead_id: 's', due_date: '2000-01-02', completed: false, assigned_to: 'u2' },
+      { lead_id: 'd', due_date: '2000-01-01', completed: false, assigned_to: 'u1' },
+      { lead_id: 'futuro', due_date: '2099-01-01', completed: false, assigned_to: 'u1' },
+    ],
+  })
+  const out = (await run('list_crm_leads', ctx, { tareas_hoy: true, orden: 'estado' })) as Record<string, any>
+  assertEquals(out.leads.map((l: Row) => l.id), ['s', 'n'])
+})
+
+Deno.test('get_crm_dashboard: sólo SUPERADMIN; importantes por estrella o etapa, con TU próxima tarea', async () => {
+  const filas = {
+    mcp_crm_stages: ETAPAS_CRM,
+    mcp_crm_leads: [
+      { id: 'a', company_name: 'Etapa marcada', funnel_stage_id: 'seg', contactos: [{ nombre: 'Pedro', decisor: true }] },
+      { id: 'b', company_name: 'Con estrella', funnel_stage_id: 'nuevo', importante: true },
+      { id: 'c', company_name: 'Ninguna', funnel_stage_id: 'nuevo' },
+    ],
+    mcp_crm_tasks: [{ lead_id: 'a', title: 'Llamar', due_date: '2000-01-01', completed: false, assigned_to: 'u1' }],
+    mcp_crm_meetings: [
+      { id: 'm1', lead_id: 'a', assigned_to: 'u1', starts_at: '2099-01-01T09:00:00Z', status: 'scheduled', title: 'Demo' },
+      { id: 'm2', lead_id: 'a', assigned_to: 'u1', starts_at: '2099-01-01T11:00:00Z', status: 'cancelled', title: 'Demo' },
+    ],
+  }
+  const { ctx, de } = base(filas)
+  const out = (await run('get_crm_dashboard', ctx)) as Record<string, any>
+  assertEquals(out.importantes.map((l: Row) => l.inmobiliaria), ['Con estrella', 'Etapa marcada'])
+  assertEquals(out.importantes[1].decisores, ['Pedro'])
+  assertEquals(out.importantes[1].seguimiento, 'vencida')
+  assertEquals(out.importantes[0].seguimiento, 'sin tarea')
+  assertEquals(out.agenda[0].reuniones.map((m: Row) => m.id), ['m1'])
+  assert(de('mcp_crm_tasks').filters!.some((f) => f.op === 'eq' && f.column === 'assigned_to' && f.value === 'u1'))
+
+  const sdr = base(filas)
+  sdr.ctx.db.rpc = () => Promise.resolve({ nombre: 'Ana', rol: 'SDR' })
+  assertEquals(((await run('get_crm_dashboard', sdr.ctx)) as Row).disponible, false)
+})
+
+Deno.test('get_crm_goals: los números de cada persona, el total y lo pendiente ahora', async () => {
+  const act = (m: Record<string, unknown>) => `<!--act-->${JSON.stringify({ tipo: 'llamada', con: [], ...m })}`
+  const { ctx } = base({
+    mcp_crm_stages: ETAPAS_CRM,
+    mcp_crm_leads: [{ id: 'l1', funnel_stage_id: 'seg', assigned_to: 'u1' }],
+    mcp_crm_comments: [
+      { lead_id: 'l1', created_at: '2026-11-03T10:00:00Z', long_description: act({ resultado: 'contestada', decisor: true }) },
+      { lead_id: 'l1', created_at: '2026-11-03T11:00:00Z', long_description: act({ resultado: 'no_respondida' }) },
+      { lead_id: 'l1', created_at: '2026-11-03T12:00:00Z', long_description: 'nota suelta' },
+    ],
+    mcp_crm_emails: [{ lead_id: 'l1', status: 'delivered' }, { lead_id: 'l1', status: 'failed' }],
+  })
+  const a1 = '00000000-0000-0000-0000-0000000000a1'
+  const out = (await run('get_crm_goals', ctx, { personas: [a1, '00000000-0000-0000-0000-0000000000a2'] })) as Record<string, any>
+  const p = out.periodos[0].personas[0]
+  assertEquals([p.contestadas, p.con_decisor, p.no_respondidas, p.presentaciones_con_video], [1, 1, 1, 1])
+  assertEquals(p.decisor_por_contactado.tasa, 1)
+  assertEquals(out.periodos[0].total.contestadas, 2)
+  assertEquals(out.pendiente_ahora.length, 2)
+  const demasiado = (await run('get_crm_goals', base().ctx, { semanas: 12, personas: [a1, a1, a1] })) as Row
+  assert(typeof demasiado.error === 'string')
+})
+
+Deno.test('list_crm_email_problems: por defecto los míos sin «Listo», con el estado en castellano', async () => {
+  const { ctx, de } = base({ mcp_crm_emails: [{ id: 'e', lead_id: null, sent_by: 'u1', subject: 'Hola', status: 'bounced', sent_at: 'x' }] })
+  const out = (await run('list_crm_email_problems', ctx)) as Record<string, any>
+  const f = de('mcp_crm_emails').filters!
+  assert(f.some((x) => x.op === 'eq' && x.column === 'sent_by' && x.value === 'u1'))
+  assert(f.some((x) => x.op === 'is_null' && x.column === 'seen_at'))
+  assert(f.some((x) => x.op === 'in' && x.column === 'status'))
+  assertEquals(out.envios[0].estado, 'Rebotó')
+})
+
+// ─── actividad por fecha y persona (13/11/2026) ────────────────────────────
+
+Deno.test('list_crm_activity: resumen por persona y día en hora de España, contacto fallido y decisor', async () => {
+  const act = (m: Record<string, unknown>) => `<!--act-->${JSON.stringify({ con: [], ...m })}`
+  const { ctx, de } = base({
+    mcp_crm_leads: [{ id: 'l1', company_name: 'Inmo Sol' }],
+    mcp_crm_comments: [
+      { id: 'a', lead_id: 'l1', comment_type: 'MANUAL', description: 'Atendió Pedro', long_description: act({ tipo: 'llamada', resultado: 'contestada', decisor: true, con: ['Pedro'] }), created_by: 'u2', created_at: '2026-11-10T09:00:00Z' },
+      { id: 'b', lead_id: 'l1', comment_type: 'MANUAL', description: 'No respondió.', long_description: act({ tipo: 'llamada', resultado: 'no_respondida' }), created_by: 'u2', created_at: '2026-11-10T10:00:00Z' },
+      // 23:30 UTC del 10 es el 11 en España.
+      { id: 'c', lead_id: 'l1', comment_type: 'MANUAL', description: 'Demo agendada.', long_description: act({ tipo: 'demo' }), created_by: 'u2', created_at: '2026-11-10T23:30:00Z' },
+      { id: 'd', lead_id: 'l1', comment_type: 'MANUAL', description: 'Nota suelta', long_description: null, created_by: 'u1', created_at: '2026-11-10T11:00:00Z' },
+    ],
+  })
+  const out = (await run('list_crm_activity', ctx, { desde: '2026-11-10', hasta: '2026-11-11' })) as Record<string, any>
+  const f = de('mcp_crm_comments').filters!
+  assert(f.some((x) => x.op === 'gte' && x.column === 'created_at' && x.value === '2026-11-10T00:00:00+01:00'))
+  assert(f.some((x) => x.op === 'lt' && x.column === 'created_at' && x.value === '2026-11-12T00:00:00+01:00'))
+  assert(f.some((x) => x.op === 'eq' && x.column === 'comment_type' && x.value === 'MANUAL'))
+  const ana = out.resumen.find((r: Row) => r.persona === 'Ana')
+  assertEquals([ana.total.llamada_contestada, ana.total.con_decisor, ana.total.contacto_fallido, ana.total.demo_agendada, ana.total.total], [1, 1, 1, 1, 3])
+  assertEquals(ana.por_dia.map((d: Row) => [d.dia, d.total]), [['2026-11-10', 2], ['2026-11-11', 1]])
+  assertEquals(out.actividades[0].tipo, 'demo_agendada') // el más nuevo primero
+  assertEquals(out.actividades.find((x: Row) => x.tipo === 'llamada_contestada').inmobiliaria, 'Inmo Sol')
+
+  const soloSdr = (await run('list_crm_activity', ctx, { desde: '2026-11-10', hasta: '2026-11-11', solo_sdr: true })) as Record<string, any>
+  assertEquals(soloSdr.resumen.map((r: Row) => r.persona), ['Ana'])
+})
+
+Deno.test('list_crm_activity: rangos imposibles devuelven un error claro', async () => {
+  assert(typeof ((await run('list_crm_activity', base().ctx, { desde: '2026-11-10', hasta: '2026-11-01' })) as Row).error === 'string')
+  assert(typeof ((await run('list_crm_activity', base().ctx, { desde: '2026-01-01', hasta: '2026-12-31' })) as Row).error === 'string')
+})
+
+Deno.test('actividad: la llamada que no respondieron es un contacto fallido, como en el lead', async () => {
+  const { ctx } = base({
+    mcp_crm_leads: [{ id: 'l1', company_name: 'Inmo Sol' }],
+    mcp_crm_comments: [{ comment_type: 'MANUAL', description: 'No respondió.', long_description: '<!--act-->{"tipo":"llamada","con":[],"resultado":"no_respondida"}', created_by: 'u2', created_at: 'x' }],
+  })
+  const out = (await run('get_crm_lead', ctx, { lead_id: 'l1' })) as Record<string, any>
+  assertEquals(out.actividad[0].tipo, 'contacto fallido')
+})

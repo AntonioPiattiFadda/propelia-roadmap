@@ -11,8 +11,12 @@ const MARCA_ACTIVIDAD = '<!--act-->'
 const TIPOS: Record<string, string> = {
   nota: 'nota',
   llamada: 'llamada',
+  // Ningún registro de la app lleva `fallido`: el contacto fallido es una llamada `no_respondida`
+  // (ver `actividadDe`). Queda por si alguna fila vieja lo trae.
   fallido: 'contacto fallido',
   demo: 'demo agendada',
+  // Lo anotado durante la demo, desde la pestaña «Demo» del lead (4/11/2026).
+  demoHecha: 'notas de la demo',
 }
 
 export interface Actividad {
@@ -42,6 +46,8 @@ export function actividadDe(commentType: unknown, longDescription: unknown): Act
     if (typeof meta?.decisorApuntado === 'string' && meta.decisorApuntado.trim()) a.decisorApuntado = meta.decisorApuntado.trim()
     if (typeof meta?.reunion === 'string') a.reunion = meta.reunion
     if (typeof meta?.resultado === 'string') a.resultado = meta.resultado
+    // Como la actividad del lead: la llamada que no respondieron es un «Contacto fallido».
+    if (meta?.tipo === 'llamada' && meta.resultado === 'no_respondida') a.tipo = 'contacto fallido'
     return a
   } catch {
     return { tipo: 'nota', con: [] }

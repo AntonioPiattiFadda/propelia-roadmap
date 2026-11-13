@@ -3,7 +3,11 @@
 Copiado de `propelia-frontend` (`docs/mcp/README.md` de allá tiene la historia larga): OAuth, el
 blindaje del token, la auditoría y la pantalla de consentimiento (migración
 `20261030115614_mcp_oauth_infra`), y las tools sobre vistas `mcp_*` (migración
-`20261031135450_mcp_tools`). **Todas de sólo lectura.**
+`20261031135450_mcp_tools`, y desde el 6/11/2026 `20261106185846_mcp_crm_flujos`, que **la aplica Antonio**). **Todas de
+sólo lectura.** La meta (6/11/2026, por pedido): que se pueda leer todo lo que muestran las páginas, cada una con su flow.
+Se arrancó por el CRM; faltan Roadmap (hoja de notas), Clientes (ficha del alta), Equipo (visibilidad), Caja (por mes,
+saldos, «Claude Toni») y Ajustes. Lo que vive fuera de la base (Google Calendar, el estado en Propelia por el puente) queda
+para después, y teléfonos y emails siguen sin salir.
 
 | Tool | Qué devuelve | Vista |
 |---|---|---|
@@ -12,9 +16,13 @@ blindaje del token, la auditoría y la pantalla de consentimiento (migración
 | `list_roadmap_tasks` | Tareas del tablero o del backlog: estado, prioridad, responsables, grupo, área. Por defecto el tablero sin terminadas | `mcp_roadmap_tareas`, `mcp_roadmap_grupos` |
 | `get_roadmap_task` | Una tarea entera: la explicación como texto (los tres formatos de `expl`), los pasos, los avisos y los últimos 30 mensajes | `mcp_roadmap_tareas` |
 | `list_backlog_groups` | Los grupos del backlog con nombre y cuántas tareas | `mcp_roadmap_grupos`, `mcp_roadmap_tareas` |
-| `list_crm_stages` | El funnel con cuántos leads hay en cada etapa | `mcp_crm_stages`, `mcp_crm_leads` |
-| `list_crm_leads` | Leads (inmobiliarias) con etapa, responsable, importante, tipo. Por defecto sin descartados | `mcp_crm_leads` |
-| `get_crm_lead` | Un lead entero: datos de la inmobiliaria, contactos (nombre, rol, decisor), tareas, reuniones, actividad y cambios de etapa | `mcp_crm_*` |
+| `list_crm_stages` | El funnel con cuántos leads hay en cada etapa y su configuración (gestión, tareas, Dashboard, onboarding) | `mcp_crm_stages`, `mcp_crm_leads` |
+| `list_crm_leads` | Leads (inmobiliarias) con los filtros de la lista: etapa, responsable, estrella, tipo, canal, lote, «Pendiente agendar tarea», «Tareas vencidas» (hoy o vencidas), vencidas, con/sin tareas, para recontactar, un objetivo de la semana, «Ver como» y los tres órdenes. Por defecto sin descartados (salen al buscar, como en la lista). Con un chip trae la próxima tarea de cada uno | `mcp_crm_leads`, `mcp_crm_tasks`, `mcp_crm_stages` |
+| `get_crm_lead` | Un lead entero: datos de la inmobiliaria, contactos (nombre, rol, decisor), tareas, reuniones, actividad, cambios de etapa, correos (y si llegaron) y las notas de la pestaña Demo | `mcp_crm_*`, `mcp_crm_demo_notas` |
+| `get_crm_dashboard` | El Dashboard de `/crm`: los importantes (estrella o etapa «Dashboard») con decisores, etapa, seguimiento y tu próxima tarea, y la agenda de 7 días (sin Google). Sólo SUPERADMIN | `mcp_crm_leads`, `mcp_crm_tasks`, `mcp_crm_meetings` |
+| `get_crm_goals` | Objetivos por persona y período (hoy, semana, semana pasada, mes, un rango o N semanas): contestadas, con decisor, decisores nuevos, no respondidas, presentaciones con vídeo, demos, «decisor por contactado» y lo pendiente ahora | `mcp_crm_comments`, `mcp_crm_meetings`, `mcp_crm_emails`, … |
+| `list_crm_email_problems` | La campana: los emails que no llegaron, por defecto los tuyos sin «Listo» | `mcp_crm_emails` |
+| `list_crm_activity` | La actividad registrada entre dos días (hora de España, hasta 92), de una o varias personas o sólo de los SDR: resumen por persona y día (llamadas contestadas y con decisor, contactos fallidos, demos agendadas, notas de la demo, notas) y el detalle de cada una. Pedido el 13/11/2026: «actividades por fecha y SDR» | `mcp_crm_comments` |
 | `list_crm_tasks` | Tareas del CRM. Por defecto las pendientes tuyas; `hoy` y `vencidas` en hora de España | `mcp_crm_tasks` |
 | `list_crm_meetings` | Reuniones y demos, por defecto las próximas | `mcp_crm_meetings` |
 | `list_demos` | Las demos agendadas (por defecto las próximas): hora de España, inmobiliaria y su etapa, quién asiste, decisor apuntado y notas de quien la agendó (del registro de la demo; las de antes del 22/10/2026, de `description` sin el email) | `mcp_crm_meetings`, `mcp_crm_leads`, `mcp_crm_comments` |
@@ -22,10 +30,15 @@ blindaje del token, la auditoría y la pantalla de consentimiento (migración
 | `list_onboardings` | Altas de clientes (sólo SUPERADMIN) | `mcp_onboardings` |
 | `list_expenses` | La caja, con total y cuánto pagó cada uno de lo filtrado (sólo SUPERADMIN) | `mcp_expenses` |
 
+**Las reglas de las páginas viven en `_shared/mcp/crmReglas.ts`**, espejo de `src/pages/crm/lib/` (`objetivos.ts`,
+`leadFilters.ts`, `tareas.ts`, `resumen.ts`): si cambia una regla allá, cambia acá, o Claude dice otro número que la
+pantalla. El «hoy» es el de España, no el del navegador.
+
 **Cada uno ve lo que ve en la app**: las vistas corren como su dueño (la RLS restrictiva le cierra
 las tablas al conector) y recortan cada fila con la misma regla que la RLS: `es_usuario()`, la
 cartera de `crm_puede()` y `crm_es_superadmin()` (altas y caja, que el front también esconde a un
-SDR). **Las del CRM no llaman a `crm_puede()` por fila** (migración
+SDR). **Y cortan los leads de prueba** (`crm_leads.solo_para`, desde `20261106185846_mcp_crm_flujos`): antes el
+conector de un SUPERADMIN traía los de otro. **Las del CRM no llaman a `crm_puede()` por fila** (migración
 `20261031141933_mcp_demos_y_rendimiento`): `(select crm_es_superadmin()) or owner in (select
 mcp_carteras_visibles())` dice lo mismo y se evalúa una vez por consulta. Con la función por fila,
 la lista de leads tardaba 139 ms en 431 filas y crecía con la tabla; y `security_barrier` no deja
@@ -119,6 +132,7 @@ Sign In / Providers → Email).
 |---|---|
 | Migraciones `20261030115614_mcp_oauth_infra` y `20261031135450_mcp_tools` | Aplicadas |
 | Migración `20261031141933_mcp_demos_y_rendimiento` | Pendiente de `db push` al escribir esto (`supabase migration list` lo dice) |
+| Migración `20261106185846_mcp_crm_flujos` (6/11/2026) | Pendiente de `db push`. **Antes** que deployar `mcp`: sin ella, `list_crm_stages`, el Dashboard y los chips piden columnas que la vista no tiene, y `get_crm_lead` lee `mcp_crm_demo_notas`, que el guard rechaza |
 | Función `mcp` y proxy de Vercel | Deployados: `POST /mcp` sin token da 401 con el `WWW-Authenticate` que apunta a `propelia-roadmap.vercel.app` |
 | OAuth Server (Authentication → OAuth Server) | Prendido, *Authorization Path* `/oauth/consent` |
 | *Allow Dynamic OAuth Apps* | Prendido. Supabase pide confirmar el riesgo (registros de apps falsas para phishing): lo cubre la pantalla de consentimiento, que sólo deja aprobar si el código vuelve a Claude o ChatGPT, y el token igual sólo lee las vistas `mcp_*` |
