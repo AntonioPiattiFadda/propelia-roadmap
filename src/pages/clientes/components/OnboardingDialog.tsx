@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Check, ExternalLink, MessageCircle, X } from 'lucide-react'
+import { Check, ExternalLink, Eye, MessageCircle, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -13,6 +13,7 @@ import { PUENTE_SIMULADO } from '../service/puente'
 import type { DatosDelAlta } from './datosDelAlta'
 import { ComentariosDelLead } from './ComentariosDelLead'
 import { CuentasCreadas, UsuariosDeLaOrg } from './CuentasCreadas'
+import { HitosDelCliente } from './HitosDelCliente'
 import { TareaDelOnboarding } from './TareaDelOnboarding'
 
 const fmtFecha = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -39,10 +40,11 @@ export function OnboardingDialog({ datos, lleva, yo, onCerrar }: {
 function Cuerpo({ datos, lleva, yo, onCerrar }: { datos: DatosDelAlta; lleva: Usuario | undefined; yo: Usuario; onCerrar: () => void }) {
   const hechas = new Set(datos.o.tareas.map(t => t.task_id))
   const actual = pasoActual(hechas)
-  const [abierto, setAbierto] = useState(actual ?? 0)
+  // Un paso, o 'hitos': lo que ve el cliente en crm.propelia.es/onboarding.
+  const [abierto, setAbierto] = useState<number | 'hitos'>(actual ?? 0)
   const asignar = useAsignarOnboarding()
   const completar = useCompletarOnboarding()
-  const paso = PASOS[abierto]
+  const paso = abierto === 'hitos' ? null : PASOS[abierto]
   // El chat vacío con el responsable; sin número válido no hay botón.
   const whatsapp = datos.telefono ? enlaceDeWhatsapp(datos.telefono, '', { web: !esMovil() }) : null
 
@@ -102,9 +104,23 @@ function Cuerpo({ datos, lleva, yo, onCerrar }: { datos: DatosDelAlta; lleva: Us
               </li>
             )
           })}
+          <li className="mt-1 border-t border-(--line) pt-1 max-md:mt-0 max-md:border-t-0 max-md:border-l max-md:pt-0 max-md:pl-1">
+            <button type="button" aria-current={abierto === 'hitos' ? 'step' : undefined} onClick={() => setAbierto('hitos')}
+              className={cn('flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 py-2 text-left text-[13px] max-md:w-max',
+                abierto === 'hitos' ? 'bg-primary/10 font-semibold' : 'hover:bg-(--surface-2)')}>
+              <span className="grid size-6 shrink-0 place-items-center rounded-full border-[1.5px] border-(--line-strong) text-(--fg-muted)"><Eye className="size-3.5" /></span>
+              <span className="truncate">Lo que ve el cliente</span>
+            </button>
+          </li>
         </ol>
         <section className="flex min-h-0 flex-col gap-2 overflow-y-auto p-5">
-          <h3 className="mb-1 text-[15px] font-semibold">{abierto + 1} · {paso.titulo}</h3>
+          {!paso ? (
+            <>
+              <h3 className="mb-1 text-[15px] font-semibold">Lo que ve el cliente</h3>
+              <HitosDelCliente datos={datos} />
+            </>
+          ) : (<>
+          <h3 className="mb-1 text-[15px] font-semibold">{(abierto as number) + 1} · {paso.titulo}</h3>
           {paso.tareas.map(t => <TareaDelOnboarding key={t.id} datos={datos} paso={paso} tarea={t} />)}
           {paso.id === 'contacto' && (
             <p className="mt-2 text-[12px] text-(--fg-muted)">
@@ -119,6 +135,7 @@ function Cuerpo({ datos, lleva, yo, onCerrar }: { datos: DatosDelAlta; lleva: Us
           {!datos.equipoImportado && datos.orgId && (
             <div className="mt-auto pt-4"><UsuariosDeLaOrg orgId={datos.orgId} /></div>
           )}
+          </>)}
         </section>
         <div className="flex min-h-0 flex-col max-lg:col-span-2 max-md:col-span-1">
           <ComentariosDelLead leadId={datos.o.lead.id} />

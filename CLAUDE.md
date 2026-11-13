@@ -294,6 +294,12 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   vuelve a pasar por la etapa no reabre nada. **El front nunca escribe `lead_type`**: el trigger
   rechaza el cambio a mano (`crm_lead_type_solo_rpc`), y `client_onboarding_completar` lo pasa a
   `CLIENT`. Pruebas en `supabase/tests/clientes-onboarding.sql` (como `crm-permisos.sql`).
+- **En el CRM, un lead en `ONBOARDING` es de solo lectura** (13/11/2026, por pedido): sigue en la
+  lista y en el Dashboard, pero el dialog lleva el cartel «Este lead está en onboarding» (con «Ver
+  el alta» a `/clientes?lead=` para un SUPERADMIN) y no se cambia etapa, contactos, notas,
+  actividad, reuniones ni responsable (`puedeEditarLead` / `enOnboarding`, `lib/permisos.ts`).
+  **Las tareas sí** se siguen tildando y editando: /clientes las muestra pero no las tilda. Solo
+  del front, sin trigger: /clientes escribe en el mismo lead. `CLIENT` vuelve a ser editable.
 - **La página** (solo SUPERADMIN: `NAV` y gate adentro, como Demos) lista los `ONBOARDING` y abre
   cada alta en un dialog con `?lead=<id>`. Ocho pasos (`lib/pasos.ts`, en el código como en el
   producto; en la base solo las tareas hechas); **los pasos 5 a 8 están en «Próximamente»** y no
@@ -463,6 +469,15 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   tener el equipo importado**: eso es la tarea `contacto.importar-usuarios` hecha
   (`TAREA_IMPORTAR_USUARIOS`, `datos.equipoImportado`), y de ahí leen «Cuentas del equipo», «Enviar
   mails», «Reabrir» y `onboarding_alta_reabrir` (el «Quiero editar» de la página pública).
+- **El cliente ve su avance en crm.propelia.es/onboarding** (6/11/2026, por pedido; la página es de
+  propelia-frontend, solo para los admins de la org, y solo mira). Son siete hitos (el diseño de
+  `public/demo/onboarding.html`): cinco de la prueba (equipo, Google, leads de Idealista, portales, IA)
+  y dos de después (migración, bot), en `_shared/hitosDeOnboarding.ts`. Cada uno está hecho por sus
+  tareas del alta o con el tilde a mano de /clientes › «Lo que ve el cliente» (`HitosDelCliente`,
+  `hito.<id>` en `client_onboarding_tasks`, sin migración); «Google», además, cuando todo el equipo
+  conectó el calendario. Lo pide la edge `onboarding-progress` del producto a `onboarding-progreso`
+  de acá, con el secreto del puente (`verify_jwt = false`; contrato en `PUENTE.md` › «La vuelta»).
+  Hace falta deployar las dos. Los vídeos vistos, después.
 - **Dos capacitaciones por Google Meet en el paso 2** (31/10/2026, por pedido, migración
   `20261031173059_onboarding_reuniones_de_capacitacion`, que **la aplica Antonio**): arriba del
   tutorial de leads, «con el equipo» y «con el dueño» (`Tarea.reunion` en `lib/pasos.ts`). Cada una

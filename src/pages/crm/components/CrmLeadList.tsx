@@ -413,10 +413,10 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
     responsable: usuariosPorId.get(lead.assigned_to),
     esMio: variasCarteras ? lead.assigned_to === agentes.perspectivaId : null,
     onAbrir: abrirLead,
-    acciones: <LeadRowActions lead={lead} puedeEscribir={agentes.puedeEscribir(lead.assigned_to)} onStartReassign={empezarSeleccion} />,
-    // Solo se puede marcar lo que se puede mover: un lead de una cartera de solo lectura sigue
-    // abriéndose con el clic, como fuera del modo selección.
-    seleccion: seleccionando && agentes.puedeEscribir(lead.assigned_to)
+    acciones: <LeadRowActions lead={lead} puedeEscribir={agentes.puedeEditarLead(lead)} onStartReassign={empezarSeleccion} />,
+    // Solo se puede marcar lo que se puede mover: un lead de una cartera de solo lectura (o en
+    // onboarding) sigue abriéndose con el clic, como fuera del modo selección.
+    seleccion: seleccionando && agentes.puedeEditarLead(lead)
       ? { marcado: marcados.has(lead.id), onToggle: () => alternarMarcado(lead.id) }
       : undefined,
     proxima: proximas.get(lead.id),
@@ -474,7 +474,7 @@ export function CrmLeadList({ resumen = false }: { resumen?: boolean }) {
       const ids = recorrido.map(l => l.id)
       const marcable = (id: string) => {
         const lead = recorrido.find(l => l.id === id)
-        return !!lead && agentes.puedeEscribir(lead.assigned_to)
+        return !!lead && agentes.puedeEditarLead(lead)
       }
       const vecino = vecinoMarcable(ids, cursor, e.key === 'ArrowDown' ? 1 : -1, marcable)
       e.preventDefault()

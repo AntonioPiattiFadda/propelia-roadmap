@@ -422,6 +422,38 @@ se vincula desde Facturación admin.
 vincular a una org) o `linked` (pagado y vinculado). Un `open` con `expires_at` pasado ya no se
 puede pagar.
 
+## La vuelta: el avance que ve el cliente (`onboarding-progreso`)
+
+Desde el 6/11/2026 el puente también va al revés. La página `/onboarding` de crm.propelia.es (solo
+para los admins de la org, logueados) muestra los siete hitos del onboarding y la tabla de su equipo.
+Su edge `onboarding-progress` (producto) saca la org del usuario y le pregunta a la edge
+`onboarding-progreso` de acá. La tabla del equipo la arma el producto con sus propios datos, los
+mismos de `get_organization`.
+
+```
+POST https://itqwxnmuxuiiydsueazb.supabase.co/functions/v1/onboarding-progreso
+x-bridge-secret: <el mismo secreto: PROPELIA_BRIDGE_SECRET acá, ROADMAP_BRIDGE_SECRET allá>
+{ "organization_id": "<uuid>" }
+```
+
+```json
+{ "onboarding": null }
+{ "onboarding": { "empresa": "Fincas Ribera", "iniciado": "2026-11-01T10:00:00Z", "completado": null,
+  "hitos": { "equipo": true, "google": false, "idealista": false, "portales": false,
+             "ia": false, "migracion": false, "bot": false } } }
+```
+
+Errores: 401 `secreto_invalido`, 400 `org_invalida`, 500 con el mensaje de la base.
+
+- **El alta se busca por la org**: el lead con `crm_leads.propelia_organization_id` = esa org (sin
+  borrar, el más nuevo). Completada también se devuelve, con `completado`.
+- **Los hitos** salen de `supabase/functions/_shared/hitosDeOnboarding.ts`: hecho por sus tareas del
+  alta o tildado a mano en /clientes › «Lo que ve el cliente» (`hito.<id>` en
+  `client_onboarding_tasks`, sin migración). IA, migración y bot son solo a mano.
+- **`google` acá es solo el tilde a mano**: el producto lo da por hecho además cuando todo el equipo
+  tiene `calendar_connected` (`calendarioListo`, misma regla en los dos lados).
+- No salen tareas internas, nombres de quien lleva el alta ni comentarios: solo estos booleanos.
+
 ## Secretos (los configura quien deploya)
 
 | Proyecto | Secreto | Para qué |
@@ -445,3 +477,6 @@ navegador manda un `actor`, se descarta.
 2. Roadmap: `supabase secrets set PROPELIA_BRIDGE_URL=… PROPELIA_BRIDGE_SECRET=…` (el mismo
    secreto) y `supabase functions deploy propelia-bridge`.
 3. Probar: `list_organizations` desde la consola del Roadmap logueado como SUPERADMIN.
+4. La vuelta (6/11/2026): `supabase functions deploy onboarding-progreso` acá (usa el
+   `PROPELIA_BRIDGE_SECRET` que ya está) y `supabase functions deploy onboarding-progress` en el
+   producto (usa `ROADMAP_BRIDGE_SECRET`). Sin secretos nuevos.

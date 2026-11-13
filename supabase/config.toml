@@ -434,6 +434,11 @@ verify_jwt = false
 [functions.onboarding-alta]
 verify_jwt = false
 
+# El avance del onboarding que ve el cliente en crm.propelia.es/onboarding. La llama la edge
+# `onboarding-progress` del producto, que no tiene un JWT de acá: la puerta es `x-bridge-secret`.
+[functions.onboarding-progreso]
+verify_jwt = false
+
 # Servidor MCP (conector de Claude / ChatGPT, docs/mcp/README.md). Se autentica sola con el token
 # OAuth: el 401 del gateway no trae el `WWW-Authenticate` y Claude no encontraría el login.
 [functions.mcp]

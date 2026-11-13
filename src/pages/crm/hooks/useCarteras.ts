@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import {
-  carterasConEscritura, carterasVisibles, esSuperadmin, puedeEscribir, type Acceso,
+  carterasConEscritura, carterasVisibles, esSuperadmin, puedeEditarLead, puedeEscribir, type Acceso,
 } from '../lib/permisos'
 import { getAccesos, getUsuarios } from '../service/crm.service'
 import type { Usuario } from '../types'
@@ -28,6 +28,9 @@ export function useCarteras() {
   const visibles = useMemo(() => carterasVisibles(yo, usuarios, accesos), [yo, usuarios, accesos])
   const conEscritura = useMemo(() => carterasConEscritura(yo, usuarios, accesos), [yo, usuarios, accesos])
   const puedeEscribirEn = useCallback((owner: string) => puedeEscribir(yo, owner, accesos), [yo, accesos])
+  /** Escribir en la cartera y que el lead no esté en onboarding (`puedeEditarLead`). */
+  const puedeEditar = useCallback((lead: { assigned_to: string; lead_type?: string | null }) =>
+    puedeEditarLead(yo, lead, accesos), [yo, accesos])
 
   return {
     myId,
@@ -38,6 +41,7 @@ export function useCarteras() {
     conEscritura,
     esSuperadmin: esSuperadmin(yo),
     puedeEscribir: puedeEscribirEn,
+    puedeEditarLead: puedeEditar,
     isLoading: usuariosQ.isLoading || accesosQ.isLoading || !yo,
   }
 }
