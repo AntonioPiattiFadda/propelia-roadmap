@@ -523,6 +523,9 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   responsable con vencimiento `p_initial_task_due_date` (el «hoy» local de quien carga), como el
   producto. Se sacó el 10/10/2026 y volvió el 12/10 antes de aplicarse. Sus errores son claves (`crm_…`) que traduce
   `src/pages/crm/lib/errores.ts`.
+- **La lista se trae entera, de a páginas de 1000** (`getLeads`, 13/11/2026): la API corta en
+  1000 filas por consulta y con más leads los más viejos no llegaban a ninguna pantalla. Toda
+  consulta que pueda pasar de 1000 filas va con `.range()` en un bucle.
 - **La lista se trae entera** (la RLS ya recortó) y filtros, pestañas y contadores salen de
   funciones puras en `lib/`. Todo filtro vive en la URL (`leadFilterParams.ts`): los enlaces se
   arman con `enlaceAlCrm()`, nunca a mano. `?owners=` son las carteras mirando y `?lead=` el lead
