@@ -23,6 +23,7 @@ para después, y teléfonos y emails siguen sin salir.
 | `get_crm_goals` | Objetivos por persona y período (hoy, semana, semana pasada, mes, un rango o N semanas): contestadas, con decisor, decisores nuevos, no respondidas, presentaciones con vídeo, demos, «decisor por contactado» y lo pendiente ahora | `mcp_crm_comments`, `mcp_crm_meetings`, `mcp_crm_emails`, … |
 | `list_crm_email_problems` | La campana: los emails que no llegaron, por defecto los tuyos sin «Listo» | `mcp_crm_emails` |
 | `list_crm_activity` | La actividad registrada entre dos días (hora de España, hasta 92), de una o varias personas o sólo de los SDR: resumen por persona y día (llamadas contestadas y con decisor, contactos fallidos, demos agendadas, notas de la demo, notas) y el detalle de cada una. Pedido el 13/11/2026: «actividades por fecha y SDR» | `mcp_crm_comments` |
+| `get_crm_sdr_dashboard` | El «Dashboard SDR» de una persona por mes, trimestre o 12 meses: meta, asistencia, embudo, 2+ asistentes, sin confirmar, forecast, prescripciones, matrices, mes a mes, las demos y «Second Chance». Reglas en `_shared/mcp/dashboardSdr.ts`, espejo de `src/pages/crm/lib/dashboardSdr.ts` (su test corre los mismos casos) | `mcp_crm_meetings`, `mcp_crm_comments`, `mcp_crm_tasks`, `mcp_crm_leads`, `mcp_crm_meta_sdr` |
 | `list_crm_tasks` | Tareas del CRM. Por defecto las pendientes tuyas; `hoy` y `vencidas` en hora de España | `mcp_crm_tasks` |
 | `list_crm_meetings` | Reuniones y demos, por defecto las próximas | `mcp_crm_meetings` |
 | `list_demos` | Las demos agendadas (por defecto las próximas): hora de España, inmobiliaria y su etapa, quién asiste, decisor apuntado y notas de quien la agendó (del registro de la demo; las de antes del 22/10/2026, de `description` sin el email) | `mcp_crm_meetings`, `mcp_crm_leads`, `mcp_crm_comments` |
@@ -186,7 +187,7 @@ Quedó para evaluar con calma (31/10/2026). Lo que ya está y lo que hay que mir
 |---|---|---|
 | Registro dinámico abierto | Cualquiera registra una app con cualquier nombre; el consentimiento sólo aprueba si el código vuelve a Claude o ChatGPT (`oauthRedirectTrust.ts`) | Mirar cada tanto Authentication → OAuth Apps y borrar lo raro. ¿Hace falta registrar los clientes a mano y apagar el registro dinámico? |
 | El token puede cambiar la contraseña | Heredado del producto: `PUT /auth/v1/user` con el token del conector no pasa por PostgREST ni por la RLS | Prender *Secure password change* (Authentication → Sign In / Providers → Email), que en este proyecto no se verificó, y saber que igual deja 24 h abiertas |
-| Las vistas corren como su dueño | Copian la regla de la RLS (`es_usuario()`, la cartera vía `mcp_carteras_visibles()`, `crm_es_superadmin()`) | Si cambia una policy de `crm_*`, `expenses` o `client_onboardings`, la vista no se entera sola. Falta un test tipo `crm-permisos.sql` que compare vista contra RLS por usuario |
+| Las vistas corren como su dueño | Copian la regla de la RLS (`es_usuario()`, la cartera vía `mcp_carteras_visibles()`, `crm_es_superadmin()`) | Si cambia una policy de `crm_*`, `expenses` o `client_onboardings`, la vista no se entera sola. **`supabase/tests/mcp-permisos.sql`** (13/11/2026) lo compara por usuario: correrlo después de tocar una policy o una vista |
 | Qué datos salen | Sin teléfonos, emails, tokens ni archivos; sí todos los textos del equipo (notas, consejo del SDR, conversaciones, notas de contactos) | ¿Está bien que un SDR lleve a Claude/ChatGPT todo el texto de su cartera? ¿Y la caja a un SUPERADMIN? |
 | Prompt injection | Los textos los escribe el equipo; las `instructions` le piden al modelo tratarlos como datos; el sanitizador limpia caracteres raros y corta largos | Todo es sólo lectura, así que el daño posible es que el modelo lea algo mal o lo mande a otra tool del chat |
 | Auditoría | Cada llamada queda en `mcp_audit_log` (quién, qué tool, argumentos cortos, cuántas filas); la lee un SUPERADMIN | No hay pantalla para verla ni alerta de uso raro |
@@ -194,6 +195,13 @@ Quedó para evaluar con calma (31/10/2026). Lo que ya está y lo que hay que mir
 | Dominio | `vercel.app` es compartido | Un dominio propio da logo y una URL que no depende del subdominio de Vercel |
 
 ## Tests
+
+**Permisos** (13/11/2026): `supabase/tests/mcp-permisos.sql`, como `crm-permisos.sql`: se corre entero con el MCP
+`execute_sql`, crea sus usuarios en una transacción y termina en `rollback`; tiene que devolver `mcp-permisos: OK`. Para
+cuatro personas (SDR, SDR con `read` sobre otro, dos SUPERADMIN) compara cada vista del CRM contra lo que la RLS de su
+tabla deja leer, y verifica lo que corta más que la RLS: roadmap, caja y altas sólo SUPERADMIN, notas de la demo por
+lead, `solo_para` y que con el token del conector las tablas devuelvan cero. Necesita la migración `20261106185846`.
+
 
 ```bash
 # Fuera del repo: con el package.json de la raíz, Deno busca las dependencias en node_modules.

@@ -363,3 +363,36 @@ Deno.test('actividad: la llamada que no respondieron es un contacto fallido, com
   const out = (await run('get_crm_lead', ctx, { lead_id: 'l1' })) as Record<string, any>
   assertEquals(out.actividad[0].tipo, 'contacto fallido')
 })
+
+// ─── Dashboard SDR (13/11/2026) ────────────────────────────────────────────
+
+Deno.test('get_crm_sdr_dashboard: demos de la persona con registro, confirmación, contratado y la meta del equipo', async () => {
+  const { ctx, de } = base({
+    mcp_crm_meta_sdr: [{ texto: '{"demosRealizadasPorMes":4}' }],
+    mcp_crm_stages: [{ id: 'contratado', starts_onboarding: true }, { id: 'nuevo', starts_onboarding: false }],
+    mcp_crm_meetings: [
+      // Realizada, con dos asistentes en su registro, confirmada «de hoy» y el lead contratado.
+      { id: 'm1', lead_id: 'l1', starts_at: '2026-11-10T08:30:00Z', created_at: '2026-11-03T10:00:00Z', status: 'completed', cancel_reason: null },
+      { id: 'm2', lead_id: 'l2', starts_at: '2026-11-04T08:30:00Z', created_at: '2026-11-02T10:00:00Z', status: 'cancelled', cancel_reason: 'No podía' },
+    ],
+    mcp_crm_leads: [
+      { id: 'l1', company_name: 'Inmo Sol', funnel_stage_id: 'contratado', lead_type: 'LEAD', contactos: [{ nombre: 'Pedro' }] },
+      { id: 'l2', company_name: 'Inmo Luna', funnel_stage_id: 'nuevo', lead_type: 'LEAD', contactos: [{ nombre: 'Marta' }] },
+    ],
+    mcp_crm_comments: [
+      { comment_type: 'MANUAL', long_description: '<!--act-->{"tipo":"demo","con":["Pedro","Jordi"],"reunion":"m1"}', created_at: '2026-11-03T10:00:00Z' },
+      { comment_type: 'MANUAL', long_description: '<!--act-->{"tipo":"llamada","con":[],"resultado":"contestada","decisor":true}', created_at: '2026-11-03T09:00:00Z' },
+    ],
+    mcp_crm_tasks: [{ lead_id: 'l1', title: 'Confirmar la demo de hoy a las 09:30', due_date: '2026-11-10', completed: true }],
+  })
+  const out = (await run('get_crm_sdr_dashboard', ctx, { mes: '2026-11' })) as Record<string, any>
+  assert(de('mcp_crm_meetings').filters!.some((f) => f.op === 'eq' && f.column === 'created_by' && f.value === 'u1'))
+  assertEquals(out.meta.demos_realizadas_por_mes, 4)
+  assertEquals(out.meta.realizadas, 1)
+  const sol = out.demos.find((d: Row) => d.inmobiliaria === 'Inmo Sol')
+  assertEquals([sol.estado, sol.asistentes, sol.confirmada, sol.contratado, sol.contacto], ['Realizada', 2, true, true, 'Pedro, Jordi'])
+  const luna = out.demos.find((d: Row) => d.inmobiliaria === 'Inmo Luna')
+  assertEquals([luna.estado, luna.motivo_cancelacion, luna.asistentes, luna.contacto], ['Cancelada', 'No podía', 1, 'Marta'])
+  assertEquals(out.second_chance.map((d: Row) => d.inmobiliaria), ['Inmo Luna'])
+  assertEquals(out.asistencia.pct, 50)
+})

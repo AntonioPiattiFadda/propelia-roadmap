@@ -16,12 +16,17 @@ import {
 } from './roadmap.ts'
 import { actividadDe, demoVieja, diasEntre, horaEnEspana, hoyEnEspana, TEXTO_DE_DEMO } from './crm.ts'
 import {
-  esDescartado, esImportante, esParaRecontactar, esPendienteAgendar, ESTADOS_QUE_NO_LLEGARON, type Etapa, estaVencida,
+  bolsasDeLlamada, esDescartado, esImportante, esParaRecontactar, esPendienteAgendar, ESTADOS_QUE_NO_LLEGARON, type Etapa, estaVencida,
   etapaDe, type Llamada, leadsConDecisor, type NombreDePeriodo, type Objetivo, OBJETIVOS, objetivosDe, type ObjetivosDelPeriodo,
   ordenarImportantes, ordenarPorEstado, ordenarPorProximaTarea, pendientesDePersona, type Periodo, periodoDe, PERIODOS,
   type ProximaTarea, proximaTareaPorLead, seguimientoDelLead, semanasHaciaAtras, sumarDias, sumarResumenes, type Tarea,
   tasaDeDecisor, tocaHoyOVencida,
 } from './crmReglas.ts'
+import {
+  antelacionEnDias, type DemoDelSdr, demoConfirmada, diasHabilesRestantes, esContratado, estadoDeDemo, leerMetaSdr,
+  mesEnEspana, metricasDelPeriodo, periodoDeMes, PREFIJO_CONFIRMAR, type RegistroDeLaDemo, ROTULO_DE_ESTADO,
+  segundaOportunidad, type TareaDeConfirmar, trimestreDe, ultimos12Meses,
+} from './dashboardSdr.ts'
 
 export interface ToolContext {
   db: McpDb
@@ -1092,7 +1097,10 @@ const listExpenses: McpToolDef = {
 // ─── CRM: el Dashboard, los Objetivos y la campana ─────────────────────────
 
 /** El día de España de un instante: cómo se agrupa la agenda. */
-const diaEnEspana = (iso: string) => hoyEnEspana(new Date(iso))
+const diaEnEspana = (iso: string) => {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : hoyEnEspana(d)
+}
 
 const getCrmDashboard: McpToolDef = {
   name: 'get_crm_dashboard',
@@ -1446,13 +1454,201 @@ const listCrmActivity: McpToolDef = {
   },
 }
 
+// ─── CRM: el Dashboard SDR (13/11/2026, por pedido) ────────────────────────
+
+/** De a cuántos ids va un `in`: la URL de PostgREST tiene tope (como `porTandas` del front). */
+const TANDA = 100
+
+async function enTandas(ids: string[], leer: (tanda: string[]) => Promise<Row[]>): Promise<Row[]> {
+  const tandas: string[][] = []
+  for (let i = 0; i < ids.length; i += TANDA) tandas.push(ids.slice(i, i + TANDA))
+  return (await Promise.all(tandas.map(leer))).flat()
+}
+
+const MES = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Mes YYYY-MM')
+
+const pct = (x: number | null) => (x === null ? null : Math.round(x * 1000) / 10)
+
+const getCrmSdrDashboard: McpToolDef = {
+  name: 'get_crm_sdr_dashboard',
+  title: 'Dashboard SDR',
+  description:
+    'El «Dashboard SDR» del CRM (el botón del diálogo de Objetivos): el rendimiento de una persona que agenda demos, armado ' +
+    'sólo con la base. Meta de demos realizadas, asistencia, embudo (llamadas → decisores → demos agendadas), demos con 2+ ' +
+    'asistentes, demos sin confirmar, forecast del mes en curso, prescripciones, matrices (confirmación, antelación, ' +
+    'asistentes), desglose mes a mes, la lista de demos y «Second Chance» (canceladas o sin marcar). Una demo es del mes en ' +
+    'que se agendó. Estados: Agendada, Realizada, Cancelada y «Sin marcar» (pasó la hora y nadie la marcó hecha). Los ' +
+    'porcentajes van de 0 a 100. Meses en hora de España. Por defecto, el usuario conectado y el mes en curso.',
+  inputSchema: {
+    persona: uuid.optional().describe('Id (list_team). Por defecto, el usuario conectado.'),
+    periodo: z.enum(['mes', 'trimestre', '12_meses']).optional().describe('mes (por defecto), trimestre (el calendario que contiene a «mes») o 12_meses.'),
+    mes: MES.optional().describe('YYYY-MM. Por defecto, el mes en curso.'),
+    incluir_demos: z.boolean().optional().describe('false: sin la lista de demos (por defecto true).'),
+  },
+  async run({ db, userId }, args) {
+    const persona = typeof args.persona === 'string' ? args.persona : userId
+    const hoy = hoyEnEspana()
+    const mesActual = hoy.slice(0, 7)
+    const mes = typeof args.mes === 'string' ? args.mes : mesActual
+    const periodo = args.periodo === 'trimestre' ? trimestreDe(mes)
+      : args.periodo === '12_meses' ? ultimos12Meses(mes)
+      : periodoDeMes(mes)
+    const desde = inicioDelDiaEnEspana(`${[...periodo.meses].sort()[0]}-01`)
+    const hasta = inicioDelDiaEnEspana(sumarDias(hoy, 1))
+
+    const [comentarios, reuniones, metaFila, etapas, gente] = await Promise.all([
+      db.select({
+        view: 'mcp_crm_comments', columns: ['created_at', 'long_description'],
+        filters: [
+          { op: 'eq', column: 'created_by', value: persona }, { op: 'eq', column: 'comment_type', value: 'MANUAL' },
+          { op: 'gte', column: 'created_at', value: desde }, { op: 'lt', column: 'created_at', value: hasta },
+        ],
+        range: [0, ALL],
+      }),
+      db.select({
+        view: 'mcp_crm_meetings', columns: ['id', 'lead_id', 'starts_at', 'created_at', 'status', 'cancel_reason'],
+        filters: [{ op: 'eq', column: 'created_by', value: persona }, { op: 'gte', column: 'created_at', value: desde }],
+        order: [{ column: 'created_at', ascending: false }],
+        range: [0, ALL],
+      }),
+      db.select({ view: 'mcp_crm_meta_sdr', columns: ['texto'], range: [0, 0] }),
+      db.select({ view: 'mcp_crm_stages', columns: ['id', 'starts_onboarding'], range: [0, ALL] }),
+      equipo(db),
+    ])
+    const leadIds = [...new Set(reuniones.rows.map((r) => r.lead_id).filter((x): x is string => typeof x === 'string'))]
+    const [leads, registros, tareas] = await Promise.all([
+      enTandas(leadIds, async (t) => (await db.select({
+        view: 'mcp_crm_leads', columns: ['id', 'funnel_stage_id', 'lead_type', 'company_name', 'contactos'],
+        filters: [{ op: 'in', column: 'id', values: t }], range: [0, ALL],
+      })).rows),
+      enTandas(leadIds, async (t) => (await db.select({
+        view: 'mcp_crm_comments', columns: ['comment_type', 'long_description'],
+        filters: [{ op: 'in', column: 'lead_id', values: t }, { op: 'eq', column: 'es_registro_de_demo', value: true }],
+        range: [0, ALL],
+      })).rows),
+      enTandas(leadIds, async (t) => (await db.select({
+        view: 'mcp_crm_tasks', columns: ['lead_id', 'title', 'due_date', 'completed'],
+        filters: [{ op: 'in', column: 'lead_id', values: t }, { op: 'eq', column: 'completed', value: true }],
+        range: [0, ALL],
+      })).rows),
+    ])
+
+    // Llamadas y decisores por mes, de la actividad registrada (`llamadasPorMes`).
+    const llamadas = new Map<string, { llamadas: number; decisores: number }>()
+    for (const c of comentarios.rows) {
+      const bolsas = bolsasDeLlamada(c.long_description)
+      if (bolsas.length === 0) continue
+      const m = mesEnEspana(c.created_at)
+      const fila = llamadas.get(m) ?? { llamadas: 0, decisores: 0 }
+      fila.llamadas++
+      if (bolsas.includes('decisores')) fila.decisores++
+      llamadas.set(m, fila)
+    }
+
+    // Armar las demos (`armarDemos`): el registro de cada una por su reunión, y el lead aparte.
+    const registroDe = new Map<string, RegistroDeLaDemo>()
+    for (const k of registros) {
+      const a = actividadDe(k.comment_type, k.long_description)
+      if (a.reunion) registroDe.set(a.reunion, { con: a.con })
+    }
+    const leadDe = new Map(leads.map((l) => [l.id as string, l]))
+    const etapasOnboarding = new Map(etapas.rows.map((e) => [e.id as string, { starts_onboarding: e.starts_onboarding === true }]))
+    const confirmar: TareaDeConfirmar[] = tareas
+      .filter((t) => typeof t.title === 'string' && t.title.startsWith(PREFIJO_CONFIRMAR))
+      .map((t) => ({ lead_id: t.lead_id ?? null, title: t.title, due_date: t.due_date ?? null, completed: t.completed === true }))
+    const ahora = new Date()
+    const conFechas = reuniones.rows.filter((r) => !Number.isNaN(Date.parse(r.created_at)) && !Number.isNaN(Date.parse(r.starts_at)))
+    const demos: DemoDelSdr[] = conFechas.map((r) => {
+      const con = registroDe.get(r.id)?.con ?? []
+      const lead = r.lead_id ? leadDe.get(r.lead_id) : undefined
+      const delCliente = Array.isArray(lead?.contactos) ? (lead!.contactos[0]?.nombre ?? '') : ''
+      const estado = estadoDeDemo(r as { status: string; starts_at: string }, ahora)
+      return {
+        id: r.id, leadId: r.lead_id ?? null,
+        inmobiliaria: str(lead?.company_name) ?? 'Sin nombre',
+        contacto: con.length ? con.join(', ') : delCliente,
+        con, asistentes: Math.max(1, con.length),
+        agendadaEl: r.created_at, empiezaEl: r.starts_at,
+        estado, motivoCancelacion: estado === 'cancelada' ? (r.cancel_reason ?? null) : null,
+        confirmada: demoConfirmada(r as { lead_id: string | null; starts_at: string }, confirmar),
+        contratado: esContratado(lead ? { funnel_stage_id: lead.funnel_stage_id ?? null, lead_type: lead.lead_type ?? null } : null, etapasOnboarding),
+        antelacion: antelacionEnDias(r.created_at, r.starts_at),
+      }
+    })
+
+    const metaMensual = leerMetaSdr(metaFila.rows[0]?.texto)
+    const m = metricasDelPeriodo({ meses: periodo.meses, demos, llamadas, metaMensual, mesActual, diasHabiles: diasHabilesRestantes(hoy) })
+    const cruce = (c: { demos: number; realizadas: number; tasa: number | null }) => ({ demos: c.demos, realizadas: c.realizadas, asistencia_pct: pct(c.tasa) })
+    const demoSalida = (d: DemoDelSdr) => ({
+      lead_id: d.leadId,
+      inmobiliaria: d.inmobiliaria,
+      contacto: d.contacto || null,
+      asistentes: d.asistentes,
+      agendada_el: d.agendadaEl,
+      demo_hora_espana: horaEnEspana(d.empiezaEl),
+      antelacion_dias: d.antelacion,
+      estado: ROTULO_DE_ESTADO[d.estado],
+      motivo_cancelacion: d.motivoCancelacion,
+      confirmada: d.confirmada,
+      contratado: d.contratado,
+    })
+    return {
+      persona: nombreDe(gente, persona),
+      periodo: periodo.label,
+      meses: periodo.meses,
+      hoy_en_espana: hoy,
+      meta: {
+        demos_realizadas_por_mes: metaMensual,
+        objetivo: m.meta.objetivo,
+        realizadas: m.meta.realizadas,
+        cumplido_pct: pct(m.meta.porcentaje),
+        por_encima: m.meta.porEncima,
+      },
+      asistencia: { realizadas: m.asistencia.realizadas, resueltas: m.asistencia.resueltas, pct: pct(m.asistencia.tasa) },
+      embudo: {
+        llamadas: m.embudo.llamadas,
+        decisores: m.embudo.decisores,
+        demos_agendadas: m.embudo.demos,
+        paso_de_filtro_pct: pct(m.embudo.pasoDeFiltro),
+        efectividad_de_pitch_pct: pct(m.embudo.efectividadDePitch),
+        llamadas_por_demo: m.embudo.llamadasPorDemo === null ? null : Math.round(m.embudo.llamadasPorDemo * 10) / 10,
+      },
+      demos_con_2_o_mas_asistentes: { demos: m.dosOMas.demos, de: m.dosOMas.total, pct: pct(m.dosOMas.tasa) },
+      agendadas_sin_confirmar: m.sinConfirmar,
+      forecast: m.forecast && {
+        asistencia_usada_pct: pct(m.forecast.tasa),
+        asistencia_estimada: m.forecast.tasaEstimada,
+        realizadas_esperadas_de_lo_agendado: Math.round(m.forecast.pipeline * 10) / 10,
+        brecha: Math.round(m.forecast.brecha * 10) / 10,
+        demos_nuevas_necesarias: m.forecast.demosNecesarias,
+        llamadas_restantes: m.forecast.llamadasRestantes,
+        llamadas_por_dia_habil: m.forecast.ritmoDiario,
+        dias_habiles_restantes: m.forecast.diasHabiles,
+      },
+      prescripciones: m.prescripciones,
+      matrices: {
+        confirmacion: { confirmadas: cruce(m.matrices.confirmacion.con), sin_confirmar: cruce(m.matrices.confirmacion.sin) },
+        antelacion: m.matrices.antelacion.map((c) => ({ rango: c.rango, ...cruce(c) })),
+        asistentes: m.matrices.asistentes.map((c) => ({ rango: c.rango, ...cruce(c) })),
+      },
+      mes_a_mes: m.desglose.map((f) => ({
+        mes: f.mes, llamadas: f.llamadas, decisores: f.decisores, paso_de_filtro_pct: pct(f.pasoDeFiltro),
+        demos: f.demos, efectividad_de_pitch_pct: pct(f.efectividadDePitch), asistencia_pct: pct(f.asistencia),
+        realizadas: f.realizadas, contratados: f.contratados,
+      })),
+      second_chance: segundaOportunidad(m.demos).map(demoSalida),
+      ...(args.incluir_demos === false ? {} : { demos: [...m.demos].sort((a, b) => Date.parse(b.empiezaEl) - Date.parse(a.empiezaEl)).map(demoSalida) }),
+    }
+  },
+}
+
 const redondear = (n: number) => Math.round(n * 100) / 100
 
 export const TOOLS: readonly McpToolDef[] = [
   getMe, listTeam,
   listRoadmapTasks, getRoadmapTask, listBacklogGroups,
   listCrmStages, listCrmLeads, getCrmLead, listCrmTasks, listCrmMeetings, listDemos, getDemoBriefing,
-  getCrmDashboard, getCrmGoals, listCrmEmailProblems, listCrmActivity,
+  getCrmDashboard, getCrmGoals, listCrmEmailProblems, listCrmActivity, getCrmSdrDashboard,
   listOnboardings, listExpenses,
 ]
 

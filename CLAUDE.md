@@ -258,6 +258,13 @@ Antonio**. Todo en `docs/mcp/README.md`, con la tabla de tools.
   `get_crm_goals` (Objetivos), `list_crm_email_problems` (la campana), las notas de la pestaña Demo en `get_crm_lead`
   y, desde el 13/11/2026 (por pedido), `list_crm_activity`: la actividad por fecha y persona (o solo SDR), con resumen
   por día. El contacto fallido es la llamada `no_respondida` (`actividadDe`, `_shared/mcp/crm.ts`), como en el lead.
+  Y `get_crm_sdr_dashboard`: el Dashboard SDR, con sus reglas en `_shared/mcp/dashboardSdr.ts`, **espejo** de
+  `lib/dashboardSdr.ts` (su test corre los mismos casos de la app): si cambia una regla allá, cambia acá. La meta se lee
+  de la vista `mcp_crm_meta_sdr`.
+- **El roadmap por el conector es solo SUPERADMIN**, como la página (13/11/2026): su RLS es `es_usuario()`, así que la
+  vista corta más que la tabla. **Los permisos se prueban con `supabase/tests/mcp-permisos.sql`** (como
+  `crm-permisos.sql`, por `execute_sql`, termina en `rollback`): compara cada vista contra la RLS por usuario y los cortes
+  por rol. Si se toca una policy de una tabla con vista `mcp_*`, se corre.
   Las reglas son **espejo** de `src/pages/crm/lib/` en `_shared/mcp/crmReglas.ts`: si cambia una allá, cambia acá.
   Sin teléfonos ni emails, y sin lo que vive fuera de la base (Google Calendar, el puente), por pedido. Faltan
   Roadmap, Clientes, Equipo, Caja y Ajustes (`docs/mcp/README.md`).

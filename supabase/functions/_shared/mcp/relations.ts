@@ -14,7 +14,7 @@
 export const MCP_RELATIONS = [
   'mcp_team', 'mcp_roadmap_tareas', 'mcp_roadmap_grupos', 'mcp_crm_stages', 'mcp_crm_leads',
   'mcp_crm_tasks', 'mcp_crm_meetings', 'mcp_crm_comments', 'mcp_crm_stage_history',
-  'mcp_onboardings', 'mcp_expenses', 'mcp_crm_assignment_history', 'mcp_crm_emails', 'mcp_crm_demo_notas',
+  'mcp_onboardings', 'mcp_expenses', 'mcp_crm_assignment_history', 'mcp_crm_emails', 'mcp_crm_demo_notas', 'mcp_crm_meta_sdr',
 ] as const
 
 export type McpRelation = (typeof MCP_RELATIONS)[number]

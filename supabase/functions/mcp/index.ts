@@ -83,6 +83,7 @@ const INSTRUCTIONS =
   'Objetivos semanales por persona y período (get_crm_goals), los emails que no llegaron ' +
   '(list_crm_email_problems), la actividad registrada por fecha y persona, con resumen por día ' +
   '(list_crm_activity: para «qué hizo cada SDR el martes» usá esta y no get_crm_lead lead por lead), ' +
+  'el Dashboard SDR de una persona con meta, asistencia, embudo y forecast (get_crm_sdr_dashboard), ' +
   'las demos de Propelia con ' +
   'inmobiliarias (list_demos para ver las agendadas; get_demo_briefing para preparar una: trae ' +
   'todo lo que se sabe del lead), las altas de clientes (list_onboardings) y la caja de la ' +

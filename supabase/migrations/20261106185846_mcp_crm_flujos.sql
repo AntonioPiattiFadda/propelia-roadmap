@@ -15,6 +15,8 @@
 -- 5. ROADMAP. `mcp_roadmap_tareas` y `mcp_roadmap_grupos` pasan a sólo SUPERADMIN, como la página
 --    (13/11/2026): la RLS de `roadmap_*` es `es_usuario()` y un SDR lo leía por el conector.
 --
+-- 6. META DEL DASHBOARD SDR. Vista nueva `mcp_crm_meta_sdr` (fila `crm-meta-sdr` de `roadmap_notas`).
+--
 -- Sin columnas nuevas en las tablas. `create or replace view` deja agregar columnas al final,
 -- no cambiar las que había: por eso cada vista repite las suyas en el mismo orden.
 
@@ -196,6 +198,20 @@ where n.id like 'demo-guion-%'
 revoke all on public.mcp_crm_demo_notas from public, anon, authenticated;
 grant select on public.mcp_crm_demo_notas to authenticated;
 
+-- ─── nueva: la meta del Dashboard SDR (13/11/2026) ─────────────────────────
+-- Demos realizadas por mes, una sola del equipo, en `roadmap_notas` (fila `crm-meta-sdr`). En la app
+-- la lee cualquier `es_usuario()` (el Dashboard SDR lo abre también un SDR); acá igual.
+create or replace view public.mcp_crm_meta_sdr
+with (security_barrier = true)
+as
+select n.texto, n.updated_at
+from public.roadmap_notas n
+where n.id = 'crm-meta-sdr'
+  and (select public.es_usuario());
+
+revoke all on public.mcp_crm_meta_sdr from public, anon, authenticated;
+grant select on public.mcp_crm_meta_sdr to authenticated;
+
 -- ─── lista blanca (completa) ───────────────────────────────────────────────
 -- Misma lista que MCP_RELATIONS en supabase/functions/_shared/mcp/relations.ts.
 create or replace function public.mcp_oauth_relations()
@@ -207,6 +223,6 @@ as $$
     'mcp_team', 'mcp_roadmap_tareas', 'mcp_roadmap_grupos', 'mcp_crm_stages', 'mcp_crm_leads',
     'mcp_crm_tasks', 'mcp_crm_meetings', 'mcp_crm_comments', 'mcp_crm_stage_history',
     'mcp_onboardings', 'mcp_expenses', 'mcp_crm_assignment_history', 'mcp_crm_emails',
-    'mcp_crm_demo_notas'
+    'mcp_crm_demo_notas', 'mcp_crm_meta_sdr'
   ]::text[];
 $$;
