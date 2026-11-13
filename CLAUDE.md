@@ -294,6 +294,12 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   vuelve a pasar por la etapa no reabre nada. **El front nunca escribe `lead_type`**: el trigger
   rechaza el cambio a mano (`crm_lead_type_solo_rpc`), y `client_onboarding_completar` lo pasa a
   `CLIENT`. Pruebas en `supabase/tests/clientes-onboarding.sql` (como `crm-permisos.sql`).
+- **En el CRM, un lead en `ONBOARDING` es de solo lectura** (13/11/2026, por pedido): sigue en la
+  lista y en el Dashboard, pero el dialog lleva el cartel «Este lead está en onboarding» (con «Ver
+  el alta» a `/clientes?lead=` para un SUPERADMIN) y no se cambia etapa, contactos, notas,
+  actividad, reuniones ni responsable (`puedeEditarLead` / `enOnboarding`, `lib/permisos.ts`).
+  **Las tareas sí** se siguen tildando y editando: /clientes las muestra pero no las tilda. Solo
+  del front, sin trigger: /clientes escribe en el mismo lead. `CLIENT` vuelve a ser editable.
 - **La página** (solo SUPERADMIN: `NAV` y gate adentro, como Demos) lista los `ONBOARDING` y abre
   cada alta en un dialog con `?lead=<id>`. Ocho pasos (`lib/pasos.ts`, en el código como en el
   producto; en la base solo las tareas hechas); **los pasos 5 a 8 están en «Próximamente»** y no

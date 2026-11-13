@@ -113,7 +113,7 @@ function TareaDeLaFila({ proxima, seguimiento, hoy }: { proxima: ProximaTarea | 
  *  Descartado abre el diálogo del motivo; sin permiso de escritura es solo la chapa. */
 function EtapaEditable({ lead }: { lead: CrmLeadRow }) {
   const { etapasPorId, etapasActivas, descartada } = useCrmCatalogos()
-  const { puedeEscribir } = useCarteras()
+  const { puedeEditarLead } = useCarteras()
   const actualizarLead = useActualizarLead()
   const [descartando, setDescartando] = useState(false)
   const actual = lead.funnel_stage_id ? etapasPorId.get(lead.funnel_stage_id) : undefined
@@ -124,7 +124,7 @@ function EtapaEditable({ lead }: { lead: CrmLeadRow }) {
     <>
       <Select
         value={lead.funnel_stage_id ?? ''}
-        disabled={!puedeEscribir(lead.assigned_to)}
+        disabled={!puedeEditarLead(lead)}
         onValueChange={id => {
           if (id === descartada?.id) setDescartando(true)
           else actualizarLead.mutate({ id: lead.id, patch: { funnel_stage_id: id, discard_reason: null, recontact_at: null } })

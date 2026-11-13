@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Building2, Check, ChevronDown, ChevronUp, Copy, Mail, NotebookPen, Pencil, Phone, Pin, TriangleAlert, User, UserPlus, X } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { Building2, Check, ChevronDown, ChevronUp, Copy, Lock, Mail, NotebookPen, Pencil, Phone, Pin, TriangleAlert, User, UserPlus, X } from 'lucide-react'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
@@ -18,6 +19,7 @@ import {
 import { toIsoDate } from '@/lib/calendarDate'
 import { decisorContactado } from '../lib/actividad'
 import { etapaDelLead } from '../lib/effectiveStage'
+import { enOnboarding } from '../lib/permisos'
 import { etapasPorGestion, permiteAgendarTarea } from '../lib/gestionDeEtapa'
 import { ORIGENES_DE_TELEFONO, valorDeOpcion } from '../lib/inmobiliaria'
 import { fmtFechaCompleta } from '../lib/motivosDescarte'
@@ -193,7 +195,7 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
   onStartReassign?: (leadId: string) => void
 }) {
   const { etapasPorId, etapasActivas, descartada } = useCrmCatalogos()
-  const { puedeEscribir } = useCarteras()
+  const { puedeEscribir, puedeEditarLead, esSuperadmin } = useCarteras()
   const detalleQ = useLeadDetalle(lead.id)
   const decisor = detalleQ.data ? decisorContactado(detalleQ.data.comments) : null
   /* Descartado se ofrece, pero elegirlo abre el diálogo del motivo en vez de mover el lead (cancelar
@@ -209,7 +211,11 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
   const grupoActual = etapaMostrada ? etapasPorGestion([etapaMostrada])[0]?.label : undefined
   const actualizarLead = useActualizarLead()
   const actualizarCliente = useActualizarCliente()
-  const escribe = puedeEscribir(lead.assigned_to)
+  /* En onboarding (13/11/2026, por pedido) el lead es de solo lectura: lo lleva /clientes. Las
+     tareas no (`escribeTareas`): /clientes las muestra y no las tilda, y quedarían sin cerrar. */
+  const onboarding = enOnboarding(lead)
+  const escribe = puedeEditarLead(lead)
+  const escribeTareas = puedeEscribir(lead.assigned_to)
 
   const [creandoTarea, setCreandoTarea] = useState(false)
   const [editandoNotas, setEditandoNotas] = useState(false)
@@ -773,6 +779,21 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
 
       {editorContacto}
 
+      {onboarding && (
+        <div role="status"
+          className="ui-scale max-md:[zoom:1] flex shrink-0 items-center gap-2 bg-warning-soft px-4 py-2 text-[13px] text-warning [border-bottom:1px_solid_var(--line)] max-md:px-2">
+          <Lock size={14} aria-hidden className="shrink-0" />
+          <span className="min-w-0 flex-1">
+            <strong className="font-semibold">Este lead está en onboarding</strong>, así que no se puede modificar desde el CRM. Las tareas se siguen pudiendo marcar.
+          </span>
+          {esSuperadmin && (
+            <Link to={`/clientes?lead=${lead.id}`} className="shrink-0 font-semibold underline-offset-2 hover:underline">
+              Ver el alta
+            </Link>
+          )}
+        </div>
+      )}
+
       {/* Abajo de lg se apila: el perfil y debajo la actividad, con el compositor al pie de ella.
           Desde lg el perfil es una sola columna (inmobiliaria, tareas, notas) al lado de la actividad. */}
       <div className="ui-scale grid min-h-0 flex-1 overflow-y-auto lg:grid-cols-[minmax(380px,1.4fr)_minmax(360px,2.1fr)] lg:overflow-hidden">
@@ -852,7 +873,7 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
           </Seccion>
 
           <Seccion titulo="Tareas">
-            <TareasDelLead leadId={lead.id} responsableId={lead.assigned_to} puedeEscribir={escribe}
+            <TareasDelLead leadId={lead.id} responsableId={lead.assigned_to} puedeEscribir={escribeTareas}
               puedeAgendar={permiteAgendarTarea(etapaMostrada)} etapa={etapaMostrada?.label}
               tareas={detalleQ.data?.tasks ?? []} cargando={detalleQ.isLoading}
               creando={creandoTarea} onCreando={setCreandoTarea} />

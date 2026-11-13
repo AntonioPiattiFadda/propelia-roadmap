@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Usuario } from '../types'
 import {
-  carterasConEscritura, carterasVisibles, comoValido, esSuperadmin, nivelSobre, nombreDe, puedeEscribir, quienesVenLaCartera, puedeLeer, puedeMarcarImportante, puedeVerComo,
+  carterasConEscritura, carterasVisibles, comoValido, enOnboarding, esSuperadmin, nivelSobre, nombreDe, puedeEditarLead, puedeEscribir, quienesVenLaCartera, puedeLeer, puedeMarcarImportante, puedeVerComo,
   type Acceso,
 } from './permisos'
 
@@ -115,5 +115,19 @@ describe('quienesVenLaCartera (a quién se le puede pasar una tarea)', () => {
   })
   it('el dueño actual de la tarea se queda en la lista aunque ya no califique, para que se vea elegido', () => {
     expect(quienesVenLaCartera('ana', TODOS, [], 'beto').map(x => x.id)).toEqual(['admin', 'ana', 'beto'])
+  })
+})
+
+describe('puedeEditarLead (un lead en onboarding es de solo lectura en el CRM)', () => {
+  it('ONBOARDING no se edita, ni siquiera un SUPERADMIN', () => {
+    const lead = { assigned_to: 'admin', lead_type: 'ONBOARDING' }
+    expect(enOnboarding(lead)).toBe(true)
+    expect(puedeEditarLead(ADMIN, lead, [])).toBe(false)
+  })
+  it('LEAD, CLIENT o sin lead_type (un optimista) siguen la regla de la cartera', () => {
+    expect(puedeEditarLead(ADMIN, { assigned_to: 'ana', lead_type: 'LEAD' }, [])).toBe(true)
+    expect(puedeEditarLead(ADMIN, { assigned_to: 'ana', lead_type: 'CLIENT' }, [])).toBe(true)
+    expect(puedeEditarLead(SDR, { assigned_to: 'sdr' }, [])).toBe(true)
+    expect(puedeEditarLead(SDR, { assigned_to: 'ana' }, [])).toBe(false)
   })
 })
