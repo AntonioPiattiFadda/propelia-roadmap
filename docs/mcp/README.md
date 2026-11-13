@@ -37,7 +37,8 @@ pantalla. El «hoy» es el de España, no el del navegador.
 **Cada uno ve lo que ve en la app**: las vistas corren como su dueño (la RLS restrictiva le cierra
 las tablas al conector) y recortan cada fila con la misma regla que la RLS: `es_usuario()`, la
 cartera de `crm_puede()` y `crm_es_superadmin()` (altas y caja, que el front también esconde a un
-SDR). **Y cortan los leads de prueba** (`crm_leads.solo_para`, desde `20261106185846_mcp_crm_flujos`): antes el
+SDR). **El roadmap también es sólo SUPERADMIN** (13/11/2026), como la página: la RLS de `roadmap_*` es
+`es_usuario()`, así que la vista corta más que la tabla. **Y cortan los leads de prueba** (`crm_leads.solo_para`, desde `20261106185846_mcp_crm_flujos`): antes el
 conector de un SUPERADMIN traía los de otro. **Las del CRM no llaman a `crm_puede()` por fila** (migración
 `20261031141933_mcp_demos_y_rendimiento`): `(select crm_es_superadmin()) or owner in (select
 mcp_carteras_visibles())` dice lo mismo y se evalúa una vez por consulta. Con la función por fila,

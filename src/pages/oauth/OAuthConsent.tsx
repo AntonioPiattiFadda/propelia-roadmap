@@ -98,7 +98,7 @@ export function OAuthConsent() {
 
         <div className="space-y-3 rounded-md border border-border bg-muted/40 p-4">
           <p className="text-xs font-medium text-muted-foreground">Va a poder:</p>
-          <Permiso icono={ListChecks} texto="Ver el roadmap: tareas, backlog, explicaciones, checklist, avisos y conversaciones." />
+          <Permiso icono={ListChecks} texto="Si sos SUPERADMIN, el roadmap: tareas, backlog, explicaciones, checklist, avisos y conversaciones." />
           <Permiso icono={Building2} texto="Ver el CRM como lo ves vos: leads de tus carteras con los filtros de la lista, contactos (nombre, rol y notas), tareas, demos y sus notas, actividad, tus objetivos, el Dashboard y el asunto de los correos enviados y si llegaron." />
           {/* Lo que sólo un SUPERADMIN ve en la app: a otro rol las vistas le devuelven vacío. */}
           <Permiso icono={Wallet} texto="Si sos SUPERADMIN, también las altas de clientes y la caja." />

@@ -12,8 +12,32 @@
 --    (`roadmap_notas`, fila `demo-guion-<lead>`). En la app esa fila la lee cualquier
 --    `es_usuario()`; acá, sólo quien ve el lead (el cuadro se ve adentro del lead).
 --
+-- 5. ROADMAP. `mcp_roadmap_tareas` y `mcp_roadmap_grupos` pasan a sólo SUPERADMIN, como la página
+--    (13/11/2026): la RLS de `roadmap_*` es `es_usuario()` y un SDR lo leía por el conector.
+--
 -- Sin columnas nuevas en las tablas. `create or replace view` deja agregar columnas al final,
 -- no cambiar las que había: por eso cada vista repite las suyas en el mismo orden.
+
+-- ─── roadmap: sólo SUPERADMIN, como la página (13/11/2026) ─────────────────
+-- La RLS de `roadmap_*` deja leer a cualquier `es_usuario()`, pero /roadmap es sólo SUPERADMIN
+-- (`NAV` en src/components/nav.ts). Hasta acá un SDR leía el roadmap entero por el conector.
+create or replace view public.mcp_roadmap_tareas
+with (security_barrier = true)
+as
+select
+  t.id, t.tarea, t.estado, t.prioridad, t.pend, t.backlog, t.sprint, t.modulo, t.dep,
+  t.creada, t.updated_at, t.expl, t.subtareas, t.chat,
+  lower(concat_ws(' ', t.id, t.tarea, t.modulo, t.dep)) as busqueda
+from public.roadmap_tareas t
+where (select public.crm_es_superadmin());
+
+create or replace view public.mcp_roadmap_grupos
+with (security_barrier = true)
+as
+select substr(n.id, 7)::int as numero, nullif(trim(n.titulo), '') as nombre
+from public.roadmap_notas n
+where n.id ~ '^grupo-[0-9]+$'
+  and (select public.crm_es_superadmin());
 
 -- ─── funnel ─────────────────────────────────────────────────────────────────
 create or replace view public.mcp_crm_stages

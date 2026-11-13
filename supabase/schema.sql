@@ -3319,6 +3319,27 @@ create index if not exists crm_assignment_history_lead_idx
 -- ─── el CRM como las páginas (migración 20261106185846_mcp_crm_flujos) ─────
 -- Redefine las vistas del CRM de arriba con el corte de `solo_para`, suma columnas al funnel y a
 -- los emails, y la vista de las notas de la demo. Detalle en el archivo de la migración.
+-- ─── roadmap: sólo SUPERADMIN, como la página (13/11/2026) ─────────────────
+-- La RLS de `roadmap_*` deja leer a cualquier `es_usuario()`, pero /roadmap es sólo SUPERADMIN
+-- (`NAV` en src/components/nav.ts). Hasta acá un SDR leía el roadmap entero por el conector.
+create or replace view public.mcp_roadmap_tareas
+with (security_barrier = true)
+as
+select
+  t.id, t.tarea, t.estado, t.prioridad, t.pend, t.backlog, t.sprint, t.modulo, t.dep,
+  t.creada, t.updated_at, t.expl, t.subtareas, t.chat,
+  lower(concat_ws(' ', t.id, t.tarea, t.modulo, t.dep)) as busqueda
+from public.roadmap_tareas t
+where (select public.crm_es_superadmin());
+
+create or replace view public.mcp_roadmap_grupos
+with (security_barrier = true)
+as
+select substr(n.id, 7)::int as numero, nullif(trim(n.titulo), '') as nombre
+from public.roadmap_notas n
+where n.id ~ '^grupo-[0-9]+$'
+  and (select public.crm_es_superadmin());
+
 -- ─── funnel ─────────────────────────────────────────────────────────────────
 create or replace view public.mcp_crm_stages
 with (security_barrier = true)

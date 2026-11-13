@@ -148,6 +148,7 @@ function tareaResumen(r: Row, gente: Map<string, Persona>, nombresDeGrupo: Map<n
 
 const listRoadmapTasks: McpToolDef = {
   name: 'list_roadmap_tasks',
+  // Sólo SUPERADMIN, como /roadmap: lo corta la vista (20261106185846_mcp_crm_flujos).
   title: 'Tareas del roadmap',
   description:
     'Lista las tareas del roadmap interno de Propelia. Por defecto, las del tablero (no las del backlog) sin las terminadas. ' +
