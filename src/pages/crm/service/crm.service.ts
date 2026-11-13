@@ -31,17 +31,29 @@ async function comprobar(p: PromiseLike<{ error: unknown }>): Promise<void> {
 /* «Última actividad» es el último registro hecho a mano en la Actividad del lead (nota, llamada,
    contacto fallido): el comentario MANUAL más nuevo sin borrar. No `last_important_event_at`, que
    lo escribe también la reasignación. Se embebe uno solo por lead, ya recortado por la RLS. */
+/* De a páginas (13/11/2026): la API corta en 1000 filas por consulta (`max_rows`) y con 1171 leads
+   los más viejos no llegaban a ninguna pantalla —Altamarco, en onboarding, faltaba del Dashboard—.
+   El `id` desempata el orden para que ninguna fila caiga entre dos páginas. */
+const FILAS_POR_PAGINA = 1000
+
 export async function getLeads(): Promise<CrmLeadRow[]> {
-  const { data, error } = await supabase
-    .from('crm_leads')
-    .select('*, client:crm_clients(*), registros:crm_comments(created_at)')
-    .is('deleted_at', null)
-    .eq('registros.comment_type', 'MANUAL')
-    .is('registros.deleted_at', null)
-    .order('created_at', { referencedTable: 'registros', ascending: false })
-    .limit(1, { referencedTable: 'registros' })
-    .order('created_at', { ascending: false })
-  if (error) throw error
+  const data = []
+  for (let desde = 0; ; desde += FILAS_POR_PAGINA) {
+    const { data: pagina, error } = await supabase
+      .from('crm_leads')
+      .select('*, client:crm_clients(*), registros:crm_comments(created_at)')
+      .is('deleted_at', null)
+      .eq('registros.comment_type', 'MANUAL')
+      .is('registros.deleted_at', null)
+      .order('created_at', { referencedTable: 'registros', ascending: false })
+      .limit(1, { referencedTable: 'registros' })
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(desde, desde + FILAS_POR_PAGINA - 1)
+    if (error) throw error
+    data.push(...pagina)
+    if (pagina.length < FILAS_POR_PAGINA) break
+  }
   return data.map(({ registros, ...lead }) => ({
     ...lead,
     ultima_actividad_at: registros[0]?.created_at ?? null,
