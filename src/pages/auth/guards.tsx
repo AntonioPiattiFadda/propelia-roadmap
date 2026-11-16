@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation, useSearchParams } from 'react-router-dom'
+import { Loader2 } from 'lucide-react'
 import { safeNextPath } from '@/lib/safeNextPath'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
@@ -6,10 +7,22 @@ import { accesoDe } from '@/lib/acceso'
 import { inicioDe, puedeEntrar } from '@/components/nav'
 import { PantallaAcceso } from './PantallaAcceso'
 
+/* Lo que se ve mientras se busca la sesión o la fila de `users`. Antes era `null`: con Supabase
+   lento (un refresh de token puede tardar varios segundos) la pantalla quedaba en blanco y
+   parecía que el sitio no cargaba. */
+function Cargando() {
+  return (
+    <div role="status" className="flex min-h-screen items-center justify-center gap-2 bg-background text-sm text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin" />
+      Cargando…
+    </div>
+  )
+}
+
 /** Sin sesión → al login. */
 export function RequireAuth() {
   const { lookingForSession, userSession } = useUserSession()
-  if (lookingForSession) return null
+  if (lookingForSession) return <Cargando />
   return userSession ? <Outlet /> : <Navigate to="/sign-in" replace />
 }
 
@@ -19,7 +32,7 @@ export function RequireAuth() {
 export function RequireAuthReturning() {
   const { lookingForSession, userSession } = useUserSession()
   const location = useLocation()
-  if (lookingForSession) return null
+  if (lookingForSession) return <Cargando />
   if (userSession) return <Outlet />
   return <Navigate to={`/sign-in?next=${encodeURIComponent(location.pathname + location.search)}`} replace />
 }
@@ -29,7 +42,7 @@ export function RequireAuthReturning() {
 export function PublicRoutesAuthCheck() {
   const { lookingForSession, userSession } = useUserSession()
   const [searchParams] = useSearchParams()
-  if (lookingForSession) return null
+  if (lookingForSession) return <Cargando />
   return userSession ? <Navigate to={safeNextPath(searchParams.get('next')) ?? '/roadmap'} replace /> : <Outlet />
 }
 
@@ -39,7 +52,7 @@ export function RequireAcceso() {
   const yo = useYo(userSession?.user.id)
   const acceso = accesoDe({ cargando: yo.isPending, error: yo.error, fila: yo.data })
 
-  if (acceso === 'cargando') return null
+  if (acceso === 'cargando') return <Cargando />
   if (acceso === 'error') {
     return (
       <PantallaAcceso
@@ -67,6 +80,6 @@ export function RequireRol() {
   const { pathname } = useLocation()
   const { userSession } = useUserSession()
   const { data: yo } = useYo(userSession?.user.id)
-  if (!yo) return null
+  if (!yo) return <Cargando />
   return puedeEntrar(yo.rol, pathname) ? <Outlet /> : <Navigate to={inicioDe(yo.rol)} replace />
 }
