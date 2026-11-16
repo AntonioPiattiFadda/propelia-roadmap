@@ -20,6 +20,8 @@ export const CRM_KEYS = {
   emails: ['crm', 'emails'] as const,
   /** Los emails que no llegaron (campana de la cabecera y cartel del lead). */
   emailsQueNoLlegaron: ['crm', 'emails', 'no-llegaron'] as const,
+  /** Todo lo enviado (Herramientas › «Emails enviados»). */
+  historialDeEmails: ['crm', 'emails', 'historial'] as const,
   /** El estado de un envío recién hecho, por el id de Resend (la pastilla del pie del mail). */
   envio: (resendId: string) => ['crm', 'emails', 'envio', resendId] as const,
   /** El último enviado de cada plantilla, que es con lo que arranca el diálogo. */
@@ -32,4 +34,6 @@ export const CRM_KEYS = {
   dashboardSdr: (persona: string, desde: string) => ['crm', 'dashboard-sdr', persona, desde] as const,
   /** La meta de demos realizadas por mes (fila `crm-meta-sdr` de `roadmap_notas`). */
   metaSdr: ['crm', 'meta-sdr'] as const,
+  /** Los commits de llamadas contestadas y demos por persona y día (fila `crm-commits` de `roadmap_notas`). */
+  commits: ['crm', 'commits'] as const,
 }

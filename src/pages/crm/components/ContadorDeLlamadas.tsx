@@ -1,21 +1,31 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { ChartColumnIcon, ChevronLeftIcon, ChevronRightIcon } from 'lucide-react'
-import { localTodayIso, shiftIsoDate, startOfMonthIso, startOfWeekIso } from '@/lib/calendarDate'
+import {
+  CalendarCheckIcon, CalendarDaysIcon, ChartColumnIcon, ChevronLeftIcon, ChevronRightIcon, ClockAlertIcon, HandshakeIcon,
+  MailIcon, PercentIcon, PhoneCallIcon, PhoneIcon, PhoneMissedIcon, SparklesIcon, TargetIcon, UserCheckIcon, UsersIcon,
+  type LucideIcon,
+} from 'lucide-react'
+import { localTodayIso } from '@/lib/calendarDate'
 import { cn } from '@/lib/utils'
 import { AvatarUsuario } from '@/components/AvatarUsuario'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { DashboardSdrDialog } from './DashboardSdrDialog'
 import { Explicacion, type Explicado } from './Explicacion'
 import { useCarteras } from '../hooks/useCarteras'
+import { useCommits, useGuardarCommit } from '../hooks/useCommits'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
 import { useObjetivos, useObjetivosDeVarios } from '../hooks/useObjetivos'
 import { useVerComo } from '../hooks/useVerComo'
-import { escribirFiltros, escribirLeadAbierto, filtrosDesdeUrl } from '../lib/leadFilterParams'
-import { pendientesDePersona, semanasHaciaAtras, sumarResumenes, tasaDeDecisor, type Objetivo, type PeriodoDeObjetivos } from '../lib/objetivos'
-import { puedeVerComo } from '../lib/permisos'
+import { commitDelPeriodo, esDiaHabil, tonoDelCommit, type CampoDeCommit, type Commits } from '../lib/commits'
+import { escribirFiltros, filtrosDesdeUrl } from '../lib/leadFilterParams'
+import { hitoAlcanzado, mensajeDePropelin } from '../lib/propelin'
+import {
+  diasHaciaAtras, LLAMADAS_POR_DEMO, mesesHaciaAtras, pendientesDePersona, progresoHaciaDemo, semanasHaciaAtras,
+  sumarResumenes, tasaDeDecisor,
+  type Objetivo, type PeriodoDeObjetivos, type TonoDeProgreso,
+} from '../lib/objetivos'
+import { esSuperadmin, puedeVerComo } from '../lib/permisos'
 import type { Usuario } from '../types'
 
 /* Qué es cada número y de dónde sale (5/11/2026, por pedido): tocar el encabezado en el diálogo lo
@@ -67,6 +77,23 @@ const TASA: Explicado = {
 /** La tasa va pegada después de esta columna, en el contador y en el diálogo. */
 const TRAS: Objetivo = 'decisores'
 
+/* Los commits (16/11/2026, por pedido): solo en el diálogo, cada uno pegado después de la columna
+   real con la que se compara. Verde si se alcanzó, rojo si no. Reglas en `lib/commits.ts`. */
+const COMMIT_DE: Partial<Record<Objetivo, Explicado & { campo: CampoDeCommit }>> = {
+  contestadas: {
+    campo: 'contestadas', label: 'Commit contestadas', title: 'Las llamadas contestadas que se comprometió a hacer',
+    explicacion: 'Cuántas llamadas contestadas se comprometió a hacer por día. Vale desde el día en que se pone hasta que se cambia, solo de lunes a viernes; en semanas y meses es la suma de cada día hábil hasta hoy. Verde si «Contestadas» lo alcanzó, rojo si no. Lo pone un SUPERADMIN tocando la celda en la escala «Días».',
+    fuente: 'Tabla roadmap_notas, fila crm-commits (un JSON por persona y día), contra la columna «Contestadas».',
+  },
+  demos: {
+    campo: 'demos', label: 'Commit demos', title: 'Las demos que se comprometió a agendar',
+    explicacion: 'Cuántas demos se comprometió a agendar por día. Vale desde el día en que se pone hasta que se cambia, solo de lunes a viernes; en semanas y meses es la suma de cada día hábil hasta hoy. Verde si «Demos agendadas» lo alcanzó, rojo si no. Lo pone un SUPERADMIN tocando la celda en la escala «Días».',
+    fuente: 'Tabla roadmap_notas, fila crm-commits (un JSON por persona y día), contra la columna «Demos agendadas».',
+  },
+}
+/** Cuántas columnas suma el diálogo además de `COLUMNAS`: la tasa y los commits. */
+const EXTRAS = 1 + Object.keys(COMMIT_DE).length
+
 const porciento =(t: ReturnType<typeof tasaDeDecisor> | undefined) => (
   t ? <span className="tabular-nums" title={`${t.conDecisor} de ${t.contestadas} inmobiliarias`}>
     {t.tasa === null ? '–' : `${Math.round(t.tasa * 100)} %`}
@@ -74,71 +101,204 @@ const porciento =(t: ReturnType<typeof tasaDeDecisor> | undefined) => (
   </span> : numero(undefined)
 )
 
-/** Cuántas semanas se ven a la vez en el selector; las flechas saltan de a tantas. */
-const SEMANAS_A_LA_VEZ = 6
-
 const numero = (n: number | undefined) => (
   <span className={cn('tabular-nums', n === undefined && 'text-(--fg-faint)')}>{n ?? '–'}</span>
 )
 
-/* Lo que registré ESTA SEMANA: llamadas por resultado, decisores nuevos, mails de presentación y
-   demos. Fue «Objetivos hoy» y desde el 17/10/2026 (por pedido) cuenta desde el lunes: vuelve a
-   cero cuando termina el domingo. Cada número es un botón: filtra la lista a esos leads
-   (`?objetivo=`, también de la semana) y otro clic lo saca. El rótulo abre el diálogo para comparar
-   semanas y personas. */
+const ICONOS: Record<Objetivo, LucideIcon> = {
+  noRespondidas: PhoneMissedIcon,
+  contestadas: PhoneCallIcon,
+  decisores: UserCheckIcon,
+  decisoresNuevos: SparklesIcon,
+  presentaciones: MailIcon,
+  demos: CalendarCheckIcon,
+}
+
+const TONOS: Record<TonoDeProgreso, { caja: string; barra: string; texto: string }> = {
+  rojo: { caja: 'bg-(--danger-soft) [border-color:color-mix(in_oklab,var(--danger)_30%,transparent)]', barra: 'bg-(--danger)', texto: 'text-(--danger-fg)' },
+  amarillo: { caja: 'bg-(--warning-soft) [border-color:color-mix(in_oklab,var(--warning)_35%,transparent)]', barra: 'bg-(--warning)', texto: 'text-(--warning-fg)' },
+  verde: { caja: 'bg-(--success-soft) [border-color:color-mix(in_oklab,var(--success)_35%,transparent)]', barra: 'bg-(--success)', texto: 'text-(--success-fg)' },
+}
+
+/* Lo que registré HOY: llamadas por resultado, decisores, mails de presentación y demos, en
+   tarjetas. Fue «Objetivos hoy», del 17/10/2026 al 16/11/2026 «Objetivos semanales» (desde el
+   lunes) y volvió a ser del día, más visual (16/11/2026, por pedido). Cada tarjeta es un botón:
+   filtra la lista a esos leads (`?objetivo=`, también del día) y otro clic lo saca. «Comparar»
+   abre el diálogo de semanas y personas. Al lado, la barra hacia la próxima demo estadística. */
 export function ContadorDeLlamadas() {
   const [abierto, setAbierto] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const elegido = filtrosDesdeUrl(searchParams).objetivo
-  const { data, isError } = useObjetivos(startOfWeekIso(localTodayIso()))
+  const { data, isError } = useObjetivos(localTodayIso())
   if (isError) return null
 
   const alternar = (k: Objetivo) =>
     setSearchParams(prev => escribirFiltros(prev, { objetivo: elegido === k ? null : k }), { replace: true })
+  const llamadas = data?.llamadasDesdeLaUltimaDemo
 
   return (
     <>
-      <div role="group" aria-label="Objetivos de la semana"
-        className="flex flex-wrap items-stretch overflow-hidden rounded-lg bg-card [border:1px_solid_var(--line)]">
-        <button type="button" onClick={() => setAbierto(true)} title="Comparar semanas y personas"
-          className="flex cursor-pointer items-center px-2.5 text-[11px] font-bold uppercase tracking-[0.08em] text-(--fg-muted) hover:bg-(--surface-2) hover:text-foreground">
-          Objetivos semanales
-        </button>
-        {COLUMNAS.map(c => (
-          <Fragment key={c.k}>
-            <button type="button" aria-pressed={elegido === c.k}
-              title={elegido === c.k ? 'Quitar el filtro' : `${c.title}. Tocá para ver esos leads.`}
-              onClick={() => alternar(c.k)}
-              className={cn(
-                'flex cursor-pointer items-baseline gap-1.5 px-2.5 py-1 [border-left:1px_solid_var(--line)] hover:bg-(--surface-2)',
-                elegido === c.k && 'bg-(--surface-2) shadow-[inset_0_-2px_0_var(--brand)]',
-              )}>
-              <span className="text-[15px] font-semibold text-foreground">{numero(data?.resumen[c.k])}</span>
-              <span className={cn('text-[12px] text-(--fg-2)', elegido === c.k && 'font-semibold text-foreground')}>{c.label}</span>
-            </button>
-            {/* La tasa no filtra (no es un conjunto de leads): tocarla la explica. */}
-            {c.k === TRAS && (
-              <Explicacion c={TASA} align="start"
-                className="flex cursor-pointer items-baseline gap-1.5 px-2.5 py-1 [border-left:1px_solid_var(--line)] hover:bg-(--surface-2)">
-                <span className="text-[15px] font-semibold text-foreground">{porciento(data ? tasaDeDecisor([data]) : undefined)}</span>
-                <span className="text-[12px] text-(--fg-2)">{TASA.label}</span>
-              </Explicacion>
-            )}
-          </Fragment>
-        ))}
-      </div>
+      <section aria-label="Objetivos de hoy"
+        className="rounded-xl bg-card p-2.5 [border:1px_solid_var(--line)]">
+        <div className="mb-2 flex items-center justify-between gap-2 px-0.5">
+          <h2 className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-(--fg-muted)">
+            <TargetIcon className="size-3.5 text-(--brand)" aria-hidden />Objetivos de hoy
+          </h2>
+          <Button variant="ghost" size="sm" className="h-7 text-[12px]" onClick={() => setAbierto(true)}
+            title="Comparar días, semanas y personas">
+            <ChartColumnIcon className="size-3.5" />Comparar
+          </Button>
+        </div>
+        <div className="flex flex-wrap gap-2 lg:flex-nowrap">
+          <div role="group" aria-label="Lo registrado hoy"
+            className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(96px,1fr))] justify-items-center gap-2">
+            {COLUMNAS.map(c => (
+              <Fragment key={c.k}>
+                <Tarjeta icono={ICONOS[c.k]} label={c.label} activo={elegido === c.k}
+                  title={elegido === c.k ? 'Quitar el filtro' : `${c.title}. Tocá para ver esos leads.`}
+                  onClick={() => alternar(c.k)}>
+                  {numero(data?.resumen[c.k])}
+                </Tarjeta>
+                {/* La tasa no filtra (no es un conjunto de leads): tocarla la explica. */}
+                {c.k === TRAS && (
+                  <Explicacion c={TASA} align="start" className={TARJETA}>
+                    <ContenidoDeTarjeta icono={PercentIcon} label={TASA.label}>
+                      {porciento(data ? tasaDeDecisor([data]) : undefined)}
+                    </ContenidoDeTarjeta>
+                  </Explicacion>
+                )}
+              </Fragment>
+            ))}
+          </div>
+          <HaciaLaProximaDemo llamadas={llamadas} />
+        </div>
+      </section>
       {abierto && <ObjetivosDialog onClose={() => setAbierto(false)} />}
     </>
   )
 }
 
-/** Hoy y el mes van como períodos más, al lado de las semanas: es lo que mostraba el diálogo antes. */
-function periodosFijos(hoy: string): PeriodoDeObjetivos[] {
-  const manana = shiftIsoDate(hoy, 1)
-  return [
-    { desde: hoy, hasta: manana, label: 'Hoy' },
-    { desde: startOfMonthIso(hoy), hasta: manana, label: 'Este mes' },
-  ]
+/* Cada objetivo es un círculo (16/11/2026, por pedido): el ícono y el número adentro y el nombre
+   debajo. Elegido, el círculo se llena del color de la marca. */
+const TARJETA = 'group flex cursor-pointer flex-col items-center gap-1.5 rounded-xl px-1 py-1 text-center'
+
+function ContenidoDeTarjeta({ icono: Icono, label, activo = false, children }: {
+  icono: LucideIcon; label: string; activo?: boolean; children: React.ReactNode
+}) {
+  return (
+    <>
+      <span className={cn(
+        'grid size-[72px] place-items-center content-center gap-0.5 rounded-full transition-all [border:2px_solid]',
+        activo
+          ? 'bg-(--brand) text-white [border-color:var(--brand)] shadow-(--shadow-md)'
+          : 'bg-(--surface-2) text-foreground [border-color:var(--brand-200)] group-hover:[border-color:var(--brand)] group-hover:shadow-(--shadow-sm)',
+      )}>
+        <Icono className={cn('size-3.5', activo ? 'text-white/85' : 'text-(--brand)')} aria-hidden />
+        {/* En el círculo no entra el «4/10» de la tasa: queda en el title. */}
+        <span className="text-[20px] leading-none font-semibold [&_span]:text-inherit [&_span_span]:hidden">{children}</span>
+      </span>
+      <span className={cn('max-w-[96px] text-[11.5px] leading-tight', activo ? 'font-semibold text-(--brand)' : 'text-(--fg-2)')}>{label}</span>
+    </>
+  )
+}
+
+function Tarjeta({ icono, label, activo, title, onClick, children }: {
+  icono: LucideIcon; label: string; activo: boolean; title: string; onClick: () => void; children: React.ReactNode
+}) {
+  return (
+    <button type="button" aria-pressed={activo} title={title} onClick={onClick} className={TARJETA}>
+      <ContenidoDeTarjeta icono={icono} label={label} activo={activo}>{children}</ContenidoDeTarjeta>
+    </button>
+  )
+}
+
+/* Cada `LLAMADAS_POR_DEMO` llamadas sale una demo (16/11/2026, por pedido): la barra muestra cuánto
+   falta para la próxima, contando desde la última demo agendada hoy (agendar una la vuelve a cero).
+   Rojo sutil al arrancar, amarillo pasada la mitad y verde llegando. */
+function HaciaLaProximaDemo({ llamadas }: { llamadas: number | undefined }) {
+  const p = progresoHaciaDemo(llamadas ?? 0)
+  const t = TONOS[p.tono]
+  const cargando = llamadas === undefined
+  const festejo = useFestejoDePropelin(llamadas)
+  return (
+    <div className="relative w-full lg:w-[260px] lg:shrink-0">
+    {festejo.texto && <GloboDePropelin key={festejo.id} texto={festejo.texto} onCerrar={festejo.cerrar} />}
+    <div role="group" aria-label="Hacia la próxima demo"
+      title={`Estadísticamente, cada ${LLAMADAS_POR_DEMO} llamadas (contestadas y no respondidas) se agenda una demo. Cuenta desde la última demo que agendaste hoy: agendar una lo vuelve a cero.`}
+      className={cn('flex h-full w-full flex-col justify-between gap-1.5 rounded-lg px-3 py-2 transition-colors [border:1px_solid]', t.caja)}>
+      <div className="flex items-center justify-between gap-2">
+        <span className={cn('flex items-center gap-1.5 text-[11.5px] font-semibold', t.texto)}>
+          <PhoneIcon className="size-3.5" aria-hidden />Hacia la próxima demo
+        </span>
+        {p.deMas > 0 && (
+          <span className={cn('rounded-full bg-card px-1.5 py-0.5 text-[11px] font-semibold tabular-nums', t.texto)}
+            title="Llamadas de más desde que la barra se llenó, todavía sin demo">
+            +{p.deMas}
+          </span>
+        )}
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span className="text-[22px] leading-none font-semibold tabular-nums text-foreground">{cargando ? '–' : p.enCiclo}</span>
+        <span className="text-[13px] text-(--fg-muted) tabular-nums">/ {LLAMADAS_POR_DEMO} llamadas</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-card" role="progressbar"
+        aria-valuemin={0} aria-valuemax={LLAMADAS_POR_DEMO} aria-valuenow={p.enCiclo}>
+        <div className={cn('h-full rounded-full transition-[width,background-color] duration-500', t.barra)}
+          style={{ width: `${Math.round(p.fraccion * 100)}%` }} />
+      </div>
+      <span className="text-[11.5px] text-(--fg-2)">
+        {cargando ? ' ' : p.faltan === 0 ? '¡Demo a la vista! Seguí así.' : `Faltan ${p.faltan} ${p.faltan === 1 ? 'llamada' : 'llamadas'}`}
+      </span>
+    </div>
+    </div>
+  )
+}
+
+/** Cada 10 llamadas, un mensaje de Propelin (`hitoAlcanzado`). Se va solo a los 7 s. */
+function useFestejoDePropelin(llamadas: number | undefined) {
+  const vistas = useRef<number | undefined>(undefined)
+  const [festejo, setFestejo] = useState<{ id: number; texto: string } | null>(null)
+  useEffect(() => {
+    const hito = hitoAlcanzado(vistas.current, llamadas)
+    if (llamadas !== undefined) vistas.current = llamadas
+    if (hito === null || llamadas === undefined) return
+    const faltan = progresoHaciaDemo(llamadas).faltan
+    // Sincroniza con un dato que llega de afuera (las llamadas registradas): por eso va en un efecto.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFestejo(prev => ({ id: hito, texto: mensajeDePropelin(hito, faltan, Math.random, prev?.texto) }))
+  }, [llamadas])
+  useEffect(() => {
+    if (!festejo) return
+    const t = setTimeout(() => setFestejo(null), 7000)
+    return () => clearTimeout(t)
+  }, [festejo])
+  return { id: festejo?.id ?? 0, texto: festejo?.texto ?? null, cerrar: () => setFestejo(null) }
+}
+
+/** El robot con su globo, colgado debajo de la barra «Hacia la próxima demo». */
+function GloboDePropelin({ texto, onCerrar }: { texto: string; onCerrar: () => void }) {
+  return (
+    <div role="status" aria-live="polite"
+      className="absolute top-full right-0 z-30 mt-2 flex w-[300px] items-end gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
+      <img src="/propelia-bot.webp" alt="Propelin" className="size-14 shrink-0 animate-hero-float drop-shadow-md" />
+      <div className="relative flex-1 rounded-2xl rounded-bl-sm bg-card px-3.5 py-2.5 text-[13px] leading-snug text-foreground shadow-(--shadow-md) [border:1px_solid_var(--brand-200)]">
+        <button type="button" onClick={onCerrar} aria-label="Cerrar"
+          className="absolute -top-2 -right-2 grid size-5 cursor-pointer place-items-center rounded-full bg-card text-[11px] text-(--fg-muted) shadow-(--shadow-sm) [border:1px_solid_var(--line)] hover:text-foreground">
+          ✕
+        </button>
+        <span className="mb-0.5 block text-[11px] font-bold uppercase tracking-[0.08em] text-(--brand)">Propelin</span>
+        {texto}
+      </div>
+    </div>
+  )
+}
+
+type Escala = 'dia' | 'semana' | 'mes'
+/** Las escalas del diálogo: cuántos períodos se ven a la vez (las flechas saltan de a tantos). */
+const ESCALAS: Record<Escala, { label: string; aLaVez: number; haciaAtras: (hoy: string, n: number, saltar?: number) => PeriodoDeObjetivos[] }> = {
+  dia: { label: 'Días', aLaVez: 7, haciaAtras: diasHaciaAtras },
+  semana: { label: 'Semanas', aLaVez: 6, haciaAtras: semanasHaciaAtras },
+  mes: { label: 'Meses', aLaVez: 6, haciaAtras: mesesHaciaAtras },
 }
 
 const clave = (p: PeriodoDeObjetivos) => `${p.desde}_${p.hasta}`
@@ -146,36 +306,43 @@ const clave = (p: PeriodoDeObjetivos) => `${p.desde}_${p.hasta}`
 /* El diálogo de Objetivos (4/11/2026, por pedido): grande, para comparar. Se eligen uno o varios
    períodos (hoy, el mes o cualquier semana, con flechas hacia atrás) y, quien ve otras carteras,
    una o varias personas. Con varias, cada período lleva una fila por persona y el total. Abajo, lo
-   que cada una tiene pendiente ahora. Se monta al abrir: cada vez arranca en «esta semana» y en el
-   «yo» de pantalla. Los números de otro salen de lo que la RLS me deja leer, como «Ver como». */
+   que cada una tiene pendiente ahora. Desde el 16/11/2026 (por pedido) se compara por escala —varios
+   días, varias semanas o varios meses— y se monta al abrir en «Hoy» con todos los comerciales que
+   veo. Los números de otro salen de lo que la RLS me deja leer, como «Ver como». */
 function ObjetivosDialog({ onClose }: { onClose: () => void }) {
   const hoy = localTodayIso()
   const { yo, usuarios, accesos } = useCarteras()
   const { perspectivaId } = useVerComo()
-  const [, setSearchParams] = useSearchParams()
-  // El Dashboard SDR (11/11/2026, por pedido): «Abrir lead» cierra los dos diálogos y abre el lead.
-  const [dashboard, setDashboard] = useState(false)
-  const abrirLead = (leadId: string) => {
-    setDashboard(false)
-    onClose()
-    setSearchParams(prev => escribirLeadAbierto(prev, leadId))
-  }
+  const commits = useCommits().data
+  const guardarCommit = useGuardarCommit()
+  const editaCommits = esSuperadmin(yo)
 
   const elegibles = useMemo(() => {
     const otros = puedeVerComo(yo, usuarios, accesos)
     return yo ? [yo as Usuario, ...otros] : otros
   }, [yo, usuarios, accesos])
   const [personasIds, setPersonasIds] = useState<string[] | null>(null)
-  const personas = (personasIds ?? (perspectivaId ? [perspectivaId] : []))
+  // De entrada, todos los comerciales que veo (16/11/2026, por pedido); sin cargar todavía, el «yo».
+  const porDefecto = elegibles.length > 0 ? elegibles.map(u => u.id) : (perspectivaId ? [perspectivaId] : [])
+  const personas = (personasIds ?? porDefecto)
     .map(id => usuarios.find(u => u.id === id)).filter((u): u is Usuario => !!u)
 
+  // Se compara dentro de una escala (16/11/2026, por pedido): varios días, varias semanas o varios
+  // meses. Cambiar de escala vuelve a elegir solo el más nuevo de la otra.
+  const [escala, setEscala] = useState<Escala>('dia')
   const [saltar, setSaltar] = useState(0)
-  const ventana = semanasHaciaAtras(hoy, SEMANAS_A_LA_VEZ, saltar)
-  const fijos = periodosFijos(hoy)
-  const [elegidos, setElegidos] = useState<PeriodoDeObjetivos[]>(() => semanasHaciaAtras(hoy, 1))
-  // Hoy primero, después las semanas de la más nueva a la más vieja y el mes al final.
-  const periodos = [...elegidos].sort((a, b) => orden(a) - orden(b) || b.desde.localeCompare(a.desde))
-  function orden(p: PeriodoDeObjetivos) { return p.label === 'Hoy' ? 0 : p.label === 'Este mes' ? 2 : 1 }
+  const { aLaVez, haciaAtras } = ESCALAS[escala]
+  const ventana = haciaAtras(hoy, aLaVez, saltar)
+  // Arranca en «Hoy», como el contador (16/11/2026).
+  const [elegidos, setElegidos] = useState<PeriodoDeObjetivos[]>(() => diasHaciaAtras(hoy, 1))
+  const cambiarEscala = (e: Escala) => {
+    if (e === escala) return
+    setEscala(e)
+    setSaltar(0)
+    setElegidos(ESCALAS[e].haciaAtras(hoy, 1))
+  }
+  // El más nuevo primero.
+  const periodos = [...elegidos].sort((a, b) => b.desde.localeCompare(a.desde))
 
   const alternarPeriodo = (p: PeriodoDeObjetivos) => setElegidos(prev =>
     prev.some(x => clave(x) === clave(p))
@@ -192,117 +359,266 @@ function ObjetivosDialog({ onClose }: { onClose: () => void }) {
   const resultadoDe = (p: PeriodoDeObjetivos, u: Usuario) =>
     resultados[pedidos.findIndex(x => x.autor === u.id && x.desde === p.desde && x.hasta === p.hasta)]
   const varias = personas.length > 1
+  // El mayor de cada columna entre las filas a la vista (sin los totales): la barrita debajo de
+  // cada número se mide contra él, y el que lo alcanza se resalta. Es lo que hace que se compare.
+  const maximos = useMemo(() => {
+    const datos = resultados.map(q => q?.data).filter(d => !!d)
+    const m: Partial<Record<Objetivo | 'tasa', number>> = {}
+    for (const c of COLUMNAS) m[c.k] = Math.max(0, ...datos.map(d => d.resumen[c.k]))
+    m.tasa = Math.max(0, ...datos.map(d => tasaDeDecisor([d]).tasa ?? 0))
+    return m
+  }, [resultados])
+  const comparando = pedidos.length > 1
 
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose() }}>
-      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-[min(1180px,96vw)]">
+      <DialogContent className="max-h-[92vh] gap-5 overflow-y-auto sm:max-w-[min(1180px,96vw)]">
         <DialogHeader>
-          <div className="flex flex-wrap items-center justify-between gap-2 pr-8">
-            <DialogTitle>Objetivos</DialogTitle>
-            <Button variant="outline" size="sm" onClick={() => setDashboard(true)}
-              title="Demos realizadas, asistencia, embudo y forecast de quien agenda demos">
-              <ChartColumnIcon className="size-4" />Dashboard SDR
-            </Button>
+          {/* El botón «Dashboard SDR» salió de acá (16/11/2026, por pedido). */}
+          <div className="flex items-center gap-3 pr-8">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-(--brand-soft) text-(--brand)">
+              <TargetIcon className="size-5" aria-hidden />
+            </span>
+            <div className="flex flex-col gap-0.5">
+              <DialogTitle>Comparar objetivos</DialogTitle>
+              <DialogDescription>
+                Elegí uno o varios períodos{elegibles.length > 1 && ' y una o varias personas'}. Tocá un encabezado para ver de dónde sale.
+                {editaCommits && ' Los commits se ponen tocando la celda en «Días».'}
+              </DialogDescription>
+            </div>
           </div>
-          <DialogDescription>Elegí uno o varios períodos{elegibles.length > 1 && ' y una o varias personas'} para compararlos.</DialogDescription>
         </DialogHeader>
-        <DashboardSdrDialog open={dashboard} onOpenChange={setDashboard} onAbrirLead={abrirLead} />
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
+            {/* La escala: un segmentado. Adentro de cada una se eligen varios. */}
+            <div role="radiogroup" aria-label="Comparar por" className="flex rounded-full bg-(--surface-2) p-1">
+              {(Object.keys(ESCALAS) as Escala[]).map(e => (
+                <button key={e} type="button" role="radio" aria-checked={escala === e} onClick={() => cambiarEscala(e)}
+                  className={cn('cursor-pointer rounded-full px-3.5 py-1 text-[12.5px] font-semibold transition-colors',
+                    escala === e ? 'bg-card text-foreground shadow-(--shadow-sm)' : 'text-(--fg-muted) hover:text-foreground')}>
+                  {ESCALAS[e].label}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              <Button variant="ghost" size="icon" className="size-7 rounded-full" aria-label="Anteriores" title="Anteriores"
+                onClick={() => setSaltar(s => s + aLaVez)}>
+                <ChevronLeftIcon className="size-4" />
+              </Button>
+              {[...ventana].reverse().map(p => (
+                <Chip key={clave(p)} activo={elegidos.some(x => clave(x) === clave(p))} onClick={() => alternarPeriodo(p)}>{p.label}</Chip>
+              ))}
+              <Button variant="ghost" size="icon" className="size-7 rounded-full" aria-label="Más nuevos" title="Más nuevos"
+                disabled={saltar === 0} onClick={() => setSaltar(s => Math.max(0, s - aLaVez))}>
+                <ChevronRightIcon className="size-4" />
+              </Button>
+            </div>
+          </div>
           {elegibles.length > 1 && (
-            <Fila rotulo="Personas">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <UsersIcon className="mr-1 size-4 text-(--fg-muted)" aria-label="Personas" />
               {elegibles.map(u => (
                 <Chip key={u.id} activo={personas.some(x => x.id === u.id)} onClick={() => alternarPersona(u.id)}>
                   <AvatarUsuario usuario={u} />{u.nombre}
                 </Chip>
               ))}
-            </Fila>
+            </div>
           )}
-          <Fila rotulo="Períodos">
-            {fijos.map(p => (
-              <Chip key={p.label} activo={elegidos.some(x => clave(x) === clave(p))} onClick={() => alternarPeriodo(p)}>{p.label}</Chip>
-            ))}
-            <span className="mx-1 h-5 [border-left:1px_solid_var(--line)]" />
-            <Button variant="ghost" size="icon" aria-label="Semanas anteriores" title="Semanas anteriores"
-              onClick={() => setSaltar(s => s + SEMANAS_A_LA_VEZ)}>
-              <ChevronLeftIcon className="size-4" />
-            </Button>
-            {[...ventana].reverse().map(p => (
-              <Chip key={p.desde} activo={elegidos.some(x => clave(x) === clave(p))} onClick={() => alternarPeriodo(p)}>{p.label}</Chip>
-            ))}
-            <Button variant="ghost" size="icon" aria-label="Semanas más nuevas" title="Semanas más nuevas"
-              disabled={saltar === 0} onClick={() => setSaltar(s => Math.max(0, s - SEMANAS_A_LA_VEZ))}>
-              <ChevronRightIcon className="size-4" />
-            </Button>
-          </Fila>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-[14px]">
-            <thead>
-              <tr className="text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--fg-muted)">
-                <th className="py-2 font-bold" />
-                {COLUMNAS.map(c => (
-                  <Fragment key={c.k}>
-                    <th className="px-3 py-2 text-right font-bold"><Explicacion c={c}>{c.label}</Explicacion></th>
-                    {c.k === TRAS && <th className="px-3 py-2 text-right font-bold"><Explicacion c={TASA}>{TASA.label}</Explicacion></th>}
-                  </Fragment>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {periodos.map(p => {
-                const filas = personas.map(u => ({ u, q: resultadoDe(p, u) }))
-                const todos = filas.every(f => f.q?.data) ? filas.map(f => f.q!.data!) : undefined
-                const total = todos ? sumarResumenes(todos.map(d => d.resumen)) : undefined
-                const tasaTotal = todos ? tasaDeDecisor(todos) : undefined
-                return (
-                  <Fragment key={clave(p)}>
-                    {varias && (
-                      <tr className="[border-top:1px_solid_var(--line)]">
-                        <th colSpan={COLUMNAS.length + 2} scope="rowgroup" className="pt-4 pb-1 text-left text-[13px] font-semibold text-foreground">{p.label}</th>
-                      </tr>
-                    )}
-                    {filas.map(({ u, q }) => (
-                      <tr key={u.id} className={cn(!varias && '[border-top:1px_solid_var(--line-soft)]')}>
-                        <th scope="row" className={cn('py-3 text-left', varias ? 'pl-3 font-normal text-(--fg-2)' : 'font-semibold text-foreground')}>
-                          {varias ? <span className="flex items-center gap-2"><AvatarUsuario usuario={u} />{u.nombre}</span> : p.label}
-                        </th>
-                        {COLUMNAS.map(c => (
-                          <Fragment key={c.k}>
-                            <td className="px-3 py-3 text-right text-[18px] font-semibold text-foreground">
-                              {q?.isError ? <span className="text-(--fg-faint)" title="No se pudo leer">!</span> : numero(q?.data?.resumen[c.k])}
-                            </td>
-                            {c.k === TRAS && (
-                              <td className="px-3 py-3 text-right text-[18px] font-semibold text-foreground">
-                                {q?.isError ? <span className="text-(--fg-faint)" title="No se pudo leer">!</span> : porciento(q?.data ? tasaDeDecisor([q.data]) : undefined)}
-                              </td>
-                            )}
-                          </Fragment>
-                        ))}
-                      </tr>
-                    ))}
-                    {varias && (
-                      <tr className="bg-(--surface-2)">
-                        <th scope="row" className="py-2.5 pl-3 text-left text-[12px] font-bold uppercase tracking-[0.06em] text-(--fg-muted)">Total</th>
-                        {COLUMNAS.map(c => (
-                          <Fragment key={c.k}>
-                            <td className="px-3 py-2.5 text-right text-[18px] font-bold text-foreground">{numero(total?.[c.k])}</td>
-                            {c.k === TRAS && <td className="px-3 py-2.5 text-right text-[18px] font-bold text-foreground">{porciento(tasaTotal)}</td>}
-                          </Fragment>
-                        ))}
-                      </tr>
-                    )}
-                  </Fragment>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="overflow-hidden rounded-xl bg-card [border:1px_solid_var(--line)]">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[14px]">
+              <thead>
+                <tr className="bg-(--surface-2) text-[11.5px] text-(--fg-2)">
+                  <th className="sticky left-0 z-10 min-w-[150px] bg-(--surface-2) px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--fg-muted)">
+                    {varias ? 'Período · persona' : 'Período'}
+                  </th>
+                  {COLUMNAS.map(c => (
+                    <Fragment key={c.k}>
+                      <Encabezado c={c} icono={ICONOS[c.k]} />
+                      {c.k === TRAS && <Encabezado c={TASA} icono={PercentIcon} />}
+                      {COMMIT_DE[c.k] && <Encabezado c={COMMIT_DE[c.k]!} icono={HandshakeIcon} />}
+                    </Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {periodos.map(p => {
+                  const filas = personas.map(u => ({ u, q: resultadoDe(p, u) }))
+                  const todos = filas.every(f => f.q?.data) ? filas.map(f => f.q!.data!) : undefined
+                  const total = todos ? sumarResumenes(todos.map(d => d.resumen)) : undefined
+                  const tasaTotal = todos ? tasaDeDecisor(todos) : undefined
+                  return (
+                    <Fragment key={clave(p)}>
+                      {varias && (
+                        <tr className="[border-top:1px_solid_var(--line)]">
+                          <th colSpan={COLUMNAS.length + EXTRAS + 1} scope="rowgroup" className="px-4 pt-4 pb-1.5 text-left">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-(--brand-soft) px-2.5 py-0.5 text-[12px] font-semibold text-(--brand-soft-fg)">
+                              <CalendarDaysIcon className="size-3.5" aria-hidden />{p.label}
+                            </span>
+                          </th>
+                        </tr>
+                      )}
+                      {filas.map(({ u, q }) => (
+                        <tr key={u.id} className="group [border-top:1px_solid_var(--line-soft)] hover:bg-(--surface-2)/60">
+                          <th scope="row" className="sticky left-0 z-10 bg-card px-4 py-3 text-left group-hover:bg-(--surface-2)">
+                            {varias
+                              ? <span className="flex items-center gap-2 font-normal text-(--fg-2)"><AvatarUsuario usuario={u} />{u.nombre}</span>
+                              : <span className="font-semibold text-foreground">{p.label}</span>}
+                          </th>
+                          {COLUMNAS.map(c => (
+                            <Fragment key={c.k}>
+                              <Celda error={q?.isError} valor={q?.data?.resumen[c.k]} max={comparando ? maximos[c.k] : undefined}>
+                                {numero(q?.data?.resumen[c.k])}
+                              </Celda>
+                              {c.k === TRAS && (
+                                <Celda error={q?.isError} valor={q?.data ? tasaDeDecisor([q.data]).tasa ?? 0 : undefined}
+                                  max={comparando ? maximos.tasa : undefined}>
+                                  {porciento(q?.data ? tasaDeDecisor([q.data]) : undefined)}
+                                </Celda>
+                              )}
+                              {COMMIT_DE[c.k] && (() => {
+                                const campo = COMMIT_DE[c.k]!.campo
+                                const commit = commitDe(commits, u.id, p, campo)
+                                // Se edita en «Días» y de lunes a viernes: el commit es diario.
+                                const editable = editaCommits && escala === 'dia' && esDiaHabil(p.desde)
+                                return (
+                                  <CeldaDeCommit real={q?.data?.resumen[c.k]} commit={commit}
+                                    cargando={!commits} editable={editable}
+                                    onGuardar={valor => guardarCommit.mutate({ persona: u.id, dia: p.desde, campo, valor })} />
+                                )
+                              })()}
+                            </Fragment>
+                          ))}
+                        </tr>
+                      ))}
+                      {varias && (
+                        <tr className="bg-(--brand-soft)/50 [border-top:1px_solid_var(--line-soft)]">
+                          <th scope="row" className="sticky left-0 z-10 bg-(--brand-soft) px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--brand-soft-fg)">
+                            Total
+                          </th>
+                          {COLUMNAS.map(c => (
+                            <Fragment key={c.k}>
+                              <td className="px-4 py-2.5 text-right text-[18px] font-bold text-foreground">{numero(total?.[c.k])}</td>
+                              {c.k === TRAS && <td className="px-4 py-2.5 text-right text-[18px] font-bold text-foreground">{porciento(tasaTotal)}</td>}
+                              {COMMIT_DE[c.k] && (
+                                <CeldaDeCommit real={total?.[c.k]} cargando={!commits} editable={false} total
+                                  commit={sumarDefinidos(personas.map(u => commitDe(commits, u.id, p, COMMIT_DE[c.k]!.campo)))} />
+                              )}
+                            </Fragment>
+                          ))}
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <PendientesAhora personas={personas} hoy={hoy} />
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Encabezado de una columna: ícono arriba y el nombre, tocable para ver de dónde sale. */
+function Encabezado({ c, icono: Icono }: { c: Explicado; icono: LucideIcon }) {
+  return (
+    <th className="px-4 py-3 text-right align-bottom font-semibold">
+      <Explicacion c={c}>
+        <span className="inline-flex flex-col items-end gap-1 leading-tight">
+          <span className="grid size-6 place-items-center rounded-md bg-card text-(--brand) [border:1px_solid_var(--line)]">
+            <Icono className="size-3.5" aria-hidden />
+          </span>
+          {c.label}
+        </span>
+      </Explicacion>
+    </th>
+  )
+}
+
+/** Un número de la tabla. Comparando, lleva debajo una barrita contra el mayor de su columna, y
+ *  el que lo alcanza va en el color de la marca. */
+function Celda({ error, valor, max, children }: {
+  error?: boolean; valor: number | undefined; max: number | undefined; children: React.ReactNode
+}) {
+  if (error) {
+    return <td className="px-4 py-3 text-right text-[18px] font-semibold text-(--fg-faint)" title="No se pudo leer">!</td>
+  }
+  const conBarra = max !== undefined && max > 0 && valor !== undefined
+  const lider = conBarra && valor === max
+  return (
+    <td className="px-4 py-3 text-right align-top">
+      <div className="inline-flex min-w-[64px] flex-col items-end gap-1.5">
+        <span className={cn('text-[18px] leading-none font-semibold', lider ? 'text-(--brand)' : 'text-foreground')}>{children}</span>
+        {conBarra && (
+          <span className="h-1 w-full overflow-hidden rounded-full bg-(--surface-2)" aria-hidden>
+            <span className={cn('block h-full rounded-full', lider ? 'bg-(--brand)' : 'bg-(--brand)/35')}
+              style={{ width: `${Math.round((valor / max) * 100)}%` }} />
+          </span>
+        )}
+      </div>
+    </td>
+  )
+}
+
+const commitDe = (c: Commits | undefined, persona: string, p: PeriodoDeObjetivos, campo: CampoDeCommit) =>
+  c ? commitDelPeriodo(c, persona, p.desde, p.hasta, campo) : undefined
+
+/** La suma de los que tienen valor; si ninguno tiene, undefined. */
+function sumarDefinidos(ns: (number | undefined)[]): number | undefined {
+  const def = ns.filter((n): n is number => n !== undefined)
+  return def.length ? def.reduce((a, b) => a + b, 0) : undefined
+}
+
+/** Un commit: verde si lo real lo alcanzó, rojo si no. En «Días», un SUPERADMIN lo toca y lo
+ *  escribe; vale desde ese día. Vacío lo saca de ese día (vuelve el de antes, si había). */
+function CeldaDeCommit({ real, commit, cargando, editable, total = false, onGuardar }: {
+  real: number | undefined; commit: number | undefined; cargando: boolean; editable: boolean; total?: boolean
+  onGuardar?: (valor: number | null) => void
+}) {
+  const [editando, setEditando] = useState(false)
+  const tono = tonoDelCommit(real, commit)
+  const color = tono === 'verde'
+    ? 'bg-(--success-soft) text-(--success-fg) [border-color:color-mix(in_oklab,var(--success)_35%,transparent)]'
+    : tono === 'rojo'
+      ? 'bg-(--danger-soft) text-(--danger-fg) [border-color:color-mix(in_oklab,var(--danger)_30%,transparent)]'
+      : 'text-(--fg-faint) [border-color:transparent]'
+  const titulo = commit === undefined ? 'Sin commit'
+    : `Commit ${commit} · real ${real ?? '–'}${tono === 'verde' ? ' · alcanzado' : tono === 'rojo' ? ' · no alcanzado' : ''}`
+  const guardar = (texto: string) => {
+    setEditando(false)
+    const t = texto.trim()
+    if (t === '') { onGuardar?.(null); return }
+    const n = Number(t)
+    if (Number.isFinite(n) && n >= 0 && n !== commit) onGuardar?.(Math.round(n))
+  }
+  const caja = cn('inline-flex min-w-[56px] items-center justify-end rounded-lg px-2.5 py-1 leading-none font-semibold tabular-nums [border:1px_solid]',
+    total ? 'text-[18px] font-bold' : 'text-[18px]', color)
+
+  return (
+    <td className={cn('px-4 text-right align-top', total ? 'py-2.5' : 'py-3')}>
+      {editando ? (
+        <input type="number" min={0} autoFocus defaultValue={commit ?? ''} aria-label="Commit del día"
+          className="w-[72px] rounded-lg bg-card px-2 py-1 text-right text-[16px] tabular-nums [border:1px_solid_var(--brand)]"
+          onBlur={e => guardar(e.currentTarget.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') e.currentTarget.blur()
+            if (e.key === 'Escape') { e.stopPropagation(); setEditando(false) }
+          }} />
+      ) : editable ? (
+        <button type="button" title={`${titulo}. Tocá para cambiarlo desde este día.`} onClick={() => setEditando(true)}
+          className={cn(caja, 'cursor-pointer hover:[border-color:var(--brand)]')}>
+          {cargando ? '–' : commit ?? '＋'}
+        </button>
+      ) : (
+        <span title={titulo} className={caja}>{cargando || commit === undefined ? '–' : commit}</span>
+      )}
+    </td>
   )
 }
 
@@ -325,41 +641,39 @@ function PendientesAhora({ personas, hoy }: { personas: Usuario[]; hoy: string }
   const listo = !!leadsQ.data && !!tareasQ.data
 
   return (
-    <section className="mt-2">
-      <h3 className="mb-1 text-[13px] font-semibold text-foreground">Pendiente ahora</h3>
-      <table className="w-full max-w-[640px] text-[14px]">
-        <thead>
-          <tr className="text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--fg-muted)">
-            <th className="py-2 font-bold" />
-            <th className="px-3 py-2 text-right font-bold"><Explicacion c={VENCIDAS}>{VENCIDAS.label}</Explicacion></th>
-            <th className="px-3 py-2 text-right font-bold"><Explicacion c={SIN_TAREA}>{SIN_TAREA.label}</Explicacion></th>
-          </tr>
-        </thead>
-        <tbody>
-          {personas.map(u => {
-            const p = listo ? pendientesDePersona(u.id, leadsQ.data!, tareasQ.data!, etapasPorId, hoy) : undefined
-            return (
-              <tr key={u.id} className="[border-top:1px_solid_var(--line-soft)]">
-                <th scope="row" className="py-2.5 text-left font-normal text-(--fg-2)">
-                  <span className="flex items-center gap-2"><AvatarUsuario usuario={u} />{u.nombre}</span>
-                </th>
-                <td className={cn('px-3 py-2.5 text-right text-[18px] font-semibold', p?.vencidas ? 'text-(--danger)' : 'text-foreground')}>{numero(p?.vencidas)}</td>
-                <td className={cn('px-3 py-2.5 text-right text-[18px] font-semibold', p?.sinTarea ? 'text-(--danger)' : 'text-foreground')}>{numero(p?.sinTarea)}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+    <section className="flex flex-col gap-2">
+      <h3 className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-(--fg-muted)">
+        <ClockAlertIcon className="size-3.5 text-(--brand)" aria-hidden />Pendiente ahora
+        <span className="font-normal normal-case tracking-normal text-(--fg-faint)">· no depende del período</span>
+      </h3>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(250px,1fr))] gap-2">
+        {personas.map(u => {
+          const p = listo ? pendientesDePersona(u.id, leadsQ.data!, tareasQ.data!, etapasPorId, hoy) : undefined
+          return (
+            <div key={u.id} className="flex flex-col gap-2.5 rounded-xl bg-card p-3 [border:1px_solid_var(--line)]">
+              <span className="flex items-center gap-2 text-[13px] font-semibold text-foreground"><AvatarUsuario usuario={u} />{u.nombre}</span>
+              <div className="grid grid-cols-2 gap-2">
+                <Pendiente c={VENCIDAS} valor={p?.vencidas} />
+                <Pendiente c={SIN_TAREA} valor={p?.sinTarea} />
+              </div>
+            </div>
+          )
+        })}
+      </div>
     </section>
   )
 }
 
-function Fila({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+/** Un pendiente: en rojo suave si hay alguno, neutro si está en cero. */
+function Pendiente({ c, valor }: { c: Explicado; valor: number | undefined }) {
+  const hay = !!valor
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="w-20 shrink-0 text-[11px] font-bold uppercase tracking-[0.08em] text-(--fg-muted)">{rotulo}</span>
-      {children}
-    </div>
+    <Explicacion c={c} align="start"
+      className={cn('flex cursor-pointer flex-col gap-1 rounded-lg px-2.5 py-2 text-left [border:1px_solid_transparent]',
+        hay ? 'bg-(--danger-soft) [border-color:color-mix(in_oklab,var(--danger)_30%,transparent)]' : 'bg-(--surface-2)')}>
+      <span className={cn('text-[11.5px] leading-tight', hay ? 'text-(--danger-fg)' : 'text-(--fg-2)')}>{c.label}</span>
+      <span className={cn('text-[20px] leading-none font-semibold', hay ? 'text-(--danger)' : 'text-foreground')}>{numero(valor)}</span>
+    </Explicacion>
   )
 }
 
@@ -367,8 +681,10 @@ function Chip({ activo, onClick, children }: { activo: boolean; onClick: () => v
   return (
     <button type="button" aria-pressed={activo} onClick={onClick}
       className={cn(
-        'flex cursor-pointer items-center gap-1.5 rounded-full px-2.5 py-1 text-[12.5px] [border:1px_solid_var(--line)] hover:bg-(--surface-2)',
-        activo ? 'bg-(--brand-soft) font-semibold text-(--brand-soft-fg) [border-color:var(--brand)]' : 'text-(--fg-2)',
+        'flex cursor-pointer items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-[12.5px] transition-colors [border:1px_solid_var(--line)]',
+        activo
+          ? 'bg-(--brand) font-semibold text-white [border-color:var(--brand)] shadow-(--shadow-sm)'
+          : 'text-(--fg-2) hover:text-foreground hover:[border-color:var(--brand-200)]',
       )}>
       {children}
     </button>

@@ -1,4 +1,4 @@
-import { ArrowDownWideNarrow, ChevronDown, Columns3, Layers, List, ListChecks, PhoneCall, Search, X } from 'lucide-react'
+import { ArrowDownWideNarrow, ChevronDown, Columns3, Layers, LayoutDashboard, List, ListChecks, PhoneCall, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuGroup,
@@ -70,8 +70,11 @@ export function BuscadorLeads({ q, onCambiar, className }: {
  * si prendo esto», de `computeLeadListCounters`. Sin filtro de prioridad ni de gestión desde el
  * 10/10/2026: se sacaron del front para rediseñarlos.
  */
-export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, onVista, onCambiar, onLimpiar }: {
+export function FiltrosCrm({ filtros, dashboard, contadores, etapas, conBuscador, vista, onVista, onCambiar, onLimpiar }: {
   filtros: LeadFilterState
+  /** El chip «Dashboard» (16/11/2026, por pedido; fue un botón de la cabecera): solo SUPERADMIN.
+   *  Vive en `?resumen=`, no en los filtros: «Limpiar filtros» no lo toca. */
+  dashboard?: { activo: boolean; cantidad: number; onAlternar: () => void }
   /** El buscador va acá solo cuando no hay cabecera de tabla donde ponerlo (teléfono, columnas). */
   conBuscador: boolean
   contadores: LeadListCounters
@@ -103,6 +106,15 @@ export function FiltrosCrm({ filtros, contadores, etapas, conBuscador, vista, on
         {conBuscador && <BuscadorLeads q={filtros.q} onCambiar={onCambiar} className="mr-0.5 w-full md:w-[340px]" />}
 
         <span className="mr-0.5 text-[12px] font-bold uppercase tracking-[0.06em] text-(--fg-2)">Filtros</span>
+
+        {dashboard && (
+          <button type="button" aria-pressed={dashboard.activo} className={chip(dashboard.activo)}
+            title="Leads importantes de todas las carteras: con estrella o en una etapa con «Dashboard: Sí»"
+            onClick={dashboard.onAlternar}>
+            <Icon icon={LayoutDashboard} size="xs" />
+            Dashboard <span className="tabular-nums">{dashboard.cantidad}</span>
+          </button>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

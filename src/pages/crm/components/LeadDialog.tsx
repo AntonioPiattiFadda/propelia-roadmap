@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
-import { Building2, Check, ChevronDown, ChevronUp, Copy, Lock, Mail, NotebookPen, Pencil, Phone, Pin, TriangleAlert, User, UserPlus, X } from 'lucide-react'
+import { Building2, Check, ChevronDown, ChevronUp, Copy, Link2, Lock, Mail, NotebookPen, Pencil, Phone, Pin, TriangleAlert, User, UserPlus, X } from 'lucide-react'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
@@ -20,6 +20,7 @@ import { toIsoDate } from '@/lib/calendarDate'
 import { decisorContactado } from '../lib/actividad'
 import { etapaDelLead } from '../lib/effectiveStage'
 import { enOnboarding } from '../lib/permisos'
+import { enlaceAlCrm } from '../lib/leadFilterParams'
 import { etapasPorGestion, permiteAgendarTarea } from '../lib/gestionDeEtapa'
 import { ORIGENES_DE_TELEFONO, valorDeOpcion } from '../lib/inmobiliaria'
 import { fmtFechaCompleta } from '../lib/motivosDescarte'
@@ -27,6 +28,8 @@ import type { ClientePatch } from '../service/crm.service'
 import type { CrmLeadRow } from '../types'
 import { ActividadLead, PestanasDelLead, type PestanaDelLead } from './ActividadLead'
 import { DescartarLeadDialog } from './DescartarLeadDialog'
+import { CualificaLeadDialog } from './CualificaLeadDialog'
+import { esBuscarContacto } from '../lib/buscarContacto'
 import type { ClienteExtra } from './ClientFields'
 import { OpcionesDeEtapa } from './leadCells'
 import { LeadRowActions } from './LeadRowActions'
@@ -204,6 +207,7 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
      lead YA está en una, o en una etapa que se borró, esa opción tiene que estar: si no, el select
      queda en blanco y parece que el lead no tiene etapa. */
   const [descartandoLead, setDescartandoLead] = useState(false)
+  const [preguntandoCualifica, setPreguntandoCualifica] = useState(false)
   const actual = lead.funnel_stage_id ? etapasPorId.get(lead.funnel_stage_id) : undefined
   const opcionesEtapa = etapasActivas.filter(e =>
     !e.is_out_of_funnel || e.id === lead.funnel_stage_id || e.id === descartada?.id)
@@ -777,6 +781,18 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
         </div>
         <PestanasDelLead lead={lead} pestana={pestana} onCambiar={setPestana} />
         <div className="flex min-w-0 flex-1 basis-0 items-center justify-end gap-2">
+          {/* El enlace para compartir (16/11/2026, por pedido): solo `?lead=`, sin los filtros, el
+              orden ni el «Ver como» de quien lo copia. Abre este lead a quien lo vea por la RLS. */}
+          <button type="button" title="Copiar enlace a este lead" aria-label="Copiar enlace a este lead"
+            onClick={() => {
+              const url = window.location.origin + enlaceAlCrm({ lead: lead.id })
+              navigator.clipboard.writeText(url).then(
+                () => toast.success('Enlace copiado'),
+                () => toast.error('No se pudo copiar el enlace'))
+            }}
+            className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg text-(--fg-2) [border:1px_solid_var(--line)] hover:bg-(--surface-2) hover:text-foreground">
+            <Link2 size={16} />
+          </button>
           <LeadRowActions lead={lead} puedeEscribir={escribe} onStartReassign={onStartReassign} />
           {/* Todo se guarda solo al salir de cada campo; este botón es la salida explícita. Al
               apretarlo el campo con foco pierde el foco primero, así que lo que se estaba
@@ -835,8 +851,9 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
                   value={lead.funnel_stage_id ?? ''}
                   disabled={!escribe}
                   onValueChange={id => {
-                    if (id === descartada?.id) setDescartandoLead(true)
-                    else actualizarLead.mutate({ id: lead.id, patch: { funnel_stage_id: id, discard_reason: null, recontact_at: null } })
+                    if (id === descartada?.id) { setDescartandoLead(true); return }
+                    actualizarLead.mutate({ id: lead.id, patch: { funnel_stage_id: id, discard_reason: null, recontact_at: null } })
+                    if (esBuscarContacto(etapasPorId.get(id))) setPreguntandoCualifica(true)
                   }}
                 >
                   {/* El estado ocupa todo el botón y va en el color de marca (17/10/2026, por pedido): como
@@ -860,6 +877,9 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
               </div>
               {descartandoLead && descartada && (
                 <DescartarLeadDialog leadId={lead.id} etapa={descartada} onClose={() => setDescartandoLead(false)} />
+              )}
+              {preguntandoCualifica && (
+                <CualificaLeadDialog leadId={lead.id} onClose={() => setPreguntandoCualifica(false)} />
               )}
 
               {/* Acá solo los fijados. Todos, fijados incluidos, viven en la pestaña de la inmobiliaria (`otrosContactos`):

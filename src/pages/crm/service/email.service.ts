@@ -2,6 +2,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import type { CamposEmail, DatosDeAcceso, PlantillaEmailId } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 import { ESTADOS_QUE_NO_LLEGARON } from '../lib/emails'
+import type { EmailDelHistorial } from '../lib/historialDeEmails'
 import type { CrmEmail } from '../types'
 
 export type EmailAttachment = { filename: string; content: string }
@@ -65,6 +66,22 @@ export async function getEmailsQueNoLlegaron(): Promise<EmailQueNoLlego[]> {
     .limit(200)
   if (error) throw error
   return (data ?? []) as unknown as EmailQueNoLlego[]
+}
+
+/* El historial entero (Herramientas › «Emails enviados»), de a páginas de 1000: la API corta ahí. */
+export async function getHistorialDeEmails(): Promise<EmailDelHistorial[]> {
+  const PAGINA = 1000
+  const todos: EmailDelHistorial[] = []
+  for (let desde = 0; ; desde += PAGINA) {
+    const { data, error } = await supabase
+      .from('crm_emails')
+      .select('*, lead:crm_leads(client:crm_clients(company_name))')
+      .order('sent_at', { ascending: false })
+      .range(desde, desde + PAGINA - 1)
+    if (error) throw error
+    todos.push(...((data ?? []) as unknown as EmailDelHistorial[]))
+    if (!data || data.length < PAGINA) return todos
+  }
 }
 
 /** «Listo» (o deshacerlo, con `visto: false`): apaga la campana de quien lo mandó y pone gris la

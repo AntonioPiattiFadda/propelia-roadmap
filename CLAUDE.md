@@ -546,6 +546,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   funciones puras en `lib/`. Todo filtro vive en la URL (`leadFilterParams.ts`): los enlaces se
   arman con `enlaceAlCrm()`, nunca a mano. `?owners=` son las carteras mirando y `?lead=` el lead
   abierto en el dialog. El front nunca escribe `gestion_*` ni los historiales.
+  **El lead se comparte con un enlace** (16/11/2026, por pedido): el botón de cadena de la cabecera
+  del lead copia `/crm?lead=<id>` limpio (`enlaceAlCrm`, sin filtros, orden ni `?como=`). Un
+  `?lead=` que quien lo abre no ve (otra cartera, borrado) avisa con un toast y se saca de la URL;
+  no avisa si ese lead estuvo abierto en la pantalla (eliminarlo también lo saca de los datos).
   Si el lead abierto se va de la lista (se descartó), las flechas ↑/↓ siguen desde donde estaba
   (`vecinosEnRecorrido`, `lib/recorrido.ts`, 17/10/2026): antes se apagaban.
 - **La lista no se mueve debajo de quien la trabaja** (23/10/2026, por pedido): un lead que deja de
@@ -711,6 +715,18 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
 - **Los descartados se ven eligiendo «Descartado» en el filtro «Estado»** (16/10/2026): por
   defecto no aparecen. Reemplazó al chip «Incluir descartados»; un `?includeDiscarded=` viejo se
   ignora. La búsqueda, «Para recontactar» y los objetivos los siguen trayendo solos.
+- **Etapa «Buscar contacto»** (16/11/2026, por pedido; migración
+  `20261116162800_crm_etapa_buscar_contacto`, que **la aplica Antonio**; `value = 'FIND_CONTACT'`):
+  justo después de «Por contactar». El SDR deja ahí el lead del que no consigue contacto y el equipo
+  le busca uno. **Es una etapa común**: se ve en la lista para todos, SDR incluido. Sin gestión, así
+  que **no sale en el atajo «Por contactar»** (`etapasDePrimerContacto`) ni en «Pendiente agendar
+  tarea». **Pasarlo ahí pregunta «¿El lead cualifica?»** (16/11/2026, por pedido;
+  `CualificaLeadDialog`, `esBuscarContacto` en `lib/buscarContacto.ts`, por value): «Cualifica» lo deja
+  en Buscar contacto y «No cualifica» abre el `DescartarLeadDialog`. Sale en las cuatro puertas que
+  mueven la etapa (select del perfil, arrastre en columnas, «El lead queda en» del registro y el menú
+  `⋯`). La etapa se mueve antes de preguntar: cerrar o cancelar el descarte lo deja en Buscar
+  contacto. Solo del front. Ese mismo día fue unas horas «Sin teléfono» (`NO_PHONE`),
+  escondida y que un SDR no veía; se unificó por pedido antes de aplicarse.
 - **«Pendiente agendar tarea»** (20/10/2026, por pedido): chip siempre visible, `?agendar=1`.
   Deja los leads en una etapa de «Seguimiento» (`management_type = 'por_tarea'`) sin ninguna tarea
   pendiente (`esPendienteAgendar`, `lib/leadFilters.ts`). Con alguno, el chip va en rojo sutil.
@@ -779,8 +795,14 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   a todo SUPERADMIN salvo a quien la agendó. La marca es por navegador (`crm-demos-avisadas-hasta`,
   el `created_at` más nuevo ya mirado; `demosParaAvisar`, `pages/demos/lib/demos.ts`): la primera
   vez no avisa nada, y lo agendado con la app cerrada avisa al abrirla. Sin push, como las alarmas.
-- **«Objetivos semanales»** (17/10/2026; fue «Objetivos hoy»): el contador de la cabecera y su filtro
-  `?objetivo=` cuentan desde el lunes (`startOfWeekIso`) y vuelven a cero al terminar el domingo.
+- **«Objetivos de hoy»** (16/11/2026, por pedido; del 17/10 al 16/11/2026 fue «Objetivos semanales»,
+  desde el lunes): el contador de la cabecera y su filtro `?objetivo=` cuentan **solo el día**, en
+  tarjetas con ícono (cada una filtra), «Comparar» abre el diálogo (que arranca en «Hoy»). Al lado,
+  **«Hacia la próxima demo»**: estadísticamente sale una demo cada `LLAMADAS_POR_DEMO` (95) llamadas
+  (contestadas + no respondidas). **Cuenta desde la última demo que agendaste hoy: agendar una la
+  vuelve a cero** (`llamadasDesdeLaUltimaDemo`, por el `created_at` de `crm_meetings`; el realtime ya
+  refresca). Barra roja sutil hasta la mitad, amarilla después y verde desde el 90 %
+  (`progresoHaciaDemo`, `lib/objetivos.ts`); pasada 95 sin demo se queda llena y marca «+N».
   «No respondidas» es la primera columna. **Desde el 4/11/2026 (por pedido)** suma **«Decisores
   nuevos»** (la contestada con decisor en la que se habló con un decisor con quien nadie del equipo
   había hablado antes en ese lead, por nombre de `con`; sin nombre, solo si el lead nunca tuvo una
@@ -817,6 +839,16 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   realizadas por mes, del equipo, 15 de fábrica) vive en `roadmap_notas`, fila `crm-meta-sdr`
   (`{"demosRealizadasPorMes":15}`, leída a la defensiva) y la edita solo un SUPERADMIN (solo del
   front). **Sin comisiones ni plata, sin localStorage y sin migración.**
+  **Desde el 16/11/2026 (por pedido) el botón «Dashboard SDR» salió del diálogo de Objetivos**: el
+  diálogo y su código siguen, pero hoy no hay puerta para abrirlo.
+- **Commits en «Comparar objetivos»** (16/11/2026, por pedido): dos columnas más en la tabla,
+  «Commit contestadas» (después de «Contestadas») y «Commit demos» (después de «Demos agendadas»),
+  **verde si lo real lo alcanzó y rojo si no**. Los pone un SUPERADMIN (solo del front) tocando la
+  celda en la escala «Días»; un commit **vale desde ese día hasta el próximo cambio** (cambiarlo no
+  recolorea lo de antes) y **solo de lunes a viernes**. Semanas y meses suman cada día hábil hasta
+  hoy; el Total suma las personas. **Sin migración**: `roadmap_notas`, fila `crm-commits`, JSON
+  `{ [userId]: { [YYYY-MM-DD]: { contestadas?, demos? } } }`, leído a la defensiva (`lib/commits.ts`,
+  `useCommits`). Guardar relee la fila antes de escribir, para no pisar al otro.
 - **Las etapas que había el 27/10/2026 están fijas** (por pedido, migración
   `20261027131725_crm_funnel_stages_bloqueadas`, que **la aplica Antonio**): `allow_rename`,
   `allow_reorder` y `allow_delete` en false, así la configuración del funnel las muestra con candado.
@@ -948,6 +980,11 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   Reglas en `lib/emails.ts`. Ojo: después de un rebote duro
   Resend suprime la dirección y no le vuelve a mandar («No se envió») hasta sacarla a mano de su
   lista de supresión.
+- **«Emails enviados» en Herramientas** (16/11/2026, por pedido; `EmailsEnviadosDialog`, reglas en
+  `lib/historialDeEmails.ts`): el historial de `crm_emails`, todo lo que la RLS deja leer (lo tuyo y
+  lo de los leads que ves), de a páginas de 1000. Para todos. Busca por destinatario, asunto e
+  inmobiliaria; filtra por estado (entregados / en camino / no llegaron) y por quién lo mandó.
+  Tocar la inmobiliaria abre el lead. **El cuerpo no se guarda**: no hay «Ver email». Sin migración.
 - **El selector de carteras vive en «Herramientas»** (5/11/2026, por pedido): «Leads de Lorenzo» /
   «Leads de N personas» (`AgentFilterButton`, el mismo menú de tildes), ya no suelto en la cabecera.
   Mismas reglas: solo si ves a alguien más, ni con «Ver como» ni en el Dashboard.

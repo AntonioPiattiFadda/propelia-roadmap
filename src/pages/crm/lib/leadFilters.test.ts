@@ -76,6 +76,16 @@ describe('descartados', () => {
   })
 })
 
+describe('buscar contacto', () => {
+  // Una etapa común (16/11/2026): se ve por defecto, para todos. Que no entre en el atajo «Por
+  // contactar» lo cubre `etapasDePrimerContacto` (sin gestión).
+  it('se ve por defecto', () => {
+    const etapas = new Map<string, CrmStage>([...ETAPAS, ['buscar', etapa('buscar', { value: 'FIND_CONTACT' })]])
+    const buscar = lead('b', { funnel_stage_id: 'buscar' })
+    expect(filterLeads([lead('v'), buscar], f({}), ctx({ etapas })).map(l => l.id)).toEqual(['v', 'b'])
+  })
+})
+
 describe('para recontactar', () => {
   const vivo = lead('v')
   const vencido = lead('r', { funnel_stage_id: 'descartado', recontact_at: '2026-09-30' })

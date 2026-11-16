@@ -1559,6 +1559,24 @@ select * from (values
     is_out_of_funnel, allow_delete, allow_reorder, allow_rename)
 where not exists (select 1 from public.crm_funnel_stages);
 
+-- «Buscar contacto» (16/11/2026, migración `20261116162800_crm_etapa_buscar_contacto`): justo
+-- después de la primera etapa (en producción, «Por contactar»). Etapa común, visible para todos,
+-- sin gestión: no entra en el atajo «Por contactar» ni en «Pendiente agendar tarea».
+do $$
+declare v_pos integer;
+begin
+  if not exists (select 1 from public.crm_funnel_stages where upper(value) = 'FIND_CONTACT' and deleted_at is null) then
+    select position into v_pos from public.crm_funnel_stages
+     where deleted_at is null
+     order by (lower(label) = 'por contactar') desc, (value = 'NEW') desc, position
+     limit 1;
+    update public.crm_funnel_stages set position = position + 1 where position > v_pos;
+    insert into public.crm_funnel_stages
+      (label, value, position, is_out_of_funnel, allow_delete, allow_reorder, allow_rename, management_type)
+    values ('Buscar contacto', 'FIND_CONTACT', v_pos + 1, false, false, false, false, null);
+  end if;
+end $$;
+
 -- ---------- El vídeo de los mails: publico/videos/, solo SUPERADMIN (/ajustes) ----------
 drop policy if exists publico_videos_read on storage.objects;
 create policy publico_videos_read on storage.objects for select to authenticated

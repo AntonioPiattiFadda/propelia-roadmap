@@ -123,6 +123,40 @@ export function semanasHaciaAtras(hoy: string, n: number, saltar = 0): PeriodoDe
   })
 }
 
+const DIAS_DE_SEMANA = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
+const MESES_LARGOS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+/** `n` días hacia atrás, saltando los `saltar` más nuevos; el más nuevo primero. Cada uno va de
+ *  su medianoche a la siguiente (16/11/2026: el diálogo compara varios días). */
+export function diasHaciaAtras(hoy: string, n: number, saltar = 0): PeriodoDeObjetivos[] {
+  return Array.from({ length: n }, (_, i) => {
+    const atras = saltar + i
+    const desde = shiftIsoDate(hoy, -atras)
+    const [y, m, d] = desde.split('-').map(Number)
+    const label = atras === 0 ? 'Hoy' : atras === 1 ? 'Ayer'
+      : `${DIAS_DE_SEMANA[new Date(y, m - 1, d).getDay()]} ${diaCorto(desde, hoy.slice(0, 4))}`
+    return { desde, hasta: shiftIsoDate(desde, 1), label }
+  })
+}
+
+/** `n` meses hacia atrás, saltando los `saltar` más nuevos; el más nuevo primero. El mes en curso
+ *  termina mañana, como la semana en curso. */
+export function mesesHaciaAtras(hoy: string, n: number, saltar = 0): PeriodoDeObjetivos[] {
+  const [y0, m0] = hoy.split('-').map(Number)
+  const iso = (y: number, m: number) => `${y}-${String(m).padStart(2, '0')}-01`
+  const manana = shiftIsoDate(hoy, 1)
+  return Array.from({ length: n }, (_, i) => {
+    const atras = saltar + i
+    const total = y0 * 12 + (m0 - 1) - atras
+    const y = Math.floor(total / 12)
+    const m = (total % 12) + 1
+    const siguiente = iso(Math.floor((total + 1) / 12), ((total + 1) % 12) + 1)
+    const label = atras === 0 ? 'Este mes'
+      : `${MESES_LARGOS[m - 1]}${y === y0 ? '' : ` ${String(y).slice(2)}`}`
+    return { desde: iso(y, m), hasta: siguiente < manana ? siguiente : manana, label }
+  })
+}
+
 /** El total de varias personas en un mismo período. */
 export function sumarResumenes(resumenes: readonly Record<Objetivo, number>[]): Record<Objetivo, number> {
   const total = Object.fromEntries(OBJETIVOS.map(k => [k, 0])) as Record<Objetivo, number>
@@ -140,4 +174,37 @@ export function tasaDeDecisor(periodos: readonly Pick<ObjetivosDelPeriodo, 'lead
   const contestadas = new Set(periodos.flatMap(p => [...p.leads.contestadas]))
   const conDecisor = new Set(periodos.flatMap(p => [...p.leads.decisores]))
   return { contestadas: contestadas.size, conDecisor: conDecisor.size, tasa: contestadas.size ? conDecisor.size / contestadas.size : null }
+}
+
+/** Estadísticamente, cada tantas llamadas sale una demo agendada (16/11/2026, por pedido). */
+export const LLAMADAS_POR_DEMO = 95
+
+export type TonoDeProgreso = 'rojo' | 'amarillo' | 'verde'
+
+/**
+ * Las llamadas (contestadas y no respondidas) hechas después de la última demo agendada: agendar
+ * una demo vuelve el contador «Hacia la próxima demo» a cero (16/11/2026, por pedido). Sin demos,
+ * cuentan todas.
+ */
+export function llamadasDesdeLaUltimaDemo(llamadas: readonly Llamada[], demos: readonly { created_at: string }[]): number {
+  const ultima = demos.reduce<string | null>((max, d) => (max === null || d.created_at > max ? d.created_at : max), null)
+  return llamadas.filter(c => {
+    if (ultima !== null && c.created_at <= ultima) return false
+    const bolsas = bolsasDeLlamada(c.long_description)
+    return bolsas.includes('contestadas') || bolsas.includes('noRespondidas')
+  }).length
+}
+
+/**
+ * Cuánto falta para la próxima demo «estadística» (16/11/2026, por pedido), a partir de las
+ * llamadas desde la última demo. Rojo sutil hasta la mitad, amarillo después y verde en el último
+ * tramo (desde el 90 %). Pasado `LLAMADAS_POR_DEMO` sin demo la barra se queda llena y cuenta las
+ * de más: vuelve a cero solo cuando se agenda una.
+ */
+export function progresoHaciaDemo(llamadas: number): { enCiclo: number; faltan: number; deMas: number; fraccion: number; tono: TonoDeProgreso } {
+  const n = Math.max(0, Math.floor(llamadas))
+  const enCiclo = Math.min(n, LLAMADAS_POR_DEMO)
+  const fraccion = enCiclo / LLAMADAS_POR_DEMO
+  const tono: TonoDeProgreso = fraccion >= 0.9 ? 'verde' : fraccion >= 0.5 ? 'amarillo' : 'rojo'
+  return { enCiclo, faltan: LLAMADAS_POR_DEMO - enCiclo, deMas: n - enCiclo, fraccion, tono }
 }

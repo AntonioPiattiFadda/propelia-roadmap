@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { armarMetaDeActividad } from './actividad'
-import { esObjetivo, objetivosDe, pendientesDePersona, semanasHaciaAtras, sumarResumenes, tasaDeDecisor } from './objetivos'
+import { diasHaciaAtras, esObjetivo, LLAMADAS_POR_DEMO, mesesHaciaAtras, llamadasDesdeLaUltimaDemo, objetivosDe, pendientesDePersona, progresoHaciaDemo, semanasHaciaAtras, sumarResumenes, tasaDeDecisor } from './objetivos'
 import type { CrmLeadRow, CrmStage, CrmTask } from '../types'
 
 const llamada = (lead_id: string, resultado: 'contestada' | 'no_respondida', decisor?: boolean, con: string[] = [], created_at = '2026-11-03T10:00:00Z') => ({
@@ -103,6 +103,33 @@ describe('semanasHaciaAtras', () => {
   })
 })
 
+describe('diasHaciaAtras', () => {
+  const hoy = '2026-11-04' // miércoles
+  it('días de un día, el más nuevo primero, con Hoy y Ayer', () => {
+    const d = diasHaciaAtras(hoy, 3)
+    expect(d.map(x => [x.desde, x.hasta])).toEqual([
+      ['2026-11-04', '2026-11-05'], ['2026-11-03', '2026-11-04'], ['2026-11-02', '2026-11-03'],
+    ])
+    expect(d.map(x => x.label)).toEqual(['Hoy', 'Ayer', 'lun 2 nov'])
+  })
+  it('saltea los más nuevos', () => {
+    expect(diasHaciaAtras(hoy, 2, 7).map(x => x.desde)).toEqual(['2026-10-28', '2026-10-27'])
+  })
+})
+
+describe('mesesHaciaAtras', () => {
+  it('el mes en curso termina mañana; los de antes, el primero del siguiente', () => {
+    const m = mesesHaciaAtras('2026-11-04', 3)
+    expect(m.map(x => [x.desde, x.hasta])).toEqual([
+      ['2026-11-01', '2026-11-05'], ['2026-10-01', '2026-11-01'], ['2026-09-01', '2026-10-01'],
+    ])
+    expect(m.map(x => x.label)).toEqual(['Este mes', 'Octubre', 'Septiembre'])
+  })
+  it('cruza el año y lo dice', () => {
+    expect(mesesHaciaAtras('2026-01-10', 2)[1]).toEqual({ desde: '2025-12-01', hasta: '2026-01-01', label: 'Diciembre 25' })
+  })
+})
+
 describe('sumarResumenes', () => {
   it('suma objetivo por objetivo', () => {
     expect(sumarResumenes([
@@ -151,5 +178,50 @@ describe('tasaDeDecisor', () => {
   })
   it('sin contestadas no hay tasa', () => {
     expect(tasaDeDecisor([periodo([], [])])).toEqual({ contestadas: 0, conDecisor: 0, tasa: null })
+  })
+})
+
+describe('progresoHaciaDemo', () => {
+  it('son 95 llamadas por demo', () => {
+    expect(LLAMADAS_POR_DEMO).toBe(95)
+  })
+
+  it('sin llamadas: rojo y faltan 95', () => {
+    expect(progresoHaciaDemo(0)).toEqual({ enCiclo: 0, faltan: 95, deMas: 0, fraccion: 0, tono: 'rojo' })
+  })
+
+  it('rojo hasta la mitad, amarillo después y verde llegando a 95', () => {
+    expect(progresoHaciaDemo(47).tono).toBe('rojo')
+    expect(progresoHaciaDemo(48).tono).toBe('amarillo')
+    expect(progresoHaciaDemo(85).tono).toBe('amarillo')
+    expect(progresoHaciaDemo(86).tono).toBe('verde')
+  })
+
+  it('en 95 queda completo y en verde', () => {
+    expect(progresoHaciaDemo(95)).toEqual({ enCiclo: 95, faltan: 0, deMas: 0, fraccion: 1, tono: 'verde' })
+  })
+
+  it('pasado 95 sin demo se queda lleno y cuenta las de más: vuelve a cero solo con una demo', () => {
+    expect(progresoHaciaDemo(102)).toEqual({ enCiclo: 95, faltan: 0, deMas: 7, fraccion: 1, tono: 'verde' })
+  })
+})
+
+describe('llamadasDesdeLaUltimaDemo', () => {
+  const a = (h: string, resultado: 'contestada' | 'no_respondida' = 'no_respondida') =>
+    llamada('l1', resultado, undefined, [], `2026-11-16T${h}:00Z`)
+
+  it('sin demos cuenta todas las llamadas', () => {
+    expect(llamadasDesdeLaUltimaDemo([a('09:00'), a('10:00', 'contestada')], [])).toBe(2)
+  })
+
+  it('agendar una demo la vuelve a cero: solo cuentan las de después de la última', () => {
+    const llamadas = [a('09:00'), a('10:00'), a('11:00', 'contestada'), a('12:00'), a('13:00')]
+    const demos = [{ lead_id: 'x', created_at: '2026-11-16T10:30:00Z' }, { lead_id: 'y', created_at: '2026-11-16T11:30:00Z' }]
+    expect(llamadasDesdeLaUltimaDemo(llamadas, demos)).toBe(2)
+  })
+
+  it('una nota no es una llamada', () => {
+    const nota = { lead_id: 'l1', created_at: '2026-11-16T09:00:00Z', long_description: 'texto suelto' }
+    expect(llamadasDesdeLaUltimaDemo([nota, a('10:00')], [])).toBe(1)
   })
 })

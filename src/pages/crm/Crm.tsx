@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { LayoutDashboard, List, PlusIcon } from 'lucide-react'
+import { PlusIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { AgentFilterButton } from './components/AgentFilterButton'
 import { CampanaDeEmails } from './components/EmailsQueNoLlegaron'
 import { ContadorDeLlamadas } from './components/ContadorDeLlamadas'
 import { CrmLeadList } from './components/CrmLeadList'
+import { EmailsEnviadosDialog } from './components/EmailsEnviadosDialog'
 import { FunnelConfigDialog } from './components/FunnelConfigDialog'
 import { ImportarLoteDialog } from './components/ImportarLoteDialog'
 import { ManageChannelsDialog } from './components/ManageChannelsDialog'
@@ -20,8 +21,8 @@ import { CartelVerComo, VerComoButton } from './components/VerComo'
 import { useCarteras } from './hooks/useCarteras'
 import { useVerComo } from './hooks/useVerComo'
 import { useCrmRealtime } from './hooks/useCrmRealtime'
-import { deleteLeadFilterParams, escribirLeadAbierto, LEAD_FILTER_PARAMS_WITH_QUERY } from './lib/leadFilterParams'
-import { escribirResumen, fijarResumenEnLaUrl, muestraResumen } from './lib/resumen'
+import { escribirLeadAbierto } from './lib/leadFilterParams'
+import { fijarResumenEnLaUrl, muestraResumen } from './lib/resumen'
 
 /* Cabecera (carteras, funnel, canales, + Nuevo lead) y la lista. El realtime se abre acá y no en
    la lista: vive lo que vive la página. */
@@ -42,11 +43,6 @@ export function Crm() {
   useEffect(() => {
     if (fijar !== null) setSearchParams(new URLSearchParams(fijar), { replace: true })
   }, [fijar, setSearchParams])
-  // Un solo botón que alterna, en el mismo lugar de la cabecera en las dos vistas. A la lista se
-  // llega sin filtros ni lead abierto; al Dashboard, sin lead abierto (los filtros se quedan para la vuelta).
-  const alternarVista = () => setSearchParams(prev => (resumen
-    ? escribirResumen(deleteLeadFilterParams(escribirLeadAbierto(prev, null), LEAD_FILTER_PARAMS_WITH_QUERY), false)
-    : escribirResumen(escribirLeadAbierto(prev, null), true)))
   // Recién creado, se abre: lo próximo que se hace con un lead nuevo es trabajarlo.
   const abrir = (leadId: string) => setSearchParams(prev => escribirLeadAbierto(prev, leadId), { replace: true })
 
@@ -66,6 +62,8 @@ export function Crm() {
           <PlaybookDialog />
           {/* Para todos: módulos con guía y videos (editar, solo SUPERADMIN adentro). */}
           <CapacitacionesDialog />
+          {/* Para todos: el historial de `crm_emails` que la RLS deja leer. */}
+          <EmailsEnviadosDialog />
           <VerComoButton />
           {/* Solo SUPERADMIN (la RLS lo exige igual): un SDR que renombra una etapa desarma el
               funnel de todos. En el teléfono no: se configura una vez al mes, desde el escritorio. */}
@@ -80,15 +78,6 @@ export function Crm() {
             </div>
           )}
         </MenuDeHerramientas>
-        {/* Dashboard ⇄ lista: solo SUPERADMIN (y no con «Ver como», que no tiene Dashboard). */}
-        {decidido && esSuperadmin && !como && (
-          <Button variant="outline" onClick={alternarVista}
-            title={resumen ? 'La lista de leads, con sus filtros' : 'Leads importantes y agenda de todas las carteras'}>
-            <Icon icon={resumen ? List : LayoutDashboard} size="xs" />
-            <span className="hidden md:inline">{resumen ? 'Ver lista de leads' : 'Dashboard'}</span>
-            <span className="md:hidden">{resumen ? 'Lista' : 'Dashboard'}</span>
-          </Button>
-        )}
         {/* Notificaciones: tus emails que rebotaron o no salieron; tocar uno abre el lead. */}
         <CampanaDeEmails />
         <Button onClick={() => setAltaAbierta(true)}>
@@ -103,7 +92,7 @@ export function Crm() {
       <div className="p-1 max-md:p-0">
         {/* Sin saber todavía si hay resumen, solo la carga: la lista tampoco pinta nada sin sesión. */}
         {decidido
-          ? <CrmLeadList resumen={resumen} />
+          ? <CrmLeadList resumen={resumen} conDashboard={esSuperadmin && !como} />
           : (
             <div className="flex flex-col gap-2 px-3" aria-busy="true">
               {[0, 1, 2, 3, 4].map(i => <div key={i} className="h-[52px] animate-pulse rounded-lg bg-secondary" />)}

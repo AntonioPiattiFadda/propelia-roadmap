@@ -12,6 +12,8 @@ import { useCarteras } from '../hooks/useCarteras'
 import { useActualizarLead, useEliminarLead } from '../hooks/useLeadMutaciones'
 import type { CrmLeadRow } from '../types'
 import { DescartarLeadDialog } from './DescartarLeadDialog'
+import { CualificaLeadDialog } from './CualificaLeadDialog'
+import { esBuscarContacto } from '../lib/buscarContacto'
 
 /* Copiado de propelia-frontend (src/pages/leads/components/LeadRowActions.tsx) sin el segundo
    funnel y sin la hoja inferior de móvil; sin «Posponer gestión» desde el 10/10/2026
@@ -30,6 +32,7 @@ export function LeadRowActions({ lead, puedeEscribir, onStartReassign, triggerCl
   // Eliminar es solo del SUPERADMIN (23/10/2026, por pedido): directo, sin confirmar, con «Deshacer».
   const { esSuperadmin } = useCarteras()
   const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const [preguntandoCualifica, setPreguntandoCualifica] = useState(false)
 
   const yaDescartado = !!descartada && lead.funnel_stage_id === descartada.id
   // Las del funnel para elegir; Descartado se elige desde «Descartar», que pide el motivo.
@@ -49,7 +52,10 @@ export function LeadRowActions({ lead, puedeEscribir, onStartReassign, triggerCl
             <DropdownMenuSubContent>
               <DropdownMenuRadioGroup
                 value={lead.funnel_stage_id ?? ''}
-                onValueChange={id => actualizar.mutate({ id: lead.id, patch: { funnel_stage_id: id, discard_reason: null, recontact_at: null } })}
+                onValueChange={id => {
+                  actualizar.mutate({ id: lead.id, patch: { funnel_stage_id: id, discard_reason: null, recontact_at: null } })
+                  if (esBuscarContacto(enFunnel.find(e => e.id === id))) setPreguntandoCualifica(true)
+                }}
               >
                 {enFunnel.map(e => (
                   <DropdownMenuRadioItem key={e.id} value={e.id} className="text-xs">
@@ -80,6 +86,7 @@ export function LeadRowActions({ lead, puedeEscribir, onStartReassign, triggerCl
       {confirmDiscard && descartada && (
         <DescartarLeadDialog leadId={lead.id} etapa={descartada} onClose={() => setConfirmDiscard(false)} />
       )}
+      {preguntandoCualifica && <CualificaLeadDialog leadId={lead.id} onClose={() => setPreguntandoCualifica(false)} />}
     </>
   )
 }

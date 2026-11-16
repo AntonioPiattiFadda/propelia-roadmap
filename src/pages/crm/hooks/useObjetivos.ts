@@ -1,6 +1,6 @@
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { localTodayIso, shiftIsoDate } from '@/lib/calendarDate'
-import { leadsConDecisor, objetivosDe } from '../lib/objetivos'
+import { leadsConDecisor, llamadasDesdeLaUltimaDemo, objetivosDe } from '../lib/objetivos'
 import { demosAgendadas, historialDeActividad, metasDeActividad, presentacionesEnviadas } from '../service/crm.service'
 import { useVerComo } from './useVerComo'
 import { CRM_KEYS } from './keys'
@@ -22,7 +22,11 @@ function consultaDeObjetivos(autor: string, desde: string, hasta: string) {
       ])
       // Para saber si un decisor es nuevo hace falta lo de antes en esos leads, de cualquiera.
       const historial = await historialDeActividad(leadsConDecisor(llamadas), h)
-      return objetivosDe(llamadas, demos, { presentaciones, historial })
+      return {
+        ...objetivosDe(llamadas, demos, { presentaciones, historial }),
+        // «Hacia la próxima demo» del contador: agendar una demo lo vuelve a cero.
+        llamadasDesdeLaUltimaDemo: llamadasDesdeLaUltimaDemo(llamadas, demos),
+      }
     },
   }
 }

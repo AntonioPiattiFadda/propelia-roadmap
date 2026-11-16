@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useUserSession } from '@/hooks/useUserSession'
-import { getEmailsQueNoLlegaron, getEstadoDeEnvio, getPlantillasGuardadas, marcarEmailVisto, type EmailQueNoLlego } from '../service/email.service'
+import { getEmailsQueNoLlegaron, getEstadoDeEnvio, getHistorialDeEmails, getPlantillasGuardadas, marcarEmailVisto, type EmailQueNoLlego } from '../service/email.service'
 import { avisosSinVer, estadoDelEnvio, motivoLegible, rotuloDelEstado } from '../lib/emails'
 import { enlaceAlCrm, escribirLeadAbierto } from '../lib/leadFilterParams'
 import { CRM_KEYS } from './keys'
@@ -18,6 +18,11 @@ export function useEmailsQueNoLlegaron(opciones: { enabled?: boolean; refetchInt
     refetchInterval: opciones.refetchInterval,
     refetchIntervalInBackground: opciones.refetchInterval != null,
   })
+}
+
+/** Todo lo enviado; solo se pide con el dialog abierto. El realtime lo refresca (prefijo `emails`). */
+export function useHistorialDeEmails(enabled: boolean) {
+  return useQuery({ queryKey: CRM_KEYS.historialDeEmails, queryFn: getHistorialDeEmails, enabled })
 }
 
 /** El último enviado de cada plantilla. Lo invalida el envío (y el realtime de `crm_emails`, por prefijo). */

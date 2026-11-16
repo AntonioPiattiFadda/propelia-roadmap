@@ -245,8 +245,8 @@ export async function presentacionesEnviadas(autor: string, desde: string, hasta
 }
 
 /** Las demos que `autor` agendó en [desde, hasta): cuenta cuándo se agendaron, no para cuándo son. */
-export async function demosAgendadas(autor: string, desde: string, hasta: string): Promise<{ lead_id: string | null }[]> {
-  const { data, error } = await supabase.from('crm_meetings').select('lead_id')
+export async function demosAgendadas(autor: string, desde: string, hasta: string): Promise<{ lead_id: string | null; created_at: string }[]> {
+  const { data, error } = await supabase.from('crm_meetings').select('lead_id, created_at')
     .eq('created_by', autor).is('deleted_at', null)
     .gte('created_at', desde).lt('created_at', hasta)
   if (error) throw error

@@ -33,6 +33,8 @@ import { CancelarDemoDialog } from './CancelarDemoDialog'
 import { GuionDeDemo } from './GuionDeDemo'
 import { InmobiliariaDelLead } from './InmobiliariaDelLead'
 import { DescartarLeadDialog } from './DescartarLeadDialog'
+import { CualificaLeadDialog } from './CualificaLeadDialog'
+import { esBuscarContacto } from '../lib/buscarContacto'
 import { VentanaFlotante } from './VentanaFlotante'
 import { DemoAgendadaDialog } from './DemoAgendadaDialog'
 import type { DemoAgendada } from '../lib/avisoDeDemo'
@@ -361,7 +363,9 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     actualizarLead.mutate(
       { id: lead.id, patch: { funnel_stage_id: destino.id, discard_reason: null, recontact_at: null } },
       { onSuccess: () => toast.success(`Lead en «${destino.label}»`) })
+    if (esBuscarContacto(destino)) setPreguntandoCualifica(true)
   }
+  const [preguntandoCualifica, setPreguntandoCualifica] = useState(false)
 
   /* Cancelar una demo desde su renglón (23/10/2026, por pedido): la ventana pide la etapa en la que
      queda el lead, y la etapa se mueve recién con la reunión cancelada, como al registrar. */
@@ -700,6 +704,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       {descartando && descartada && (
         <DescartarLeadDialog leadId={lead.id} etapa={descartada} onClose={() => setDescartando(false)} />
       )}
+      {preguntandoCualifica && <CualificaLeadDialog leadId={lead.id} onClose={() => setPreguntandoCualifica(false)} />}
       <DemoAgendadaDialog demo={demoAgendada} onCerrar={() => setDemoAgendada(null)} />
       <AlertDialog open={confirmandoFallido} onOpenChange={setConfirmandoFallido}>
         <AlertDialogContent>
