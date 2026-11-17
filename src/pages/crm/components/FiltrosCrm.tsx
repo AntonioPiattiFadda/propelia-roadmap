@@ -129,35 +129,37 @@ export function FiltrosCrm({ filtros, dashboard, contadores, etapas, conBuscador
           {/* Descartado es una opción más (16/10/2026): sin elegirla, los descartados no se ven.
               Reemplazó al chip «Incluir descartados». Desde el 20/10/2026 va en subgrupos: Primer
               contacto, Seguimiento y Otros (sin clasificar y fuera del funnel), de `etapasPorGestion`. */}
-          <DropdownMenuContent align="start" className="w-72 rounded-xl p-1.5 shadow-lg">
+          {/* Renglones compactos (17/11/2026, por pedido): con todas las etapas el menú pasaba el
+              alto de la pantalla y había que scrollear hacia arriba. */}
+          <DropdownMenuContent align="start" className="w-64 rounded-xl p-1 shadow-lg">
             {etapasPorGestion(etapas).map((g, i) => {
               const ids = g.etapas.map(e => e.id)
               const marcadas = ids.filter(id => filtros.stageFilter.has(id)).length
               return (
               <DropdownMenuGroup key={g.label}>
-                {i > 0 && <DropdownMenuSeparator className="my-1.5" />}
+                {i > 0 && <DropdownMenuSeparator className="my-0.5" />}
                 {/* El título del subgrupo es un tilde más: marca o desmarca todos sus estados de una. */}
                 <DropdownMenuCheckboxItem
-                  className="rounded-md pt-2 pb-1.5 text-[11.5px] font-bold uppercase tracking-[0.07em] text-(--fg-2)"
+                  className="rounded-md pt-1 pb-0.5 text-[10.5px] font-bold uppercase tracking-[0.07em] text-(--fg-2)"
                   checked={marcadas === 0 ? false : marcadas === ids.length ? true : 'indeterminate'}
                   onSelect={ev => ev.preventDefault()}
                   onCheckedChange={() => onCambiar({ stageFilter: alternarGrupo(filtros.stageFilter, ids) })}
                 >
                   <span className="flex-1">{g.label}</span>
-                  <span className="text-[11px] font-semibold normal-case tracking-normal text-(--fg-muted)">
+                  <span className="text-[10.5px] font-semibold normal-case tracking-normal text-(--fg-muted)">
                     {marcadas === ids.length ? 'Quitar todos' : 'Elegir todos'}
                   </span>
                 </DropdownMenuCheckboxItem>
                 {g.etapas.map(e => (
                   <DropdownMenuCheckboxItem
                     key={e.id}
-                    className="rounded-md py-2 text-[13.5px]"
+                    className="rounded-md py-1 text-[12.5px]"
                     checked={filtros.stageFilter.has(e.id)}
                     onSelect={ev => ev.preventDefault()}
                     onCheckedChange={() => onCambiar({ stageFilter: alternar(filtros.stageFilter, e.id) })}
                   >
                     <span className="flex-1">{e.label}</span>
-                    <span className="rounded-full bg-(--surface-2) px-2 text-[11.5px] font-semibold tabular-nums text-(--fg-muted)">
+                    <span className="rounded-full bg-(--surface-2) px-1.5 text-[11px] font-semibold tabular-nums text-(--fg-muted)">
                       {contadores.stageCount(e.id)}
                     </span>
                   </DropdownMenuCheckboxItem>
