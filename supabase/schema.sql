@@ -1113,6 +1113,11 @@ create unique index if not exists crm_clients_idealista_url_active_uidx
 --                      al final de su consejo. No se pisa nada ni se crea otro lead.
 --   sin_novedad      — la ficha ya existe y no trae ningún contacto nuevo: se saltea.
 -- El teléfono de Idealista no cuenta como contacto nuevo: es un redirector y rota.
+--
+-- Un lead eliminado (`deleted_at`) es como si no existiera (17/11/2026, por pedido), y con él su
+-- inmobiliaria: un cliente sin ningún lead vivo no es «repetida» ni «posible repetida». Si la fila
+-- trae su ficha o su email, el cliente huérfano se da de baja (soft delete, para liberar los
+-- índices únicos) y la fila entra como nueva, con cliente y lead de cero.
 create or replace function public.crm_importar_lote(
   p_assigned_to uuid,
   p_filas       jsonb,
@@ -1142,6 +1147,7 @@ declare
   v_client_id   uuid;
   v_email_carga text;
   v_lote        text;
+  v_huerfanos   integer;
 begin
   if not public.crm_es_superadmin() then
     raise exception 'crm_sin_acceso' using errcode = '42501';
@@ -1158,23 +1164,27 @@ begin
   select id into v_stage_id from public.crm_funnel_stages
    where deleted_at is null order by (value = 'NEW') desc, position asc limit 1;
 
-  -- Los contactos de todos los clientes vivos, calculados una sola vez: buscarlos fila por fila
-  -- recorrería la tabla entera con regex 300 veces. Las inserciones del lote se suman acá.
+  -- Los contactos de todos los clientes vivos con un lead vivo, calculados una sola vez: buscarlos
+  -- fila por fila recorrería la tabla entera con regex 300 veces. Las inserciones del lote se suman acá.
   create temp table if not exists crm_import_contactos (
     client_id uuid not null, tipo text not null, valor text not null
   ) on commit drop;
   truncate crm_import_contactos;
   insert into crm_import_contactos
-  select c.id, 'tel', t from public.crm_clients c,
+  with vivos as (
+    select c.* from public.crm_clients c
+     where c.deleted_at is null
+       and exists (select 1 from public.crm_leads l where l.client_id = c.id and l.deleted_at is null)
+  )
+  select c.id, 'tel', t from vivos c,
          unnest(public.crm_telefonos(concat_ws(' ', c.phone, c.alternative_phone_1, c.alternative_phone_2,
                                                c.google_maps_phone, c.sdr_advice))) t
-   where c.deleted_at is null
   union all
-  select c.id, 'email', lower(btrim(c.email)) from public.crm_clients c
-   where c.deleted_at is null and nullif(btrim(c.email), '') is not null
+  select c.id, 'email', lower(btrim(c.email)) from vivos c
+   where nullif(btrim(c.email), '') is not null
   union all
-  select c.id, 'nombre', public.crm_normalizar(c.company_name) from public.crm_clients c
-   where c.deleted_at is null and public.crm_normalizar(c.company_name) is not null;
+  select c.id, 'nombre', public.crm_normalizar(c.company_name) from vivos c
+   where public.crm_normalizar(c.company_name) is not null;
 
   begin
     for v_fila in select * from jsonb_array_elements(p_filas) loop
@@ -1184,6 +1194,15 @@ begin
       v_lote     := nullif(btrim(v_fila->>'import_batch'), '');
       -- Los teléfonos de la fila: el de Google Maps y todos los del research. NO el de Idealista.
       v_tels     := public.crm_telefonos(concat_ws(' ', v_fila->>'google_maps_phone', v_research));
+
+      -- La inmobiliaria cuyo lead se eliminó cuenta como eliminada: se le da de baja, así la ficha
+      -- y el email quedan libres y la fila entra como nueva.
+      update public.crm_clients c set deleted_at = now()
+       where c.deleted_at is null
+         and not exists (select 1 from public.crm_leads l where l.client_id = c.id and l.deleted_at is null)
+         and (public.crm_url_clave(c.idealista_url) = public.crm_url_clave(v_fila->>'idealista_url')
+              or (v_email is not null and lower(btrim(c.email)) = v_email));
+      get diagnostics v_huerfanos = row_count;
 
       select * into v_existente from public.crm_clients
        where deleted_at is null
@@ -1317,7 +1336,8 @@ begin
       v_resultados := v_resultados || jsonb_build_object('fila', v_fila->'fila',
         'empresa', v_fila->>'company_name',
         'resultado', case when v_aviso is null then 'nueva' else 'posible_repetida' end,
-        'detalle', v_aviso);
+        'detalle', nullif(concat_ws(' ', v_aviso,
+          case when v_huerfanos > 0 then 'Tenía un lead eliminado: entra de cero.' end), ''));
     end loop;
 
     v_respuesta := json_build_object('filas', v_resultados, 'etiquetas_nuevas', v_etiquetas,

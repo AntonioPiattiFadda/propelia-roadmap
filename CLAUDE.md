@@ -899,6 +899,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   - Repetida = misma ficha: no se crea nada; si trae contactos nuevos, se agregan al final de
     `sdr_advice` («NUEVOS CONTACTOS»). Ficha nueva que comparte teléfono, email o nombre: se crea
     con «POSIBLE REPETIDA» arriba del consejo. Sin historial: el SDR edita esos bloques.
+  - **Un lead eliminado es como si no existiera** (17/11/2026, por pedido; migración
+    `20261117175236_crm_importar_lote_leads_eliminados`): una inmobiliaria sin lead vivo no es
+    repetida ni posible repetida. Si la fila trae su ficha o su email, el import le da de baja al
+    cliente huérfano y crea cliente y lead de cero («Tenía un lead eliminado: entra de cero.»).
   - `sdr_research` va a `sdr_advice`; `phone` y los alternativos no se cargan (ya están en el
     research); `current_crm` es una etiqueta de `crm_software` (`current_crm_id`).
 - **Envío de emails** (16/10/2026, copiado de `send-email` de `propelia-frontend`, ver su

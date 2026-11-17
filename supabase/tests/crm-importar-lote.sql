@@ -22,6 +22,9 @@ insert into public.crm_clients (id, company_name, idealista_url, google_maps_pho
   ('00000000-0000-4000-8000-00000000d002', 'Inmo Parecida', 'https://www.idealista.com/pro/prueba-parecida/', '+34600000009', null);
 insert into public.crm_leads (client_id, assigned_to, funnel_stage_id) values
   ('00000000-0000-4000-8000-00000000d001', '00000000-0000-4000-8000-00000000c001',
+   (select id from public.crm_funnel_stages where value = 'NEW' and deleted_at is null limit 1)),
+  -- Sin lead vivo un cliente cuenta como eliminado (caso 6): para ser «posible repetida» necesita uno.
+  ('00000000-0000-4000-8000-00000000d002', '00000000-0000-4000-8000-00000000c001',
    (select id from public.crm_funnel_stages where value = 'NEW' and deleted_at is null limit 1));
 
 -- Una fila del lote, con el research en sus cuatro secciones.
@@ -149,6 +152,35 @@ begin
      (select id from public.crm_funnel_stages where value = 'NEW' and deleted_at is null limit 1));
   raise exception 'FALLO (5): un cliente quedó con dos leads';
 exception when unique_violation then null;
+end $$;
+
+-- ---------- 6. Un lead eliminado es como si no existiera ----------
+-- Se elimina el lead de d001 (lo que hace «Eliminar» del menú `⋯`): reimportar su ficha la crea
+-- de cero, con cliente y lead nuevos, y el cliente viejo queda dado de baja. Tampoco cuenta para
+-- «posible repetida»: la fila comparte teléfono y nombre con d001.
+update public.crm_leads set deleted_at = now() where client_id = '00000000-0000-4000-8000-00000000d001';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-8000-00000000c0a0","role":"authenticated"}';
+do $$
+declare r jsonb;
+begin
+  r := public.crm_importar_lote('00000000-0000-4000-8000-00000000c0a0', jsonb_build_array(
+    pg_temp.fila(7, 'Inmo Existe', 'https://www.idealista.com/pro/prueba-existe/', '+34600000001',
+                 'Ana Uno | CEO | https://existe.test', 'Sin numeros adicionales')), false)::jsonb;
+  if r->'filas'->0->>'resultado' <> 'nueva' then raise exception 'FALLO (6a): dio %', r->'filas'->0; end if;
+  if r->'filas'->0->>'detalle' not like '%lead eliminado%' then raise exception 'FALLO (6b): no avisa: %', r->'filas'->0; end if;
+end $$;
+reset role;
+do $$
+declare n int;
+begin
+  if (select deleted_at from public.crm_clients where id = '00000000-0000-4000-8000-00000000d001') is null then
+    raise exception 'FALLO (6c): el cliente viejo sigue vivo';
+  end if;
+  select count(*) into n from public.crm_clients c join public.crm_leads l on l.client_id = c.id
+   where c.deleted_at is null and l.deleted_at is null
+     and public.crm_url_clave(c.idealista_url) = public.crm_url_clave('https://www.idealista.com/pro/prueba-existe/');
+  if n <> 1 then raise exception 'FALLO (6d): la ficha quedó con % clientes con lead vivo', n; end if;
 end $$;
 
 select 'crm-importar-lote: OK' as resultado;
