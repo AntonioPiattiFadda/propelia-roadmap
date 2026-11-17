@@ -995,9 +995,11 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   lo de los leads que ves), de a páginas de 1000. Para todos. Busca por destinatario, asunto e
   inmobiliaria; filtra por estado (entregados / en camino / no llegaron) y por quién lo mandó.
   Tocar la inmobiliaria abre el lead. **El cuerpo no se guarda**: no hay «Ver email». Sin migración.
-- **El selector de carteras vive en «Herramientas»** (5/11/2026, por pedido): «Leads de Lorenzo» /
-  «Leads de N personas» (`AgentFilterButton`, el mismo menú de tildes), ya no suelto en la cabecera.
-  Mismas reglas: solo si ves a alguien más, ni con «Ver como» ni en el Dashboard.
+- **El selector de carteras vive en la fila de filtros** (17/11/2026, por pedido; del 5/11 estuvo en
+  «Herramientas»): un chip «Leads de Lorenzo» / «Leads de N personas» / «Leads de todos»
+  (`AgentFilterButton`, el mismo menú de tildes) con **«Todos»** arriba de las personas, que marca
+  todas o, si ya estaban, vuelve a la propia (`lib/selectorDeCarteras.ts`). Vive en `?owners=`:
+  «Limpiar filtros» no lo toca. Mismas reglas: solo si ves a alguien más, ni con «Ver como» ni en el Dashboard.
 - **«Ver como»** (23/10/2026, por pedido): botón de la cabecera del CRM (`VerComoButton`,
   `components/VerComo.tsx`) que abre en **otra ventana** `/crm?como=<id>` (`COMO_PARAM`,
   `enlaceAlCrm({ como })`). Lista a los activos cuya cartera ves, sin vos (`puedeVerComo`,

@@ -260,8 +260,12 @@ const TITULO_DE_ORDEN: Record<OrdenLeads, string> = {
 }
 
 /** `resumen`: el filtro «Dashboard» de un SUPERADMIN (`muestraResumen`): la lista parte de los
- *  importantes de todas las carteras. `conDashboard`: si se ofrece el chip (SUPERADMIN, sin «Ver como»). */
-export function CrmLeadList({ resumen = false, conDashboard = false }: { resumen?: boolean; conDashboard?: boolean }) {
+ *  importantes de todas las carteras. `conDashboard`: si se ofrece el chip (SUPERADMIN, sin «Ver como»).
+ *  `conCarteras`: si se ofrece el selector de carteras en los filtros (sin «Ver como»: ahí la vista es
+ *  la cartera de quien se mira). */
+export function CrmLeadList({ resumen = false, conDashboard = false, conCarteras = false }: {
+  resumen?: boolean; conDashboard?: boolean; conCarteras?: boolean
+}) {
   const [searchParams, setSearchParams] = useSearchParams()
   const isMobile = useIsMobile()
   const leadsQ = useCrmLeads()
@@ -565,6 +569,8 @@ export function CrmLeadList({ resumen = false, conDashboard = false }: { resumen
       <FiltrosCrm
         filtros={filtros}
         dashboard={conDashboard ? { activo: resumen, cantidad: cantidadDashboard, onAlternar: alternarDashboard } : undefined}
+        // En el Dashboard no: ya muestra todas las carteras.
+        conCarteras={conCarteras && !resumen}
         contadores={contadores}
         etapas={cat.etapasActivas}
         conBuscador={isMobile || enColumnas}

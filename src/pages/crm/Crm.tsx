@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom'
 import { PlusIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
-import { AgentFilterButton } from './components/AgentFilterButton'
 import { CampanaDeEmails } from './components/EmailsQueNoLlegaron'
 import { ContadorDeLlamadas } from './components/ContadorDeLlamadas'
 import { CrmLeadList } from './components/CrmLeadList'
@@ -53,10 +52,6 @@ export function Crm() {
       <header className="flex items-center justify-end gap-2 px-4 pb-2 pt-3 max-md:px-2">
         <h1 className="mr-auto text-lg font-semibold text-foreground">CRM</h1>
         <MenuDeHerramientas>
-          {/* De qué personas se ven los leads (5/11/2026, por pedido: se mudó de la cabecera acá).
-              Mirando como alguien, la vista es su cartera: el selector sobra (y `?owners=` sigue
-              andando). En el resumen tampoco: muestra todas las carteras. Solo sale si ves a alguien más. */}
-          {!como && !resumen && <AgentFilterButton />}
           {/* Para todos, SDR incluido: es la jornada contra la que se trabaja la lista. */}
           <PlanningDiarioDialog />
           <PlaybookDialog />
@@ -92,7 +87,7 @@ export function Crm() {
       <div className="p-1 max-md:p-0">
         {/* Sin saber todavía si hay resumen, solo la carga: la lista tampoco pinta nada sin sesión. */}
         {decidido
-          ? <CrmLeadList resumen={resumen} conDashboard={esSuperadmin && !como} />
+          ? <CrmLeadList resumen={resumen} conDashboard={esSuperadmin && !como} conCarteras={!como} />
           : (
             <div className="flex flex-col gap-2 px-3" aria-busy="true">
               {[0, 1, 2, 3, 4].map(i => <div key={i} className="h-[52px] animate-pulse rounded-lg bg-secondary" />)}

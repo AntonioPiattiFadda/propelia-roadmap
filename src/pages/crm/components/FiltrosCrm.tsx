@@ -11,6 +11,7 @@ import { alternarGrupo, esSoloEstas, etapasDePrimerContacto, etapasPorGestion } 
 import type { VistaCrm } from '../lib/leadFilterParams'
 import type { LeadFilterState, OrdenLeads } from '../lib/leadFilters'
 import type { CrmStage } from '../types'
+import { AgentFilterButton } from './AgentFilterButton'
 
 /* El número adentro del chip (`.tabular-nums`) es una chapita teñida con el color del propio
    texto, así se lee bien también sobre el rojo de «Vencidas» y el ámbar de «Para recontactar». */
@@ -70,8 +71,12 @@ export function BuscadorLeads({ q, onCambiar, className }: {
  * si prendo esto», de `computeLeadListCounters`. Sin filtro de prioridad ni de gestión desde el
  * 10/10/2026: se sacaron del front para rediseñarlos.
  */
-export function FiltrosCrm({ filtros, dashboard, contadores, etapas, conBuscador, vista, onVista, onCambiar, onLimpiar }: {
+export function FiltrosCrm({ filtros, dashboard, conCarteras = false, contadores, etapas, conBuscador, vista, onVista, onCambiar, onLimpiar }: {
   filtros: LeadFilterState
+  /** El selector de carteras (17/11/2026, por pedido; estuvo en «Herramientas»): de quién se ven los
+   *  leads, o de todos. Vive en `?owners=`, no en los filtros: «Limpiar filtros» no lo toca. Solo
+   *  se dibuja si ves a alguien más (lo decide `AgentFilterButton`). */
+  conCarteras?: boolean
   /** El chip «Dashboard» (16/11/2026, por pedido; fue un botón de la cabecera): solo SUPERADMIN.
    *  Vive en `?resumen=`, no en los filtros: «Limpiar filtros» no lo toca. */
   dashboard?: { activo: boolean; cantidad: number; onAlternar: () => void }
@@ -115,6 +120,8 @@ export function FiltrosCrm({ filtros, dashboard, contadores, etapas, conBuscador
             Dashboard <span className="tabular-nums">{dashboard.cantidad}</span>
           </button>
         )}
+
+        {conCarteras && <AgentFilterButton className={cn(chip(false), 'data-[state=open]:[border-color:var(--brand-200)]')} />}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
