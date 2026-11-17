@@ -2,7 +2,7 @@ import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-q
 import { toast } from 'sonner'
 import { localTodayIso } from '@/lib/calendarDate'
 import { mensajeDeError } from '../lib/errores'
-import { recontactoDeMotivo, type MotivoDescarte } from '../lib/motivosDescarte'
+import { recontactoDeMotivo, type GrupoDescarte, type MotivoDescarte } from '../lib/motivosDescarte'
 import { comentarioDescarte, comentarioReasignacion } from '../lib/systemComment'
 import type { FilaDelLote } from '../lib/importarLote'
 import {
@@ -60,9 +60,9 @@ export function useActualizarCliente() {
 
 /** Lo que escribe un descarte: el código del motivo (o el texto libre del descarte para siempre) y,
  *  si «podría calificar», desde cuándo volver a llamarlo. Una sola cuenta para el optimista y para la base. */
-export type VarsDescarte = { leadId: string; etapaId: string; motivo: MotivoDescarte | string }
-const patchDeDescarte = ({ etapaId, motivo }: VarsDescarte) =>
-  ({ funnel_stage_id: etapaId, discard_reason: motivo, recontact_at: recontactoDeMotivo(motivo, localTodayIso()) })
+export type VarsDescarte = { leadId: string; etapaId: string; motivo: MotivoDescarte | string; grupo?: GrupoDescarte }
+const patchDeDescarte = ({ etapaId, motivo, grupo }: VarsDescarte) =>
+  ({ funnel_stage_id: etapaId, discard_reason: motivo, recontact_at: recontactoDeMotivo(motivo, localTodayIso(), grupo) })
 
 export function useDescartar() {
   const qc = useQueryClient()

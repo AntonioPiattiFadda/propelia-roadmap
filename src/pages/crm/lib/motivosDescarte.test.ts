@@ -54,6 +54,16 @@ describe('recontactoDeMotivo', () => {
     expect(recontactoDeMotivo('has_tool', '2026-10-10')).toBe('2027-04-10')
     expect(recontactoDeMotivo('do_not_contact', '2026-10-10')).toBeNull()
   })
+
+  it('un motivo escrito a mano lleva fecha solo si se dijo que podría calificar', () => {
+    expect(recontactoDeMotivo('Se fusionó con otra', '2026-10-10', 'podria_calificar')).toBe('2027-04-10')
+    expect(recontactoDeMotivo('Se fusionó con otra', '2026-10-10', 'no_califica')).toBeNull()
+    expect(recontactoDeMotivo('Se fusionó con otra', '2026-10-10')).toBeNull()
+  })
+
+  it('el grupo elegido manda sobre el del código', () => {
+    expect(recontactoDeMotivo('has_tool', '2026-10-10', 'no_califica')).toBeNull()
+  })
 })
 
 describe('paraRecontactar', () => {

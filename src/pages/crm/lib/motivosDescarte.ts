@@ -56,9 +56,11 @@ export function fechaDeRecontacto(hoy: string): string {
   return `${anio}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
 }
 
-/** Qué `recontact_at` lleva un descarte con este motivo: fecha solo si podría calificar. */
-export function recontactoDeMotivo(code: string, hoy: string): string | null {
-  return grupoDeMotivo(code)?.id === 'podria_calificar' ? fechaDeRecontacto(hoy) : null
+/** Qué `recontact_at` lleva un descarte: fecha solo si podría calificar. Manda el grupo elegido en
+ *  el diálogo (un motivo escrito a mano no tiene código del que sacarlo); sin él, el del código. */
+export function recontactoDeMotivo(code: string, hoy: string, grupo?: GrupoDescarte): string | null {
+  const g = grupo ?? grupoDeMotivo(code)?.id
+  return g === 'podria_calificar' ? fechaDeRecontacto(hoy) : null
 }
 
 /** Descartado y con la fecha de volver a llamar cumplida (hoy incluido). Las fechas se comparan
