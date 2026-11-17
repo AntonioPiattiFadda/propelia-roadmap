@@ -81,7 +81,7 @@ export function useHaciaLaProximaDemo(autor: string | null) {
     queryFn: async () => {
       const ultima = await ultimaDemoAgendada(autor!)
       const llamadas = await actividadDesde(autor!, ultima)
-      return llamadasDesdeLaUltimaDemo(llamadas, ultima ? [{ created_at: ultima }] : [])
+      return llamadasDesdeLaUltimaDemo(llamadas, ultima)
     },
     enabled: !!autor,
   })

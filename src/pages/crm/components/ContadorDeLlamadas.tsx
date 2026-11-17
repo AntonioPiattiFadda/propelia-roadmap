@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { AvatarUsuario } from '@/components/AvatarUsuario'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Explicacion, type Explicado } from './Explicacion'
 import { useCarteras } from '../hooks/useCarteras'
 import { useCommits, useGuardarCommit } from '../hooks/useCommits'
@@ -23,7 +24,7 @@ import { hitoAlcanzado, mensajeDePropelin } from '../lib/propelin'
 import {
   diasHaciaAtras, LLAMADAS_POR_DEMO, mesesHaciaAtras, pendientesDePersona, progresoHaciaDemo, semanasHaciaAtras,
   sumarResumenes, tasaDeDecisor,
-  type Objetivo, type PeriodoDeObjetivos, type TonoDeProgreso,
+  type HaciaLaProximaDemo as DatosHaciaDemo, type Objetivo, type PeriodoDeObjetivos, type TonoDeProgreso,
 } from '../lib/objetivos'
 import { esSuperadmin, puedeVerComo } from '../lib/permisos'
 import type { Usuario } from '../types'
@@ -190,7 +191,7 @@ export function ContadorDeLlamadas() {
             ))}
           </div>
           {/* Con `key`: cambiar de persona no festeja un hito que no se alcanzó. */}
-          <HaciaLaProximaDemo key={personaId ?? ''} llamadas={haciaDemo.isError ? undefined : haciaDemo.data} />
+          <HaciaLaProximaDemo key={personaId ?? ''} datos={haciaDemo.isError ? undefined : haciaDemo.data} />
         </div>
       </section>
       {abierto && <ObjetivosDialog onClose={() => setAbierto(false)} />}
@@ -235,8 +236,11 @@ function Tarjeta({ icono, label, activo, title, onClick, children }: {
 /* Cada `LLAMADAS_POR_DEMO` llamadas sale una demo (16/11/2026, por pedido): la barra muestra cuánto
    falta para la próxima, contando desde la última demo agendada. Desde el 17/11/2026 (por pedido)
    no se reinicia con el día: solo agendar una demo la vuelve a cero (`useHaciaLaProximaDemo`).
-   Rojo sutil al arrancar, amarillo pasada la mitad y verde llegando. */
-function HaciaLaProximaDemo({ llamadas }: { llamadas: number | undefined }) {
+   Rojo sutil al arrancar, amarillo pasada la mitad y verde llegando. Desde el 17/11/2026 (por
+   pedido) cuenta solo contestadas, son 70, y tocarla dice cuándo fue la última demo y de qué días
+   son las llamadas acumuladas. */
+function HaciaLaProximaDemo({ datos }: { datos: DatosHaciaDemo | undefined }) {
+  const llamadas = datos?.contestadas
   const p = progresoHaciaDemo(llamadas ?? 0)
   const t = TONOS[p.tono]
   const cargando = llamadas === undefined
@@ -244,9 +248,11 @@ function HaciaLaProximaDemo({ llamadas }: { llamadas: number | undefined }) {
   return (
     <div className="relative w-full lg:w-[260px] lg:shrink-0">
     {festejo.texto && <GloboDePropelin key={festejo.id} texto={festejo.texto} onCerrar={festejo.cerrar} />}
-    <div role="group" aria-label="Hacia la próxima demo"
-      title={`Estadísticamente, cada ${LLAMADAS_POR_DEMO} llamadas (contestadas y no respondidas) se agenda una demo. Cuenta desde la última demo agendada, sin importar el día: solo agendar una lo vuelve a cero.`}
-      className={cn('flex h-full w-full flex-col justify-between gap-1.5 rounded-lg px-3 py-2 transition-colors [border:1px_solid]', t.caja)}>
+    <Popover>
+    <PopoverTrigger asChild>
+    <button type="button" aria-label="Hacia la próxima demo: ver el detalle"
+      title="Tocá para ver cuándo fue la última demo y de qué días son las llamadas"
+      className={cn('flex h-full w-full cursor-pointer flex-col justify-between gap-1.5 rounded-lg px-3 py-2 text-left transition-colors [border:1px_solid]', t.caja)}>
       <div className="flex items-center justify-between gap-2">
         <span className={cn('flex items-center gap-1.5 text-[11.5px] font-semibold', t.texto)}>
           <PhoneIcon className="size-3.5" aria-hidden />Hacia la próxima demo
@@ -260,7 +266,7 @@ function HaciaLaProximaDemo({ llamadas }: { llamadas: number | undefined }) {
       </div>
       <div className="flex items-baseline gap-1">
         <span className="text-[22px] leading-none font-semibold tabular-nums text-foreground">{cargando ? '–' : p.enCiclo}</span>
-        <span className="text-[13px] text-(--fg-muted) tabular-nums">/ {LLAMADAS_POR_DEMO} llamadas</span>
+        <span className="text-[13px] text-(--fg-muted) tabular-nums">/ {LLAMADAS_POR_DEMO} contestadas</span>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-card" role="progressbar"
         aria-valuemin={0} aria-valuemax={LLAMADAS_POR_DEMO} aria-valuenow={p.enCiclo}>
@@ -268,9 +274,49 @@ function HaciaLaProximaDemo({ llamadas }: { llamadas: number | undefined }) {
           style={{ width: `${Math.round(p.fraccion * 100)}%` }} />
       </div>
       <span className="text-[11.5px] text-(--fg-2)">
-        {cargando ? ' ' : p.faltan === 0 ? '¡Demo a la vista! Seguí así.' : `Faltan ${p.faltan} ${p.faltan === 1 ? 'llamada' : 'llamadas'}`}
+        {cargando ? ' ' : p.faltan === 0 ? '¡Demo a la vista! Seguí así.' : `Faltan ${p.faltan} ${p.faltan === 1 ? 'contestada' : 'contestadas'}`}
       </span>
+    </button>
+    </PopoverTrigger>
+    <PopoverContent align="end" className="w-72 text-[13px]">
+      <DetalleHaciaDemo datos={datos} />
+    </PopoverContent>
+    </Popover>
     </div>
+  )
+}
+
+const FECHA_LARGA = new Intl.DateTimeFormat('es-ES', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+const DIA_CORTO = new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
+
+function DetalleHaciaDemo({ datos }: { datos: DatosHaciaDemo | undefined }) {
+  if (!datos) return <p className="text-(--fg-muted)">Cargando…</p>
+  return (
+    <div className="flex flex-col gap-2.5">
+      <p className="text-(--fg-2)">
+        Estadísticamente, cada {LLAMADAS_POR_DEMO} llamadas contestadas se agenda una demo. Solo agendar una vuelve el contador a cero.
+      </p>
+      <div>
+        <p className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-(--fg-muted)">Demo anterior</p>
+        <p className="font-medium first-letter:uppercase">
+          {datos.desde ? FECHA_LARGA.format(new Date(datos.desde)) : 'Todavía no agendaste ninguna'}
+        </p>
+      </div>
+      <div>
+        <p className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-(--fg-muted)">Contestadas acumuladas</p>
+        {datos.porDia.length === 0
+          ? <p className="text-(--fg-muted)">Ninguna desde entonces.</p>
+          : (
+            <ul className="mt-1 flex max-h-56 flex-col gap-0.5 overflow-y-auto">
+              {datos.porDia.map(d => (
+                <li key={d.dia} className="flex justify-between gap-2 tabular-nums">
+                  <span className="first-letter:uppercase">{DIA_CORTO.format(new Date(`${d.dia}T12:00:00`))}</span>
+                  <span className="font-semibold">{d.n}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+      </div>
     </div>
   )
 }

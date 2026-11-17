@@ -1,4 +1,4 @@
-import { shiftIsoDate, startOfWeekIso } from '@/lib/calendarDate'
+import { shiftIsoDate, startOfWeekIso, toIsoDate } from '@/lib/calendarDate'
 import { bolsasDeLlamada, leerMetaDeActividad } from './actividad'
 import { esPendienteAgendar } from './leadFilters'
 import { estaVencida } from './tareas'
@@ -176,23 +176,36 @@ export function tasaDeDecisor(periodos: readonly Pick<ObjetivosDelPeriodo, 'lead
   return { contestadas: contestadas.size, conDecisor: conDecisor.size, tasa: contestadas.size ? conDecisor.size / contestadas.size : null }
 }
 
-/** Estadísticamente, cada tantas llamadas sale una demo agendada (16/11/2026, por pedido). */
-export const LLAMADAS_POR_DEMO = 95
+/** Estadísticamente, cada tantas llamadas contestadas sale una demo agendada (16/11/2026; 70 y
+ *  solo contestadas desde el 17/11/2026, por pedido). */
+export const LLAMADAS_POR_DEMO = 70
 
 export type TonoDeProgreso = 'rojo' | 'amarillo' | 'verde'
 
+export type HaciaLaProximaDemo = {
+  contestadas: number
+  /** Cuándo se agendó la última demo (`created_at`); null si nunca agendó una. */
+  desde: string | null
+  /** Las contestadas acumuladas, por día local, del más viejo al más nuevo. */
+  porDia: { dia: string; n: number }[]
+}
+
 /**
- * Las llamadas (contestadas y no respondidas) hechas después de la última demo agendada: agendar
- * una demo vuelve el contador «Hacia la próxima demo» a cero (16/11/2026, por pedido). Sin demos,
- * cuentan todas.
+ * Las llamadas contestadas hechas después de la última demo agendada (`ultima`, su `created_at`):
+ * agendar una demo vuelve el contador «Hacia la próxima demo» a cero (16/11/2026, por pedido).
+ * Sin demo, cuentan todas. Desde el 17/11/2026 (por pedido) la no respondida no suma, y se
+ * reparten por día para mostrar de cuándo son.
  */
-export function llamadasDesdeLaUltimaDemo(llamadas: readonly Llamada[], demos: readonly { created_at: string }[]): number {
-  const ultima = demos.reduce<string | null>((max, d) => (max === null || d.created_at > max ? d.created_at : max), null)
-  return llamadas.filter(c => {
-    if (ultima !== null && c.created_at <= ultima) return false
-    const bolsas = bolsasDeLlamada(c.long_description)
-    return bolsas.includes('contestadas') || bolsas.includes('noRespondidas')
-  }).length
+export function llamadasDesdeLaUltimaDemo(llamadas: readonly Llamada[], ultima: string | null): HaciaLaProximaDemo {
+  const porDia = new Map<string, number>()
+  for (const c of llamadas) {
+    if (ultima !== null && new Date(c.created_at) <= new Date(ultima)) continue
+    if (!bolsasDeLlamada(c.long_description).includes('contestadas')) continue
+    const dia = toIsoDate(new Date(c.created_at))
+    porDia.set(dia, (porDia.get(dia) ?? 0) + 1)
+  }
+  const dias = [...porDia].map(([dia, n]) => ({ dia, n })).sort((a, b) => a.dia.localeCompare(b.dia))
+  return { contestadas: dias.reduce((s, d) => s + d.n, 0), desde: ultima, porDia: dias }
 }
 
 /**

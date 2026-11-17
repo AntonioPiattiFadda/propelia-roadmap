@@ -182,46 +182,55 @@ describe('tasaDeDecisor', () => {
 })
 
 describe('progresoHaciaDemo', () => {
-  it('son 95 llamadas por demo', () => {
-    expect(LLAMADAS_POR_DEMO).toBe(95)
+  it('son 70 llamadas contestadas por demo', () => {
+    expect(LLAMADAS_POR_DEMO).toBe(70)
   })
 
-  it('sin llamadas: rojo y faltan 95', () => {
-    expect(progresoHaciaDemo(0)).toEqual({ enCiclo: 0, faltan: 95, deMas: 0, fraccion: 0, tono: 'rojo' })
+  it('sin llamadas: rojo y faltan 70', () => {
+    expect(progresoHaciaDemo(0)).toEqual({ enCiclo: 0, faltan: 70, deMas: 0, fraccion: 0, tono: 'rojo' })
   })
 
-  it('rojo hasta la mitad, amarillo después y verde llegando a 95', () => {
-    expect(progresoHaciaDemo(47).tono).toBe('rojo')
-    expect(progresoHaciaDemo(48).tono).toBe('amarillo')
-    expect(progresoHaciaDemo(85).tono).toBe('amarillo')
-    expect(progresoHaciaDemo(86).tono).toBe('verde')
+  it('rojo hasta la mitad, amarillo después y verde llegando a 70', () => {
+    expect(progresoHaciaDemo(34).tono).toBe('rojo')
+    expect(progresoHaciaDemo(35).tono).toBe('amarillo')
+    expect(progresoHaciaDemo(62).tono).toBe('amarillo')
+    expect(progresoHaciaDemo(63).tono).toBe('verde')
   })
 
-  it('en 95 queda completo y en verde', () => {
-    expect(progresoHaciaDemo(95)).toEqual({ enCiclo: 95, faltan: 0, deMas: 0, fraccion: 1, tono: 'verde' })
+  it('en 70 queda completo y en verde', () => {
+    expect(progresoHaciaDemo(70)).toEqual({ enCiclo: 70, faltan: 0, deMas: 0, fraccion: 1, tono: 'verde' })
   })
 
-  it('pasado 95 sin demo se queda lleno y cuenta las de más: vuelve a cero solo con una demo', () => {
-    expect(progresoHaciaDemo(102)).toEqual({ enCiclo: 95, faltan: 0, deMas: 7, fraccion: 1, tono: 'verde' })
+  it('pasado 70 sin demo se queda lleno y cuenta las de más: vuelve a cero solo con una demo', () => {
+    expect(progresoHaciaDemo(77)).toEqual({ enCiclo: 70, faltan: 0, deMas: 7, fraccion: 1, tono: 'verde' })
   })
 })
 
 describe('llamadasDesdeLaUltimaDemo', () => {
-  const a = (h: string, resultado: 'contestada' | 'no_respondida' = 'no_respondida') =>
-    llamada('l1', resultado, undefined, [], `2026-11-16T${h}:00Z`)
+  const a = (h: string, resultado: 'contestada' | 'no_respondida' = 'contestada', dia = '2026-11-16') =>
+    llamada('l1', resultado, undefined, [], `${dia}T${h}:00`)
 
-  it('sin demos cuenta todas las llamadas', () => {
-    expect(llamadasDesdeLaUltimaDemo([a('09:00'), a('10:00', 'contestada')], [])).toBe(2)
+  it('cuenta solo las contestadas: la no respondida no suma', () => {
+    expect(llamadasDesdeLaUltimaDemo([a('09:00', 'no_respondida'), a('10:00')], null).contestadas).toBe(1)
   })
 
   it('agendar una demo la vuelve a cero: solo cuentan las de después de la última', () => {
-    const llamadas = [a('09:00'), a('10:00'), a('11:00', 'contestada'), a('12:00'), a('13:00')]
-    const demos = [{ lead_id: 'x', created_at: '2026-11-16T10:30:00Z' }, { lead_id: 'y', created_at: '2026-11-16T11:30:00Z' }]
-    expect(llamadasDesdeLaUltimaDemo(llamadas, demos)).toBe(2)
+    const llamadas = [a('09:00'), a('10:00'), a('11:00'), a('12:00', 'no_respondida'), a('13:00')]
+    const r = llamadasDesdeLaUltimaDemo(llamadas, '2026-11-16T10:30:00')
+    expect(r.contestadas).toBe(2)
+    expect(r.desde).toBe('2026-11-16T10:30:00')
+  })
+
+  it('reparte las contestadas por día, del más viejo al más nuevo', () => {
+    const llamadas = [a('09:00', 'contestada', '2026-11-14'), a('10:00', 'contestada', '2026-11-16'),
+      a('11:00', 'contestada', '2026-11-14'), a('12:00', 'no_respondida', '2026-11-15')]
+    expect(llamadasDesdeLaUltimaDemo(llamadas, null).porDia).toEqual([
+      { dia: '2026-11-14', n: 2 }, { dia: '2026-11-16', n: 1 },
+    ])
   })
 
   it('una nota no es una llamada', () => {
-    const nota = { lead_id: 'l1', created_at: '2026-11-16T09:00:00Z', long_description: 'texto suelto' }
-    expect(llamadasDesdeLaUltimaDemo([nota, a('10:00')], [])).toBe(1)
+    const nota = { lead_id: 'l1', created_at: '2026-11-16T09:00:00', long_description: 'texto suelto' }
+    expect(llamadasDesdeLaUltimaDemo([nota, a('10:00')], null).contestadas).toBe(1)
   })
 })

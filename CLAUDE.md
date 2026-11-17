@@ -803,8 +803,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
 - **«Objetivos de hoy»** (16/11/2026, por pedido; del 17/10 al 16/11/2026 fue «Objetivos semanales»,
   desde el lunes): el contador de la cabecera y su filtro `?objetivo=` cuentan **solo el día**, en
   tarjetas con ícono (cada una filtra), «Comparar» abre el diálogo (que arranca en «Hoy»). Al lado,
-  **«Hacia la próxima demo»**: estadísticamente sale una demo cada `LLAMADAS_POR_DEMO` (95) llamadas
-  (contestadas + no respondidas). **Cuenta desde la última demo agendada, sin corte por día: solo
+  **«Hacia la próxima demo»**: estadísticamente sale una demo cada `LLAMADAS_POR_DEMO` (70) llamadas
+  **contestadas** (17/11/2026, por pedido; antes 95 contando también las no respondidas). Tocar la caja
+  abre un popover con cuándo se agendó la demo anterior y las contestadas acumuladas por día
+  (`porDia` de `llamadasDesdeLaUltimaDemo`). **Cuenta desde la última demo agendada, sin corte por día: solo
   agendar una la vuelve a cero** (17/11/2026, por pedido; hasta ese día se reiniciaba cada día).
   `useHaciaLaProximaDemo`: `ultimaDemoAgendada` (la `crm_meetings` más nueva que creó) y las llamadas
   posteriores con `actividadDesde` (de a 1000), contadas por `llamadasDesdeLaUltimaDemo`; cuelga de
@@ -812,7 +814,7 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   (17/11/2026, por pedido): chips con yo y `puedeVerComo`, solo si veo a alguien más
   (`usePersonaDeObjetivos`, `?objetivosDe=<id>`; sin él, el «yo» de pantalla). Cambia las tarjetas,
   la barra y lo que filtra `?objetivo=` en la lista, sin abrir «Comparar». Barra roja sutil hasta la mitad, amarilla después y verde desde el 90 %
-  (`progresoHaciaDemo`, `lib/objetivos.ts`); pasada 95 sin demo se queda llena y marca «+N».
+  (`progresoHaciaDemo`, `lib/objetivos.ts`); pasadas 70 sin demo se queda llena y marca «+N».
   «No respondidas» es la primera columna. **Desde el 4/11/2026 (por pedido)** suma **«Decisores
   nuevos»** (la contestada con decisor en la que se habló con un decisor con quien nadie del equipo
   había hablado antes en ese lead, por nombre de `con`; sin nombre, solo si el lead nunca tuvo una
