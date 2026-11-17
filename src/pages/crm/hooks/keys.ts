@@ -30,6 +30,9 @@ export const CRM_KEYS = {
   llamadas: ['crm', 'llamadas'] as const,
   /** Las llamadas de `autor` desde el día `desde` (incluido) hasta `hasta` (excluido). */
   llamadasEntre: (autor: string, desde: string, hasta: string) => ['crm', 'llamadas', autor, desde, hasta] as const,
+  /** «Hacia la próxima demo» de `autor`: las llamadas desde su última demo, sin corte por día.
+   *  Cuelga de `llamadas`: lo que invalida el contador (actividad y reuniones) lo refresca. */
+  haciaLaProximaDemo: (autor: string) => ['crm', 'llamadas', 'hacia-demo', autor] as const,
   /** El Dashboard SDR de `persona`: los últimos 12 meses desde `desde`. */
   dashboardSdr: (persona: string, desde: string) => ['crm', 'dashboard-sdr', persona, desde] as const,
   /** La meta de demos realizadas por mes (fila `crm-meta-sdr` de `roadmap_notas`). */

@@ -15,7 +15,7 @@ import { useCarteras } from '../hooks/useCarteras'
 import { useCommits, useGuardarCommit } from '../hooks/useCommits'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
-import { useObjetivos, useObjetivosDeVarios } from '../hooks/useObjetivos'
+import { useHaciaLaProximaDemo, useObjetivos, useObjetivosDeVarios, usePersonaDeObjetivos } from '../hooks/useObjetivos'
 import { useVerComo } from '../hooks/useVerComo'
 import { commitDelPeriodo, esDiaHabil, tonoDelCommit, type CampoDeCommit, type Commits } from '../lib/commits'
 import { escribirFiltros, filtrosDesdeUrl } from '../lib/leadFilterParams'
@@ -130,21 +130,40 @@ export function ContadorDeLlamadas() {
   const [searchParams, setSearchParams] = useSearchParams()
   const elegido = filtrosDesdeUrl(searchParams).objetivo
   const { data, isError } = useObjetivos(localTodayIso())
+  const { personaId, elegibles, elegir } = usePersonaDeObjetivos()
+  const haciaDemo = useHaciaLaProximaDemo(personaId)
   if (isError) return null
 
   const alternar = (k: Objetivo) =>
     setSearchParams(prev => escribirFiltros(prev, { objetivo: elegido === k ? null : k }), { replace: true })
-  const llamadas = data?.llamadasDesdeLaUltimaDemo
 
   return (
     <>
       <section aria-label="Objetivos de hoy"
         className="rounded-xl bg-card p-2.5 [border:1px_solid_var(--line)]">
-        <div className="mb-2 flex items-center justify-between gap-2 px-0.5">
+        <div className="mb-2 flex flex-wrap items-center gap-2 px-0.5">
           <h2 className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-(--fg-muted)">
             <TargetIcon className="size-3.5 text-(--brand)" aria-hidden />Objetivos de hoy
           </h2>
-          <Button variant="ghost" size="sm" className="h-7 text-[12px]" onClick={() => setAbierto(true)}
+          {/* De quién (17/11/2026, por pedido): solo si veo a alguien más. Cambia las tarjetas, la
+              barra hacia la próxima demo y lo que filtra cada tarjeta. */}
+          {elegibles.length > 1 && (
+            <div role="radiogroup" aria-label="De quién" className="flex flex-wrap items-center gap-1">
+              {elegibles.map(u => (
+                <button key={u.id} type="button" role="radio" aria-checked={personaId === u.id}
+                  onClick={() => elegir(u.id)}
+                  className={cn(
+                    'flex cursor-pointer items-center gap-1.5 rounded-full px-2 py-0.5 text-[12px] transition-colors [border:1px_solid_var(--line)]',
+                    personaId === u.id
+                      ? 'bg-(--brand) font-semibold text-white [border-color:var(--brand)]'
+                      : 'bg-card text-(--fg-2) hover:text-foreground hover:[border-color:var(--brand-200)]',
+                  )}>
+                  <AvatarUsuario usuario={u} />{u.nombre}
+                </button>
+              ))}
+            </div>
+          )}
+          <Button variant="ghost" size="sm" className="ml-auto h-7 text-[12px]" onClick={() => setAbierto(true)}
             title="Comparar días, semanas y personas">
             <ChartColumnIcon className="size-3.5" />Comparar
           </Button>
@@ -170,7 +189,8 @@ export function ContadorDeLlamadas() {
               </Fragment>
             ))}
           </div>
-          <HaciaLaProximaDemo llamadas={llamadas} />
+          {/* Con `key`: cambiar de persona no festeja un hito que no se alcanzó. */}
+          <HaciaLaProximaDemo key={personaId ?? ''} llamadas={haciaDemo.isError ? undefined : haciaDemo.data} />
         </div>
       </section>
       {abierto && <ObjetivosDialog onClose={() => setAbierto(false)} />}
@@ -213,7 +233,8 @@ function Tarjeta({ icono, label, activo, title, onClick, children }: {
 }
 
 /* Cada `LLAMADAS_POR_DEMO` llamadas sale una demo (16/11/2026, por pedido): la barra muestra cuánto
-   falta para la próxima, contando desde la última demo agendada hoy (agendar una la vuelve a cero).
+   falta para la próxima, contando desde la última demo agendada. Desde el 17/11/2026 (por pedido)
+   no se reinicia con el día: solo agendar una demo la vuelve a cero (`useHaciaLaProximaDemo`).
    Rojo sutil al arrancar, amarillo pasada la mitad y verde llegando. */
 function HaciaLaProximaDemo({ llamadas }: { llamadas: number | undefined }) {
   const p = progresoHaciaDemo(llamadas ?? 0)
@@ -224,7 +245,7 @@ function HaciaLaProximaDemo({ llamadas }: { llamadas: number | undefined }) {
     <div className="relative w-full lg:w-[260px] lg:shrink-0">
     {festejo.texto && <GloboDePropelin key={festejo.id} texto={festejo.texto} onCerrar={festejo.cerrar} />}
     <div role="group" aria-label="Hacia la próxima demo"
-      title={`Estadísticamente, cada ${LLAMADAS_POR_DEMO} llamadas (contestadas y no respondidas) se agenda una demo. Cuenta desde la última demo que agendaste hoy: agendar una lo vuelve a cero.`}
+      title={`Estadísticamente, cada ${LLAMADAS_POR_DEMO} llamadas (contestadas y no respondidas) se agenda una demo. Cuenta desde la última demo agendada, sin importar el día: solo agendar una lo vuelve a cero.`}
       className={cn('flex h-full w-full flex-col justify-between gap-1.5 rounded-lg px-3 py-2 transition-colors [border:1px_solid]', t.caja)}>
       <div className="flex items-center justify-between gap-2">
         <span className={cn('flex items-center gap-1.5 text-[11.5px] font-semibold', t.texto)}>

@@ -1,7 +1,12 @@
+import { useMemo } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { localTodayIso, shiftIsoDate } from '@/lib/calendarDate'
 import { leadsConDecisor, llamadasDesdeLaUltimaDemo, objetivosDe } from '../lib/objetivos'
-import { demosAgendadas, historialDeActividad, metasDeActividad, presentacionesEnviadas } from '../service/crm.service'
+import { puedeVerComo } from '../lib/permisos'
+import { actividadDesde, demosAgendadas, historialDeActividad, metasDeActividad, presentacionesEnviadas, ultimaDemoAgendada } from '../service/crm.service'
+import type { Usuario } from '../types'
+import { useCarteras } from './useCarteras'
 import { useVerComo } from './useVerComo'
 import { CRM_KEYS } from './keys'
 
@@ -22,25 +27,63 @@ function consultaDeObjetivos(autor: string, desde: string, hasta: string) {
       ])
       // Para saber si un decisor es nuevo hace falta lo de antes en esos leads, de cualquiera.
       const historial = await historialDeActividad(leadsConDecisor(llamadas), h)
-      return {
-        ...objetivosDe(llamadas, demos, { presentaciones, historial }),
-        // «Hacia la próxima demo» del contador: agendar una demo lo vuelve a cero.
-        llamadasDesdeLaUltimaDemo: llamadasDesdeLaUltimaDemo(llamadas, demos),
-      }
+      return objetivosDe(llamadas, demos, { presentaciones, historial })
     },
   }
 }
 
-/** Mis llamadas y demos desde el día `desde` hasta hoy inclusive. Son las mías y no las de las
- *  carteras que estoy mirando: es el día de trabajo de quien llama (o de quien se mira con «Ver como»). La usan el contador y la lista
- *  (para `?objetivo=`), y con la misma clave es una sola consulta. */
+/** En la URL, de quién son los objetivos que muestra el contador (y filtra `?objetivo=`). Sin él,
+ *  los míos (o los de «Ver como»). */
+export const OBJETIVOS_DE_PARAM = 'objetivosDe'
+
+/**
+ * De quién se miran los «Objetivos de hoy» (17/11/2026, por pedido): quien ve otras carteras elige
+ * arriba del contador sin abrir «Comparar». Las opciones son las del diálogo: yo y `puedeVerComo`.
+ * Un `?objetivosDe=` que no está entre ellas se ignora.
+ */
+export function usePersonaDeObjetivos() {
+  const { perspectivaId, cargando } = useVerComo()
+  const { yo, usuarios, accesos } = useCarteras()
+  const [params, setParams] = useSearchParams()
+  const elegibles = useMemo(() => {
+    const otros = puedeVerComo(yo, usuarios, accesos)
+    return yo ? [yo as Usuario, ...otros] : otros
+  }, [yo, usuarios, accesos])
+  const pedido = params.get(OBJETIVOS_DE_PARAM)
+  const personaId = pedido && elegibles.some(u => u.id === pedido) ? pedido : perspectivaId
+  const elegir = (id: string) => setParams(prev => {
+    const next = new URLSearchParams(prev)
+    if (id === perspectivaId) next.delete(OBJETIVOS_DE_PARAM)
+    else next.set(OBJETIVOS_DE_PARAM, id)
+    return next
+  }, { replace: true })
+  return { personaId, elegibles, elegir, cargando }
+}
+
+/** Las llamadas y demos de la persona elegida (`usePersonaDeObjetivos`) desde el día `desde` hasta
+ *  hoy inclusive. Son las suyas y no las de las carteras que estoy mirando: es el día de trabajo de
+ *  quien llama. La usan el contador y la lista (para `?objetivo=`), y con la misma clave es una
+ *  sola consulta. */
 export function useObjetivos(desde: string, activo = true) {
-  // Con «Ver como», las de la persona que se mira: es su día de trabajo el que se viene a ver.
-  const { perspectivaId: myId, cargando } = useVerComo()
+  const { personaId, cargando } = usePersonaDeObjetivos()
   const hasta = shiftIsoDate(localTodayIso(), 1)
   return useQuery({
-    ...consultaDeObjetivos(myId ?? '', desde, hasta),
-    enabled: !!myId && activo && !cargando,
+    ...consultaDeObjetivos(personaId ?? '', desde, hasta),
+    enabled: !!personaId && activo && !cargando,
+  })
+}
+
+/** «Hacia la próxima demo» de `autor` (17/11/2026, por pedido): las llamadas desde su última demo
+ *  agendada, **sin corte por día**. Solo agendar una demo lo vuelve a cero. */
+export function useHaciaLaProximaDemo(autor: string | null) {
+  return useQuery({
+    queryKey: CRM_KEYS.haciaLaProximaDemo(autor ?? ''),
+    queryFn: async () => {
+      const ultima = await ultimaDemoAgendada(autor!)
+      const llamadas = await actividadDesde(autor!, ultima)
+      return llamadasDesdeLaUltimaDemo(llamadas, ultima ? [{ created_at: ultima }] : [])
+    },
+    enabled: !!autor,
   })
 }
 

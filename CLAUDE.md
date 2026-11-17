@@ -712,6 +712,11 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   hora de la tarea ya no suena (`MINUTOS_DE_VIGENCIA`): abrir el CRM a la tarde no dispara las de
   la mañana. Las reglas son puras, en `lib/alarmas.ts`. Sin la migración corrida, la tarea sin hora
   se crea igual (no manda la columna) y la que tiene hora contesta `FALTA_MIGRACION`.
+- **Descartar pregunta primero «¿Cualifica?»** (17/11/2026, por pedido; `DescartarLeadDialog`):
+  «Podría calificar» muestra los motivos del catálogo más «Otro» escrito a mano, y los dos llevan
+  `recontact_at` a 6 meses (el grupo viaja en `VarsDescarte.grupo` y manda en `recontactoDeMotivo`,
+  porque un texto libre no tiene código del que sacarlo). «No califica ni calificará» es el descarte
+  definitivo: motivo escrito a mano, obligatorio, sin recontacto. Sin migración.
 - **Los descartados se ven eligiendo «Descartado» en el filtro «Estado»** (16/10/2026): por
   defecto no aparecen. Reemplazó al chip «Incluir descartados»; un `?includeDiscarded=` viejo se
   ignora. La búsqueda, «Para recontactar» y los objetivos los siguen trayendo solos.
@@ -799,9 +804,14 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   desde el lunes): el contador de la cabecera y su filtro `?objetivo=` cuentan **solo el día**, en
   tarjetas con ícono (cada una filtra), «Comparar» abre el diálogo (que arranca en «Hoy»). Al lado,
   **«Hacia la próxima demo»**: estadísticamente sale una demo cada `LLAMADAS_POR_DEMO` (95) llamadas
-  (contestadas + no respondidas). **Cuenta desde la última demo que agendaste hoy: agendar una la
-  vuelve a cero** (`llamadasDesdeLaUltimaDemo`, por el `created_at` de `crm_meetings`; el realtime ya
-  refresca). Barra roja sutil hasta la mitad, amarilla después y verde desde el 90 %
+  (contestadas + no respondidas). **Cuenta desde la última demo agendada, sin corte por día: solo
+  agendar una la vuelve a cero** (17/11/2026, por pedido; hasta ese día se reiniciaba cada día).
+  `useHaciaLaProximaDemo`: `ultimaDemoAgendada` (la `crm_meetings` más nueva que creó) y las llamadas
+  posteriores con `actividadDesde` (de a 1000), contadas por `llamadasDesdeLaUltimaDemo`; cuelga de
+  `CRM_KEYS.llamadas`, así el realtime refresca. **Arriba del contador se elige de quién**
+  (17/11/2026, por pedido): chips con yo y `puedeVerComo`, solo si veo a alguien más
+  (`usePersonaDeObjetivos`, `?objetivosDe=<id>`; sin él, el «yo» de pantalla). Cambia las tarjetas,
+  la barra y lo que filtra `?objetivo=` en la lista, sin abrir «Comparar». Barra roja sutil hasta la mitad, amarilla después y verde desde el 90 %
   (`progresoHaciaDemo`, `lib/objetivos.ts`); pasada 95 sin demo se queda llena y marca «+N».
   «No respondidas» es la primera columna. **Desde el 4/11/2026 (por pedido)** suma **«Decisores
   nuevos»** (la contestada con decisor en la que se habló con un decisor con quien nadie del equipo

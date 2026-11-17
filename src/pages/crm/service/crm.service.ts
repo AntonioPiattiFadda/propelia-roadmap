@@ -253,6 +253,32 @@ export async function demosAgendadas(autor: string, desde: string, hasta: string
   return data ?? []
 }
 
+/** Cuándo agendó `autor` su última demo (la reunión más nueva que creó), o null si nunca agendó. */
+export async function ultimaDemoAgendada(autor: string): Promise<string | null> {
+  const { data, error } = await supabase.from('crm_meetings').select('created_at')
+    .eq('created_by', autor).is('deleted_at', null)
+    .order('created_at', { ascending: false }).limit(1)
+  if (error) throw error
+  return data?.[0]?.created_at ?? null
+}
+
+/** Las actividades registradas por `autor` después de `desde` (null = todas), de a páginas de
+ *  1000: sin una demo en semanas pueden ser más de lo que la API devuelve de una. */
+export async function actividadDesde(autor: string, desde: string | null): Promise<{ lead_id: string | null; created_at: string; long_description: string | null }[]> {
+  const POR_PAGINA = 1000
+  const todas: { lead_id: string | null; created_at: string; long_description: string | null }[] = []
+  for (let i = 0; ; i += POR_PAGINA) {
+    let q = supabase.from('crm_comments').select('lead_id, created_at, long_description')
+      .eq('created_by', autor).eq('comment_type', 'MANUAL').is('deleted_at', null)
+      .like('long_description', '<!--act-->%')
+    if (desde) q = q.gt('created_at', desde)
+    const { data, error } = await q.order('created_at').range(i, i + POR_PAGINA - 1)
+    if (error) throw error
+    todas.push(...(data ?? []))
+    if (!data || data.length < POR_PAGINA) return todas
+  }
+}
+
 // ---------- Dashboard SDR (11/11/2026) ----------
 /** De a tantos ids por `.in()`: con cientos, la URL del GET se pasaría de largo. */
 const IDS_POR_PEDIDO = 100
