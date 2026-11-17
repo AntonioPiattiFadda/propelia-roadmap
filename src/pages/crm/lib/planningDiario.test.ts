@@ -3,12 +3,12 @@ import { horarioDeEspana, JORNADAS } from './planningDiario'
 
 describe('JORNADAS', () => {
   it('en verano Venezuela va 6 h atrás de España', () => {
-    expect(JORNADAS.verano.bloques.map(b => b.vzla)).toEqual(['04:00', '06:30', '07:00', '08:00', '09:00', '09:20', '09:40', '10:10'])
+    expect(JORNADAS.verano.bloques.map(b => b.vzla)).toEqual(['04:00', '04:30', '07:45', '08:00', '09:00', '09:30', '12:50'])
     expect(JORNADAS.verano.fin).toEqual({ vzla: '13:00', espana: '19:00' })
   })
 
   it('en invierno Venezuela va 5 h atrás de España', () => {
-    expect(JORNADAS.invierno.bloques.map(b => b.vzla)).toEqual(['05:00', '07:30', '08:00', '09:00', '10:00', '10:20', '10:40', '11:10'])
+    expect(JORNADAS.invierno.bloques.map(b => b.vzla)).toEqual(['05:00', '05:30', '08:45', '09:00', '10:00', '10:30', '13:50'])
     expect(JORNADAS.invierno.fin).toEqual({ vzla: '14:00', espana: '19:00' })
   })
 })

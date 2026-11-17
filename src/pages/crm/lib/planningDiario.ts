@@ -33,14 +33,13 @@ export function horarioDeEspana(fecha: Date = new Date()): Horario {
 
 /* Los bloques en hora de España son los mismos todo el año. */
 const BLOQUES: Omit<Bloque, 'vzla'>[] = [
-  { espana: '10:00', tipo: 'contactar', titulo: 'Por contactar', duracion: '2 h 30' },
-  { espana: '12:30', tipo: 'seguimiento', titulo: 'Seguimientos y tareas', duracion: '30 min' },
-  { espana: '13:00', tipo: 'contactar', titulo: 'Por contactar', duracion: '1 h' },
-  { espana: '14:00', tipo: 'pausa', titulo: 'Pausa', duracion: '1 h' },
-  { espana: '15:00', tipo: 'capacitacion', titulo: 'Capacitación', duracion: '20 min' },
-  { espana: '15:20', tipo: 'revision', titulo: 'Revisión tareas último día', duracion: '20 min' },
-  { espana: '15:40', tipo: 'seguimiento', titulo: 'Seguimientos y tareas', duracion: '30 min' },
-  { espana: '16:10', tipo: 'contactar', titulo: 'Por contactar', duracion: '2 h 50' },
+  { espana: '10:00', tipo: 'seguimiento', titulo: 'Seguimientos y tareas', duracion: '30 min' },
+  { espana: '10:30', tipo: 'contactar', titulo: 'Por contactar', duracion: '3 h 15' },
+  { espana: '13:45', tipo: 'seguimiento', titulo: 'Seguimientos y tareas', duracion: '15 min' },
+  { espana: '14:00', tipo: 'pausa', titulo: 'Comida', duracion: '1 h' },
+  { espana: '15:00', tipo: 'seguimiento', titulo: 'Seguimientos y tareas', duracion: '30 min' },
+  { espana: '15:30', tipo: 'contactar', titulo: 'Por contactar', duracion: '3 h 20' },
+  { espana: '18:50', tipo: 'revision', titulo: 'Tareas sin agendar', duracion: '10 min' },
 ]
 const FIN_ESPANA = '19:00'
 
