@@ -140,7 +140,7 @@ export function FiltrosCrm({ filtros, dashboard, contadores, etapas, conBuscador
                 {i > 0 && <DropdownMenuSeparator className="my-0.5" />}
                 {/* El título del subgrupo es un tilde más: marca o desmarca todos sus estados de una. */}
                 <DropdownMenuCheckboxItem
-                  className="rounded-md pt-1 pb-0.5 text-[10.5px] font-bold uppercase tracking-[0.07em] text-(--fg-2)"
+                  className="min-h-0 rounded-md pt-1 pb-0.5 text-[10px] leading-tight font-bold uppercase tracking-[0.07em] text-(--fg-2)"
                   checked={marcadas === 0 ? false : marcadas === ids.length ? true : 'indeterminate'}
                   onSelect={ev => ev.preventDefault()}
                   onCheckedChange={() => onCambiar({ stageFilter: alternarGrupo(filtros.stageFilter, ids) })}
@@ -153,13 +153,13 @@ export function FiltrosCrm({ filtros, dashboard, contadores, etapas, conBuscador
                 {g.etapas.map(e => (
                   <DropdownMenuCheckboxItem
                     key={e.id}
-                    className="rounded-md py-1 text-[12.5px]"
+                    className="min-h-0 rounded-md py-0.5 text-[11.5px] leading-tight"
                     checked={filtros.stageFilter.has(e.id)}
                     onSelect={ev => ev.preventDefault()}
                     onCheckedChange={() => onCambiar({ stageFilter: alternar(filtros.stageFilter, e.id) })}
                   >
                     <span className="flex-1">{e.label}</span>
-                    <span className="rounded-full bg-(--surface-2) px-1.5 text-[11px] font-semibold tabular-nums text-(--fg-muted)">
+                    <span className="rounded-full bg-(--surface-2) px-1.5 text-[10px] font-semibold tabular-nums text-(--fg-muted)">
                       {contadores.stageCount(e.id)}
                     </span>
                   </DropdownMenuCheckboxItem>
