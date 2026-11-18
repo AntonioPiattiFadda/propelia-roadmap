@@ -245,14 +245,16 @@ export function CampoDecisorApuntado({ id, valor, onCambiar, title }: { id: stri
    atendió no decide (`pideAvancesDelDecisor`). Reemplazó al campo libre (`CampoDecisorApuntado`,
    que sigue en la demo). Tres preguntas Sí/No con las pastillas de «¿Es decisor?»; las tres son
    obligatorias (registrar sin contestar una la pinta en rojo). El Sí abre su campo, que pasa a ser
-   obligatorio. El estado y las reglas son de `ActividadLead`. */
+   obligatorio. El estado y las reglas son de `ActividadLead`. La cuarta, «Horario del decisor
+   conseguido», entró el mismo día (por pedido): texto libre, que el doorkeeper da horarios vagos. */
 export type BloqueDelDecisor = {
   nombre: boolean | null; nombreValor: string
   telefono: boolean | null; telefonoValor: string; prefijo: string
+  horario: boolean | null; horarioValor: string
   email: boolean | null; emailValor: string
 }
 export const BLOQUE_DEL_DECISOR_VACIO: BloqueDelDecisor = {
-  nombre: null, nombreValor: '', telefono: null, telefonoValor: '', prefijo: PREFIJOS_DE_PAIS[0].prefijo, email: null, emailValor: '',
+  nombre: null, nombreValor: '', telefono: null, telefonoValor: '', prefijo: PREFIJOS_DE_PAIS[0].prefijo, horario: null, horarioValor: '', email: null, emailValor: '',
 }
 
 function FilaSiNo({ rotulo, valor, onCambiar, rojo, children }: {
@@ -278,7 +280,7 @@ function FilaSiNo({ rotulo, valor, onCambiar, rojo, children }: {
 export function BloqueDecisor({ valor, onCambiar, rojo }: {
   valor: BloqueDelDecisor
   onCambiar: (parcial: Partial<BloqueDelDecisor>) => void
-  rojo: { nombre: boolean; telefono: boolean; email: boolean }
+  rojo: { nombre: boolean; telefono: boolean; horario: boolean; email: boolean }
 }) {
   return (
     <fieldset className="flex flex-col gap-1 rounded-md px-3 pt-1 pb-2 [border:1px_solid_var(--line-soft)]">
@@ -300,6 +302,11 @@ export function BloqueDecisor({ valor, onCambiar, rojo }: {
             type="tel" inputMode="tel" aria-label="Teléfono del decisor" aria-invalid={rojo.telefono} placeholder="Número"
             title="Se carga en el perfil, en el contacto del decisor, al registrar" className={campoEscrito} />
         </span>
+      </FilaSiNo>
+      <FilaSiNo rotulo="Horario del decisor conseguido" valor={valor.horario} onCambiar={v => onCambiar({ horario: v })} rojo={rojo.horario}>
+        <input value={valor.horarioValor} onChange={e => onCambiar({ horarioValor: e.target.value })}
+          aria-label="Horario del decisor" aria-invalid={rojo.horario} placeholder="Ej.: martes y jueves de 10 a 12"
+          title="Cuándo se lo encuentra. Queda en la actividad" className={campoEscrito} />
       </FilaSiNo>
       <FilaSiNo rotulo="Email para enviar" valor={valor.email} onCambiar={v => onCambiar({ email: v })} rojo={rojo.email}>
         <input value={valor.emailValor} onChange={e => onCambiar({ emailValor: e.target.value })}

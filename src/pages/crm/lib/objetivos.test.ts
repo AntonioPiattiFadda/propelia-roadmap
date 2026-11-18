@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { armarMetaDeActividad } from './actividad'
-import { diasHaciaAtras, esObjetivo, LLAMADAS_POR_DEMO, mesesHaciaAtras, llamadasDesdeLaUltimaDemo, nutricionDeLaCuenta, objetivosDe, pendientesDePersona, progresoHaciaDemo, semanasHaciaAtras, sumarResumenes, tasaDeDecisor } from './objetivos'
+import { diaDeObjetivos, diasHaciaAtras, esObjetivo, LLAMADAS_POR_DEMO, mesesHaciaAtras, llamadasDesdeLaUltimaDemo, nutricionDeLaCuenta, objetivosDe, pendientesDePersona, progresoHaciaDemo, semanasHaciaAtras, sumarResumenes, tasaDeDecisor, tituloDeObjetivos } from './objetivos'
 import type { CrmLeadRow, CrmStage, CrmTask } from '../types'
 
 const llamada = (lead_id: string, resultado: 'contestada' | 'no_respondida', decisor?: boolean, con: string[] = [], created_at = '2026-11-03T10:00:00Z') => ({
@@ -9,33 +9,36 @@ const llamada = (lead_id: string, resultado: 'contestada' | 'no_respondida', dec
   long_description: armarMetaDeActividad({ tipo: 'llamada', con, resultado, ...(decisor !== undefined && { decisor }) }),
 })
 
-const cero = { contestadas: 0, decisores: 0, decisoresNuevos: 0, noRespondidas: 0, presentaciones: 0, nombresDecisor: 0, telefonosDecisor: 0, demos: 0 }
+const cero = { contestadas: 0, decisores: 0, decisoresNuevos: 0, noRespondidas: 0, presentaciones: 0, nombresDecisor: 0, telefonosDecisor: 0, horariosDecisor: 0, demos: 0 }
 
-describe('nombres y teléfonos de decisores conseguidos', () => {
+describe('nombres, teléfonos y horarios de decisores conseguidos', () => {
   const act = (lead_id: string, meta: Parameters<typeof armarMetaDeActividad>[0]) =>
     ({ lead_id, created_at: '2026-11-18T10:00:00Z', long_description: armarMetaDeActividad(meta) })
   const r = objetivosDe([
-    act('a', { tipo: 'llamada', con: ['Ana'], resultado: 'contestada', decisorApuntado: 'Pablo', telefonoDecisor: '+34600000000' }),
+    act('a', { tipo: 'llamada', con: ['Ana'], resultado: 'contestada', decisorApuntado: 'Pablo', telefonoDecisor: '+34600000000', horarioDecisor: 'martes de 10 a 12' }),
     act('a', { tipo: 'nota', con: [], decisorApuntado: 'Pablo' }),
-    act('b', { tipo: 'nota', con: [], telefonoDecisor: '+34611111111' }),
-    act('c', { tipo: 'llamada', con: [], resultado: 'contestada', decisorApuntado: '  ', telefonoDecisor: '' }), // vacíos: no
-    act('d', { tipo: 'demo', con: ['Ana'], decisorApuntado: 'Luis' }), // la demo no cuenta
+    act('b', { tipo: 'nota', con: [], telefonoDecisor: '+34611111111', horarioDecisor: 'por la tarde' }),
+    act('e', { tipo: 'nota', con: [], horarioDecisor: 'lunes' }),
+    act('c', { tipo: 'llamada', con: [], resultado: 'contestada', decisorApuntado: '  ', telefonoDecisor: '', horarioDecisor: ' ' }), // vacíos: no
+    act('d', { tipo: 'demo', con: ['Ana'], decisorApuntado: 'Luis', horarioDecisor: 'lunes' }), // la demo no cuenta
   ], [])
 
   it('cuenta actividades (llamada y nota), no leads', () => {
     expect(r.resumen.nombresDecisor).toBe(2)
     expect(r.resumen.telefonosDecisor).toBe(2)
+    expect(r.resumen.horariosDecisor).toBe(3)
   })
 
   it('junta los leads para filtrar', () => {
     expect([...r.leads.nombresDecisor]).toEqual(['a'])
     expect([...r.leads.telefonosDecisor].sort()).toEqual(['a', 'b'])
+    expect([...r.leads.horariosDecisor].sort()).toEqual(['a', 'b', 'e'])
   })
 })
 
 describe('nutricionDeLaCuenta', () => {
-  it('suma mails de presentación, nombres y teléfonos de decisores', () => {
-    expect(nutricionDeLaCuenta({ ...cero, presentaciones: 2, nombresDecisor: 3, telefonosDecisor: 1, contestadas: 9 })).toBe(6)
+  it('suma mails de presentación, nombres, teléfonos y horarios de decisores', () => {
+    expect(nutricionDeLaCuenta({ ...cero, presentaciones: 2, nombresDecisor: 3, telefonosDecisor: 1, horariosDecisor: 4, contestadas: 9 })).toBe(10)
   })
 })
 
@@ -103,6 +106,7 @@ describe('esObjetivo', () => {
     expect(esObjetivo('presentaciones')).toBe(true) // un enlace viejo sigue andando
     expect(esObjetivo('nombresDecisor')).toBe(true)
     expect(esObjetivo('telefonosDecisor')).toBe(true)
+    expect(esObjetivo('horariosDecisor')).toBe(true)
     expect(esObjetivo('otra')).toBe(false)
     expect(esObjetivo(null)).toBe(false)
   })
@@ -262,5 +266,33 @@ describe('llamadasDesdeLaUltimaDemo', () => {
   it('una nota no es una llamada', () => {
     const nota = { lead_id: 'l1', created_at: '2026-11-16T09:00:00', long_description: 'texto suelto' }
     expect(llamadasDesdeLaUltimaDemo([nota, a('10:00')], null).contestadas).toBe(1)
+  })
+})
+
+describe('tituloDeObjetivos', () => {
+  const hoy = '2026-11-18' // miércoles
+  it('hoy y ayer por su nombre', () => {
+    expect(tituloDeObjetivos(hoy, hoy)).toBe('Objetivos de hoy')
+    expect(tituloDeObjetivos('2026-11-17', hoy)).toBe('Objetivos de ayer')
+  })
+  it('otro día, con el día de la semana y d/m', () => {
+    expect(tituloDeObjetivos('2026-11-16', hoy)).toBe('Objetivos del lun 16/11')
+    expect(tituloDeObjetivos('2026-11-01', hoy)).toBe('Objetivos del dom 1/11')
+    expect(tituloDeObjetivos('2025-12-31', hoy)).toBe('Objetivos del mié 31/12')
+  })
+})
+
+describe('diaDeObjetivos', () => {
+  const hoy = '2026-11-18'
+  it('sin día pedido, hoy', () => {
+    expect(diaDeObjetivos(null, hoy)).toBe(hoy)
+  })
+  it('un día pasado válido vale', () => {
+    expect(diaDeObjetivos('2026-11-16', hoy)).toBe('2026-11-16')
+  })
+  it('uno roto o del futuro se ignora: es hoy', () => {
+    expect(diaDeObjetivos('ayer', hoy)).toBe(hoy)
+    expect(diaDeObjetivos('2026-02-31', hoy)).toBe(hoy)
+    expect(diaDeObjetivos('2026-11-19', hoy)).toBe(hoy)
   })
 })

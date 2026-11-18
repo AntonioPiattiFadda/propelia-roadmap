@@ -148,27 +148,61 @@ const DECISOR_DEL_CASILLERO: Record<CasilleroDeNombre, CampoDecisor> = {
   alternative_phone_2_note: 'alternative_phone_2_is_decision_maker',
 }
 
+type CampoOrigen = 'phone_source' | 'alternative_phone_1_source' | 'alternative_phone_2_source'
+const TELEFONO_DEL_CASILLERO: Record<CasilleroDeNombre, { telefono: CasilleroDeTelefono; origen: CampoOrigen }> = {
+  first_name: { telefono: 'phone', origen: 'phone_source' },
+  alternative_phone_1_note: { telefono: 'alternative_phone_1', origen: 'alternative_phone_1_source' },
+  alternative_phone_2_note: { telefono: 'alternative_phone_2', origen: 'alternative_phone_2_source' },
+}
+
+/** El patch de los contactos nuevos: nombres y decisores, y el teléfono (con su origen) que se
+ *  vacía al reusar la copia del de la oficina. */
+type PatchDeContactos = Partial<Record<CasilleroDeNombre, string> & Record<CampoDecisor, boolean>
+  & Record<CasilleroDeTelefono | CampoOrigen, string | null>>
+
 /**
  * Las personas escritas a mano al registrar una actividad («Hablaste con») que todavía no son
  * contactos se cargan solas en el perfil (16/10/2026, por pedido): el principal si está vacío del
  * todo (sin nombre ni teléfono), si no el primer alternativo libre. Sin teléfono: el número al que
  * se llamó puede ser de otro. Lo que no entra en los tres casilleros queda en `sinLugar` (la
  * actividad lo guarda igual). `decisor` es el nuevo que quedó como decisor, si lo hay.
+ * Sin casillero vacío (18/11/2026, por pedido) se reusa uno que solo tiene la copia del teléfono de
+ * la oficina (sin nombre, mismo número que `google_maps_phone`): primero los alternativos y después
+ * el principal, como «Agregar contacto» (`casilleroParaReusar`). Se le vacía el número, que ya vive
+ * en `google_maps_phone`. Una persona de verdad no se pisa nunca.
  */
 export function patchDeContactosNuevos(
-  client: ClienteConAlternativos & Pick<CrmClient, 'first_name' | 'last_name'>,
+  client: ClienteConAlternativos & Pick<CrmClient, 'first_name' | 'last_name'>
+    & Partial<Pick<CrmClient, 'google_maps_phone' | CampoOrigen>>,
   nombres: string[], decisor: string | null,
-): { patch: Partial<Record<CasilleroDeNombre, string> & Record<CampoDecisor, boolean>>; sinLugar: string[] } {
+): { patch: PatchDeContactos; sinLugar: string[] } {
   const libres: CasilleroDeNombre[] = []
   if (!client.first_name?.trim() && !client.last_name?.trim() && !client.phone?.trim()) libres.push('first_name')
   if (!client.alternative_phone_1?.trim() && !client.alternative_phone_1_note?.trim()) libres.push('alternative_phone_1_note')
   if (!client.alternative_phone_2?.trim() && !client.alternative_phone_2_note?.trim()) libres.push('alternative_phone_2_note')
-  const patch: ReturnType<typeof patchDeContactosNuevos>['patch'] = {}
+  const oficina = soloDigitos(client.google_maps_phone)
+  const sinNombre: Record<CasilleroDeNombre, boolean> = {
+    first_name: !client.first_name?.trim() && !client.last_name?.trim(),
+    alternative_phone_1_note: !client.alternative_phone_1_note?.trim(),
+    alternative_phone_2_note: !client.alternative_phone_2_note?.trim(),
+  }
+  const copiasDeLaOficina = oficina
+    ? (['alternative_phone_1_note', 'alternative_phone_2_note', 'first_name'] as const)
+      .filter(k => sinNombre[k] && soloDigitos(client[TELEFONO_DEL_CASILLERO[k].telefono]) === oficina)
+    : []
+  const patch: PatchDeContactos = {}
   const sinLugar: string[] = []
   for (const nombre of nombres) {
-    const casillero = libres.shift()
+    const vacio = libres.shift()
+    const casillero = vacio ?? copiasDeLaOficina.shift()
     if (!casillero) { sinLugar.push(nombre); continue }
     patch[casillero] = nombre
+    if (!vacio) {
+      const { telefono, origen } = TELEFONO_DEL_CASILLERO[casillero]
+      patch[telefono] = null
+      // Solo si tiene algo: la columna de origen puede no existir sin su migración.
+      if (client[origen]) patch[origen] = null
+    }
     if (nombre === decisor) patch[DECISOR_DEL_CASILLERO[casillero]] = true
   }
   return { patch, sinLugar }
@@ -211,7 +245,7 @@ const EMAIL_DEL_DECISOR: Record<CampoDecisor, CampoEmail> = {
 
 /** El patch de `conDatosDelDecisor`: el de los nuevos más teléfonos y emails. */
 export type PatchDelDecisor = ReturnType<typeof patchDeContactosNuevos>['patch']
-  & Partial<Record<CasilleroDeTelefono | CampoEmail, string>>
+  & Partial<Record<CampoEmail, string>>
 
 /** Lo conseguido del decisor al registrar una nota o una llamada (18/11/2026, por pedido). */
 export type DatosDelDecisor = { nombre?: string; telefono?: string; email?: string }

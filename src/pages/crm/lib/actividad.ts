@@ -64,6 +64,9 @@ export type MetaDeActividad = {
   decisorApuntado?: string
   /** Notas y llamadas (18/11/2026): el teléfono y el email del decisor conseguidos, si se dieron. */
   telefonoDecisor?: string
+  /** Notas y llamadas (18/11/2026, por pedido): cuándo se lo encuentra, en texto libre (el
+   *  doorkeeper da horarios vagos: «martes y jueves de 10 a 12», «por la tarde»). */
+  horarioDecisor?: string
   emailDecisor?: string
   /** Solo demos: el id de la reunión en `crm_meetings`. La actividad y la reunión se pintan como un
    *  solo renglón, y el día y la hora salen de la reunión: si la mueven, el registro no miente. */
@@ -94,7 +97,7 @@ export function pideAvancesDelDecisor(tipo: string, esDecisor: boolean | null): 
 
 /** Lo que va a `long_description`. Una nota sin nadie no guarda nada: es un comentario de siempre. */
 export function armarMetaDeActividad(meta: MetaDeActividad): string | null {
-  const conDecisor = meta.decisorApuntado || meta.telefonoDecisor || meta.emailDecisor
+  const conDecisor = meta.decisorApuntado || meta.telefonoDecisor || meta.horarioDecisor || meta.emailDecisor
   if (meta.tipo === 'nota' && meta.con.length === 0 && !conDecisor) return null
   return MARCA_ACTIVIDAD + JSON.stringify(meta)
 }
@@ -110,7 +113,7 @@ export function leerMetaDeActividad(guardado: string | null): MetaDeActividad | 
   try {
     const m: unknown = JSON.parse(guardado.slice(MARCA_ACTIVIDAD.length))
     if (typeof m !== 'object' || m === null) return null
-    const { tipo, con, resultado, decisor, telefono, decisorApuntado, telefonoDecisor, emailDecisor, reunion } = m as Record<string, unknown>
+    const { tipo, con, resultado, decisor, telefono, decisorApuntado, telefonoDecisor, horarioDecisor, emailDecisor, reunion } = m as Record<string, unknown>
     if (tipo !== 'nota' && tipo !== 'llamada' && tipo !== 'demo' && tipo !== 'demoHecha') return null
     if (!Array.isArray(con) || !con.every(c => typeof c === 'string')) return null
     if (resultado !== undefined && resultado !== 'contestada' && resultado !== 'no_respondida') return null
@@ -118,6 +121,7 @@ export function leerMetaDeActividad(guardado: string | null): MetaDeActividad | 
     if (telefono !== undefined && !esTelefonoGuardado(telefono)) return null
     if (decisorApuntado !== undefined && typeof decisorApuntado !== 'string') return null
     if (telefonoDecisor !== undefined && typeof telefonoDecisor !== 'string') return null
+    if (horarioDecisor !== undefined && typeof horarioDecisor !== 'string') return null
     if (emailDecisor !== undefined && typeof emailDecisor !== 'string') return null
     if (reunion !== undefined && typeof reunion !== 'string') return null
     return {
@@ -127,6 +131,7 @@ export function leerMetaDeActividad(guardado: string | null): MetaDeActividad | 
       ...(telefono !== undefined && { telefono: { numero: telefono.numero, etiqueta: telefono.etiqueta } }),
       ...(decisorApuntado !== undefined && { decisorApuntado }),
       ...(telefonoDecisor !== undefined && { telefonoDecisor }),
+      ...(horarioDecisor !== undefined && { horarioDecisor }),
       ...(emailDecisor !== undefined && { emailDecisor }),
       ...(reunion !== undefined && { reunion }),
     }
@@ -195,9 +200,10 @@ export function primeroLosUltimos<T>(xs: readonly T[], esUltimo: (x: T) => boole
   return [...xs.filter(esUltimo), ...xs.filter(x => !esUltimo(x))]
 }
 
-/** Lo conseguido del decisor en una nota o llamada (18/11/2026, por pedido): lo que haya. */
+/** Lo conseguido del decisor en una nota o llamada (18/11/2026, por pedido): lo que haya, en el
+ *  orden del bloque (nombre, teléfono, horario, email). */
 const conseguido = (meta: MetaDeActividad | null) =>
-  [meta?.decisorApuntado, meta?.telefonoDecisor, meta?.emailDecisor].map(x => x?.trim()).filter(Boolean).join(' · ')
+  [meta?.decisorApuntado, meta?.telefonoDecisor, meta?.horarioDecisor, meta?.emailDecisor].map(x => x?.trim()).filter(Boolean).join(' · ')
 
 /* El consejo de Claude ya no es actividad (17/10/2026, por pedido): lo que se muestra de él —
    personas y teléfonos— vive en la pestaña de la inmobiliaria (`investigacionDeClaude`). */

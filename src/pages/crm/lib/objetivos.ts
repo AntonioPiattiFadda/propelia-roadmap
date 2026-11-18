@@ -9,25 +9,27 @@ import type { CrmLeadRow, CrmStage, CrmTask } from '../types'
    filtre la lista (`?objetivo=`). Los números cuentan llamadas, mails y demos —tres llamadas al
    mismo lead son tres—; el filtro, leads. */
 export const OBJETIVOS = [
-  'contestadas', 'decisores', 'decisoresNuevos', 'noRespondidas', 'presentaciones', 'nombresDecisor', 'telefonosDecisor', 'demos',
+  'contestadas', 'decisores', 'decisoresNuevos', 'noRespondidas', 'presentaciones', 'nombresDecisor', 'telefonosDecisor', 'horariosDecisor', 'demos',
 ] as const
 export type Objetivo = typeof OBJETIVOS[number]
 
 /** «Nutrición de la cuenta» (18/11/2026, por pedido): lo que se consiguió de la cuenta además de
- *  hablar. Es un grupo y no un objetivo: suma, pero no filtra (filtra cada uno de los suyos). */
-export const NUTRICION_DE_LA_CUENTA = ['presentaciones', 'nombresDecisor', 'telefonosDecisor'] as const satisfies readonly Objetivo[]
+ *  hablar. Es un grupo y no un objetivo: suma, pero no filtra (filtra cada uno de los suyos). El
+ *  horario en que se encuentra al decisor entró el mismo día, por pedido. */
+export const NUTRICION_DE_LA_CUENTA = ['presentaciones', 'nombresDecisor', 'telefonosDecisor', 'horariosDecisor'] as const satisfies readonly Objetivo[]
 
 export function nutricionDeLaCuenta(resumen: Record<Objetivo, number>): number {
   return NUTRICION_DE_LA_CUENTA.reduce((s, k) => s + resumen[k], 0)
 }
 
-/** Lo que una llamada o nota (no la demo) dejó apuntado del decisor (18/11/2026): nombre y/o teléfono. */
+/** Lo que una llamada o nota (no la demo) dejó apuntado del decisor (18/11/2026): nombre, teléfono y/o horario. */
 function decisorConseguido(guardado: string | null): Objetivo[] {
   const m = leerMetaDeActividad(guardado)
   if (m?.tipo !== 'llamada' && m?.tipo !== 'nota') return []
   return [
     ...(m.decisorApuntado?.trim() ? ['nombresDecisor' as const] : []),
     ...(m.telefonoDecisor?.trim() ? ['telefonosDecisor' as const] : []),
+    ...(m.horarioDecisor?.trim() ? ['horariosDecisor' as const] : []),
   ]
 }
 
@@ -158,6 +160,23 @@ export function diasHaciaAtras(hoy: string, n: number, saltar = 0): PeriodoDeObj
       : `${DIAS_DE_SEMANA[new Date(y, m - 1, d).getDay()]} ${diaCorto(desde, hoy.slice(0, 4))}`
     return { desde, hasta: shiftIsoDate(desde, 1), label }
   })
+}
+
+/** El día que muestra «Objetivos de hoy» (18/11/2026, por pedido: las flechas del contador van a
+ *  días anteriores, `?objetivosDia=`). Sin pedir, uno roto o uno del futuro es hoy. */
+export function diaDeObjetivos(pedido: string | null | undefined, hoy: string): string {
+  if (!pedido || !/^\d{4}-\d{2}-\d{2}$/.test(pedido)) return hoy
+  // Un 31 de febrero no existe: correrlo cero días lo devuelve en marzo.
+  if (shiftIsoDate(pedido, 0) !== pedido) return hoy
+  return pedido > hoy ? hoy : pedido
+}
+
+/** El título del contador para `dia`: «Objetivos de hoy», «… de ayer» o «… del lun 16/11». */
+export function tituloDeObjetivos(dia: string, hoy: string): string {
+  if (dia === hoy) return 'Objetivos de hoy'
+  if (dia === shiftIsoDate(hoy, -1)) return 'Objetivos de ayer'
+  const [y, m, d] = dia.split('-').map(Number)
+  return `Objetivos del ${DIAS_DE_SEMANA[new Date(y, m - 1, d).getDay()]} ${d}/${m}`
 }
 
 /** `n` meses hacia atrás, saltando los `saltar` más nuevos; el más nuevo primero. El mes en curso

@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQueries, useQuery } from '@tanstack/react-query'
 import { localTodayIso, shiftIsoDate } from '@/lib/calendarDate'
-import { leadsConDecisor, llamadasDesdeLaUltimaDemo, objetivosDe } from '../lib/objetivos'
+import { diaDeObjetivos, leadsConDecisor, llamadasDesdeLaUltimaDemo, objetivosDe } from '../lib/objetivos'
 import { puedeVerComo } from '../lib/permisos'
 import { actividadDesde, demosAgendadas, historialDeActividad, metasDeActividad, presentacionesEnviadas, ultimaDemoAgendada } from '../service/crm.service'
 import type { Usuario } from '../types'
@@ -60,15 +60,36 @@ export function usePersonaDeObjetivos() {
   return { personaId, elegibles, elegir, cargando }
 }
 
-/** Las llamadas y demos de la persona elegida (`usePersonaDeObjetivos`) desde el día `desde` hasta
- *  hoy inclusive. Son las suyas y no las de las carteras que estoy mirando: es el día de trabajo de
- *  quien llama. La usan el contador y la lista (para `?objetivo=`), y con la misma clave es una
- *  sola consulta. */
-export function useObjetivos(desde: string, activo = true) {
+/** En la URL, qué día muestran los «Objetivos de hoy» (y filtra `?objetivo=`). Sin él, hoy. */
+export const OBJETIVOS_DIA_PARAM = 'objetivosDia'
+
+/**
+ * El día de los «Objetivos de hoy» (18/11/2026, por pedido): las flechas del contador van a días
+ * anteriores. Uno roto o del futuro se ignora (`diaDeObjetivos`); volver a hoy saca el parámetro.
+ */
+export function useDiaDeObjetivos() {
+  const [params, setParams] = useSearchParams()
+  const hoy = localTodayIso()
+  const dia = diaDeObjetivos(params.get(OBJETIVOS_DIA_PARAM), hoy)
+  const irA = (otro: string) => setParams(prev => {
+    const next = new URLSearchParams(prev)
+    const valido = diaDeObjetivos(otro, hoy)
+    if (valido === hoy) next.delete(OBJETIVOS_DIA_PARAM)
+    else next.set(OBJETIVOS_DIA_PARAM, valido)
+    return next
+  }, { replace: true })
+  return { dia, esHoy: dia === hoy, hoy, irA }
+}
+
+/** Las llamadas y demos de la persona elegida (`usePersonaDeObjetivos`) del día elegido
+ *  (`useDiaDeObjetivos`): [dia, dia + 1). Son las suyas y no las de las carteras que estoy mirando:
+ *  es el día de trabajo de quien llama. La usan el contador y la lista (para `?objetivo=`), y con
+ *  la misma clave es una sola consulta. */
+export function useObjetivos(activo = true) {
   const { personaId, cargando } = usePersonaDeObjetivos()
-  const hasta = shiftIsoDate(localTodayIso(), 1)
+  const { dia } = useDiaDeObjetivos()
   return useQuery({
-    ...consultaDeObjetivos(personaId ?? '', desde, hasta),
+    ...consultaDeObjetivos(personaId ?? '', dia, shiftIsoDate(dia, 1)),
     enabled: !!personaId && activo && !cargando,
   })
 }

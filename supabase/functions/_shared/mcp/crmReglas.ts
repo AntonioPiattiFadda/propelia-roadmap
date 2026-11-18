@@ -64,6 +64,7 @@ interface Meta {
   decisor?: boolean
   decisorApuntado?: string
   telefonoDecisor?: string
+  horarioDecisor?: string
 }
 
 /** Leída estricta, como el front: lo que no tiene la forma conocida no es una actividad. */
@@ -78,7 +79,8 @@ function metaDe(guardado: unknown): Meta | null {
     if (m.decisor !== undefined && typeof m.decisor !== 'boolean') return null
     if (m.decisorApuntado !== undefined && typeof m.decisorApuntado !== 'string') return null
     if (m.telefonoDecisor !== undefined && typeof m.telefonoDecisor !== 'string') return null
-    return { tipo: m.tipo, con: m.con, resultado: m.resultado, decisor: m.decisor, decisorApuntado: m.decisorApuntado, telefonoDecisor: m.telefonoDecisor }
+    if (m.horarioDecisor !== undefined && typeof m.horarioDecisor !== 'string') return null
+    return { tipo: m.tipo, con: m.con, resultado: m.resultado, decisor: m.decisor, decisorApuntado: m.decisorApuntado, telefonoDecisor: m.telefonoDecisor, horarioDecisor: m.horarioDecisor }
   } catch {
     return null
   }
@@ -87,23 +89,24 @@ function metaDe(guardado: unknown): Meta | null {
 /* ─── objetivos (lib/objetivos.ts) ─────────────────────────────────────── */
 
 export const OBJETIVOS = [
-  'contestadas', 'decisores', 'decisoresNuevos', 'noRespondidas', 'presentaciones', 'nombresDecisor', 'telefonosDecisor', 'demos',
+  'contestadas', 'decisores', 'decisoresNuevos', 'noRespondidas', 'presentaciones', 'nombresDecisor', 'telefonosDecisor', 'horariosDecisor', 'demos',
 ] as const
 export type Objetivo = (typeof OBJETIVOS)[number]
 
-/** «Nutrición de la cuenta»: mails de presentación + nombres + teléfonos de decisores conseguidos. */
-export const NUTRICION_DE_LA_CUENTA = ['presentaciones', 'nombresDecisor', 'telefonosDecisor'] as const satisfies readonly Objetivo[]
+/** «Nutrición de la cuenta»: mails de presentación + nombres + teléfonos + horarios de decisores conseguidos. */
+export const NUTRICION_DE_LA_CUENTA = ['presentaciones', 'nombresDecisor', 'telefonosDecisor', 'horariosDecisor'] as const satisfies readonly Objetivo[]
 export function nutricionDeLaCuenta(resumen: Record<Objetivo, number>): number {
   return NUTRICION_DE_LA_CUENTA.reduce((s, k) => s + resumen[k], 0)
 }
 
-/** Lo que una llamada o nota (no la demo) dejó apuntado del decisor: nombre y/o teléfono. */
+/** Lo que una llamada o nota (no la demo) dejó apuntado del decisor: nombre, teléfono y/o horario. */
 function decisorConseguido(guardado: unknown): Objetivo[] {
   const m = metaDe(guardado)
   if (m?.tipo !== 'llamada' && m?.tipo !== 'nota') return []
   return [
     ...(m.decisorApuntado?.trim() ? ['nombresDecisor' as const] : []),
     ...(m.telefonoDecisor?.trim() ? ['telefonosDecisor' as const] : []),
+    ...(m.horarioDecisor?.trim() ? ['horariosDecisor' as const] : []),
   ]
 }
 

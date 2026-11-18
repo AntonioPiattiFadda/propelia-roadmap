@@ -200,6 +200,23 @@ describe('patchDeContactosNuevos', () => {
     const lleno = { ...vacio, first_name: 'Laura', alternative_phone_1_note: 'Marc', alternative_phone_2_note: 'Ana' }
     expect(patchDeContactosNuevos(lleno, ['Pedro'], null)).toEqual({ patch: {}, sinLugar: ['Pedro'] })
   })
+  it('sin casillero vacío se reusa la copia del teléfono de la oficina: el número ya vive en google_maps_phone', () => {
+    const conOficina = { ...vacio, phone: '+34 935 59 20 19', phone_source: 'google_maps', google_maps_phone: '+34935592019',
+      alternative_phone_1_note: 'Marc', alternative_phone_2_note: 'Ana' }
+    expect(patchDeContactosNuevos(conOficina, ['Pedro'], 'Pedro'))
+      .toEqual({ patch: { first_name: 'Pedro', phone: null, phone_source: null, contact_is_decision_maker: true }, sinLugar: [] })
+  })
+  it('primero un vacío, después la oficina de un alternativo y recién después la del principal', () => {
+    const oficinas = { ...vacio, phone: '+34935592019', alternative_phone_1: '+34935592019', alternative_phone_2_note: 'Ana',
+      google_maps_phone: '+34935592019' }
+    expect(patchDeContactosNuevos(oficinas, ['Pedro', 'Luis'], null).patch)
+      .toEqual({ alternative_phone_1_note: 'Pedro', alternative_phone_1: null, first_name: 'Luis', phone: null })
+  })
+  it('una copia de la oficina con nombre ya es alguien: no se reusa', () => {
+    const lleno = { ...vacio, first_name: 'Laura', phone: '+34935592019', google_maps_phone: '+34935592019',
+      alternative_phone_1_note: 'Marc', alternative_phone_2_note: 'Ana' }
+    expect(patchDeContactosNuevos(lleno, ['Pedro'], null)).toEqual({ patch: {}, sinLugar: ['Pedro'] })
+  })
   it('el decisor se marca solo si el nuevo es el único con quien se habló y es decisor', () => {
     expect(patchDeContactosNuevos(vacio, ['Pedro'], 'Pedro').patch)
       .toEqual({ first_name: 'Pedro', contact_is_decision_maker: true })
@@ -275,6 +292,16 @@ describe('conDatosDelDecisor', () => {
     alternative_phone_2: null, alternative_phone_2_note: null, alternative_phone_2_email: null,
   }
   // `campo` es el contacto que quedó como decisor: el perfil lo fija al registrar.
+  it('otro decisor más aunque ya haya uno, en el casillero de la oficina, y queda para fijar', () => {
+    // El caso del 18/11/2026: se habló con pablo (nuevo), Sergio ya decidía y el principal era la oficina.
+    const perfil = { ...vacio, phone: '+34935592019', google_maps_phone: '+34935592019',
+      alternative_phone_2_note: 'Sergio', alternative_phone_2_is_decision_maker: true }
+    const r = conDatosDelDecisor(perfil, { alternative_phone_1_note: 'pablo' }, { nombre: 'pedro' })
+    expect(r).toEqual({
+      patch: { alternative_phone_1_note: 'pablo', first_name: 'pedro', phone: null, contact_is_decision_maker: true },
+      sinLugar: [], campo: 'contact_is_decision_maker',
+    })
+  })
   it('solo el nombre: lo mismo que el decisor apuntado', () => {
     expect(conDatosDelDecisor({ ...vacio, first_name: 'Laura', alternative_phone_1_note: 'Marc' }, {}, { nombre: 'marc' }))
       .toEqual({ patch: { alternative_phone_1_is_decision_maker: true }, sinLugar: [], campo: 'alternative_phone_1_is_decision_maker' })

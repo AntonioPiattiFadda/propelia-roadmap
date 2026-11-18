@@ -317,8 +317,9 @@ export function CrmLeadList({ resumen = false, conDashboard = false, conCarteras
   // propósito: cada vez que llegan datos nuevos (realtime, mutación) se toma un «ahora» nuevo, así
   // un descartado que llega a su fecha de recontactar con la pantalla abierta aparece en el
   // próximo refresco.
-  // Los de «Objetivos de hoy»: la misma consulta que el contador de arriba, sale de la caché.
-  const objetivosQ = useObjetivos(hoy, filtros.objetivo !== null)
+  // Los de «Objetivos de hoy» (del día de `?objetivosDia=`): la misma consulta que el contador de
+  // arriba, sale de la caché.
+  const objetivosQ = useObjetivos(filtros.objetivo !== null)
   const leadsDelObjetivo = filtros.objetivo ? objetivosQ.data?.leads[filtros.objetivo] : undefined
   const ctx = useMemo<LeadFilterContext>(
     () => ({ overdueLeadIds, leadIdsParaHoy, leadIdsConTareas, leadIdsConTareasMias, etapas: cat.etapasPorId, now: Date.now(), leadsDelObjetivo }),

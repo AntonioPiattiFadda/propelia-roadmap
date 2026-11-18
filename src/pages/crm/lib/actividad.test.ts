@@ -63,15 +63,17 @@ describe('lineaDeTiempo', () => {
       created_at: '2026-11-18T10:00:00Z', deleted_at: null,
       long_description: armarMetaDeActividad({ tipo: 'llamada', con: ['Ana'], resultado: 'contestada', decisor: false, ...meta }),
     })
-    const [todo, soloTel, nada] = lineaDeTiempo({ ...vacio, comments: [
-      llamada('t', { decisorApuntado: 'Pablo', telefonoDecisor: '+34 600 000 000', emailDecisor: 'pablo@x.com' }),
+    const [todo, soloTel, nada, soloHorario] = lineaDeTiempo({ ...vacio, comments: [
+      llamada('t', { decisorApuntado: 'Pablo', telefonoDecisor: '+34 600 000 000', horarioDecisor: 'martes 10-12', emailDecisor: 'pablo@x.com' }),
       llamada('u', { telefonoDecisor: '+34 600 000 000' }),
       llamada('v', {}),
+      llamada('w', { horarioDecisor: 'por la tarde' }),
     ] }, usuarios)
-    expect(todo.decisorConseguido).toBe('Pablo · +34 600 000 000 · pablo@x.com')
+    expect(todo.decisorConseguido).toBe('Pablo · +34 600 000 000 · martes 10-12 · pablo@x.com')
     expect(todo.texto).toBe('Pidió precio')
     expect(soloTel.decisorConseguido).toBe('+34 600 000 000')
     expect(nada.decisorConseguido).toBeUndefined()
+    expect(soloHorario.decisorConseguido).toBe('por la tarde')
   })
 
   it('ordena de lo más viejo a lo más nuevo (el chat se lee de arriba abajo)', () => {
@@ -231,15 +233,18 @@ describe('metaDeActividad', () => {
   })
   it('ida y vuelta: los datos del decisor conseguidos en la llamada (18/11/2026)', () => {
     const llamada = { tipo: 'llamada' as const, con: ['Laura'], resultado: 'contestada' as const, decisor: false,
-      decisorApuntado: 'Jordi', telefonoDecisor: '+34 600 111 222', emailDecisor: 'jordi@agencia.es' }
+      decisorApuntado: 'Jordi', telefonoDecisor: '+34 600 111 222', horarioDecisor: 'martes y jueves de 10 a 12', emailDecisor: 'jordi@agencia.es' }
     expect(leerMetaDeActividad(armarMetaDeActividad(llamada))).toEqual(llamada)
   })
   it('una nota sin nadie pero con datos del decisor sí guarda la meta', () => {
     const nota = { tipo: 'nota' as const, con: [], emailDecisor: 'jordi@agencia.es' }
     expect(leerMetaDeActividad(armarMetaDeActividad(nota))).toEqual(nota)
+    const conHorario = { tipo: 'nota' as const, con: [], horarioDecisor: 'por la mañana' }
+    expect(leerMetaDeActividad(armarMetaDeActividad(conHorario))).toEqual(conHorario)
   })
-  it('el teléfono o el email del decisor con otra forma no es meta', () => {
+  it('el teléfono, el horario o el email del decisor con otra forma no es meta', () => {
     expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"telefonoDecisor":3}')).toBeNull()
+    expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"horarioDecisor":10}')).toBeNull()
     expect(leerMetaDeActividad('<!--act-->{"tipo":"nota","con":[],"emailDecisor":false}')).toBeNull()
   })
 })

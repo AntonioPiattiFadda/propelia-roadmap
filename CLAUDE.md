@@ -194,7 +194,9 @@ acá son las reuniones del CRM (`crm_meetings`, las demos incluidas). Migración
   si arranca antes de las 11:30, también del día anterior («… de mañana …», salvo que ya haya pasado),
   con hora para que suene la alarma (`tareasDeConfirmacionDeDemo`, `lib/confirmacionDeDemo.ts`). Se
   crean después de mover la etapa (el trigger mira la final); si fallan, la demo queda y un toast
-  avisa. Reprogramar o cancelar la demo no las toca. **Guardada la demo, `DemoAgendadaDialog` ofrece «Avisar por WhatsApp»** (23/10/2026,
+  avisa. Reprogramar o cancelar la demo no las toca. **Y las de cerrar la venta** (18/11/2026, por
+  pedido): con las de confirmar nacen «Cerrar venta» a los 5 días de la demo y «Cerrar venta con
+  promoción (descuento)» a los 10, a las 10:00 de España (`tareasDeCierreDeDemo`, `lib/cierreDeDemo.ts`). **Guardada la demo, `DemoAgendadaDialog` ofrece «Avisar por WhatsApp»** (23/10/2026,
   por pedido): abre el chat con `+34 675 24 91 46` (`WHATSAPP_AVISO_DE_DEMO`) y un mensaje festivo con
   inmobiliaria, día y hora **de España**, responsable, quién la agendó, invitación, asistentes, decisor,
   etapa y notas (`mensajeDeDemoAgendada`, `lib/avisoDeDemo.ts`). No manda nada solo: lo envía quien agenda.
@@ -599,12 +601,20 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   Sí vuelve obligatorio su campo. Al registrar, `conDatosDelDecisor` (`lib/clientData.ts`) suma al mismo patch del perfil el
   nombre (como `conDecisorApuntado`), el teléfono en el casillero de ese contacto (sin nombre: el contacto
   con ese número, o un casillero libre con solo el número, marcado decisor y sin nombre inventado) y el
-  email en el del contacto decisor; nunca pisa, y lo que no entra avisa con un toast. **Ese contacto
+  email en el del contacto decisor; nunca pisa, y lo que no entra avisa con un toast. **Puede haber
+  varios decisores**: uno nuevo se carga en otro casillero aunque el perfil ya tenga otro. Y sin
+  casillero vacío (18/11/2026, por pedido) `patchDeContactosNuevos` reusa el que solo tiene la copia
+  del teléfono de la oficina (sin nombre, mismo número que `google_maps_phone`; primero los
+  alternativos), vaciándole el número, como «Agregar contacto»: antes el decisor apuntado se perdía
+  con el perfil «lleno» de una persona y la oficina. **Ese contacto
   se fija al registrar** (el `campo` que devuelve `conDatosDelDecisor` va a `onDecisorContactado`),
   aunque ya fuera decisor. La meta lleva `decisorApuntado`, `telefonoDecisor` y `emailDecisor`, y la
   actividad los muestra debajo de la llamada: «Decisor conseguido: nombre · teléfono · email», lo que
   haya (`decisorConseguido` de `lineaDeTiempo`, aparte del texto que se edita). Con «Email para enviar» en Sí, registrada la
   actividad se abre «Mensajes» en Email con ese «Para» (`canalInicial`/`paraInicial`). Sin migración.
+  **Ese mismo día (por pedido) entró una cuarta, «Horario del decisor conseguido»**, después del teléfono:
+  obligatoria como las otras y con el Sí un texto libre obligatorio («Ej.: martes y jueves de 10 a 12»; el
+  doorkeeper da horarios vagos) que va solo a la meta (`horarioDecisor`) y a «Decisor conseguido», no al perfil.
 - **La llamada con el decisor lo fija en el perfil** (17/10/2026): reemplazó al cartel «Decisor
   contactado» (16/10). El contacto queda marcado como decisor (y se crea si se escribió a mano) y
   se fija (`decisoresDeLaLlamada()`, `lib/clientData.ts`; el fijado es de cada navegador). Con varios
@@ -823,13 +833,21 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   vez no avisa nada, y lo agendado con la app cerrada avisa al abrirla. Sin push, como las alarmas.
 - **«Objetivos de hoy»** (16/11/2026, por pedido; del 17/10 al 16/11/2026 fue «Objetivos semanales»,
   desde el lunes): el contador de la cabecera y su filtro `?objetivo=` cuentan **solo el día**, en
-  tarjetas con ícono (cada una filtra), «Comparar» abre el diálogo (que arranca en «Hoy»). Al lado,
+  tarjetas con ícono (cada una filtra), «Comparar» abre el diálogo (que arranca en «Hoy»). **Desde el
+  18/11/2026 (por pedido) unas flechas sutiles al lado del título van a días anteriores**
+  (`?objetivosDia=`, `useDiaDeObjetivos`; sin él, uno roto o del futuro es hoy, `diaDeObjetivos`): el
+  título dice «de hoy», «de ayer» o «del lun 16/11» (`tituloDeObjetivos`) y cambian las tarjetas y lo
+  que filtra `?objetivo=` en la lista, no «Hacia la próxima demo». Ese día la tabla de «Comparar» pasó
+  al diseño de las tarjetas: cada número en un círculo chico (`Circulo`, compartido) y cada encabezado
+  con su ícono en un círculo; los commits pintan su círculo verde o rojo. Al lado,
   **«Hacia la próxima demo»**: estadísticamente sale una demo cada `LLAMADAS_POR_DEMO` (70) llamadas
   **contestadas** (17/11/2026, por pedido; antes 95 contando también las no respondidas). Tocar la caja
   abre un popover con cuándo se agendó la demo anterior y las contestadas acumuladas por día
   (`porDia` de `llamadasDesdeLaUltimaDemo`). **Cuenta desde la última demo agendada, sin corte por día: solo
   agendar una la vuelve a cero** (17/11/2026, por pedido; hasta ese día se reiniciaba cada día).
-  `useHaciaLaProximaDemo`: `ultimaDemoAgendada` (la `crm_meetings` más nueva que creó) y las llamadas
+  `useHaciaLaProximaDemo`: `ultimaDemoAgendada` (la `crm_meetings` más nueva que creó **y que es una
+  demo**: con lead, sin `onboarding_task` y título que empieza con «Demo»; 18/11/2026, por pedido, otra
+  reunión de la Agenda no lo vuelve a cero) y las llamadas
   posteriores con `actividadDesde` (de a 1000), contadas por `llamadasDesdeLaUltimaDemo`; cuelga de
   `CRM_KEYS.llamadas`, así el realtime refresca. **Arriba del contador se elige de quién**
   (17/11/2026, por pedido): chips con yo y `puedeVerComo`, solo si veo a alguien más
@@ -861,6 +879,8 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   leads). Tocarlo despliega o pliega los tres (nace plegado, salvo con `?objetivo=` de uno de ellos),
   teñidos de la marca como subgrupo; el grupo no filtra, cada uno de los suyos sí (`?objetivo=nombresDecisor`
   / `telefonosDecisor`; `presentaciones` sigue valiendo). Espejo en el MCP (`crmReglas.ts`, `get_crm_goals`).
+  Ese mismo día (por pedido) el grupo sumó un cuarto, «Horarios del decisor conseguidos» (`horariosDecisor`,
+  llamadas y notas con `horarioDecisor` en la meta, `?objetivo=horariosDecisor`), también en el MCP.
 - **«Dashboard SDR»** (11/11/2026, por pedido; inspirado en un «SDR Pro Dashboard» de afuera, sin su
   marca): botón del diálogo de Objetivos que abre un diálogo casi a pantalla completa
   (`DashboardSdrDialog`, reglas puras en `lib/dashboardSdr.ts`, datos en `useDashboardSdr`). Una

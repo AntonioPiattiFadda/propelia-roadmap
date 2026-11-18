@@ -1188,6 +1188,7 @@ function numerosDeObjetivos(r: Record<Objetivo, number>) {
     presentaciones_con_video: r.presentaciones,
     nombres_de_decisores: r.nombresDecisor,
     telefonos_de_decisores: r.telefonosDecisor,
+    horarios_de_decisores: r.horariosDecisor,
     demos_agendadas: r.demos,
   }
 }
@@ -1198,10 +1199,11 @@ const QUE_ES_CADA_OBJETIVO = {
   con_decisor: 'Contestadas en las que quien atendió decide. Son también contestadas.',
   decisores_nuevos: 'Contestadas con un decisor con quien nadie del equipo había hablado antes en ese lead (por nombre).',
   no_respondidas: 'Llamadas registradas como no respondidas.',
-  nutricion_de_la_cuenta: 'Suma de presentaciones_con_video, nombres_de_decisores y telefonos_de_decisores.',
+  nutricion_de_la_cuenta: 'Suma de presentaciones_con_video, nombres_de_decisores, telefonos_de_decisores y horarios_de_decisores.',
   presentaciones_con_video: 'Mails «Presentación con vídeo» enviados, sin los que Resend no llegó a mandar.',
   nombres_de_decisores: 'Llamadas y notas registradas con el nombre del decisor conseguido (cuenta actividades).',
   telefonos_de_decisores: 'Llamadas y notas registradas con el teléfono del decisor conseguido (cuenta actividades; el número no sale).',
+  horarios_de_decisores: 'Llamadas y notas registradas con el horario en que se encuentra al decisor (cuenta actividades).',
   demos_agendadas: 'Reuniones que esa persona agendó en el período (cuenta cuándo se agendaron, no para cuándo son).',
   decisor_por_contactado: 'De las inmobiliarias que contestaron, qué parte tuvo una llamada con decisor (cuenta inmobiliarias).',
   pendiente_ahora: 'Hoy, no en el período: tareas suyas vencidas (la de hoy no) y leads de su cartera en Seguimiento sin tarea suya.',
@@ -1212,7 +1214,8 @@ const getCrmGoals: McpToolDef = {
   title: 'Objetivos semanales',
   description:
     'Los «Objetivos» del CRM, como el contador de la cabecera y su diálogo: llamadas contestadas, con decisor, decisores ' +
-    'nuevos, no respondidas, mails de presentación, demos agendadas y la tasa «decisor por contactado», por persona y período ' +
+    'nuevos, no respondidas, nutrición de la cuenta (mails de presentación y nombres, teléfonos y horarios de decisores ' +
+    'conseguidos), demos agendadas y la tasa «decisor por contactado», por persona y período ' +
     '(hora de España). Con varias personas suma un total. También dice qué tiene pendiente ahora cada una. Por defecto, esta ' +
     'semana (desde el lunes) del usuario conectado. Los números de otro salen de lo que el usuario puede ver, como «Ver como».',
   inputSchema: {

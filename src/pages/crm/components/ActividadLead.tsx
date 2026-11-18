@@ -306,8 +306,9 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   const pideDecisor = tipo === 'llamada' && eligioConQuien && sabido === null
   /* «Avances para contactar al decisor» (18/11/2026, por pedido; `BloqueDecisor`): solo en la
      llamada y solo cuando quien atendió no decide (lo contestado o lo que ya sabe el perfil), haya
-     o no un decisor en el perfil. Tres Sí/No obligatorios: el nombre, el teléfono y el email. Lo
-     conseguido va al perfil (`conDatosDelDecisor`) y a la meta de la actividad; con el email en Sí,
+     o no un decisor en el perfil. Cuatro Sí/No obligatorios: el nombre, el teléfono, el horario en
+     que se lo encuentra y el email. Lo conseguido va al perfil (`conDatosDelDecisor`; el horario no,
+     queda solo en la actividad) y a la meta de la actividad; con el email en Sí,
      registrar abre «Mensajes» en Email con ese «Para». La nota ya no lo lleva. */
   const pideDecisorApuntado = pideAvancesDelDecisor(tipo, sabido ?? decisor)
   const [bloqueDecisor, setBloqueDecisor] = useState<BloqueDelDecisor>(BLOQUE_DEL_DECISOR_VACIO)
@@ -323,17 +324,20 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   const decisorApuntado = bloqueDecisor.nombre ? bloqueDecisor.nombreValor.trim().replace(/\s+/g, ' ') : ''
   const telefonoDelDecisor = bloqueDecisor.telefono
     ? telefonoEscrito([], conPrefijoDePais(bloqueDecisor.prefijo, bloqueDecisor.telefonoValor))?.numero ?? '' : ''
+  const horarioDelDecisor = bloqueDecisor.horario ? bloqueDecisor.horarioValor.trim().replace(/\s+/g, ' ') : ''
   const emailDelDecisor = bloqueDecisor.email && esEmailValido(bloqueDecisor.emailValor) ? bloqueDecisor.emailValor.trim() : ''
-  // Las tres se contestan siempre, Sí o No (18/11/2026, por pedido); el Sí además pide su campo.
+  // Las cuatro se contestan siempre, Sí o No (18/11/2026, por pedido); el Sí además pide su campo.
   const faltaDelDecisor = {
     nombre: pideDecisorApuntado && (bloqueDecisor.nombre === null || (bloqueDecisor.nombre && !decisorApuntado)),
     telefono: pideDecisorApuntado && (bloqueDecisor.telefono === null || (bloqueDecisor.telefono && !telefonoDelDecisor)),
+    horario: pideDecisorApuntado && (bloqueDecisor.horario === null || (bloqueDecisor.horario && !horarioDelDecisor)),
     email: pideDecisorApuntado && (bloqueDecisor.email === null || (bloqueDecisor.email && !emailDelDecisor)),
   }
   // Lo del decisor que va en la meta de la actividad: solo lo que se pidió y se escribió.
   const metaDelDecisor = pideDecisorApuntado ? {
     ...(decisorApuntado && { decisorApuntado }),
     ...(telefonoDelDecisor && { telefonoDecisor: telefonoDelDecisor }),
+    ...(horarioDelDecisor && { horarioDecisor: horarioDelDecisor }),
     ...(emailDelDecisor && { emailDecisor: emailDelDecisor }),
   } : {}
   // El mail al decisor se abre con la actividad ya registrada; `n` remonta el dialog cada vez.
@@ -436,6 +440,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     texto: tipo === 'nota' && !limpio,
     decisorNombre: faltaDelDecisor.nombre,
     decisorTelefono: faltaDelDecisor.telefono,
+    decisorHorario: faltaDelDecisor.horario,
     decisorEmail: faltaDelDecisor.email,
   }
   const enRojo = (k: keyof typeof falta) => intento && falta[k]
@@ -727,7 +732,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
             {tipo === 'llamada' && eligioConQuien && sabido !== null && <NotaDeDecisorSabido sabido={sabido} />}
             {pideDecisorApuntado && (
               <BloqueDecisor valor={bloqueDecisor} onCambiar={cambiarBloqueDecisor}
-                rojo={{ nombre: enRojo('decisorNombre'), telefono: enRojo('decisorTelefono'), email: enRojo('decisorEmail') }} />
+                rojo={{ nombre: enRojo('decisorNombre'), telefono: enRojo('decisorTelefono'), horario: enRojo('decisorHorario'), email: enRojo('decisorEmail') }} />
             )}
             <textarea
               value={texto}

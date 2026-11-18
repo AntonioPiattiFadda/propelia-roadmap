@@ -50,23 +50,24 @@ Deno.test('objetivos: decisor nuevo por nombre contra el historial del lead, y l
   ]
   const o = objetivosDe(llamadas, [{ lead_id: 'l2' }], { presentaciones: [{ lead_id: 'l5' }], historial })
   assertEquals(o.resumen, {
-    contestadas: 4, decisores: 3, decisoresNuevos: 1, noRespondidas: 1, presentaciones: 1, nombresDecisor: 0, telefonosDecisor: 0, demos: 1,
+    contestadas: 4, decisores: 3, decisoresNuevos: 1, noRespondidas: 1, presentaciones: 1, nombresDecisor: 0, telefonosDecisor: 0, horariosDecisor: 0, demos: 1,
   })
   assertEquals(tasaDeDecisor([o]), { contestadas: 3, con_decisor: 2, tasa: 0.667 })
   assertEquals(tasaDeDecisor([objetivosDe([], [])]).tasa, null)
 })
 
-Deno.test('objetivos: nombres y teléfonos de decisores conseguidos en llamadas y notas, y la nutrición', () => {
+Deno.test('objetivos: nombres, teléfonos y horarios de decisores conseguidos en llamadas y notas, y la nutrición', () => {
   const llamadas = [
-    llamada('l1', '2026-11-18T10:00:00Z', { resultado: 'contestada', decisorApuntado: 'Pablo', telefonoDecisor: '+34600000000' }),
-    { lead_id: 'l2', created_at: '2026-11-18T11:00:00Z', long_description: act({ tipo: 'nota', con: [], decisorApuntado: 'Ana' }) },
-    llamada('l3', '2026-11-18T12:00:00Z', { resultado: 'contestada', decisorApuntado: ' ' }), // vacío: no
-    { lead_id: 'l4', created_at: '2026-11-18T13:00:00Z', long_description: act({ tipo: 'demo', con: [], decisorApuntado: 'Luis' }) }, // demo: no
+    llamada('l1', '2026-11-18T10:00:00Z', { resultado: 'contestada', decisorApuntado: 'Pablo', telefonoDecisor: '+34600000000', horarioDecisor: 'martes de 10 a 12' }),
+    { lead_id: 'l2', created_at: '2026-11-18T11:00:00Z', long_description: act({ tipo: 'nota', con: [], decisorApuntado: 'Ana', horarioDecisor: 'por la tarde' }) },
+    llamada('l3', '2026-11-18T12:00:00Z', { resultado: 'contestada', decisorApuntado: ' ', horarioDecisor: '' }), // vacíos: no
+    { lead_id: 'l4', created_at: '2026-11-18T13:00:00Z', long_description: act({ tipo: 'demo', con: [], decisorApuntado: 'Luis', horarioDecisor: 'lunes' }) }, // demo: no
   ]
   const o = objetivosDe(llamadas, [], { presentaciones: [{ lead_id: 'l5' }] })
-  assertEquals([o.resumen.nombresDecisor, o.resumen.telefonosDecisor], [2, 1])
+  assertEquals([o.resumen.nombresDecisor, o.resumen.telefonosDecisor, o.resumen.horariosDecisor], [2, 1, 2])
   assertEquals([...o.leads.nombresDecisor].sort(), ['l1', 'l2'])
-  assertEquals(nutricionDeLaCuenta(o.resumen), 4)
+  assertEquals([...o.leads.horariosDecisor].sort(), ['l1', 'l2'])
+  assertEquals(nutricionDeLaCuenta(o.resumen), 6)
 })
 
 Deno.test('pendiente agendar: Seguimiento que deja tareas y sin tarea de quien mira', () => {

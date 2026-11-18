@@ -1,12 +1,12 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  CalendarCheckIcon, CalendarDaysIcon, ChartColumnIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClockAlertIcon,
+  CalendarCheckIcon, CalendarDaysIcon, ChartColumnIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClockAlertIcon, ClockIcon,
   ContactIcon, HandshakeIcon, InfoIcon, MailIcon, PercentIcon, PhoneCallIcon, PhoneIcon, PhoneMissedIcon, SmartphoneIcon,
   SparklesIcon, SproutIcon, TargetIcon, UserCheckIcon, UsersIcon,
   type LucideIcon,
 } from 'lucide-react'
-import { localTodayIso } from '@/lib/calendarDate'
+import { localTodayIso, shiftIsoDate } from '@/lib/calendarDate'
 import { cn } from '@/lib/utils'
 import { AvatarUsuario } from '@/components/AvatarUsuario'
 import { Button } from '@/components/ui/button'
@@ -17,14 +17,14 @@ import { useCarteras } from '../hooks/useCarteras'
 import { useCommits, useGuardarCommit } from '../hooks/useCommits'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
-import { useHaciaLaProximaDemo, useObjetivos, useObjetivosDeVarios, usePersonaDeObjetivos } from '../hooks/useObjetivos'
+import { useDiaDeObjetivos, useHaciaLaProximaDemo, useObjetivos, useObjetivosDeVarios, usePersonaDeObjetivos } from '../hooks/useObjetivos'
 import { useVerComo } from '../hooks/useVerComo'
 import { commitDelPeriodo, esDiaHabil, tonoDelCommit, type CampoDeCommit, type Commits } from '../lib/commits'
 import { escribirFiltros, filtrosDesdeUrl } from '../lib/leadFilterParams'
 import { hitoAlcanzado, mensajeDePropelin } from '../lib/propelin'
 import {
   diasHaciaAtras, LLAMADAS_POR_DEMO, mesesHaciaAtras, NUTRICION_DE_LA_CUENTA, nutricionDeLaCuenta, pendientesDePersona,
-  progresoHaciaDemo, semanasHaciaAtras, sumarResumenes, tasaDeDecisor,
+  progresoHaciaDemo, semanasHaciaAtras, sumarResumenes, tasaDeDecisor, tituloDeObjetivos,
   type HaciaLaProximaDemo as DatosHaciaDemo, type Objetivo, type PeriodoDeObjetivos, type TonoDeProgreso,
 } from '../lib/objetivos'
 import { esSuperadmin, puedeVerComo } from '../lib/permisos'
@@ -49,7 +49,7 @@ const COLUMNAS: Columna[] = [
     explicacion: 'Cada «Llamada» registrada: alguien de la inmobiliaria atendió, decida o no. Cuenta llamadas.',
     fuente: `${LLAMADAS_DE_LA_PERSONA}, de tipo llamada y resultado contestada.`,
   },
-  // «Nutrición de la cuenta» va a la izquierda de «Con decisor» (18/11/2026, por pedido): sus tres
+  // «Nutrición de la cuenta» va a la izquierda de «Con decisor» (18/11/2026, por pedido): sus cuatro
   // columnas van seguidas y se ven solo con el grupo desplegado (`piezas`).
   {
     k: 'presentaciones', enGrupo: true, label: 'Mails de presentación', title: 'Mails «Presentación con vídeo» enviados',
@@ -65,6 +65,12 @@ const COLUMNAS: Columna[] = [
     k: 'telefonosDecisor', enGrupo: true, label: 'Teléfonos de decisores conseguidos', title: 'Actividades en las que apuntaste el teléfono del decisor',
     explicacion: 'Cada llamada o nota registrada con «Teléfono del decisor conseguido» en Sí y el número escrito. Cuenta actividades, no inmobiliarias.',
     fuente: `${LLAMADAS_DE_LA_PERSONA}, de tipo llamada o nota y con telefonoDecisor escrito en la meta.`,
+  },
+  // El horario en que se encuentra al decisor (18/11/2026, por pedido): la cuarta del grupo.
+  {
+    k: 'horariosDecisor', enGrupo: true, label: 'Horarios del decisor conseguidos', title: 'Actividades en las que apuntaste el horario en que se encuentra al decisor',
+    explicacion: 'Cada llamada o nota registrada con «Horario del decisor conseguido» en Sí y el horario escrito (texto libre: «martes y jueves de 10 a 12»). Cuenta actividades, no inmobiliarias.',
+    fuente: `${LLAMADAS_DE_LA_PERSONA}, de tipo llamada o nota y con horarioDecisor escrito en la meta.`,
   },
   {
     k: 'decisores', label: 'Con decisor', title: 'De las contestadas, en cuántas hablaste con alguien que decide',
@@ -92,15 +98,15 @@ const TASA: Explicado = {
 
 const NUTRICION: Explicado = {
   label: 'Nutrición de la cuenta',
-  title: 'Mails de presentación, nombres y teléfonos de decisores conseguidos, sumados',
-  explicacion: 'Lo que se consiguió de la cuenta además de hablar: la suma de «Mails de presentación», «Nombres de decisores conseguidos» y «Teléfonos de decisores conseguidos». Tocalo para desplegar o plegar los tres; cada uno filtra la lista, el grupo no.',
-  fuente: 'La suma de las tres columnas del grupo: crm_emails (presentacion-video) y la meta de las actividades en crm_comments (decisorApuntado y telefonoDecisor).',
+  title: 'Mails de presentación, nombres, teléfonos y horarios de decisores conseguidos, sumados',
+  explicacion: 'Lo que se consiguió de la cuenta además de hablar: la suma de «Mails de presentación», «Nombres de decisores conseguidos», «Teléfonos de decisores conseguidos» y «Horarios del decisor conseguidos». Tocalo para desplegar o plegar los cuatro; cada uno filtra la lista, el grupo no.',
+  fuente: 'La suma de las cuatro columnas del grupo: crm_emails (presentacion-video) y la meta de las actividades en crm_comments (decisorApuntado, telefonoDecisor y horarioDecisor).',
 }
 
 /** El orden en que se dibujan las columnas: el grupo entra antes de su primera columna, y las
  *  suyas solo con el grupo desplegado. */
 const GRUPO = 'nutricion'
-/* Desplegado, el grupo se ve como tal (18/11/2026, por pedido): las tres suyas van teñidas de la
+/* Desplegado, el grupo se ve como tal (18/11/2026, por pedido): las cuatro suyas van teñidas de la
    marca y el grupo, el padre, lleva además el borde. Mismos tokens en claro y en oscuro. */
 const TINTE_SUB = 'bg-(--brand-soft)/45'
 const TINTE_GRUPO = 'bg-(--brand-soft) [box-shadow:inset_0_0_0_1px_var(--brand-200)]'
@@ -141,6 +147,11 @@ const porciento =(t: ReturnType<typeof tasaDeDecisor> | undefined) => (
   </span> : numero(undefined)
 )
 
+/** El «4/10» de la tasa, debajo de su círculo en la tabla (adentro no entra). */
+const fraccionDeTasa = (t: ReturnType<typeof tasaDeDecisor> | undefined) => (
+  t ? <span className="text-[11px] leading-none text-(--fg-muted) tabular-nums">{t.conDecisor}/{t.contestadas}</span> : null
+)
+
 const numero = (n: number | undefined) => (
   <span className={cn('tabular-nums', n === undefined && 'text-(--fg-faint)')}>{n ?? '–'}</span>
 )
@@ -153,6 +164,7 @@ const ICONOS: Record<Objetivo, LucideIcon> = {
   presentaciones: MailIcon,
   nombresDecisor: ContactIcon,
   telefonosDecisor: SmartphoneIcon,
+  horariosDecisor: ClockIcon,
   demos: CalendarCheckIcon,
 }
 
@@ -166,12 +178,17 @@ const TONOS: Record<TonoDeProgreso, { caja: string; barra: string; texto: string
    tarjetas. Fue «Objetivos hoy», del 17/10/2026 al 16/11/2026 «Objetivos semanales» (desde el
    lunes) y volvió a ser del día, más visual (16/11/2026, por pedido). Cada tarjeta es un botón:
    filtra la lista a esos leads (`?objetivo=`, también del día) y otro clic lo saca. «Comparar»
-   abre el diálogo de semanas y personas. Al lado, la barra hacia la próxima demo estadística. */
+   abre el diálogo de semanas y personas. Al lado, la barra hacia la próxima demo estadística.
+   Desde el 18/11/2026 (por pedido) las flechas del título van a días anteriores
+   (`?objetivosDia=`, `useDiaDeObjetivos`): cambian las tarjetas y lo que filtra cada una, no la
+   barra hacia la próxima demo, que no es del día. */
 export function ContadorDeLlamadas() {
   const [abierto, setAbierto] = useState(false)
   const [searchParams, setSearchParams] = useSearchParams()
   const elegido = filtrosDesdeUrl(searchParams).objetivo
-  const { data, isError } = useObjetivos(localTodayIso())
+  const { data, isError } = useObjetivos()
+  const { dia, esHoy, hoy, irA } = useDiaDeObjetivos()
+  const titulo = tituloDeObjetivos(dia, hoy)
   const { personaId, elegibles, elegir } = usePersonaDeObjetivos()
   const haciaDemo = useHaciaLaProximaDemo(personaId)
   // Nace plegado, salvo que la URL ya filtre por uno de los suyos (un enlace viejo a
@@ -186,12 +203,25 @@ export function ContadorDeLlamadas() {
 
   return (
     <>
-      <section aria-label="Objetivos de hoy"
+      <section aria-label={titulo}
         className="rounded-xl bg-card p-2.5 [border:1px_solid_var(--line)]">
         <div className="mb-2 flex flex-wrap items-center gap-2 px-0.5">
           <h2 className="flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-[0.08em] text-(--fg-muted)">
-            <TargetIcon className="size-3.5 text-(--brand)" aria-hidden />Objetivos de hoy
+            <TargetIcon className="size-3.5 text-(--brand)" aria-hidden />{titulo}
           </h2>
+          {/* Las flechas del día (18/11/2026, por pedido): sutiles, para no competir con el título.
+              No hay mañana: la de adelante se apaga en hoy. */}
+          <div className="-ml-1 flex items-center">
+            <button type="button" aria-label="Día anterior" title="Día anterior" onClick={() => irA(shiftIsoDate(dia, -1))}
+              className="grid size-5 cursor-pointer place-items-center rounded-full text-(--fg-faint) transition-colors hover:bg-(--surface-2) hover:text-(--fg-2)">
+              <ChevronLeftIcon className="size-3.5" aria-hidden />
+            </button>
+            <button type="button" aria-label="Día siguiente" title={esHoy ? 'Ya estás en hoy' : 'Día siguiente'}
+              disabled={esHoy} onClick={() => irA(shiftIsoDate(dia, 1))}
+              className="grid size-5 cursor-pointer place-items-center rounded-full text-(--fg-faint) transition-colors hover:bg-(--surface-2) hover:text-(--fg-2) disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-(--fg-faint)">
+              <ChevronRightIcon className="size-3.5" aria-hidden />
+            </button>
+          </div>
           {/* De quién (17/11/2026, por pedido): solo si veo a alguien más. Cambia las tarjetas, la
               barra hacia la próxima demo y lo que filtra cada tarjeta. */}
           {elegibles.length > 1 && (
@@ -216,10 +246,10 @@ export function ContadorDeLlamadas() {
           </Button>
         </div>
         <div className="flex flex-wrap gap-2 lg:flex-nowrap">
-          <div role="group" aria-label="Lo registrado hoy"
+          <div role="group" aria-label={esHoy ? 'Lo registrado hoy' : `Lo registrado el ${dia}`}
             className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(96px,1fr))] justify-items-center gap-2">
             {piezas(nutricionAbierta).map(c => c === GRUPO ? (
-              // El grupo no filtra (16 leads de tres orígenes no son una pregunta): despliega los suyos.
+              // El grupo no filtra (16 leads de cuatro orígenes no son una pregunta): despliega los suyos.
               <button key="nutricion" type="button" aria-expanded={nutricionAbierta}
                 title={`${NUTRICION.title}. Tocá para ${nutricionAbierta ? 'plegar' : 'ver'} el detalle.`}
                 onClick={() => setNutricionAbierta(a => !a)} className={cn(TARJETA, nutricionAbierta && TINTE_GRUPO)}>
@@ -261,21 +291,42 @@ export function ContadorDeLlamadas() {
    debajo. Elegido, el círculo se llena del color de la marca. */
 const TARJETA = 'group flex cursor-pointer flex-col items-center gap-1.5 rounded-xl px-1 py-1 text-center'
 
-function ContenidoDeTarjeta({ icono: Icono, label, activo = false, children }: {
+/* El círculo de un objetivo, compartido por las tarjetas y el diálogo «Comparar» (18/11/2026, por
+   pedido: la tabla lleva el mismo diseño). `compacto` es el de la tabla; `tono`, el verde o rojo de
+   un commit; `hover`, si reacciona al `group` de afuera (en la tabla el `group` es la fila). */
+const TONOS_DEL_CIRCULO = {
+  verde: 'bg-(--success-soft) text-(--success-fg) [border-color:color-mix(in_oklab,var(--success)_45%,transparent)]',
+  rojo: 'bg-(--danger-soft) text-(--danger-fg) [border-color:color-mix(in_oklab,var(--danger)_40%,transparent)]',
+} as const
+
+function Circulo({ icono: Icono, activo = false, compacto = false, tono, hover = true, className, children }: {
+  icono?: LucideIcon; activo?: boolean; compacto?: boolean; tono?: keyof typeof TONOS_DEL_CIRCULO; hover?: boolean
+  className?: string; children: React.ReactNode
+}) {
+  return (
+    <span className={cn(
+      'grid shrink-0 place-items-center content-center gap-0.5 rounded-full transition-all [border:2px_solid]',
+      compacto ? 'size-[46px]' : 'size-[72px]',
+      activo
+        ? 'bg-(--brand) text-white [border-color:var(--brand)] shadow-(--shadow-md)'
+        : tono ? TONOS_DEL_CIRCULO[tono] : 'bg-(--surface-2) text-foreground [border-color:var(--brand-200)]',
+      !activo && hover && 'group-hover:[border-color:var(--brand)] group-hover:shadow-(--shadow-sm)',
+      className,
+    )}>
+      {Icono && <Icono className={cn(compacto ? 'size-3' : 'size-3.5', activo ? 'text-white/85' : 'text-(--brand)')} aria-hidden />}
+      {/* En el círculo no entra el «4/10» de la tasa: queda en el title (en la tabla, debajo). */}
+      <span className={cn('leading-none font-semibold tabular-nums [&_span]:text-inherit [&_span_span]:hidden',
+        compacto ? 'text-[14px]' : 'text-[20px]')}>{children}</span>
+    </span>
+  )
+}
+
+function ContenidoDeTarjeta({ icono, label, activo = false, children }: {
   icono: LucideIcon; label: React.ReactNode; activo?: boolean; children: React.ReactNode
 }) {
   return (
     <>
-      <span className={cn(
-        'grid size-[72px] place-items-center content-center gap-0.5 rounded-full transition-all [border:2px_solid]',
-        activo
-          ? 'bg-(--brand) text-white [border-color:var(--brand)] shadow-(--shadow-md)'
-          : 'bg-(--surface-2) text-foreground [border-color:var(--brand-200)] group-hover:[border-color:var(--brand)] group-hover:shadow-(--shadow-sm)',
-      )}>
-        <Icono className={cn('size-3.5', activo ? 'text-white/85' : 'text-(--brand)')} aria-hidden />
-        {/* En el círculo no entra el «4/10» de la tasa: queda en el title. */}
-        <span className="text-[20px] leading-none font-semibold [&_span]:text-inherit [&_span_span]:hidden">{children}</span>
-      </span>
+      <Circulo icono={icono} activo={activo}>{children}</Circulo>
       <span className={cn('max-w-[96px] text-[11.5px] leading-tight', activo ? 'font-semibold text-(--brand)' : 'text-(--fg-2)')}>{label}</span>
     </>
   )
@@ -611,7 +662,7 @@ function ObjetivosDialog({ onClose }: { onClose: () => void }) {
                               </Celda>
                               {c.k === TRAS && (
                                 <Celda error={q?.isError} valor={q?.data ? tasaDeDecisor([q.data]).tasa ?? 0 : undefined}
-                                  max={comparando ? maximos.tasa : undefined}>
+                                  max={comparando ? maximos.tasa : undefined} pie={fraccionDeTasa(q?.data ? tasaDeDecisor([q.data]) : undefined)}>
                                   {porciento(q?.data ? tasaDeDecisor([q.data]) : undefined)}
                                 </Celda>
                               )}
@@ -636,13 +687,13 @@ function ObjetivosDialog({ onClose }: { onClose: () => void }) {
                             Total
                           </th>
                           {columnas.map(c => c === GRUPO ? (
-                            <td key={GRUPO} className={cn('px-4 py-2.5 text-right text-[18px] font-bold text-foreground', celdaDeGrupo(nutricionAbierta))}>
+                            <CeldaTotal key={GRUPO} className={celdaDeGrupo(nutricionAbierta)}>
                               {numero(total ? nutricionDeLaCuenta(total) : undefined)}
-                            </td>
+                            </CeldaTotal>
                           ) : (
                             <Fragment key={c.k}>
-                              <td className={cn('px-4 py-2.5 text-right text-[18px] font-bold text-foreground', celdaSub(c))}>{numero(total?.[c.k])}</td>
-                              {c.k === TRAS && <td className="px-4 py-2.5 text-right text-[18px] font-bold text-foreground">{porciento(tasaTotal)}</td>}
+                              <CeldaTotal className={celdaSub(c)}>{numero(total?.[c.k])}</CeldaTotal>
+                              {c.k === TRAS && <CeldaTotal pie={fraccionDeTasa(tasaTotal)}>{porciento(tasaTotal)}</CeldaTotal>}
                               {COMMIT_DE[c.k] && (
                                 <CeldaDeCommit real={total?.[c.k]} cargando={!commits} editable={false} total
                                   commit={sumarDefinidos(personas.map(u => commitDe(commits, u.id, p, COMMIT_DE[c.k]!.campo)))} />
@@ -668,12 +719,10 @@ function ObjetivosDialog({ onClose }: { onClose: () => void }) {
 /** Encabezado de una columna: ícono arriba y el nombre, tocable para ver de dónde sale. */
 function Encabezado({ c, icono: Icono, className }: { c: Explicado; icono: LucideIcon; className?: string }) {
   return (
-    <th className={cn('px-4 py-3 text-right align-bottom font-semibold', className)}>
+    <th className={cn('px-3 py-3 text-center align-bottom font-semibold', className)}>
       <Explicacion c={c}>
-        <span className="inline-flex flex-col items-end gap-1 leading-tight">
-          <span className="grid size-6 place-items-center rounded-md bg-card text-(--brand) [border:1px_solid_var(--line)]">
-            <Icono className="size-3.5" aria-hidden />
-          </span>
+        <span className="inline-flex max-w-[110px] flex-col items-center gap-1 leading-tight">
+          <IconoDeEncabezado icono={Icono} />
           {c.label}
         </span>
       </Explicacion>
@@ -681,19 +730,26 @@ function Encabezado({ c, icono: Icono, className }: { c: Explicado; icono: Lucid
   )
 }
 
-/** El encabezado de «Nutrición de la cuenta»: tocarlo despliega o pliega sus tres columnas, y la
+/** El ícono de la columna en un círculo chico, como el de las tarjetas (18/11/2026). */
+function IconoDeEncabezado({ icono: Icono }: { icono: LucideIcon }) {
+  return (
+    <span className="grid size-7 place-items-center rounded-full bg-(--surface-2) text-(--brand) [border:1.5px_solid_var(--brand-200)]">
+      <Icono className="size-3.5" aria-hidden />
+    </span>
+  )
+}
+
+/** El encabezado de «Nutrición de la cuenta»: tocarlo despliega o pliega sus cuatro columnas, y la
  *  «i» de al lado explica de dónde sale (no se puede anidar un botón en otro). */
 function EncabezadoDeGrupo({ abierto, onAlternar }: { abierto: boolean; onAlternar: () => void }) {
   return (
-    <th className={cn('px-4 py-3 text-right align-bottom font-semibold', celdaDeGrupo(abierto), abierto && 'text-(--brand-soft-fg)')}>
-      <span className="inline-flex flex-col items-end gap-1 leading-tight">
+    <th className={cn('px-3 py-3 text-center align-bottom font-semibold', celdaDeGrupo(abierto), abierto && 'text-(--brand-soft-fg)')}>
+      <span className="inline-flex max-w-[120px] flex-col items-center gap-1 leading-tight">
         <span className="flex items-center gap-1">
           <Explicacion c={NUTRICION} className="cursor-pointer text-(--fg-muted) hover:text-foreground">
             <InfoIcon className="size-3.5" aria-label="Qué es y de dónde sale" />
           </Explicacion>
-          <span className="grid size-6 place-items-center rounded-md bg-card text-(--brand) [border:1px_solid_var(--line)]">
-            <SproutIcon className="size-3.5" aria-hidden />
-          </span>
+          <IconoDeEncabezado icono={SproutIcon} />
         </span>
         <button type="button" aria-expanded={abierto} onClick={onAlternar}
           title={`${NUTRICION.title}. Tocá para ${abierto ? 'plegar' : 'ver'} el detalle.`}
@@ -706,26 +762,44 @@ function EncabezadoDeGrupo({ abierto, onAlternar }: { abierto: boolean; onAltern
   )
 }
 
-/** Un número de la tabla. Comparando, lleva debajo una barrita contra el mayor de su columna, y
- *  el que lo alcanza va en el color de la marca. */
-function Celda({ error, valor, max, className, children }: {
-  error?: boolean; valor: number | undefined; max: number | undefined; className?: string; children: React.ReactNode
+/** Un número de la tabla, en un círculo como el de las tarjetas (18/11/2026, por pedido).
+ *  Comparando, lleva debajo una barrita contra el mayor de su columna, y el que lo alcanza lleva el
+ *  círculo en el color de la marca. `pie` va debajo del círculo (el «4/10» de la tasa). */
+function Celda({ error, valor, max, pie, className, children }: {
+  error?: boolean; valor: number | undefined; max: number | undefined; pie?: React.ReactNode; className?: string; children: React.ReactNode
 }) {
   if (error) {
-    return <td className={cn('px-4 py-3 text-right text-[18px] font-semibold text-(--fg-faint)', className)} title="No se pudo leer">!</td>
+    return (
+      <td className={cn('px-3 py-2.5 text-center align-top', className)} title="No se pudo leer">
+        <Circulo compacto hover={false} className="mx-auto text-(--fg-faint)">!</Circulo>
+      </td>
+    )
   }
   const conBarra = max !== undefined && max > 0 && valor !== undefined
   const lider = conBarra && valor === max
   return (
-    <td className={cn('px-4 py-3 text-right align-top', className)}>
-      <div className="inline-flex min-w-[64px] flex-col items-end gap-1.5">
-        <span className={cn('text-[18px] leading-none font-semibold', lider ? 'text-(--brand)' : 'text-foreground')}>{children}</span>
+    <td className={cn('px-3 py-2.5 text-center align-top', className)}>
+      <div className="inline-flex w-[52px] flex-col items-center gap-1.5">
+        <Circulo compacto hover={false} className={cn(lider && 'text-(--brand) [border-color:var(--brand)]')}>{children}</Circulo>
+        {pie}
         {conBarra && (
           <span className="h-1 w-full overflow-hidden rounded-full bg-(--surface-2)" aria-hidden>
             <span className={cn('block h-full rounded-full', lider ? 'bg-(--brand)' : 'bg-(--brand)/35')}
               style={{ width: `${Math.round((valor / max) * 100)}%` }} />
           </span>
         )}
+      </div>
+    </td>
+  )
+}
+
+/** Un total: el mismo círculo, con el borde de la marca y el número en negrita. */
+function CeldaTotal({ pie, className, children }: { pie?: React.ReactNode; className?: string; children: React.ReactNode }) {
+  return (
+    <td className={cn('px-3 py-2.5 text-center align-top', className)}>
+      <div className="inline-flex w-[52px] flex-col items-center gap-1.5">
+        <Circulo compacto hover={false} className="bg-card [border-color:var(--brand)] [&>span]:font-bold">{children}</Circulo>
+        {pie}
       </div>
     </td>
   )
@@ -748,11 +822,6 @@ function CeldaDeCommit({ real, commit, cargando, editable, total = false, onGuar
 }) {
   const [editando, setEditando] = useState(false)
   const tono = tonoDelCommit(real, commit)
-  const color = tono === 'verde'
-    ? 'bg-(--success-soft) text-(--success-fg) [border-color:color-mix(in_oklab,var(--success)_35%,transparent)]'
-    : tono === 'rojo'
-      ? 'bg-(--danger-soft) text-(--danger-fg) [border-color:color-mix(in_oklab,var(--danger)_30%,transparent)]'
-      : 'text-(--fg-faint) [border-color:transparent]'
   const titulo = commit === undefined ? 'Sin commit'
     : `Commit ${commit} · real ${real ?? '–'}${tono === 'verde' ? ' · alcanzado' : tono === 'rojo' ? ' · no alcanzado' : ''}`
   const guardar = (texto: string) => {
@@ -762,14 +831,20 @@ function CeldaDeCommit({ real, commit, cargando, editable, total = false, onGuar
     const n = Number(t)
     if (Number.isFinite(n) && n >= 0 && n !== commit) onGuardar?.(Math.round(n))
   }
-  const caja = cn('inline-flex min-w-[56px] items-center justify-end rounded-lg px-2.5 py-1 leading-none font-semibold tabular-nums [border:1px_solid]',
-    total ? 'text-[18px] font-bold' : 'text-[18px]', color)
+  // El círculo de la tabla, verde o rojo (18/11/2026, por pedido: antes era una cajita). Sin
+  // commit, apagado y punteado: no hay con qué comparar.
+  const circulo = (contenido: React.ReactNode, extra?: string) => (
+    <Circulo compacto hover={false} tono={tono}
+      className={cn(!tono && 'text-(--fg-faint) [border-style:dashed]', total && '[&>span]:font-bold', extra)}>
+      {contenido}
+    </Circulo>
+  )
 
   return (
-    <td className={cn('px-4 text-right align-top', total ? 'py-2.5' : 'py-3')}>
+    <td className="px-3 py-2.5 text-center align-top">
       {editando ? (
         <input type="number" min={0} autoFocus defaultValue={commit ?? ''} aria-label="Commit del día"
-          className="w-[72px] rounded-lg bg-card px-2 py-1 text-right text-[16px] tabular-nums [border:1px_solid_var(--brand)]"
+          className="h-[46px] w-[64px] rounded-full bg-card px-2 text-center text-[15px] tabular-nums [border:2px_solid_var(--brand)]"
           onBlur={e => guardar(e.currentTarget.value)}
           onKeyDown={e => {
             if (e.key === 'Enter') e.currentTarget.blur()
@@ -777,11 +852,11 @@ function CeldaDeCommit({ real, commit, cargando, editable, total = false, onGuar
           }} />
       ) : editable ? (
         <button type="button" title={`${titulo}. Tocá para cambiarlo desde este día.`} onClick={() => setEditando(true)}
-          className={cn(caja, 'cursor-pointer hover:[border-color:var(--brand)]')}>
-          {cargando ? '–' : commit ?? '＋'}
+          className="group/commit inline-flex cursor-pointer rounded-full">
+          {circulo(cargando ? '–' : commit ?? '＋', 'group-hover/commit:[border-color:var(--brand)] group-hover/commit:[border-style:solid]')}
         </button>
       ) : (
-        <span title={titulo} className={caja}>{cargando || commit === undefined ? '–' : commit}</span>
+        <span title={titulo} className="inline-flex">{circulo(cargando || commit === undefined ? '–' : commit)}</span>
       )}
     </td>
   )

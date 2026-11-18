@@ -253,10 +253,14 @@ export async function demosAgendadas(autor: string, desde: string, hasta: string
   return data ?? []
 }
 
-/** Cuándo agendó `autor` su última demo (la reunión más nueva que creó), o null si nunca agendó. */
+/** Cuándo agendó `autor` su última demo, o null si nunca agendó. Desde el 18/11/2026 (por pedido)
+ *  solo cuenta una demo: reunión con lead, que no es del onboarding y cuyo título empieza con «Demo»
+ *  (`tituloDeLaDemo`, o el viejo «Demo»). Otra reunión agendada en la Agenda no vuelve a cero
+ *  «Hacia la próxima demo». No se mira el registro de actividad: una demo agendada desde la Agenda no lo tiene. */
 export async function ultimaDemoAgendada(autor: string): Promise<string | null> {
   const { data, error } = await supabase.from('crm_meetings').select('created_at')
     .eq('created_by', autor).is('deleted_at', null)
+    .not('lead_id', 'is', null).is('onboarding_task', null).ilike('title', 'demo%')
     .order('created_at', { ascending: false }).limit(1)
   if (error) throw error
   return data?.[0]?.created_at ?? null
