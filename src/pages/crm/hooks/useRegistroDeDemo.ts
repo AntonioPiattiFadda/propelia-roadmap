@@ -8,6 +8,7 @@ import {
   patchDeContactosNuevos, telefonoEscrito, telefonosDelCliente, tieneDecisor, tienePrefijoDePais, type CasilleroDeTelefono,
 } from '../lib/clientData'
 import { tareasDeConfirmacionDeDemo } from '../lib/confirmacionDeDemo'
+import { tareasDeCierreDeDemo } from '../lib/cierreDeDemo'
 import { mensajeDeError } from '../lib/errores'
 import { esEmailValido, type RegistroInicialDeDemo } from '../lib/reuniones'
 import { crearComentario, crearTarea } from '../service/crm.service'
@@ -188,15 +189,16 @@ export function useRegistroDeDemo(leadId: string | undefined, open: boolean, ini
 
     // Las tareas para confirmar la demo (4/11/2026, por pedido). Si no se pueden crear (la etapa no
     // deja agendar tareas, o falla el insert), la demo queda igual y se avisa.
-    const confirmar = tareasDeConfirmacionDeDemo(startsAt, new Date())
+    // Y las de cerrar la venta a los 5 y 10 días de la demo (`tareasDeCierreDeDemo`, 18/11/2026).
+    const tareas = [...tareasDeConfirmacionDeDemo(startsAt, new Date()), ...tareasDeCierreDeDemo(startsAt)]
     if (myId) {
-      const resultados = await Promise.allSettled(confirmar.map(t => crearTarea({ ...t, lead_id: lead.id, assigned_to: myId })))
+      const resultados = await Promise.allSettled(tareas.map(t => crearTarea({ ...t, lead_id: lead.id, assigned_to: myId })))
       const fallo = resultados.find((x): x is PromiseRejectedResult => x.status === 'rejected')
-      if (fallo) toast.error(`La demo quedó agendada, pero no se pudo crear la tarea para confirmarla: ${mensajeDeError(fallo.reason)}`)
+      if (fallo) toast.error(`La demo quedó agendada, pero no se pudieron crear sus tareas: ${mensajeDeError(fallo.reason)}`)
       void qc.invalidateQueries({ queryKey: CRM_KEYS.detalle(lead.id) })
       void qc.invalidateQueries({ queryKey: CRM_KEYS.tareasPendientes })
     } else {
-      toast.error('La demo quedó agendada, pero no se pudo crear la tarea para confirmarla: no se sabe quién sos.')
+      toast.error('La demo quedó agendada, pero no se pudieron crear sus tareas: no se sabe quién sos.')
     }
   }
 
