@@ -17,7 +17,7 @@ import {
 import { actividadDe, demoVieja, diasEntre, horaEnEspana, hoyEnEspana, TEXTO_DE_DEMO } from './crm.ts'
 import {
   bolsasDeLlamada, esDescartado, esImportante, esParaRecontactar, esPendienteAgendar, ESTADOS_QUE_NO_LLEGARON, type Etapa, estaVencida,
-  etapaDe, type Llamada, leadsConDecisor, type NombreDePeriodo, type Objetivo, OBJETIVOS, objetivosDe, type ObjetivosDelPeriodo,
+  etapaDe, type Llamada, leadsConDecisor, type NombreDePeriodo, nutricionDeLaCuenta, type Objetivo, OBJETIVOS, objetivosDe, type ObjetivosDelPeriodo,
   ordenarImportantes, ordenarPorEstado, ordenarPorProximaTarea, pendientesDePersona, type Periodo, periodoDe, PERIODOS,
   type ProximaTarea, proximaTareaPorLead, seguimientoDelLead, semanasHaciaAtras, sumarDias, sumarResumenes, type Tarea,
   tasaDeDecisor, tocaHoyOVencida,
@@ -1184,7 +1184,10 @@ function numerosDeObjetivos(r: Record<Objetivo, number>) {
     con_decisor: r.decisores,
     decisores_nuevos: r.decisoresNuevos,
     no_respondidas: r.noRespondidas,
+    nutricion_de_la_cuenta: nutricionDeLaCuenta(r),
     presentaciones_con_video: r.presentaciones,
+    nombres_de_decisores: r.nombresDecisor,
+    telefonos_de_decisores: r.telefonosDecisor,
     demos_agendadas: r.demos,
   }
 }
@@ -1195,7 +1198,10 @@ const QUE_ES_CADA_OBJETIVO = {
   con_decisor: 'Contestadas en las que quien atendió decide. Son también contestadas.',
   decisores_nuevos: 'Contestadas con un decisor con quien nadie del equipo había hablado antes en ese lead (por nombre).',
   no_respondidas: 'Llamadas registradas como no respondidas.',
+  nutricion_de_la_cuenta: 'Suma de presentaciones_con_video, nombres_de_decisores y telefonos_de_decisores.',
   presentaciones_con_video: 'Mails «Presentación con vídeo» enviados, sin los que Resend no llegó a mandar.',
+  nombres_de_decisores: 'Llamadas y notas registradas con el nombre del decisor conseguido (cuenta actividades).',
+  telefonos_de_decisores: 'Llamadas y notas registradas con el teléfono del decisor conseguido (cuenta actividades; el número no sale).',
   demos_agendadas: 'Reuniones que esa persona agendó en el período (cuenta cuándo se agendaron, no para cuándo son).',
   decisor_por_contactado: 'De las inmobiliarias que contestaron, qué parte tuvo una llamada con decisor (cuenta inmobiliarias).',
   pendiente_ahora: 'Hoy, no en el período: tareas suyas vencidas (la de hoy no) y leads de su cartera en Seguimiento sin tarea suya.',

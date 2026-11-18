@@ -1,8 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  CalendarCheckIcon, CalendarDaysIcon, ChartColumnIcon, ChevronLeftIcon, ChevronRightIcon, ClockAlertIcon, HandshakeIcon,
-  MailIcon, PercentIcon, PhoneCallIcon, PhoneIcon, PhoneMissedIcon, SparklesIcon, TargetIcon, UserCheckIcon, UsersIcon,
+  CalendarCheckIcon, CalendarDaysIcon, ChartColumnIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClockAlertIcon,
+  ContactIcon, HandshakeIcon, InfoIcon, MailIcon, PercentIcon, PhoneCallIcon, PhoneIcon, PhoneMissedIcon, SmartphoneIcon,
+  SparklesIcon, SproutIcon, TargetIcon, UserCheckIcon, UsersIcon,
   type LucideIcon,
 } from 'lucide-react'
 import { localTodayIso } from '@/lib/calendarDate'
@@ -22,8 +23,8 @@ import { commitDelPeriodo, esDiaHabil, tonoDelCommit, type CampoDeCommit, type C
 import { escribirFiltros, filtrosDesdeUrl } from '../lib/leadFilterParams'
 import { hitoAlcanzado, mensajeDePropelin } from '../lib/propelin'
 import {
-  diasHaciaAtras, LLAMADAS_POR_DEMO, mesesHaciaAtras, pendientesDePersona, progresoHaciaDemo, semanasHaciaAtras,
-  sumarResumenes, tasaDeDecisor,
+  diasHaciaAtras, LLAMADAS_POR_DEMO, mesesHaciaAtras, NUTRICION_DE_LA_CUENTA, nutricionDeLaCuenta, pendientesDePersona,
+  progresoHaciaDemo, semanasHaciaAtras, sumarResumenes, tasaDeDecisor,
   type HaciaLaProximaDemo as DatosHaciaDemo, type Objetivo, type PeriodoDeObjetivos, type TonoDeProgreso,
 } from '../lib/objetivos'
 import { esSuperadmin, puedeVerComo } from '../lib/permisos'
@@ -34,8 +35,10 @@ import type { Usuario } from '../types'
 
 const LLAMADAS_DE_LA_PERSONA = 'Tabla crm_comments: las actividades escritas a mano (comment_type = MANUAL, sin borrar) que registró la persona (created_by) en el período (created_at), con la meta de la actividad (long_description que empieza con <!--act-->)'
 
+type Columna = Explicado & { k: Objetivo; enGrupo?: true }
+
 // «No respondidas» va primera, a la izquierda (17/10/2026, por pedido), en el contador y en el diálogo.
-const COLUMNAS: (Explicado & { k: Objetivo })[] = [
+const COLUMNAS: Columna[] = [
   {
     k: 'noRespondidas', label: 'No respondidas', title: 'Llamadas que nadie atendió',
     explicacion: 'Cada «Contacto fallido» que registraste: llamaste y nadie atendió. Cuenta llamadas, no inmobiliarias: tres intentos al mismo lead son tres.',
@@ -46,11 +49,22 @@ const COLUMNAS: (Explicado & { k: Objetivo })[] = [
     explicacion: 'Cada «Llamada» registrada: alguien de la inmobiliaria atendió, decida o no. Cuenta llamadas.',
     fuente: `${LLAMADAS_DE_LA_PERSONA}, de tipo llamada y resultado contestada.`,
   },
-  // «Mails de presentación» va a la izquierda de «Con decisor» (18/11/2026, por pedido).
+  // «Nutrición de la cuenta» va a la izquierda de «Con decisor» (18/11/2026, por pedido): sus tres
+  // columnas van seguidas y se ven solo con el grupo desplegado (`piezas`).
   {
-    k: 'presentaciones', label: 'Mails de presentación', title: 'Mails «Presentación con vídeo» enviados',
+    k: 'presentaciones', enGrupo: true, label: 'Mails de presentación', title: 'Mails «Presentación con vídeo» enviados',
     explicacion: 'Mails «Presentación con vídeo» que mandaste desde «Mensajes» del lead. No cuentan los que no salieron (falló el envío o la dirección estaba suprimida).',
     fuente: 'Tabla crm_emails: plantilla = presentacion-video, enviados por la persona (sent_by) en el período (sent_at), sin status failed ni suppressed.',
+  },
+  {
+    k: 'nombresDecisor', enGrupo: true, label: 'Nombres de decisores conseguidos', title: 'Actividades en las que apuntaste el nombre del decisor',
+    explicacion: 'Cada llamada o nota registrada con «Nombre del decisor conseguido» en Sí y el nombre escrito. Cuenta actividades, no inmobiliarias: dos en el mismo lead son dos.',
+    fuente: `${LLAMADAS_DE_LA_PERSONA}, de tipo llamada o nota y con decisorApuntado escrito en la meta.`,
+  },
+  {
+    k: 'telefonosDecisor', enGrupo: true, label: 'Teléfonos de decisores conseguidos', title: 'Actividades en las que apuntaste el teléfono del decisor',
+    explicacion: 'Cada llamada o nota registrada con «Teléfono del decisor conseguido» en Sí y el número escrito. Cuenta actividades, no inmobiliarias.',
+    fuente: `${LLAMADAS_DE_LA_PERSONA}, de tipo llamada o nota y con telefonoDecisor escrito en la meta.`,
   },
   {
     k: 'decisores', label: 'Con decisor', title: 'De las contestadas, en cuántas hablaste con alguien que decide',
@@ -74,6 +88,30 @@ const TASA: Explicado = {
   title: 'De las inmobiliarias que contestaron, en cuántas se habló con un decisor',
   explicacion: 'De las inmobiliarias que contestaron una llamada en el período, qué parte terminó en una llamada con un decisor. Cuenta inmobiliarias y no llamadas: dos llamadas al mismo lead son una. Ejemplo: 10 inmobiliarias contestaron y en 4 se habló con un decisor = 40 %. Con varias personas, la misma inmobiliaria cuenta una vez.',
   fuente: `Las mismas llamadas de «Contestadas» y «Con decisor» (${LLAMADAS_DE_LA_PERSONA}), contando inmobiliarias distintas (lead_id): las de «Con decisor» dividido las de «Contestadas».`,
+}
+
+const NUTRICION: Explicado = {
+  label: 'Nutrición de la cuenta',
+  title: 'Mails de presentación, nombres y teléfonos de decisores conseguidos, sumados',
+  explicacion: 'Lo que se consiguió de la cuenta además de hablar: la suma de «Mails de presentación», «Nombres de decisores conseguidos» y «Teléfonos de decisores conseguidos». Tocalo para desplegar o plegar los tres; cada uno filtra la lista, el grupo no.',
+  fuente: 'La suma de las tres columnas del grupo: crm_emails (presentacion-video) y la meta de las actividades en crm_comments (decisorApuntado y telefonoDecisor).',
+}
+
+/** El orden en que se dibujan las columnas: el grupo entra antes de su primera columna, y las
+ *  suyas solo con el grupo desplegado. */
+const GRUPO = 'nutricion'
+/* Desplegado, el grupo se ve como tal (18/11/2026, por pedido): las tres suyas van teñidas de la
+   marca y el grupo, el padre, lleva además el borde. Mismos tokens en claro y en oscuro. */
+const TINTE_SUB = 'bg-(--brand-soft)/45'
+const TINTE_GRUPO = 'bg-(--brand-soft) [box-shadow:inset_0_0_0_1px_var(--brand-200)]'
+/** Las celdas de la tabla: el grupo abre con un riel a la izquierda y las suyas siguen teñidas. */
+const celdaDeGrupo = (abierto: boolean) => cn(abierto && 'bg-(--brand-soft)/80 [border-left:2px_solid_var(--brand)]')
+const celdaSub = (c: Columna) => cn(c.enGrupo && TINTE_SUB)
+function piezas(desplegado: boolean): (Columna | typeof GRUPO)[] {
+  return COLUMNAS.flatMap(c => [
+    ...(c.k === NUTRICION_DE_LA_CUENTA[0] ? [GRUPO] as const : []),
+    ...(c.enGrupo && !desplegado ? [] : [c]),
+  ])
 }
 
 /** La tasa va pegada después de esta columna, en el contador y en el diálogo. */
@@ -113,6 +151,8 @@ const ICONOS: Record<Objetivo, LucideIcon> = {
   decisores: UserCheckIcon,
   decisoresNuevos: SparklesIcon,
   presentaciones: MailIcon,
+  nombresDecisor: ContactIcon,
+  telefonosDecisor: SmartphoneIcon,
   demos: CalendarCheckIcon,
 }
 
@@ -134,6 +174,11 @@ export function ContadorDeLlamadas() {
   const { data, isError } = useObjetivos(localTodayIso())
   const { personaId, elegibles, elegir } = usePersonaDeObjetivos()
   const haciaDemo = useHaciaLaProximaDemo(personaId)
+  // Nace plegado, salvo que la URL ya filtre por uno de los suyos (un enlace viejo a
+  // `?objetivo=presentaciones`): si no, la tarjeta prendida quedaría escondida.
+  const [nutricionAbierta, setNutricionAbierta] = useState(
+    () => (NUTRICION_DE_LA_CUENTA as readonly Objetivo[]).includes(elegido ?? 'demos'),
+  )
   if (isError) return null
 
   const alternar = (k: Objetivo) =>
@@ -173,9 +218,21 @@ export function ContadorDeLlamadas() {
         <div className="flex flex-wrap gap-2 lg:flex-nowrap">
           <div role="group" aria-label="Lo registrado hoy"
             className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(96px,1fr))] justify-items-center gap-2">
-            {COLUMNAS.map(c => (
+            {piezas(nutricionAbierta).map(c => c === GRUPO ? (
+              // El grupo no filtra (16 leads de tres orígenes no son una pregunta): despliega los suyos.
+              <button key="nutricion" type="button" aria-expanded={nutricionAbierta}
+                title={`${NUTRICION.title}. Tocá para ${nutricionAbierta ? 'plegar' : 'ver'} el detalle.`}
+                onClick={() => setNutricionAbierta(a => !a)} className={cn(TARJETA, nutricionAbierta && TINTE_GRUPO)}>
+                <ContenidoDeTarjeta icono={SproutIcon} label={<>
+                  {NUTRICION.label}
+                  <ChevronDownIcon aria-hidden className={cn('ml-0.5 inline size-3 transition-transform', !nutricionAbierta && '-rotate-90')} />
+                </>}>
+                  {numero(data ? nutricionDeLaCuenta(data.resumen) : undefined)}
+                </ContenidoDeTarjeta>
+              </button>
+            ) : (
               <Fragment key={c.k}>
-                <Tarjeta icono={ICONOS[c.k]} label={c.label} activo={elegido === c.k}
+                <Tarjeta icono={ICONOS[c.k]} label={c.label} activo={elegido === c.k} className={celdaSub(c)}
                   title={elegido === c.k ? 'Quitar el filtro' : `${c.title}. Tocá para ver esos leads.`}
                   onClick={() => alternar(c.k)}>
                   {numero(data?.resumen[c.k])}
@@ -205,7 +262,7 @@ export function ContadorDeLlamadas() {
 const TARJETA = 'group flex cursor-pointer flex-col items-center gap-1.5 rounded-xl px-1 py-1 text-center'
 
 function ContenidoDeTarjeta({ icono: Icono, label, activo = false, children }: {
-  icono: LucideIcon; label: string; activo?: boolean; children: React.ReactNode
+  icono: LucideIcon; label: React.ReactNode; activo?: boolean; children: React.ReactNode
 }) {
   return (
     <>
@@ -224,11 +281,11 @@ function ContenidoDeTarjeta({ icono: Icono, label, activo = false, children }: {
   )
 }
 
-function Tarjeta({ icono, label, activo, title, onClick, children }: {
-  icono: LucideIcon; label: string; activo: boolean; title: string; onClick: () => void; children: React.ReactNode
+function Tarjeta({ icono, label, activo, title, onClick, className, children }: {
+  icono: LucideIcon; label: string; activo: boolean; title: string; onClick: () => void; className?: string; children: React.ReactNode
 }) {
   return (
-    <button type="button" aria-pressed={activo} title={title} onClick={onClick} className={TARJETA}>
+    <button type="button" aria-pressed={activo} title={title} onClick={onClick} className={cn(TARJETA, className)}>
       <ContenidoDeTarjeta icono={icono} label={label} activo={activo}>{children}</ContenidoDeTarjeta>
     </button>
   )
@@ -431,12 +488,15 @@ function ObjetivosDialog({ onClose }: { onClose: () => void }) {
   // cada número se mide contra él, y el que lo alcanza se resalta. Es lo que hace que se compare.
   const maximos = useMemo(() => {
     const datos = resultados.map(q => q?.data).filter(d => !!d)
-    const m: Partial<Record<Objetivo | 'tasa', number>> = {}
+    const m: Partial<Record<Objetivo | 'tasa' | typeof GRUPO, number>> = {}
     for (const c of COLUMNAS) m[c.k] = Math.max(0, ...datos.map(d => d.resumen[c.k]))
     m.tasa = Math.max(0, ...datos.map(d => tasaDeDecisor([d]).tasa ?? 0))
+    m[GRUPO] = Math.max(0, ...datos.map(d => nutricionDeLaCuenta(d.resumen)))
     return m
   }, [resultados])
   const comparando = pedidos.length > 1
+  const [nutricionAbierta, setNutricionAbierta] = useState(false)
+  const columnas = piezas(nutricionAbierta)
 
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose() }}>
@@ -503,9 +563,11 @@ function ObjetivosDialog({ onClose }: { onClose: () => void }) {
                   <th className="sticky left-0 z-10 min-w-[150px] bg-(--surface-2) px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--fg-muted)">
                     {varias ? 'Período · persona' : 'Período'}
                   </th>
-                  {COLUMNAS.map(c => (
+                  {columnas.map(c => c === GRUPO ? (
+                    <EncabezadoDeGrupo key={GRUPO} abierto={nutricionAbierta} onAlternar={() => setNutricionAbierta(a => !a)} />
+                  ) : (
                     <Fragment key={c.k}>
-                      <Encabezado c={c} icono={ICONOS[c.k]} />
+                      <Encabezado c={c} icono={ICONOS[c.k]} className={celdaSub(c)} />
                       {c.k === TRAS && <Encabezado c={TASA} icono={PercentIcon} />}
                       {COMMIT_DE[c.k] && <Encabezado c={COMMIT_DE[c.k]!} icono={HandshakeIcon} />}
                     </Fragment>
@@ -522,7 +584,7 @@ function ObjetivosDialog({ onClose }: { onClose: () => void }) {
                     <Fragment key={clave(p)}>
                       {varias && (
                         <tr className="[border-top:1px_solid_var(--line)]">
-                          <th colSpan={COLUMNAS.length + EXTRAS + 1} scope="rowgroup" className="px-4 pt-4 pb-1.5 text-left">
+                          <th colSpan={columnas.length + EXTRAS + 1} scope="rowgroup" className="px-4 pt-4 pb-1.5 text-left">
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-(--brand-soft) px-2.5 py-0.5 text-[12px] font-semibold text-(--brand-soft-fg)">
                               <CalendarDaysIcon className="size-3.5" aria-hidden />{p.label}
                             </span>
@@ -536,9 +598,15 @@ function ObjetivosDialog({ onClose }: { onClose: () => void }) {
                               ? <span className="flex items-center gap-2 font-normal text-(--fg-2)"><AvatarUsuario usuario={u} />{u.nombre}</span>
                               : <span className="font-semibold text-foreground">{p.label}</span>}
                           </th>
-                          {COLUMNAS.map(c => (
+                          {columnas.map(c => c === GRUPO ? (
+                            <Celda key={GRUPO} className={celdaDeGrupo(nutricionAbierta)}
+                              error={q?.isError} valor={q?.data ? nutricionDeLaCuenta(q.data.resumen) : undefined}
+                              max={comparando ? maximos[GRUPO] : undefined}>
+                              {numero(q?.data ? nutricionDeLaCuenta(q.data.resumen) : undefined)}
+                            </Celda>
+                          ) : (
                             <Fragment key={c.k}>
-                              <Celda error={q?.isError} valor={q?.data?.resumen[c.k]} max={comparando ? maximos[c.k] : undefined}>
+                              <Celda className={celdaSub(c)} error={q?.isError} valor={q?.data?.resumen[c.k]} max={comparando ? maximos[c.k] : undefined}>
                                 {numero(q?.data?.resumen[c.k])}
                               </Celda>
                               {c.k === TRAS && (
@@ -567,9 +635,13 @@ function ObjetivosDialog({ onClose }: { onClose: () => void }) {
                           <th scope="row" className="sticky left-0 z-10 bg-(--brand-soft) px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-[0.08em] text-(--brand-soft-fg)">
                             Total
                           </th>
-                          {COLUMNAS.map(c => (
+                          {columnas.map(c => c === GRUPO ? (
+                            <td key={GRUPO} className={cn('px-4 py-2.5 text-right text-[18px] font-bold text-foreground', celdaDeGrupo(nutricionAbierta))}>
+                              {numero(total ? nutricionDeLaCuenta(total) : undefined)}
+                            </td>
+                          ) : (
                             <Fragment key={c.k}>
-                              <td className="px-4 py-2.5 text-right text-[18px] font-bold text-foreground">{numero(total?.[c.k])}</td>
+                              <td className={cn('px-4 py-2.5 text-right text-[18px] font-bold text-foreground', celdaSub(c))}>{numero(total?.[c.k])}</td>
                               {c.k === TRAS && <td className="px-4 py-2.5 text-right text-[18px] font-bold text-foreground">{porciento(tasaTotal)}</td>}
                               {COMMIT_DE[c.k] && (
                                 <CeldaDeCommit real={total?.[c.k]} cargando={!commits} editable={false} total
@@ -594,9 +666,9 @@ function ObjetivosDialog({ onClose }: { onClose: () => void }) {
 }
 
 /** Encabezado de una columna: ícono arriba y el nombre, tocable para ver de dónde sale. */
-function Encabezado({ c, icono: Icono }: { c: Explicado; icono: LucideIcon }) {
+function Encabezado({ c, icono: Icono, className }: { c: Explicado; icono: LucideIcon; className?: string }) {
   return (
-    <th className="px-4 py-3 text-right align-bottom font-semibold">
+    <th className={cn('px-4 py-3 text-right align-bottom font-semibold', className)}>
       <Explicacion c={c}>
         <span className="inline-flex flex-col items-end gap-1 leading-tight">
           <span className="grid size-6 place-items-center rounded-md bg-card text-(--brand) [border:1px_solid_var(--line)]">
@@ -609,18 +681,43 @@ function Encabezado({ c, icono: Icono }: { c: Explicado; icono: LucideIcon }) {
   )
 }
 
+/** El encabezado de «Nutrición de la cuenta»: tocarlo despliega o pliega sus tres columnas, y la
+ *  «i» de al lado explica de dónde sale (no se puede anidar un botón en otro). */
+function EncabezadoDeGrupo({ abierto, onAlternar }: { abierto: boolean; onAlternar: () => void }) {
+  return (
+    <th className={cn('px-4 py-3 text-right align-bottom font-semibold', celdaDeGrupo(abierto), abierto && 'text-(--brand-soft-fg)')}>
+      <span className="inline-flex flex-col items-end gap-1 leading-tight">
+        <span className="flex items-center gap-1">
+          <Explicacion c={NUTRICION} className="cursor-pointer text-(--fg-muted) hover:text-foreground">
+            <InfoIcon className="size-3.5" aria-label="Qué es y de dónde sale" />
+          </Explicacion>
+          <span className="grid size-6 place-items-center rounded-md bg-card text-(--brand) [border:1px_solid_var(--line)]">
+            <SproutIcon className="size-3.5" aria-hidden />
+          </span>
+        </span>
+        <button type="button" aria-expanded={abierto} onClick={onAlternar}
+          title={`${NUTRICION.title}. Tocá para ${abierto ? 'plegar' : 'ver'} el detalle.`}
+          className="inline-flex cursor-pointer items-center gap-0.5 uppercase underline decoration-dotted underline-offset-4 hover:text-foreground">
+          {NUTRICION.label}
+          <ChevronDownIcon aria-hidden className={cn('size-3 transition-transform', !abierto && '-rotate-90')} />
+        </button>
+      </span>
+    </th>
+  )
+}
+
 /** Un número de la tabla. Comparando, lleva debajo una barrita contra el mayor de su columna, y
  *  el que lo alcanza va en el color de la marca. */
-function Celda({ error, valor, max, children }: {
-  error?: boolean; valor: number | undefined; max: number | undefined; children: React.ReactNode
+function Celda({ error, valor, max, className, children }: {
+  error?: boolean; valor: number | undefined; max: number | undefined; className?: string; children: React.ReactNode
 }) {
   if (error) {
-    return <td className="px-4 py-3 text-right text-[18px] font-semibold text-(--fg-faint)" title="No se pudo leer">!</td>
+    return <td className={cn('px-4 py-3 text-right text-[18px] font-semibold text-(--fg-faint)', className)} title="No se pudo leer">!</td>
   }
   const conBarra = max !== undefined && max > 0 && valor !== undefined
   const lider = conBarra && valor === max
   return (
-    <td className="px-4 py-3 text-right align-top">
+    <td className={cn('px-4 py-3 text-right align-top', className)}>
       <div className="inline-flex min-w-[64px] flex-col items-end gap-1.5">
         <span className={cn('text-[18px] leading-none font-semibold', lider ? 'text-(--brand)' : 'text-foreground')}>{children}</span>
         {conBarra && (

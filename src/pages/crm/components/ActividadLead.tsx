@@ -325,10 +325,11 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   const telefonoDelDecisor = bloqueDecisor.telefono
     ? telefonoEscrito([], conPrefijoDePais(bloqueDecisor.prefijo, bloqueDecisor.telefonoValor))?.numero ?? '' : ''
   const emailDelDecisor = bloqueDecisor.email && esEmailValido(bloqueDecisor.emailValor) ? bloqueDecisor.emailValor.trim() : ''
+  // Las tres se contestan siempre, Sí o No (18/11/2026, por pedido); el Sí además pide su campo.
   const faltaDelDecisor = {
-    nombre: pideDecisorApuntado && bloqueDecisor.nombre === true && !decisorApuntado,
-    telefono: pideDecisorApuntado && bloqueDecisor.telefono === true && !telefonoDelDecisor,
-    email: pideDecisorApuntado && bloqueDecisor.email === true && !emailDelDecisor,
+    nombre: pideDecisorApuntado && (bloqueDecisor.nombre === null || (bloqueDecisor.nombre && !decisorApuntado)),
+    telefono: pideDecisorApuntado && (bloqueDecisor.telefono === null || (bloqueDecisor.telefono && !telefonoDelDecisor)),
+    email: pideDecisorApuntado && (bloqueDecisor.email === null || (bloqueDecisor.email && !emailDelDecisor)),
   }
   // Lo del decisor que va en la meta de la actividad: solo lo que se pidió y se escribió.
   const metaDelDecisor = pideDecisorApuntado ? {

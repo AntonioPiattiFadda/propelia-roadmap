@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { armarMetaDeActividad } from './actividad'
-import { diasHaciaAtras, esObjetivo, LLAMADAS_POR_DEMO, mesesHaciaAtras, llamadasDesdeLaUltimaDemo, objetivosDe, pendientesDePersona, progresoHaciaDemo, semanasHaciaAtras, sumarResumenes, tasaDeDecisor } from './objetivos'
+import { diasHaciaAtras, esObjetivo, LLAMADAS_POR_DEMO, mesesHaciaAtras, llamadasDesdeLaUltimaDemo, nutricionDeLaCuenta, objetivosDe, pendientesDePersona, progresoHaciaDemo, semanasHaciaAtras, sumarResumenes, tasaDeDecisor } from './objetivos'
 import type { CrmLeadRow, CrmStage, CrmTask } from '../types'
 
 const llamada = (lead_id: string, resultado: 'contestada' | 'no_respondida', decisor?: boolean, con: string[] = [], created_at = '2026-11-03T10:00:00Z') => ({
@@ -9,7 +9,35 @@ const llamada = (lead_id: string, resultado: 'contestada' | 'no_respondida', dec
   long_description: armarMetaDeActividad({ tipo: 'llamada', con, resultado, ...(decisor !== undefined && { decisor }) }),
 })
 
-const cero = { contestadas: 0, decisores: 0, decisoresNuevos: 0, noRespondidas: 0, presentaciones: 0, demos: 0 }
+const cero = { contestadas: 0, decisores: 0, decisoresNuevos: 0, noRespondidas: 0, presentaciones: 0, nombresDecisor: 0, telefonosDecisor: 0, demos: 0 }
+
+describe('nombres y teléfonos de decisores conseguidos', () => {
+  const act = (lead_id: string, meta: Parameters<typeof armarMetaDeActividad>[0]) =>
+    ({ lead_id, created_at: '2026-11-18T10:00:00Z', long_description: armarMetaDeActividad(meta) })
+  const r = objetivosDe([
+    act('a', { tipo: 'llamada', con: ['Ana'], resultado: 'contestada', decisorApuntado: 'Pablo', telefonoDecisor: '+34600000000' }),
+    act('a', { tipo: 'nota', con: [], decisorApuntado: 'Pablo' }),
+    act('b', { tipo: 'nota', con: [], telefonoDecisor: '+34611111111' }),
+    act('c', { tipo: 'llamada', con: [], resultado: 'contestada', decisorApuntado: '  ', telefonoDecisor: '' }), // vacíos: no
+    act('d', { tipo: 'demo', con: ['Ana'], decisorApuntado: 'Luis' }), // la demo no cuenta
+  ], [])
+
+  it('cuenta actividades (llamada y nota), no leads', () => {
+    expect(r.resumen.nombresDecisor).toBe(2)
+    expect(r.resumen.telefonosDecisor).toBe(2)
+  })
+
+  it('junta los leads para filtrar', () => {
+    expect([...r.leads.nombresDecisor]).toEqual(['a'])
+    expect([...r.leads.telefonosDecisor].sort()).toEqual(['a', 'b'])
+  })
+})
+
+describe('nutricionDeLaCuenta', () => {
+  it('suma mails de presentación, nombres y teléfonos de decisores', () => {
+    expect(nutricionDeLaCuenta({ ...cero, presentaciones: 2, nombresDecisor: 3, telefonosDecisor: 1, contestadas: 9 })).toBe(6)
+  })
+})
 
 describe('objetivosDe', () => {
   const r = objetivosDe(
@@ -26,7 +54,7 @@ describe('objetivosDe', () => {
   )
 
   it('cuenta llamadas, mails y demos, no leads', () => {
-    expect(r.resumen).toEqual({ contestadas: 2, decisores: 1, decisoresNuevos: 1, noRespondidas: 3, presentaciones: 2, demos: 3 })
+    expect(r.resumen).toEqual({ ...cero, contestadas: 2, decisores: 1, decisoresNuevos: 1, noRespondidas: 3, presentaciones: 2, demos: 3 })
   })
 
   it('junta los leads de cada número, sin repetir', () => {
@@ -72,7 +100,9 @@ describe('objetivosDe', () => {
 describe('esObjetivo', () => {
   it('acepta solo los de la lista', () => {
     expect(esObjetivo('demos')).toBe(true)
-    expect(esObjetivo('presentaciones')).toBe(true)
+    expect(esObjetivo('presentaciones')).toBe(true) // un enlace viejo sigue andando
+    expect(esObjetivo('nombresDecisor')).toBe(true)
+    expect(esObjetivo('telefonosDecisor')).toBe(true)
     expect(esObjetivo('otra')).toBe(false)
     expect(esObjetivo(null)).toBe(false)
   })

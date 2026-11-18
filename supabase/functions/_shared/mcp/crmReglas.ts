@@ -62,6 +62,8 @@ interface Meta {
   con: string[]
   resultado?: string
   decisor?: boolean
+  decisorApuntado?: string
+  telefonoDecisor?: string
 }
 
 /** Leída estricta, como el front: lo que no tiene la forma conocida no es una actividad. */
@@ -74,7 +76,9 @@ function metaDe(guardado: unknown): Meta | null {
     if (!Array.isArray(m.con) || !m.con.every((c: unknown) => typeof c === 'string')) return null
     if (m.resultado !== undefined && m.resultado !== 'contestada' && m.resultado !== 'no_respondida') return null
     if (m.decisor !== undefined && typeof m.decisor !== 'boolean') return null
-    return { tipo: m.tipo, con: m.con, resultado: m.resultado, decisor: m.decisor }
+    if (m.decisorApuntado !== undefined && typeof m.decisorApuntado !== 'string') return null
+    if (m.telefonoDecisor !== undefined && typeof m.telefonoDecisor !== 'string') return null
+    return { tipo: m.tipo, con: m.con, resultado: m.resultado, decisor: m.decisor, decisorApuntado: m.decisorApuntado, telefonoDecisor: m.telefonoDecisor }
   } catch {
     return null
   }
@@ -82,8 +86,26 @@ function metaDe(guardado: unknown): Meta | null {
 
 /* ─── objetivos (lib/objetivos.ts) ─────────────────────────────────────── */
 
-export const OBJETIVOS = ['contestadas', 'decisores', 'decisoresNuevos', 'noRespondidas', 'presentaciones', 'demos'] as const
+export const OBJETIVOS = [
+  'contestadas', 'decisores', 'decisoresNuevos', 'noRespondidas', 'presentaciones', 'nombresDecisor', 'telefonosDecisor', 'demos',
+] as const
 export type Objetivo = (typeof OBJETIVOS)[number]
+
+/** «Nutrición de la cuenta»: mails de presentación + nombres + teléfonos de decisores conseguidos. */
+export const NUTRICION_DE_LA_CUENTA = ['presentaciones', 'nombresDecisor', 'telefonosDecisor'] as const satisfies readonly Objetivo[]
+export function nutricionDeLaCuenta(resumen: Record<Objetivo, number>): number {
+  return NUTRICION_DE_LA_CUENTA.reduce((s, k) => s + resumen[k], 0)
+}
+
+/** Lo que una llamada o nota (no la demo) dejó apuntado del decisor: nombre y/o teléfono. */
+function decisorConseguido(guardado: unknown): Objetivo[] {
+  const m = metaDe(guardado)
+  if (m?.tipo !== 'llamada' && m?.tipo !== 'nota') return []
+  return [
+    ...(m.decisorApuntado?.trim() ? ['nombresDecisor' as const] : []),
+    ...(m.telefonoDecisor?.trim() ? ['telefonosDecisor' as const] : []),
+  ]
+}
 
 export interface Llamada {
   lead_id: string | null
@@ -137,6 +159,7 @@ export function objetivosDe(
   for (const c of llamadas) {
     for (const k of bolsasDeLlamada(c.long_description)) sumar(k, c.lead_id)
     if (esDecisorNuevo(c, previas)) sumar('decisoresNuevos', c.lead_id)
+    for (const k of decisorConseguido(c.long_description)) sumar(k, c.lead_id)
   }
   for (const m of extra.presentaciones ?? []) sumar('presentaciones', m.lead_id)
   for (const d of demos) sumar('demos', d.lead_id)

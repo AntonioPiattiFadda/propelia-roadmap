@@ -8,8 +8,28 @@ import type { CrmLeadRow, CrmStage, CrmTask } from '../types'
    presentación y las demos que agendé. Cada uno además dice QUÉ leads son, para que tocar el número
    filtre la lista (`?objetivo=`). Los números cuentan llamadas, mails y demos —tres llamadas al
    mismo lead son tres—; el filtro, leads. */
-export const OBJETIVOS = ['contestadas', 'decisores', 'decisoresNuevos', 'noRespondidas', 'presentaciones', 'demos'] as const
+export const OBJETIVOS = [
+  'contestadas', 'decisores', 'decisoresNuevos', 'noRespondidas', 'presentaciones', 'nombresDecisor', 'telefonosDecisor', 'demos',
+] as const
 export type Objetivo = typeof OBJETIVOS[number]
+
+/** «Nutrición de la cuenta» (18/11/2026, por pedido): lo que se consiguió de la cuenta además de
+ *  hablar. Es un grupo y no un objetivo: suma, pero no filtra (filtra cada uno de los suyos). */
+export const NUTRICION_DE_LA_CUENTA = ['presentaciones', 'nombresDecisor', 'telefonosDecisor'] as const satisfies readonly Objetivo[]
+
+export function nutricionDeLaCuenta(resumen: Record<Objetivo, number>): number {
+  return NUTRICION_DE_LA_CUENTA.reduce((s, k) => s + resumen[k], 0)
+}
+
+/** Lo que una llamada o nota (no la demo) dejó apuntado del decisor (18/11/2026): nombre y/o teléfono. */
+function decisorConseguido(guardado: string | null): Objetivo[] {
+  const m = leerMetaDeActividad(guardado)
+  if (m?.tipo !== 'llamada' && m?.tipo !== 'nota') return []
+  return [
+    ...(m.decisorApuntado?.trim() ? ['nombresDecisor' as const] : []),
+    ...(m.telefonoDecisor?.trim() ? ['telefonosDecisor' as const] : []),
+  ]
+}
 
 export type ObjetivosDelPeriodo = {
   resumen: Record<Objetivo, number>
@@ -54,7 +74,7 @@ export function objetivosDe(
     historial?: readonly Llamada[]
   } = {},
 ): ObjetivosDelPeriodo {
-  const resumen = { contestadas: 0, decisores: 0, decisoresNuevos: 0, noRespondidas: 0, presentaciones: 0, demos: 0 }
+  const resumen = Object.fromEntries(OBJETIVOS.map(k => [k, 0])) as Record<Objetivo, number>
   const leads = Object.fromEntries(OBJETIVOS.map(k => [k, new Set<string>()])) as Record<Objetivo, Set<string>>
   const sumar = (k: Objetivo, leadId: string | null) => {
     resumen[k]++
@@ -66,6 +86,7 @@ export function objetivosDe(
   for (const c of llamadas) {
     for (const k of bolsasDeLlamada(c.long_description)) sumar(k, c.lead_id)
     if (esDecisorNuevo(c, previas)) sumar('decisoresNuevos', c.lead_id)
+    for (const k of decisorConseguido(c.long_description)) sumar(k, c.lead_id)
   }
   for (const m of extra.presentaciones ?? []) sumar('presentaciones', m.lead_id)
   for (const d of demos) sumar('demos', d.lead_id)

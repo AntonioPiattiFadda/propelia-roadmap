@@ -591,8 +591,8 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   **Desde el 18/11/2026 (por pedido), en la llamada y la nota es un bloque «Decisor»** (`BloqueDecisor`,
   `FilasDelRegistro.tsx`; la demo sigue con el campo libre): tres Sí/No —«Nombre del decisor
   conseguido», «Teléfono del decisor conseguido» (con prefijo, España de entrada) y «Enviar mail»
-  (precargado con el primer email de la inmobiliaria)—; sin contestar es No y el Sí vuelve obligatorio
-  su campo. Al registrar, `conDatosDelDecisor` (`lib/clientData.ts`) suma al mismo patch del perfil el
+  (precargado con el primer email de la inmobiliaria)—; **las tres son obligatorias** (registrar con una
+  sin contestar la pinta en rojo y no registra, como la etapa) y el Sí vuelve obligatorio su campo. Al registrar, `conDatosDelDecisor` (`lib/clientData.ts`) suma al mismo patch del perfil el
   nombre (como `conDecisorApuntado`), el teléfono en el casillero de ese contacto (sin nombre: el contacto
   con ese número, o un casillero libre marcado decisor y, si es alternativo, rotulado «Decisor») y el
   email en el del contacto decisor; nunca pisa, y lo que no entra avisa con un toast. La meta lleva
@@ -843,6 +843,13 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   la misma inmobiliaria va una vez). No filtra: tocarla la explica. **Cada encabezado del diálogo
   se toca y dice qué es el número y de qué tabla y columnas sale** (`Explicacion`, textos en
   `COLUMNAS` de `ContadorDeLlamadas.tsx`): si cambia una consulta de `useObjetivos`, cambia el texto.
+  **«Nutrición de la cuenta»** (18/11/2026, por pedido), a la izquierda de «Con decisor» en el
+  contador y en «Comparar»: la suma de «Mails de presentación», «Nombres de decisores conseguidos» y
+  «Teléfonos de decisores conseguidos» (`NUTRICION_DE_LA_CUENTA`, `lib/objetivos.ts`; los dos nuevos
+  cuentan llamadas y notas con `decisorApuntado` / `telefonoDecisor` en la meta, actividades y no
+  leads). Tocarlo despliega o pliega los tres (nace plegado, salvo con `?objetivo=` de uno de ellos),
+  teñidos de la marca como subgrupo; el grupo no filtra, cada uno de los suyos sí (`?objetivo=nombresDecisor`
+  / `telefonosDecisor`; `presentaciones` sigue valiendo). Espejo en el MCP (`crmReglas.ts`, `get_crm_goals`).
 - **«Dashboard SDR»** (11/11/2026, por pedido; inspirado en un «SDR Pro Dashboard» de afuera, sin su
   marca): botón del diálogo de Objetivos que abre un diálogo casi a pantalla completa
   (`DashboardSdrDialog`, reglas puras en `lib/dashboardSdr.ts`, datos en `useDashboardSdr`). Una

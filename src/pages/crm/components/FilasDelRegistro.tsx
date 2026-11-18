@@ -243,7 +243,8 @@ export function CampoDecisorApuntado({ id, valor, onCambiar, title }: { id: stri
 
 /* El bloque «Decisor» de la llamada y la nota (18/11/2026, por pedido): reemplazó al campo libre
    (`CampoDecisorApuntado`, que sigue en la demo). Tres preguntas Sí/No con las pastillas de «¿Es
-   decisor?»; sin contestar es No. El Sí abre su campo, que pasa a ser obligatorio. El estado y las
+   decisor?»; las tres son obligatorias (registrar sin contestar una la pinta en rojo). El Sí abre
+   su campo, que pasa a ser obligatorio. El estado y las
    reglas son de `ActividadLead`. */
 export type BloqueDelDecisor = {
   nombre: boolean | null; nombreValor: string
