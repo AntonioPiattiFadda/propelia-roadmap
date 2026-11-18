@@ -2,8 +2,21 @@ import { describe, expect, it } from 'vitest'
 import type { CrmMeeting, CrmTask, LeadDetalle, Usuario } from '../types'
 import {
   agruparPorDia, armarMetaDeActividad, decisorContactado, horaDe, leerMetaDeActividad, lineaDeTiempo, primeroLosUltimos, resumenDeLlamadas, textoEditado,
-  ultimoContacto, type ItemActividad, type MetaDeActividad,
+  pideAvancesDelDecisor, ultimoContacto, type ItemActividad, type MetaDeActividad,
 } from './actividad'
+
+describe('pideAvancesDelDecisor', () => {
+  it('solo en la llamada y solo cuando quien atendió no decide', () => {
+    expect(pideAvancesDelDecisor('llamada', false)).toBe(true)
+    expect(pideAvancesDelDecisor('llamada', true)).toBe(false)
+    expect(pideAvancesDelDecisor('llamada', null)).toBe(false) // todavía sin contestar
+  })
+  it('la nota, el contacto fallido y la demo no lo piden', () => {
+    expect(pideAvancesDelDecisor('nota', false)).toBe(false)
+    expect(pideAvancesDelDecisor('fallido', false)).toBe(false)
+    expect(pideAvancesDelDecisor('demo', false)).toBe(false)
+  })
+})
 
 describe('textoEditado', () => {
   it('lo escrito, sin espacios de más', () => {

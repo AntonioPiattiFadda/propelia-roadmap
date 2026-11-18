@@ -82,6 +82,13 @@ export function textoEditado(i: Pick<ItemActividad, 'tipo' | 'resultado'>, texto
   return i.tipo === 'llamada' && i.resultado ? TEXTO_DE_LLAMADA[i.resultado] : null
 }
 
+/** «Avances para contactar al decisor» (18/11/2026, por pedido): solo en la llamada y solo cuando
+ *  quien atendió NO decide (`esDecisor`: lo contestado o lo que ya sabe el perfil; null = sin
+ *  contestar). Si decide, no hay a quién más buscar. */
+export function pideAvancesDelDecisor(tipo: string, esDecisor: boolean | null): boolean {
+  return tipo === 'llamada' && esDecisor === false
+}
+
 /** Lo que va a `long_description`. Una nota sin nadie no guarda nada: es un comentario de siempre. */
 export function armarMetaDeActividad(meta: MetaDeActividad): string | null {
   const conDecisor = meta.decisorApuntado || meta.telefonoDecisor || meta.emailDecisor

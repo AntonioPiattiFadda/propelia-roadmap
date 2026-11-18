@@ -18,10 +18,10 @@ import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useActualizarCliente, useActualizarLead, useMutacionDelDetalle } from '../hooks/useLeadMutaciones'
 import {
   agruparPorDia, armarMetaDeActividad, horaDe, INTENTOS_DE_CONTACTO, lineaDeTiempo, primeroLosUltimos, TEXTO_DE_LLAMADA, textoEditado,
-  ultimoContacto, type ItemActividad, type MetaDeActividad, type ResultadoDeLlamada,
+  pideAvancesDelDecisor, ultimoContacto, type ItemActividad, type MetaDeActividad, type ResultadoDeLlamada,
 } from '../lib/actividad'
 import {
-  campoDelNuevoDecisor, casilleroDelTelefonoNuevo, conDatosDelDecisor, conPrefijoDePais, contactosConDecisor, tieneDecisor, decisorDelContactoNuevo, decisorSabido,
+  campoDelNuevoDecisor, casilleroDelTelefonoNuevo, conDatosDelDecisor, conPrefijoDePais, contactosConDecisor, decisorDelContactoNuevo, decisorSabido,
   decisoresDeLaLlamada, nombreDelLead, patchDeContactosNuevos, telefonoEscrito, telefonosDelCliente, type CampoDecisor,
 } from '../lib/clientData'
 import { MensajesPredeterminadosDialog } from './MensajesPredeterminados'
@@ -304,13 +304,12 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   // Si el perfil ya dice si los elegidos deciden, no se pregunta: se toma de ahí.
   const sabido = decisorSabido(conDecisor, con)
   const pideDecisor = tipo === 'llamada' && eligioConQuien && sabido === null
-  /* Apuntar al decisor (17/10/2026, por pedido): habló el doorkeeper u otro y dio el nombre de
-     quien decide. Opcional, y deja de estar en cuanto el perfil tiene a alguien marcado como
-     decisor. El contacto fallido no lo ofrece: ahí no habló nadie. */
-  const pideDecisorApuntado = (tipo === 'nota' || tipo === 'llamada') && !tieneDecisor(lead.client)
-  /* Desde el 18/11/2026 (por pedido) es un bloque «Decisor» con tres Sí/No (`BloqueDecisor`): el
-     nombre, el teléfono y «Enviar mail». Lo conseguido va al perfil (`conDatosDelDecisor`) y a la
-     meta de la actividad; con «Enviar mail» en Sí, registrar abre «Mensajes» en Email con ese «Para». */
+  /* «Avances para contactar al decisor» (18/11/2026, por pedido; `BloqueDecisor`): solo en la
+     llamada y solo cuando quien atendió no decide (lo contestado o lo que ya sabe el perfil), haya
+     o no un decisor en el perfil. Tres Sí/No obligatorios: el nombre, el teléfono y el email. Lo
+     conseguido va al perfil (`conDatosDelDecisor`) y a la meta de la actividad; con el email en Sí,
+     registrar abre «Mensajes» en Email con ese «Para». La nota ya no lo lleva. */
+  const pideDecisorApuntado = pideAvancesDelDecisor(tipo, sabido ?? decisor)
   const [bloqueDecisor, setBloqueDecisor] = useState<BloqueDelDecisor>(BLOQUE_DEL_DECISOR_VACIO)
   const cambiarBloqueDecisor = (parcial: Partial<BloqueDelDecisor>) => setBloqueDecisor(b => {
     const nuevo = { ...b, ...parcial }
@@ -713,10 +712,16 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 debajo de con quién, recién cuando se eligió, y hay que contestarla: sin respuesta
                 no se registra. Contestar «Sí» con un solo contacto elegido lo marca en el perfil. */}
             {pideDecisor && (
-              <FilaEsDecisor valor={decisor} onCambiar={setDecisor} rojo={enRojo('decisor')}
+              <FilaEsDecisor valor={decisor} rojo={enRojo('decisor')}
+                // Pasar a Sí esconde el bloque: lo contestado ahí se vacía, así no queda nada oculto.
+                onCambiar={v => { setDecisor(v); if (v) setBloqueDecisor(BLOQUE_DEL_DECISOR_VACIO) }}
                 title="Quien atendió decide en la inmobiliaria" />
             )}
             {tipo === 'llamada' && eligioConQuien && sabido !== null && <NotaDeDecisorSabido sabido={sabido} />}
+            {pideDecisorApuntado && (
+              <BloqueDecisor valor={bloqueDecisor} onCambiar={cambiarBloqueDecisor}
+                rojo={{ nombre: enRojo('decisorNombre'), telefono: enRojo('decisorTelefono'), email: enRojo('decisorEmail') }} />
+            )}
             <textarea
               value={texto}
               onChange={e => setTexto(e.target.value)}
@@ -729,10 +734,6 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
               aria-invalid={enRojo('texto')}
               className={claseDelTexto(enRojo('texto'))}
             />
-            {pideDecisorApuntado && (
-              <BloqueDecisor valor={bloqueDecisor} onCambiar={cambiarBloqueDecisor}
-                rojo={{ nombre: enRojo('decisorNombre'), telefono: enRojo('decisorTelefono'), email: enRojo('decisorEmail') }} />
-            )}
             {pideEtapa && (
               <CajaDeEtapa valor={etapaFinal} onCambiar={v => { setEtapaElegida(v); setFaltaEtapa(false) }}
                 opciones={opcionesEtapa} actual={actual} rojo={faltaEtapa}

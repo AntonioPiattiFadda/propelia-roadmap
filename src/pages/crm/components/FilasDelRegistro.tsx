@@ -241,11 +241,11 @@ export function CampoDecisorApuntado({ id, valor, onCambiar, title }: { id: stri
   )
 }
 
-/* El bloque «Decisor» de la llamada y la nota (18/11/2026, por pedido): reemplazó al campo libre
-   (`CampoDecisorApuntado`, que sigue en la demo). Tres preguntas Sí/No con las pastillas de «¿Es
-   decisor?»; las tres son obligatorias (registrar sin contestar una la pinta en rojo). El Sí abre
-   su campo, que pasa a ser obligatorio. El estado y las
-   reglas son de `ActividadLead`. */
+/* «Avances para contactar al decisor» (18/11/2026, por pedido): en la llamada, solo cuando quien
+   atendió no decide (`pideAvancesDelDecisor`). Reemplazó al campo libre (`CampoDecisorApuntado`,
+   que sigue en la demo). Tres preguntas Sí/No con las pastillas de «¿Es decisor?»; las tres son
+   obligatorias (registrar sin contestar una la pinta en rojo). El Sí abre su campo, que pasa a ser
+   obligatorio. El estado y las reglas son de `ActividadLead`. */
 export type BloqueDelDecisor = {
   nombre: boolean | null; nombreValor: string
   telefono: boolean | null; telefonoValor: string; prefijo: string
@@ -281,7 +281,7 @@ export function BloqueDecisor({ valor, onCambiar, rojo }: {
 }) {
   return (
     <fieldset className="flex flex-col gap-1.5 rounded-md px-3 py-2 [border:1px_solid_var(--line-soft)]">
-      <legend className="px-1 text-[11.5px] font-semibold text-(--fg-2)">Decisor</legend>
+      <legend className="px-1 text-[11.5px] font-semibold text-(--fg-2)">Avances para contactar al decisor</legend>
       <FilaSiNo rotulo="Nombre del decisor conseguido" valor={valor.nombre} onCambiar={v => onCambiar({ nombre: v })} rojo={rojo.nombre}>
         <input autoFocus value={valor.nombreValor} onChange={e => onCambiar({ nombreValor: e.target.value })}
           aria-label="Nombre del decisor" aria-invalid={rojo.nombre} placeholder="Nombre de quien decide"
@@ -300,7 +300,7 @@ export function BloqueDecisor({ valor, onCambiar, rojo }: {
             title="Se carga en el perfil, en el contacto del decisor, al registrar" className={campoEscrito} />
         </span>
       </FilaSiNo>
-      <FilaSiNo rotulo="Enviar mail" valor={valor.email} onCambiar={v => onCambiar({ email: v })} rojo={rojo.email}>
+      <FilaSiNo rotulo="Email para enviar" valor={valor.email} onCambiar={v => onCambiar({ email: v })} rojo={rojo.email}>
         <input value={valor.emailValor} onChange={e => onCambiar({ emailValor: e.target.value })}
           type="email" aria-label="Email del decisor" aria-invalid={rojo.email} placeholder="casilla@inmobiliaria.com"
           title="Al registrar se abre «Mensajes» con este «Para»" className={campoEscrito} />

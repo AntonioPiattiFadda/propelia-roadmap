@@ -588,15 +588,19 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   queda en el perfil marcado como decisor (`conDecisorApuntado`: si ya es contacto lo marca, si no lo
   carga en el primer casillero libre) y no se fija como contactado. El campo desaparece en cuanto el
   perfil tiene a alguien marcado como decisor (`tieneDecisor`).
-  **Desde el 18/11/2026 (por pedido), en la llamada y la nota es un bloque «Decisor»** (`BloqueDecisor`,
-  `FilasDelRegistro.tsx`; la demo sigue con el campo libre): tres Sí/No —«Nombre del decisor
-  conseguido», «Teléfono del decisor conseguido» (con prefijo, España de entrada) y «Enviar mail»
-  (precargado con el primer email de la inmobiliaria)—; **las tres son obligatorias** (registrar con una
-  sin contestar la pinta en rojo y no registra, como la etapa) y el Sí vuelve obligatorio su campo. Al registrar, `conDatosDelDecisor` (`lib/clientData.ts`) suma al mismo patch del perfil el
+  **Desde el 18/11/2026 (por pedido), en la llamada es el bloque «Avances para contactar al decisor»**
+  (`BloqueDecisor`, `FilasDelRegistro.tsx`; la nota ya no lo lleva y la demo sigue con el campo libre).
+  La llamada pregunta primero «¿Es decisor?» (obligatoria; si el perfil ya lo sabe, vale eso) y el
+  bloque va justo debajo **solo si la respuesta es No** (`pideAvancesDelDecisor`, `lib/actividad.ts`),
+  haya o no un decisor en el perfil; pasar a Sí lo esconde y vacía lo contestado. Tres Sí/No —«Nombre
+  del decisor conseguido», «Teléfono del decisor conseguido» (con prefijo, España de entrada) y «Email
+  para enviar» (precargado con el primer email de la inmobiliaria)—; **las tres son obligatorias**
+  mientras se ve (registrar con una sin contestar la pinta en rojo y no registra, como la etapa) y el
+  Sí vuelve obligatorio su campo. Al registrar, `conDatosDelDecisor` (`lib/clientData.ts`) suma al mismo patch del perfil el
   nombre (como `conDecisorApuntado`), el teléfono en el casillero de ese contacto (sin nombre: el contacto
   con ese número, o un casillero libre marcado decisor y, si es alternativo, rotulado «Decisor») y el
   email en el del contacto decisor; nunca pisa, y lo que no entra avisa con un toast. La meta lleva
-  `decisorApuntado`, `telefonoDecisor` y `emailDecisor`. Con «Enviar mail» en Sí, registrada la
+  `decisorApuntado`, `telefonoDecisor` y `emailDecisor`. Con «Email para enviar» en Sí, registrada la
   actividad se abre «Mensajes» en Email con ese «Para» (`canalInicial`/`paraInicial`). Sin migración.
 - **La llamada con el decisor lo fija en el perfil** (17/10/2026): reemplazó al cartel «Decisor
   contactado» (16/10). El contacto queda marcado como decisor (y se crea si se escribió a mano) y
