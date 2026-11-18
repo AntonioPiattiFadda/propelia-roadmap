@@ -241,6 +241,73 @@ export function CampoDecisorApuntado({ id, valor, onCambiar, title }: { id: stri
   )
 }
 
+/* El bloque «Decisor» de la llamada y la nota (18/11/2026, por pedido): reemplazó al campo libre
+   (`CampoDecisorApuntado`, que sigue en la demo). Tres preguntas Sí/No con las pastillas de «¿Es
+   decisor?»; sin contestar es No. El Sí abre su campo, que pasa a ser obligatorio. El estado y las
+   reglas son de `ActividadLead`. */
+export type BloqueDelDecisor = {
+  nombre: boolean | null; nombreValor: string
+  telefono: boolean | null; telefonoValor: string; prefijo: string
+  email: boolean | null; emailValor: string
+}
+export const BLOQUE_DEL_DECISOR_VACIO: BloqueDelDecisor = {
+  nombre: null, nombreValor: '', telefono: null, telefonoValor: '', prefijo: PREFIJOS_DE_PAIS[0].prefijo, email: null, emailValor: '',
+}
+
+function FilaSiNo({ rotulo, valor, onCambiar, rojo, children }: {
+  rotulo: string; valor: boolean | null; onCambiar: (v: boolean) => void; rojo: boolean; children?: React.ReactNode
+}) {
+  return (
+    <div className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo(rojo))}>
+      <div role="radiogroup" aria-label={rotulo} className="contents">
+        <span className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo(rojo))}>{rotulo}</span>
+        {([[true, 'Sí'], [false, 'No']] as const).map(([v, label]) => (
+          <button key={label} type="button" role="radio" aria-checked={valor === v}
+            onClick={() => onCambiar(v)} className={pastilla(valor === v)}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {valor === true && children}
+    </div>
+  )
+}
+
+export function BloqueDecisor({ valor, onCambiar, rojo }: {
+  valor: BloqueDelDecisor
+  onCambiar: (parcial: Partial<BloqueDelDecisor>) => void
+  rojo: { nombre: boolean; telefono: boolean; email: boolean }
+}) {
+  return (
+    <fieldset className="flex flex-col gap-1.5 rounded-md px-3 py-2 [border:1px_solid_var(--line-soft)]">
+      <legend className="px-1 text-[11.5px] font-semibold text-(--fg-2)">Decisor</legend>
+      <FilaSiNo rotulo="Nombre del decisor conseguido" valor={valor.nombre} onCambiar={v => onCambiar({ nombre: v })} rojo={rojo.nombre}>
+        <input autoFocus value={valor.nombreValor} onChange={e => onCambiar({ nombreValor: e.target.value })}
+          aria-label="Nombre del decisor" aria-invalid={rojo.nombre} placeholder="Nombre de quien decide"
+          title="Se carga en el perfil como decisor al registrar" className={campoEscrito} />
+      </FilaSiNo>
+      <FilaSiNo rotulo="Teléfono del decisor conseguido" valor={valor.telefono} onCambiar={v => onCambiar({ telefono: v })} rojo={rojo.telefono}>
+        <span className="flex min-w-[150px] flex-1 gap-1">
+          <select value={valor.prefijo} onChange={e => onCambiar({ prefijo: e.target.value })} aria-label="Prefijo del país"
+            className="h-7 shrink-0 cursor-pointer rounded-md bg-card px-1.5 text-[12.5px] text-foreground tabular-nums outline-none [border:1px_solid_var(--line)] focus:[border-color:var(--line-strong)] max-md:text-[16px]">
+            {PREFIJOS_DE_PAIS.map(p => (
+              <option key={p.codigo} value={p.prefijo} title={p.pais}>{p.codigo} {p.prefijo}</option>
+            ))}
+          </select>
+          <input value={valor.telefonoValor} onChange={e => onCambiar({ telefonoValor: e.target.value })}
+            type="tel" inputMode="tel" aria-label="Teléfono del decisor" aria-invalid={rojo.telefono} placeholder="Número"
+            title="Se carga en el perfil, en el contacto del decisor, al registrar" className={campoEscrito} />
+        </span>
+      </FilaSiNo>
+      <FilaSiNo rotulo="Enviar mail" valor={valor.email} onCambiar={v => onCambiar({ email: v })} rojo={rojo.email}>
+        <input value={valor.emailValor} onChange={e => onCambiar({ emailValor: e.target.value })}
+          type="email" aria-label="Email del decisor" aria-invalid={rojo.email} placeholder="casilla@inmobiliaria.com"
+          title="Al registrar se abre «Mensajes» con este «Para»" className={campoEscrito} />
+      </FilaSiNo>
+    </fieldset>
+  )
+}
+
 /* «El lead queda en»: arranca vacía y es obligatoria (12/10/2026). */
 export function CajaDeEtapa({ valor, onCambiar, opciones, actual, rojo, aviso }: {
   valor: string

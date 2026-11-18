@@ -56,8 +56,12 @@ export type MetaDeActividad = {
    *  «Laura»). Va aparte de `con` porque el número marcado y quien atiende no siempre coinciden
    *  (16/10/2026, por pedido). Las llamadas anteriores no lo dicen. */
   telefono?: { numero: string; etiqueta: string }
-  /** Solo demos: el decisor que dio el doorkeeper, si se apuntó (no tiene por qué asistir). */
+  /** El decisor que dio el doorkeeper, si se apuntó (no tiene por qué asistir). En demos y, desde
+   *  el 18/11/2026, en notas y llamadas (el bloque «Decisor» del registro). */
   decisorApuntado?: string
+  /** Notas y llamadas (18/11/2026): el teléfono y el email del decisor conseguidos, si se dieron. */
+  telefonoDecisor?: string
+  emailDecisor?: string
   /** Solo demos: el id de la reunión en `crm_meetings`. La actividad y la reunión se pintan como un
    *  solo renglón, y el día y la hora salen de la reunión: si la mueven, el registro no miente. */
   reunion?: string
@@ -80,7 +84,8 @@ export function textoEditado(i: Pick<ItemActividad, 'tipo' | 'resultado'>, texto
 
 /** Lo que va a `long_description`. Una nota sin nadie no guarda nada: es un comentario de siempre. */
 export function armarMetaDeActividad(meta: MetaDeActividad): string | null {
-  if (meta.tipo === 'nota' && meta.con.length === 0) return null
+  const conDecisor = meta.decisorApuntado || meta.telefonoDecisor || meta.emailDecisor
+  if (meta.tipo === 'nota' && meta.con.length === 0 && !conDecisor) return null
   return MARCA_ACTIVIDAD + JSON.stringify(meta)
 }
 
@@ -95,13 +100,15 @@ export function leerMetaDeActividad(guardado: string | null): MetaDeActividad | 
   try {
     const m: unknown = JSON.parse(guardado.slice(MARCA_ACTIVIDAD.length))
     if (typeof m !== 'object' || m === null) return null
-    const { tipo, con, resultado, decisor, telefono, decisorApuntado, reunion } = m as Record<string, unknown>
+    const { tipo, con, resultado, decisor, telefono, decisorApuntado, telefonoDecisor, emailDecisor, reunion } = m as Record<string, unknown>
     if (tipo !== 'nota' && tipo !== 'llamada' && tipo !== 'demo' && tipo !== 'demoHecha') return null
     if (!Array.isArray(con) || !con.every(c => typeof c === 'string')) return null
     if (resultado !== undefined && resultado !== 'contestada' && resultado !== 'no_respondida') return null
     if (decisor !== undefined && typeof decisor !== 'boolean') return null
     if (telefono !== undefined && !esTelefonoGuardado(telefono)) return null
     if (decisorApuntado !== undefined && typeof decisorApuntado !== 'string') return null
+    if (telefonoDecisor !== undefined && typeof telefonoDecisor !== 'string') return null
+    if (emailDecisor !== undefined && typeof emailDecisor !== 'string') return null
     if (reunion !== undefined && typeof reunion !== 'string') return null
     return {
       tipo, con,
@@ -109,6 +116,8 @@ export function leerMetaDeActividad(guardado: string | null): MetaDeActividad | 
       ...(decisor !== undefined && { decisor }),
       ...(telefono !== undefined && { telefono: { numero: telefono.numero, etiqueta: telefono.etiqueta } }),
       ...(decisorApuntado !== undefined && { decisorApuntado }),
+      ...(telefonoDecisor !== undefined && { telefonoDecisor }),
+      ...(emailDecisor !== undefined && { emailDecisor }),
       ...(reunion !== undefined && { reunion }),
     }
   } catch { return null }

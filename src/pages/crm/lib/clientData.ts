@@ -202,7 +202,82 @@ export function conDecisorApuntado(
   return { patch: { ...patch, ...nuevo.patch }, sinLugar: nuevo.sinLugar.length > 0 }
 }
 
-type ClienteConGoogle = Pick<CrmClient, 'phone' | 'google_maps_phone'
+type CampoEmail = 'email' | 'alternative_phone_1_email' | 'alternative_phone_2_email'
+const EMAIL_DEL_DECISOR: Record<CampoDecisor, CampoEmail> = {
+  contact_is_decision_maker: 'email',
+  alternative_phone_1_is_decision_maker: 'alternative_phone_1_email',
+  alternative_phone_2_is_decision_maker: 'alternative_phone_2_email',
+}
+
+/** El patch de `conDatosDelDecisor`: el de los nuevos más teléfonos y emails. */
+export type PatchDelDecisor = ReturnType<typeof patchDeContactosNuevos>['patch']
+  & Partial<Record<CasilleroDeTelefono | CampoEmail, string>>
+
+/** Lo conseguido del decisor al registrar una nota o una llamada (18/11/2026, por pedido). */
+export type DatosDelDecisor = { nombre?: string; telefono?: string; email?: string }
+
+/**
+ * El bloque «Decisor» del registro (18/11/2026, por pedido): nombre, teléfono y email conseguidos.
+ * El nombre va como en `conDecisorApuntado`. El teléfono va al casillero de ese contacto si no tiene
+ * número; sin nombre, si ya es de un contacto marca a ese, y si no va a un casillero libre
+ * (`casilleroDelTelefonoNuevo`) marcado como decisor y, si es un alternativo sin nombre, rotulado
+ * «Decisor». El email va al del contacto decisor si está vacío y no está ya en el perfil; sin
+ * contacto (ni nombre ni teléfono) no tiene dónde ir y queda solo en la actividad. Nunca se pisa
+ * nada: lo que no entra va a `sinLugar`.
+ */
+export function conDatosDelDecisor(
+  client: ClienteConDecisor & Partial<Pick<CrmClient, CampoEmail>>,
+  patchInicial: ReturnType<typeof patchDeContactosNuevos>['patch'],
+  datos: DatosDelDecisor,
+): { patch: PatchDelDecisor; sinLugar: ('nombre' | 'telefono' | 'email')[] } {
+  const sinLugar: ('nombre' | 'telefono' | 'email')[] = []
+  let patch: PatchDelDecisor = { ...patchInicial }
+  let campo: CampoDecisor | null = null
+  const nombre = datos.nombre?.trim()
+  if (nombre) {
+    const r = conDecisorApuntado(client, patch, nombre)
+    patch = { ...patch, ...r.patch }
+    if (r.sinLugar) sinLugar.push('nombre')
+    else {
+      const igual = (a: string | null | undefined) => !!a && a.toLocaleLowerCase('es') === nombre.toLocaleLowerCase('es')
+      const casillero = (Object.keys(DECISOR_DEL_CASILLERO) as CasilleroDeNombre[]).find(k => igual(patch[k]))
+      campo = contactosConDecisor(client).find(c => igual(c.nombre))?.campoDecisor
+        ?? (casillero ? DECISOR_DEL_CASILLERO[casillero] : null)
+    }
+  }
+  const telefono = datos.telefono?.trim()
+  if (telefono) {
+    const actual = { ...client, ...patch }
+    if (campo) {
+      const suyo = TELEFONO_DEL_DECISOR[campo]
+      if (!actual[suyo]?.trim()) patch[suyo] = telefono
+      else if (soloDigitos(actual[suyo]) !== soloDigitos(telefono)) sinLugar.push('telefono')
+    } else {
+      const yaEsta = CAMPOS_DECISOR.find(c => soloDigitos(actual[TELEFONO_DEL_DECISOR[c]]) === soloDigitos(telefono))
+      const casillero = yaEsta ? null : casilleroDelTelefonoNuevo(actual, null)
+      if (yaEsta) campo = yaEsta
+      else if (casillero) {
+        campo = CAMPOS_DECISOR.find(c => TELEFONO_DEL_DECISOR[c] === casillero) ?? null
+        patch[casillero] = telefono
+        if (casillero !== 'phone' && !actual[`${casillero}_note`]?.trim()) patch[`${casillero}_note`] = 'Decisor'
+      } else sinLugar.push('telefono')
+      if (campo) patch[campo] = true
+    }
+  }
+  const email = datos.email?.trim()
+  if (email && campo) {
+    const actual = { ...client, ...patch }
+    const yaEsta = (Object.values(EMAIL_DEL_DECISOR)).some(k => actual[k]?.trim().toLowerCase() === email.toLowerCase())
+    const suyo = EMAIL_DEL_DECISOR[campo]
+    if (!yaEsta) {
+      if (!actual[suyo]?.trim()) patch[suyo] = email
+      else sinLugar.push('email')
+    }
+  }
+  return { patch, sinLugar }
+}
+
+type ClienteConGoogle =Pick<CrmClient, 'phone' | 'google_maps_phone'
   | 'alternative_phone_1' | 'alternative_phone_1_note' | 'alternative_phone_2' | 'alternative_phone_2_note'>
 export type CasilleroDeTelefono = 'phone' | 'alternative_phone_1' | 'alternative_phone_2'
 

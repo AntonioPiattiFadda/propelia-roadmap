@@ -199,6 +199,19 @@ describe('metaDeActividad', () => {
     expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"resultado":"quizas"}')).toBeNull()
     expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"decisor":"si"}')).toBeNull()
   })
+  it('ida y vuelta: los datos del decisor conseguidos en la llamada (18/11/2026)', () => {
+    const llamada = { tipo: 'llamada' as const, con: ['Laura'], resultado: 'contestada' as const, decisor: false,
+      decisorApuntado: 'Jordi', telefonoDecisor: '+34 600 111 222', emailDecisor: 'jordi@agencia.es' }
+    expect(leerMetaDeActividad(armarMetaDeActividad(llamada))).toEqual(llamada)
+  })
+  it('una nota sin nadie pero con datos del decisor sí guarda la meta', () => {
+    const nota = { tipo: 'nota' as const, con: [], emailDecisor: 'jordi@agencia.es' }
+    expect(leerMetaDeActividad(armarMetaDeActividad(nota))).toEqual(nota)
+  })
+  it('el teléfono o el email del decisor con otra forma no es meta', () => {
+    expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"telefonoDecisor":3}')).toBeNull()
+    expect(leerMetaDeActividad('<!--act-->{"tipo":"nota","con":[],"emailDecisor":false}')).toBeNull()
+  })
 })
 
 describe('resumenDeLlamadas', () => {

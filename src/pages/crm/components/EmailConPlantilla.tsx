@@ -72,14 +72,16 @@ export function ListaDePlantillasEmail({ elegida, onElegir }: { elegida: Plantil
 
 /** El lado derecho: para quién y los campos editables, la vista previa al lado, y «Enviar». Se monta con
     `key` por plantilla, así que cambiar de plantilla arranca de cero. */
-export function EmailConPlantilla({ id, client, leadId, onEnviado }: {
+export function EmailConPlantilla({ id, client, leadId, onEnviado, paraInicial }: {
   id: PlantillaEmailId; client: CrmClient | null; leadId?: string
   /** Con el mail ya en Resend: `MensajesPredeterminados` pregunta si se asienta en la actividad. */
   onEnviado?: (envio: { plantilla: string; destino: string }) => void
+  /** El «Para» de entrada, aunque no esté cargado en el perfil (el mail del decisor, 18/11/2026). */
+  paraInicial?: string
 }) {
   const plantilla = PLANTILLAS_EMAIL.find(p => p.id === id)!
   const conocidos = useMemo(() => emailsDe(client), [client])
-  const [para, setPara] = useState(conocidos[0] ?? '')
+  const [para, setPara] = useState(paraInicial?.trim() || conocidos[0] || '')
   // La fila de `users` ya la trajo el guard de acceso: al montar está en caché.
   const { userSession } = useUserSession()
   const yo = useYo(userSession?.user.id).data

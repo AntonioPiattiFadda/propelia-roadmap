@@ -94,15 +94,19 @@ export function BotonMensajes({ client, leadId, className }: { client: CrmClient
   )
 }
 
-export function MensajesPredeterminadosDialog({ client, leadId, abierto, onCerrar }: {
+export function MensajesPredeterminadosDialog({ client, leadId, abierto, onCerrar, canalInicial = 'whatsapp', paraInicial }: {
   client: CrmClient | null
   /** Para colgarle el envío de un email al lead (`crm_emails`) y avisar si rebota. */
   leadId?: string
   abierto: boolean
   onCerrar: () => void
+  /** Se leen al montar: el registro de actividad lo abre en Email con el mail del decisor
+   *  (18/11/2026, por pedido). El botón «Mensajes» no los pasa. */
+  canalInicial?: Canal
+  paraInicial?: string
 }) {
   const [plantillas, setPlantillas] = useState<Plantilla[]>(EJEMPLOS)
-  const [canal, setCanal] = useState<Canal>('whatsapp')
+  const [canal, setCanal] = useState<Canal>(canalInicial)
   const [elegidaId, setElegidaId] = useState<string | null>(null)
   /* Con borrador se edita (nueva si su id está vacío); sin borrador se mira la elegida. */
   const [borrador, setBorrador] = useState<Plantilla | null>(null)
@@ -236,7 +240,7 @@ export function MensajesPredeterminadosDialog({ client, leadId, abierto, onCerra
 
           <section className="flex min-h-0 min-w-0 flex-col">
             {canal === 'email' ? (
-              <EmailConPlantilla key={plantillaEmail} id={plantillaEmail} client={client} leadId={leadId}
+              <EmailConPlantilla key={plantillaEmail} id={plantillaEmail} client={client} leadId={leadId} paraInicial={paraInicial}
                 onEnviado={e => preguntarSiAsentar({ canal: 'email', ...e })} />
             ) : borrador ? (
               <EditorDePlantilla borrador={borrador} onCambiar={setBorrador}

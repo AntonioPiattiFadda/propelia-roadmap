@@ -21,12 +21,13 @@ import {
   ultimoContacto, type ItemActividad, type MetaDeActividad, type ResultadoDeLlamada,
 } from '../lib/actividad'
 import {
-  campoDelNuevoDecisor, casilleroDelTelefonoNuevo, conDecisorApuntado, contactosConDecisor, tieneDecisor, decisorDelContactoNuevo, decisorSabido,
+  campoDelNuevoDecisor, casilleroDelTelefonoNuevo, conDatosDelDecisor, conPrefijoDePais, contactosConDecisor, tieneDecisor, decisorDelContactoNuevo, decisorSabido,
   decisoresDeLaLlamada, nombreDelLead, patchDeContactosNuevos, telefonoEscrito, telefonosDelCliente, type CampoDecisor,
 } from '../lib/clientData'
+import { MensajesPredeterminadosDialog } from './MensajesPredeterminados'
 import { MeetingFormContent } from '@/pages/agenda/components/meetings/MeetingFormContent'
 import { GUIA_DE_DEMO, GUIA_DE_LLAMADA, type SeccionDeGuia } from '../lib/guiaDeLlamada'
-import { DESCRIPCION_DE_DEMO, invitadosDeLaDemo, RECORDATORIO_DE_DEMO, registroDeDemoDesdeLaActividad, tituloDeLaDemo } from '../lib/reuniones'
+import { DESCRIPCION_DE_DEMO, esEmailValido, invitadosDeLaDemo, RECORDATORIO_DE_DEMO, registroDeDemoDesdeLaActividad, tituloDeLaDemo } from '../lib/reuniones'
 import { actualizarComentario, cancelarReunion, crearComentario, marcarComentarioBorrado } from '../service/crm.service'
 import type { CrmLeadRow, CrmMeeting, LeadDetalle } from '../types'
 import { CancelarDemoDialog } from './CancelarDemoDialog'
@@ -39,7 +40,8 @@ import { VentanaFlotante } from './VentanaFlotante'
 import { DemoAgendadaDialog } from './DemoAgendadaDialog'
 import type { DemoAgendada } from '../lib/avisoDeDemo'
 import {
-  CajaDeEtapa, CampoDecisorApuntado, claseDelTexto, FilaDePersonas, FilaDeTelefono, FilaEsDecisor, NotaDeDecisorSabido,
+  BLOQUE_DEL_DECISOR_VACIO, BloqueDecisor, CajaDeEtapa, claseDelTexto, FilaDePersonas, FilaDeTelefono, FilaEsDecisor, NotaDeDecisorSabido,
+  type BloqueDelDecisor,
 } from './FilasDelRegistro'
 
 /* NUEVO. En el producto el chat de actividad vive adentro de LeadAccordion (5.600 líneas); acá
@@ -263,7 +265,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     setCon(xs => xs.includes(elegido) ? xs : [...xs, elegido])
   }
   // Corre al registrar con éxito: también apaga el rojo de lo que faltaba.
-  const limpiarConQuien = () => { setCon([]); setNuevos([]); setIntento(false); setDecisorApuntado('') }
+  const limpiarConQuien = () => { setCon([]); setNuevos([]); setIntento(false); setBloqueDecisor(BLOQUE_DEL_DECISOR_VACIO) }
   /* A qué teléfono se llamó va aparte de con quién se habló (16/10/2026, por pedido): se marca la
      oficina y atiende Laura, o el celular de Marc y atiende su socio. Lo piden la llamada y el
      contacto fallido, primero que nada; arranca vacío, como la etapa, para que no se confirme sin
@@ -305,8 +307,38 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   /* Apuntar al decisor (17/10/2026, por pedido): habló el doorkeeper u otro y dio el nombre de
      quien decide. Opcional, y deja de estar en cuanto el perfil tiene a alguien marcado como
      decisor. El contacto fallido no lo ofrece: ahí no habló nadie. */
-  const [decisorApuntado, setDecisorApuntado] = useState('')
   const pideDecisorApuntado = (tipo === 'nota' || tipo === 'llamada') && !tieneDecisor(lead.client)
+  /* Desde el 18/11/2026 (por pedido) es un bloque «Decisor» con tres Sí/No (`BloqueDecisor`): el
+     nombre, el teléfono y «Enviar mail». Lo conseguido va al perfil (`conDatosDelDecisor`) y a la
+     meta de la actividad; con «Enviar mail» en Sí, registrar abre «Mensajes» en Email con ese «Para». */
+  const [bloqueDecisor, setBloqueDecisor] = useState<BloqueDelDecisor>(BLOQUE_DEL_DECISOR_VACIO)
+  const cambiarBloqueDecisor = (parcial: Partial<BloqueDelDecisor>) => setBloqueDecisor(b => {
+    const nuevo = { ...b, ...parcial }
+    // El mail arranca con el primero que tenga la inmobiliaria, si tiene: se edita.
+    if (parcial.email === true && !b.emailValor.trim()) {
+      const c = lead.client
+      nuevo.emailValor = [c?.email, c?.alternative_phone_1_email, c?.alternative_phone_2_email].map(e => e?.trim()).find(Boolean) ?? ''
+    }
+    return nuevo
+  })
+  const decisorApuntado = bloqueDecisor.nombre ? bloqueDecisor.nombreValor.trim().replace(/\s+/g, ' ') : ''
+  const telefonoDelDecisor = bloqueDecisor.telefono
+    ? telefonoEscrito([], conPrefijoDePais(bloqueDecisor.prefijo, bloqueDecisor.telefonoValor))?.numero ?? '' : ''
+  const emailDelDecisor = bloqueDecisor.email && esEmailValido(bloqueDecisor.emailValor) ? bloqueDecisor.emailValor.trim() : ''
+  const faltaDelDecisor = {
+    nombre: pideDecisorApuntado && bloqueDecisor.nombre === true && !decisorApuntado,
+    telefono: pideDecisorApuntado && bloqueDecisor.telefono === true && !telefonoDelDecisor,
+    email: pideDecisorApuntado && bloqueDecisor.email === true && !emailDelDecisor,
+  }
+  // Lo del decisor que va en la meta de la actividad: solo lo que se pidió y se escribió.
+  const metaDelDecisor = pideDecisorApuntado ? {
+    ...(decisorApuntado && { decisorApuntado }),
+    ...(telefonoDelDecisor && { telefonoDecisor: telefonoDelDecisor }),
+    ...(emailDelDecisor && { emailDecisor: emailDelDecisor }),
+  } : {}
+  // El mail al decisor se abre con la actividad ya registrada; `n` remonta el dialog cada vez.
+  const [mailAlDecisor, setMailAlDecisor] = useState<{ para: string; n: number } | null>(null)
+  const [mailAbierto, setMailAbierto] = useState(false)
   /* Toda actividad registrada pide elegir en qué etapa queda el lead, para que avanzarlo no
      dependa de acordarse (12/10/2026, por pedido). Arranca VACÍA y es obligatoria: precargarla
      (con la actual o con una sugerida) hacía que se confirmara sin leerla. Registrar sin elegir
@@ -402,6 +434,9 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     con: tipo === 'llamada' && !eligioConQuien,
     decisor: pideDecisor && decisor === null,
     texto: tipo === 'nota' && !limpio,
+    decisorNombre: faltaDelDecisor.nombre,
+    decisorTelefono: faltaDelDecisor.telefono,
+    decisorEmail: faltaDelDecisor.email,
   }
   const enRojo = (k: keyof typeof falta) => intento && falta[k]
 
@@ -426,11 +461,16 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       if (casillero) patchTelefono[casillero] = numero
       else toast(`El perfil no tiene más lugar para teléfonos: ${numero} quedó solo en la actividad`)
     }
-    // El decisor apuntado va último: el número marcado es de quien atendió, no del decisor.
-    const apuntado = pideDecisorApuntado ? decisorApuntado.trim().replace(/\s+/g, ' ') : ''
-    const conApuntado = apuntado ? conDecisorApuntado({ ...client, ...patchTelefono }, patch, apuntado) : { patch, sinLugar: false }
-    if (conApuntado.sinLugar) toast(`El perfil no tiene más lugar para contactos: el decisor ${apuntado} no se cargó`)
-    const todo = { ...conApuntado.patch, ...patchTelefono }
+    /* Lo del decisor va último: el número marcado es de quien atendió, no del decisor. Nombre,
+       teléfono y email (18/11/2026), sin pisar nada (`conDatosDelDecisor`). */
+    const del: ReturnType<typeof conDatosDelDecisor> = pideDecisorApuntado
+      ? conDatosDelDecisor({ ...client, ...patchTelefono }, patch,
+        { nombre: decisorApuntado, telefono: telefonoDelDecisor, email: emailDelDecisor })
+      : { patch, sinLugar: [] }
+    if (del.sinLugar.includes('nombre')) toast(`El perfil no tiene más lugar para contactos: el decisor ${decisorApuntado} no se cargó`)
+    if (del.sinLugar.includes('telefono')) toast(`El perfil no tiene lugar para el teléfono del decisor: ${telefonoDelDecisor} quedó solo en la actividad`)
+    if (del.sinLugar.includes('email')) toast(`El contacto del decisor ya tiene otro email: ${emailDelDecisor} quedó solo en la actividad`)
+    const todo = { ...del.patch, ...patchTelefono }
     if (Object.keys(todo).length > 0) actualizarCliente.mutate({ clientId: client.id, patch: todo })
     if (sinLugar.length > 0) toast(`El perfil no tiene más lugar para contactos: ${sinLugar.join(', ')} quedó solo en la actividad`)
     // Sin el apuntado: no es alguien con quien se habló, así que no se fija como decisor contactado.
@@ -444,7 +484,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
 
   const enviar = (fallidoConfirmado = false) => {
     if (enviando || esDemo) return
-    if (!listo || (pideEtapa && !etapaFinal)) {
+    if (!listo || (pideEtapa && !etapaFinal) || Object.values(faltaDelDecisor).some(Boolean)) {
       setIntento(true)
       if (pideEtapa && !etapaFinal) setFaltaEtapa(true)
       return
@@ -459,7 +499,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       const marcado = telefonoElegido && { telefono: telefonoElegido.numero === telefonoNuevo && tipo === 'llamada' && elegidos.length === 1
         ? { ...telefonoElegido, etiqueta: elegidos[0] } : telefonoElegido }
       const meta: MetaDeActividad = tipo === 'llamada'
-        ? { tipo: 'llamada', con: elegidos, resultado, decisor: esDecisor, ...marcado }
+        ? { tipo: 'llamada', con: elegidos, resultado, decisor: esDecisor, ...marcado, ...metaDelDecisor }
         : { tipo: 'llamada', con: [], resultado, ...marcado }
       // Contestó que sí: el contacto queda como decisor en el perfil y la próxima no se pregunta.
       const nuevoDecisor = tipo === 'llamada' && sabido === null ? campoDelNuevoDecisor(conDecisor, elegidos, esDecisor) : null
@@ -478,15 +518,24 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
             actualizarCliente.mutate({ clientId: lead.client.id, patch: { [nuevoDecisor]: true } })
           }
           moverEtapa()
+          abrirMailAlDecisor()
         } })
     }
     else if (tipo === 'nota') {
-      const meta = { tipo, con: con.filter(c => elegibles.includes(c)) }
+      const meta: MetaDeActividad = { tipo, con: con.filter(c => elegibles.includes(c)), ...metaDelDecisor }
       comentar.mutate({ description: limpio, meta }, { onSuccess: () => {
         cargarContactosNuevos(null)
         setTexto(''); limpiarConQuien(); setAbierto(false); moverEtapa()
+        abrirMailAlDecisor()
       } })
     }
+  }
+  /* Con «Enviar mail» en Sí, «Mensajes» se abre en Email («Presentación con vídeo») con el «Para» del
+     decisor. Va después de mover la etapa: si se abre el descarte o «¿Cualifica?», queda encima. */
+  const abrirMailAlDecisor = () => {
+    if (!pideDecisorApuntado || !emailDelDecisor) return
+    setMailAlDecisor(m => ({ para: emailDelDecisor, n: (m?.n ?? 0) + 1 }))
+    setMailAbierto(true)
   }
 
 
@@ -680,8 +729,8 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
               className={claseDelTexto(enRojo('texto'))}
             />
             {pideDecisorApuntado && (
-              <CampoDecisorApuntado id="decisor-apuntado" valor={decisorApuntado} onCambiar={setDecisorApuntado}
-                title="Se carga en el perfil como decisor al registrar" />
+              <BloqueDecisor valor={bloqueDecisor} onCambiar={cambiarBloqueDecisor}
+                rojo={{ nombre: enRojo('decisorNombre'), telefono: enRojo('decisorTelefono'), email: enRojo('decisorEmail') }} />
             )}
             {pideEtapa && (
               <CajaDeEtapa valor={etapaFinal} onCambiar={v => { setEtapaElegida(v); setFaltaEtapa(false) }}
@@ -706,6 +755,11 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       )}
       {preguntandoCualifica && <CualificaLeadDialog leadId={lead.id} onClose={() => setPreguntandoCualifica(false)} />}
       <DemoAgendadaDialog demo={demoAgendada} onCerrar={() => setDemoAgendada(null)} />
+      {/* Queda montado al cerrarse: «¿Registrar la actividad?» del envío vive adentro. */}
+      {mailAlDecisor && (
+        <MensajesPredeterminadosDialog key={mailAlDecisor.n} client={lead.client} leadId={lead.id}
+          abierto={mailAbierto} onCerrar={() => setMailAbierto(false)} canalInicial="email" paraInicial={mailAlDecisor.para} />
+      )}
       <AlertDialog open={confirmandoFallido} onOpenChange={setConfirmandoFallido}>
         <AlertDialogContent>
           <AlertDialogHeader>
