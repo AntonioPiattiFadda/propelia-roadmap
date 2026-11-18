@@ -448,7 +448,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
      fallido) no carga personas. */
   const cargarAlPerfil = (decisor: string | null, elegidos: string[]) => {
     const client = lead.client
-    if (!client) return {}
+    if (!client) return { patch: {}, decisorConseguido: null }
     const { patch, sinLugar } = elegidos.length > 0 && nuevosElegidos.length > 0
       ? patchDeContactosNuevos(client, nuevosElegidos, decisor) : { patch: {}, sinLugar: [] }
     const numero = pideTelefono && telefonoNuevo && telefono === telefonoNuevo ? telefonoNuevo : null
@@ -466,15 +466,16 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     const del: ReturnType<typeof conDatosDelDecisor> = pideDecisorApuntado
       ? conDatosDelDecisor({ ...client, ...patchTelefono }, patch,
         { nombre: decisorApuntado, telefono: telefonoDelDecisor, email: emailDelDecisor })
-      : { patch, sinLugar: [] }
+      : { patch, sinLugar: [], campo: null }
     if (del.sinLugar.includes('nombre')) toast(`El perfil no tiene más lugar para contactos: el decisor ${decisorApuntado} no se cargó`)
     if (del.sinLugar.includes('telefono')) toast(`El perfil no tiene lugar para el teléfono del decisor: ${telefonoDelDecisor} quedó solo en la actividad`)
     if (del.sinLugar.includes('email')) toast(`El contacto del decisor ya tiene otro email: ${emailDelDecisor} quedó solo en la actividad`)
     const todo = { ...del.patch, ...patchTelefono }
     if (Object.keys(todo).length > 0) actualizarCliente.mutate({ clientId: client.id, patch: todo })
     if (sinLugar.length > 0) toast(`El perfil no tiene más lugar para contactos: ${sinLugar.join(', ')} quedó solo en la actividad`)
-    // Sin el apuntado: no es alguien con quien se habló, así que no se fija como decisor contactado.
-    return patch
+    /* El contacto que quedó con el nombre o el teléfono conseguidos se fija (18/11/2026, por
+       pedido; antes el apuntado no se fijaba porque no es alguien con quien se habló). */
+    return { patch, decisorConseguido: del.campo }
   }
   const cargarContactosNuevos = (decisor: string | null) => cargarAlPerfil(decisor, nuevosElegidos)
 
@@ -508,8 +509,9 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       comentar.mutate({ description: limpio || TEXTO_DE_LLAMADA[resultado], meta },
         { onSuccess: () => {
           if (tipo === 'llamada') {
-            const patch = cargarAlPerfil(decisorNuevo, elegidos)
+            const { patch, decisorConseguido } = cargarAlPerfil(decisorNuevo, elegidos)
             const decisores = decisoresDeLaLlamada(conDecisor, elegidos, esDecisor, patch)
+            if (decisorConseguido && !decisores.includes(decisorConseguido)) decisores.push(decisorConseguido)
             if (decisores.length > 0) onDecisorContactado?.(decisores)
           } else cargarAlPerfil(null, [])
           setTexto(''); limpiarConQuien(); setDecisor(null); setTelefono(null); setTelefonoNuevo(null)
@@ -522,11 +524,10 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
         } })
     }
     else if (tipo === 'nota') {
-      const meta: MetaDeActividad = { tipo, con: con.filter(c => elegibles.includes(c)), ...metaDelDecisor }
+      const meta: MetaDeActividad = { tipo, con: con.filter(c => elegibles.includes(c)) }
       comentar.mutate({ description: limpio, meta }, { onSuccess: () => {
         cargarContactosNuevos(null)
         setTexto(''); limpiarConQuien(); setAbierto(false); moverEtapa()
-        abrirMailAlDecisor()
       } })
     }
   }
@@ -590,6 +591,12 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                           <span className="shrink-0 text-[11px] tabular-nums text-(--fg-muted)">{horaDe(i.fecha)}</span>
                         </div>
                         {quien && <p className="text-[12px] leading-snug text-(--fg-2)">{quien}</p>}
+                        {/* Lo conseguido del decisor (18/11/2026, por pedido): de la meta, no del texto. */}
+                        {i.decisorConseguido && (
+                          <p className="mt-0.5 text-[12px] leading-snug text-(--fg-2)">
+                            <span className="font-semibold text-foreground">Decisor conseguido:</span> {i.decisorConseguido}
+                          </p>
+                        )}
                       </div>
                       {verTexto && (
                         <p className={cn('w-full min-w-0 flex-1 whitespace-pre-wrap rounded-md px-3 py-2 text-[13px] leading-snug text-foreground',
@@ -650,7 +657,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
           lateral={tipo === 'llamada' ? <GuiaDelCompositor key="llamada" titulo="Guía de la llamada" secciones={GUIA_DE_LLAMADA} />
             : esDemo ? <GuiaDelCompositor key="demo" titulo="Guía de la demo" secciones={GUIA_DE_DEMO} />
             : undefined}>
-          <div className="flex flex-col gap-4 p-4">
+          <div className="flex flex-col gap-3 p-4">
             <div className="flex flex-wrap items-center gap-1.5">
               {TIPOS.map(t => {
                 const on = tipo === t.id
@@ -726,7 +733,8 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
               value={texto}
               onChange={e => setTexto(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); enviar() } }}
-              rows={6}
+              // Con «Avances para contactar al decisor» a la vista, más bajo: así la ventana no scrollea.
+              rows={pideDecisorApuntado ? 3 : 6}
               aria-label="Registrar actividad"
               placeholder={tipo === 'llamada' ? 'Qué se habló (opcional)…'
                 : tipo === 'fallido' ? 'Detalle (opcional): no atendió, buzón, número equivocado…'

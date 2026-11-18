@@ -261,7 +261,8 @@ function FilaSiNo({ rotulo, valor, onCambiar, rojo, children }: {
   return (
     <div className={cn('flex flex-wrap items-center gap-1.5', filaEnRojo(rojo))}>
       <div role="radiogroup" aria-label={rotulo} className="contents">
-        <span className={cn('mr-0.5 text-[11.5px]', rotuloEnRojo(rojo))}>{rotulo}</span>
+        {/* Rótulo de ancho fijo: las pastillas de las tres preguntas caen en la misma columna. */}
+        <span className={cn('w-[176px] shrink-0 text-[11.5px] max-sm:w-auto', rotuloEnRojo(rojo))}>{rotulo}</span>
         {([[true, 'Sí'], [false, 'No']] as const).map(([v, label]) => (
           <button key={label} type="button" role="radio" aria-checked={valor === v}
             onClick={() => onCambiar(v)} className={pastilla(valor === v)}>
@@ -280,7 +281,7 @@ export function BloqueDecisor({ valor, onCambiar, rojo }: {
   rojo: { nombre: boolean; telefono: boolean; email: boolean }
 }) {
   return (
-    <fieldset className="flex flex-col gap-1.5 rounded-md px-3 py-2 [border:1px_solid_var(--line-soft)]">
+    <fieldset className="flex flex-col gap-1 rounded-md px-3 pt-1 pb-2 [border:1px_solid_var(--line-soft)]">
       <legend className="px-1 text-[11.5px] font-semibold text-(--fg-2)">Avances para contactar al decisor</legend>
       <FilaSiNo rotulo="Nombre del decisor conseguido" valor={valor.nombre} onCambiar={v => onCambiar({ nombre: v })} rojo={rojo.nombre}>
         <input autoFocus value={valor.nombreValor} onChange={e => onCambiar({ nombreValor: e.target.value })}

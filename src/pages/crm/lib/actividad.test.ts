@@ -57,6 +57,23 @@ describe('lineaDeTiempo', () => {
   }
   const items = lineaDeTiempo(detalle, usuarios)
 
+  it('la llamada dice lo conseguido del decisor, solo lo que haya, aparte del texto (que se edita)', () => {
+    const llamada = (id: string, meta: Partial<MetaDeActividad>) => ({
+      id, lead_id: 'x', description: 'Pidió precio', comment_type: 'MANUAL' as const, created_by: 'a',
+      created_at: '2026-11-18T10:00:00Z', deleted_at: null,
+      long_description: armarMetaDeActividad({ tipo: 'llamada', con: ['Ana'], resultado: 'contestada', decisor: false, ...meta }),
+    })
+    const [todo, soloTel, nada] = lineaDeTiempo({ ...vacio, comments: [
+      llamada('t', { decisorApuntado: 'Pablo', telefonoDecisor: '+34 600 000 000', emailDecisor: 'pablo@x.com' }),
+      llamada('u', { telefonoDecisor: '+34 600 000 000' }),
+      llamada('v', {}),
+    ] }, usuarios)
+    expect(todo.decisorConseguido).toBe('Pablo · +34 600 000 000 · pablo@x.com')
+    expect(todo.texto).toBe('Pidió precio')
+    expect(soloTel.decisorConseguido).toBe('+34 600 000 000')
+    expect(nada.decisorConseguido).toBeUndefined()
+  })
+
   it('ordena de lo más viejo a lo más nuevo (el chat se lee de arriba abajo)', () => {
     expect(items.map(i => i.id)).toEqual(['c1', 'e1', 'c2', 'e2'])
   })

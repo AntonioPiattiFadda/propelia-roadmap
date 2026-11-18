@@ -25,6 +25,9 @@ export type ItemActividad = {
   intento?: number
   /** Solo demos registradas: el decisor que se apuntó al agendarla. */
   decisorApuntado?: string
+  /** Solo notas y llamadas: lo conseguido del decisor («Avances para contactar al decisor»), en un
+   *  renglón: nombre · teléfono · email, lo que haya. Aparte de `texto`, que se edita. */
+  decisorConseguido?: string
   /** Solo demos con su reunión viva: cuál es y en qué estado está. Cancelar la demo desde la
    *  actividad (23/10/2026, por pedido) se ofrece mientras esté `scheduled`. */
   reunion?: { id: string; estado: CrmMeeting['status'] }
@@ -192,6 +195,10 @@ export function primeroLosUltimos<T>(xs: readonly T[], esUltimo: (x: T) => boole
   return [...xs.filter(esUltimo), ...xs.filter(x => !esUltimo(x))]
 }
 
+/** Lo conseguido del decisor en una nota o llamada (18/11/2026, por pedido): lo que haya. */
+const conseguido = (meta: MetaDeActividad | null) =>
+  [meta?.decisorApuntado, meta?.telefonoDecisor, meta?.emailDecisor].map(x => x?.trim()).filter(Boolean).join(' · ')
+
 /* El consejo de Claude ya no es actividad (17/10/2026, por pedido): lo que se muestra de él —
    personas y teléfonos— vive en la pestaña de la inmobiliaria (`investigacionDeClaude`). */
 export function lineaDeTiempo(detalle: LeadDetalle, usuarios: Usuario[]): ItemActividad[] {
@@ -226,6 +233,7 @@ export function lineaDeTiempo(detalle: LeadDetalle, usuarios: Usuario[]): ItemAc
         id: c.id, tipo: meta?.tipo === 'llamada' ? 'llamada' as const : 'comentario' as const,
         fecha: c.created_at, texto: c.description, autorId: c.created_by, con: meta?.con ?? [],
         resultado: meta?.resultado, decisor: meta?.decisor, telefono: meta?.telefono,
+        ...(conseguido(meta) && { decisorConseguido: conseguido(meta) }),
       }
     }),
     ...detalle.events.map(e => ({

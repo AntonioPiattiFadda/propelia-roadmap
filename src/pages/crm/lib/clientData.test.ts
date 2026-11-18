@@ -274,9 +274,10 @@ describe('conDatosDelDecisor', () => {
     alternative_phone_1: null, alternative_phone_1_note: null, alternative_phone_1_email: null,
     alternative_phone_2: null, alternative_phone_2_note: null, alternative_phone_2_email: null,
   }
+  // `campo` es el contacto que quedó como decisor: el perfil lo fija al registrar.
   it('solo el nombre: lo mismo que el decisor apuntado', () => {
     expect(conDatosDelDecisor({ ...vacio, first_name: 'Laura', alternative_phone_1_note: 'Marc' }, {}, { nombre: 'marc' }))
-      .toEqual({ patch: { alternative_phone_1_is_decision_maker: true }, sinLugar: [] })
+      .toEqual({ patch: { alternative_phone_1_is_decision_maker: true }, sinLugar: [], campo: 'alternative_phone_1_is_decision_maker' })
   })
   it('nombre nuevo con teléfono y email: todo va a su casillero', () => {
     expect(conDatosDelDecisor({ ...vacio, first_name: 'Laura', phone: '+34 600' }, {},
@@ -284,57 +285,57 @@ describe('conDatosDelDecisor', () => {
       .toEqual({ patch: {
         alternative_phone_1_note: 'Jordi', alternative_phone_1_is_decision_maker: true,
         alternative_phone_1: '+34 611 222 333', alternative_phone_1_email: 'jordi@agencia.es',
-      }, sinLugar: [] })
+      }, sinLugar: [], campo: 'alternative_phone_1_is_decision_maker' })
   })
   it('el contacto que ya es decisor con otro número no se pisa: el teléfono queda en la actividad', () => {
     expect(conDatosDelDecisor({ ...vacio, first_name: 'Laura', phone: '+34 600 000 000' }, {},
       { nombre: 'Laura', telefono: '+34 611 222 333' }))
-      .toEqual({ patch: { contact_is_decision_maker: true }, sinLugar: ['telefono'] })
+      .toEqual({ patch: { contact_is_decision_maker: true }, sinLugar: ['telefono'], campo: 'contact_is_decision_maker' })
   })
   it('el mismo número (por dígitos) que ya tiene no es falta de lugar', () => {
     expect(conDatosDelDecisor({ ...vacio, first_name: 'Laura', phone: '+34 611222333' }, {},
       { nombre: 'Laura', telefono: '+34 611 222 333' }))
-      .toEqual({ patch: { contact_is_decision_maker: true }, sinLugar: [] })
+      .toEqual({ patch: { contact_is_decision_maker: true }, sinLugar: [], campo: 'contact_is_decision_maker' })
   })
-  it('sin nombre, el teléfono va a un casillero libre marcado como decisor y el alternativo se llama «Decisor»', () => {
+  it('sin nombre, solo el teléfono va a un casillero libre, marcado como decisor y sin inventarle nombre', () => {
     expect(conDatosDelDecisor({ ...vacio, first_name: 'Laura' }, {}, { telefono: '+34 611 222 333', email: 'd@x.es' }))
       .toEqual({ patch: {
-        alternative_phone_1: '+34 611 222 333', alternative_phone_1_note: 'Decisor',
+        alternative_phone_1: '+34 611 222 333',
         alternative_phone_1_is_decision_maker: true, alternative_phone_1_email: 'd@x.es',
-      }, sinLugar: [] })
+      }, sinLugar: [], campo: 'alternative_phone_1_is_decision_maker' })
     expect(conDatosDelDecisor(vacio, {}, { telefono: '+34 611 222 333' }))
-      .toEqual({ patch: { phone: '+34 611 222 333', contact_is_decision_maker: true }, sinLugar: [] })
+      .toEqual({ patch: { phone: '+34 611 222 333', contact_is_decision_maker: true }, sinLugar: [], campo: 'contact_is_decision_maker' })
   })
   it('sin nombre, un número que ya es de un contacto marca a ese contacto', () => {
     expect(conDatosDelDecisor({ ...vacio, first_name: 'Laura', alternative_phone_1: '+34611222333', alternative_phone_1_note: 'Marc' }, {},
       { telefono: '+34 611 222 333' }))
-      .toEqual({ patch: { alternative_phone_1_is_decision_maker: true }, sinLugar: [] })
+      .toEqual({ patch: { alternative_phone_1_is_decision_maker: true }, sinLugar: [], campo: 'alternative_phone_1_is_decision_maker' })
   })
   it('sin casillero libre para el teléfono, se avisa', () => {
     const lleno = { ...vacio, first_name: 'Laura', alternative_phone_1_note: 'Marc', alternative_phone_2_note: 'Ana' }
-    expect(conDatosDelDecisor(lleno, {}, { telefono: '+34 611 222 333' })).toEqual({ patch: {}, sinLugar: ['telefono'] })
+    expect(conDatosDelDecisor(lleno, {}, { telefono: '+34 611 222 333' })).toEqual({ patch: {}, sinLugar: ['telefono'], campo: null })
   })
   it('el email no pisa uno cargado ni se repite si ya está en el perfil', () => {
     expect(conDatosDelDecisor({ ...vacio, first_name: 'Laura', email: 'info@agencia.es' }, {}, { nombre: 'Laura', email: 'laura@agencia.es' }))
-      .toEqual({ patch: { contact_is_decision_maker: true }, sinLugar: ['email'] })
+      .toEqual({ patch: { contact_is_decision_maker: true }, sinLugar: ['email'], campo: 'contact_is_decision_maker' })
     expect(conDatosDelDecisor({ ...vacio, first_name: 'Laura', alternative_phone_1_note: 'Marc', email: 'Marc@Agencia.es' }, {},
       { nombre: 'Marc', email: 'marc@agencia.es' }))
-      .toEqual({ patch: { alternative_phone_1_is_decision_maker: true }, sinLugar: [] })
+      .toEqual({ patch: { alternative_phone_1_is_decision_maker: true }, sinLugar: [], campo: 'alternative_phone_1_is_decision_maker' })
   })
   it('el email sin nombre ni teléfono no tiene contacto donde ir: queda en la actividad, sin aviso', () => {
-    expect(conDatosDelDecisor({ ...vacio, first_name: 'Laura' }, {}, { email: 'd@x.es' })).toEqual({ patch: {}, sinLugar: [] })
+    expect(conDatosDelDecisor({ ...vacio, first_name: 'Laura' }, {}, { email: 'd@x.es' })).toEqual({ patch: {}, sinLugar: [], campo: null })
   })
   it('respeta a los nuevos de la misma actividad', () => {
     expect(conDatosDelDecisor({ ...vacio, phone: '+34 600' }, { alternative_phone_1_note: 'Pedro' }, { telefono: '+34 611 222 333' }))
       .toEqual({ patch: {
         alternative_phone_1_note: 'Pedro',
-        alternative_phone_2: '+34 611 222 333', alternative_phone_2_note: 'Decisor', alternative_phone_2_is_decision_maker: true,
-      }, sinLugar: [] })
+        alternative_phone_2: '+34 611 222 333', alternative_phone_2_is_decision_maker: true,
+      }, sinLugar: [], campo: 'alternative_phone_2_is_decision_maker' })
   })
-  it('el nombre sin lugar no impide cargar el teléfono como «Decisor»... salvo que tampoco haya lugar', () => {
+  it('el nombre sin lugar no impide cargar el teléfono... salvo que tampoco haya lugar', () => {
     const lleno = { ...vacio, first_name: 'Laura', alternative_phone_1_note: 'Marc', alternative_phone_2_note: 'Ana' }
     expect(conDatosDelDecisor(lleno, {}, { nombre: 'Jordi', telefono: '+34 611' }))
-      .toEqual({ patch: {}, sinLugar: ['nombre', 'telefono'] })
+      .toEqual({ patch: {}, sinLugar: ['nombre', 'telefono'], campo: null })
   })
 })
 

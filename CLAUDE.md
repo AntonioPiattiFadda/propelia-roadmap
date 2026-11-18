@@ -598,9 +598,12 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   mientras se ve (registrar con una sin contestar la pinta en rojo y no registra, como la etapa) y el
   Sí vuelve obligatorio su campo. Al registrar, `conDatosDelDecisor` (`lib/clientData.ts`) suma al mismo patch del perfil el
   nombre (como `conDecisorApuntado`), el teléfono en el casillero de ese contacto (sin nombre: el contacto
-  con ese número, o un casillero libre marcado decisor y, si es alternativo, rotulado «Decisor») y el
-  email en el del contacto decisor; nunca pisa, y lo que no entra avisa con un toast. La meta lleva
-  `decisorApuntado`, `telefonoDecisor` y `emailDecisor`. Con «Email para enviar» en Sí, registrada la
+  con ese número, o un casillero libre con solo el número, marcado decisor y sin nombre inventado) y el
+  email en el del contacto decisor; nunca pisa, y lo que no entra avisa con un toast. **Ese contacto
+  se fija al registrar** (el `campo` que devuelve `conDatosDelDecisor` va a `onDecisorContactado`),
+  aunque ya fuera decisor. La meta lleva `decisorApuntado`, `telefonoDecisor` y `emailDecisor`, y la
+  actividad los muestra debajo de la llamada: «Decisor conseguido: nombre · teléfono · email», lo que
+  haya (`decisorConseguido` de `lineaDeTiempo`, aparte del texto que se edita). Con «Email para enviar» en Sí, registrada la
   actividad se abre «Mensajes» en Email con ese «Para» (`canalInicial`/`paraInicial`). Sin migración.
 - **La llamada con el decisor lo fija en el perfil** (17/10/2026): reemplazó al cartel «Decisor
   contactado» (16/10). El contacto queda marcado como decisor (y se crea si se escribió a mano) y
@@ -608,7 +611,11 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   elegidos solo se fijan los que el perfil ya da por decisores. **Desde el 20/10/2026 todo contacto
   que pasa a decisor se fija solo**, por el camino que sea (el Sí del perfil, uno cargado nuevo o
   una actividad): `decisoresQueSeMarcaron()` compara la foto anterior de `lead.client` con la nueva.
-  Solo el paso a «sí»: el que ya era decisor al abrir no se refija, así desfijarlo a mano dura. La etiqueta «Contactado» del
+  Solo el paso a «sí»: el que ya era decisor al abrir no se refija, así desfijarlo a mano dura.
+  **Lo fijado se queda fijado hasta que el usuario lo cambie** (18/11/2026, por pedido): nada desfija
+  solo; desfijan el pin y quitar a la persona. Se guarda por casillero (`principal` /
+  `alternative_phone_N`) en `localStorage` (`crm-contactos-fijados:<clientId>`): es de cada navegador
+  y, si el casillero pasa a ser de otra persona, el fijado la sigue a ella. La etiqueta «Contactado» del
   contacto sigue saliendo de `decisorContactado()` (`lib/actividad.ts`). El 16/10/2026 salió del perfil el bloque del motivo de descarte
   (`discard_reason`/`recontact_at` siguen en la base y en el `DescartarLeadDialog`), y también la
   cruz de «cerrar sin guardar» del encabezado: la salida es «Guardar y cerrar».

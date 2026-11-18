@@ -220,16 +220,16 @@ export type DatosDelDecisor = { nombre?: string; telefono?: string; email?: stri
  * El bloque «Decisor» del registro (18/11/2026, por pedido): nombre, teléfono y email conseguidos.
  * El nombre va como en `conDecisorApuntado`. El teléfono va al casillero de ese contacto si no tiene
  * número; sin nombre, si ya es de un contacto marca a ese, y si no va a un casillero libre
- * (`casilleroDelTelefonoNuevo`) marcado como decisor y, si es un alternativo sin nombre, rotulado
- * «Decisor». El email va al del contacto decisor si está vacío y no está ya en el perfil; sin
+ * (`casilleroDelTelefonoNuevo`) marcado como decisor, solo el número: sin nombre inventado. El email va al del contacto decisor si está vacío y no está ya en el perfil; sin
  * contacto (ni nombre ni teléfono) no tiene dónde ir y queda solo en la actividad. Nunca se pisa
- * nada: lo que no entra va a `sinLugar`.
+ * nada: lo que no entra va a `sinLugar`. `campo` es el contacto que quedó como decisor: el perfil
+ * lo fija al registrar.
  */
 export function conDatosDelDecisor(
   client: ClienteConDecisor & Partial<Pick<CrmClient, CampoEmail>>,
   patchInicial: ReturnType<typeof patchDeContactosNuevos>['patch'],
   datos: DatosDelDecisor,
-): { patch: PatchDelDecisor; sinLugar: ('nombre' | 'telefono' | 'email')[] } {
+): { patch: PatchDelDecisor; sinLugar: ('nombre' | 'telefono' | 'email')[]; campo: CampoDecisor | null } {
   const sinLugar: ('nombre' | 'telefono' | 'email')[] = []
   let patch: PatchDelDecisor = { ...patchInicial }
   let campo: CampoDecisor | null = null
@@ -258,8 +258,9 @@ export function conDatosDelDecisor(
       if (yaEsta) campo = yaEsta
       else if (casillero) {
         campo = CAMPOS_DECISOR.find(c => TELEFONO_DEL_DECISOR[c] === casillero) ?? null
+        // Solo el número (18/11/2026, por pedido): sin nombre inventado. La marca de decisor es lo
+        // que lo muestra como tal en el perfil.
         patch[casillero] = telefono
-        if (casillero !== 'phone' && !actual[`${casillero}_note`]?.trim()) patch[`${casillero}_note`] = 'Decisor'
       } else sinLugar.push('telefono')
       if (campo) patch[campo] = true
     }
@@ -274,7 +275,7 @@ export function conDatosDelDecisor(
       else sinLugar.push('email')
     }
   }
-  return { patch, sinLugar }
+  return { patch, sinLugar, campo }
 }
 
 type ClienteConGoogle =Pick<CrmClient, 'phone' | 'google_maps_phone'
