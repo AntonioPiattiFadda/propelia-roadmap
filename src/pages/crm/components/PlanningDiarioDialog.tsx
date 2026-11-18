@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Icon } from '@/components/ui/icon'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
-import { horarioDeEspana, JORNADAS, type Horario, type TipoDeBloque } from '../lib/planningDiario'
+import { alturaDeBloque, horarioDeEspana, JORNADAS, type Horario, type TipoDeBloque } from '../lib/planningDiario'
 
 /* NUEVO. El planning diario del SDR, a mano en la cabecera del CRM: es la jornada contra la que
    se trabaja la lista. Es texto fijo (lib/planningDiario.ts) y no un dato de la base. Hay dos,
@@ -18,7 +18,9 @@ const ESTILO: Record<TipoDeBloque, { caja: string; vzla: string; espana: string;
   revision: { caja: 'bg-white border-2 border-blue-600', vzla: 'text-slate-900', espana: 'text-slate-500', titulo: 'text-blue-600', duracion: 'text-slate-700' },
 }
 
-const COLUMNAS = 'grid grid-cols-[72px_72px_1fr_auto] items-center gap-x-3 max-sm:grid-cols-[60px_1fr_auto]'
+/* Venezuela, España, bloque, duración. El alto de cada fila sale de alturaDeBloque(): crece con
+   la duración, pero no en proporción exacta (ver lib). */
+const COLUMNAS = 'grid grid-cols-[52px_44px_1fr_auto] items-center gap-x-3 max-sm:grid-cols-[52px_1fr_auto]'
 
 const HORARIOS: Horario[] = ['verano', 'invierno']
 
@@ -26,30 +28,33 @@ function TablaDeJornada({ horario }: { horario: Horario }) {
   const j = JORNADAS[horario]
   return (
     <div>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-blue-600">{j.bajada}</p>
-      <div className={cn(COLUMNAS, 'mt-3 border-b border-slate-200 px-4 pb-2 text-[10.5px] font-semibold uppercase tracking-widest text-slate-500')}>
-        <span>Venezuela</span>
+      <div className={cn(COLUMNAS, 'px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-400')}>
+        <span>Vzla</span>
         <span className="max-sm:hidden">España</span>
-        <span>Bloque</span>
-        <span className="text-right">Duración</span>
+        <span className="truncate normal-case tracking-normal">{j.bajada}</span>
+        <span />
       </div>
-      <ul className="mt-2 space-y-2">
+      <ul className="space-y-1">
         {j.bloques.map(b => {
           const e = ESTILO[b.tipo]
           return (
-            <li key={b.vzla} className={cn(COLUMNAS, 'rounded-lg px-4 py-3', e.caja)}>
-              <span className={cn('font-mono text-[17px] font-bold tabular-nums', e.vzla)}>{b.vzla}</span>
-              <span className={cn('font-mono text-[15px] tabular-nums max-sm:hidden', e.espana)}>{b.espana}</span>
-              <span className={cn('text-[15px] font-bold', e.titulo)}>{b.titulo}</span>
-              <span className={cn('text-right font-mono text-[13px] tabular-nums', e.duracion)}>{b.duracion}</span>
+            <li
+              key={b.vzla}
+              style={{ height: alturaDeBloque(b.minutos) }}
+              className={cn(COLUMNAS, 'rounded-md px-3', e.caja)}
+            >
+              <span className={cn('font-mono text-[14px] font-bold tabular-nums', e.vzla)}>{b.vzla}</span>
+              <span className={cn('font-mono text-[12px] tabular-nums max-sm:hidden', e.espana)}>{b.espana}</span>
+              <span className={cn('truncate text-[13.5px] font-semibold', e.titulo)}>{b.titulo}</span>
+              <span className={cn('text-right font-mono text-[12px] tabular-nums', e.duracion)}>{b.duracion}</span>
             </li>
           )
         })}
       </ul>
-      <div className={cn(COLUMNAS, 'mt-2 border-t border-dashed border-slate-200 px-4 pt-2 text-slate-400')}>
-        <span className="font-mono text-[15px] font-bold tabular-nums">{j.fin.vzla}</span>
-        <span className="font-mono text-[14px] tabular-nums max-sm:hidden">{j.fin.espana}</span>
-        <span className="text-[12px] font-semibold uppercase tracking-widest">Fin de jornada</span>
+      <div className={cn(COLUMNAS, 'px-3 pt-1.5 text-slate-400')}>
+        <span className="font-mono text-[14px] font-bold tabular-nums">{j.fin.vzla}</span>
+        <span className="font-mono text-[12px] tabular-nums max-sm:hidden">{j.fin.espana}</span>
+        <span className="text-[11px] font-semibold uppercase tracking-widest">Fin de jornada</span>
       </div>
     </div>
   )
@@ -64,12 +69,12 @@ export function PlanningDiarioDialog() {
           <span className="max-md:hidden">Planning diario</span>
         </Button>
       </DialogTrigger>
-      <DialogContent aria-describedby={undefined} className="max-h-[92dvh] overflow-y-auto sm:max-w-[1040px] max-md:h-[100dvh] max-md:max-h-none max-md:max-w-none max-md:rounded-none">
+      <DialogContent aria-describedby={undefined} className="max-h-[96dvh] gap-3 overflow-y-auto p-5 sm:max-w-[640px] max-md:h-[100dvh] max-md:max-h-none max-md:max-w-none max-md:rounded-none">
         <DialogHeader>
           <DialogTitle>Planning diario 8 h · SDR Propelia</DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue={horarioDeEspana()}>
+        <Tabs defaultValue={horarioDeEspana()} className="gap-2">
           <TabsList>
             {HORARIOS.map(h => (
               <TabsTrigger key={h} value={h}>{JORNADAS[h].titulo}</TabsTrigger>

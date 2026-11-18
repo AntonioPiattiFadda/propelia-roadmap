@@ -12,6 +12,8 @@ export interface Bloque {
   tipo: TipoDeBloque
   titulo: string
   duracion: string
+  /** Hasta el bloque siguiente (o el fin de jornada). */
+  minutos: number
 }
 
 export interface Jornada {
@@ -32,7 +34,7 @@ export function horarioDeEspana(fecha: Date = new Date()): Horario {
 }
 
 /* Los bloques en hora de España son los mismos todo el año. */
-const BLOQUES: Omit<Bloque, 'vzla'>[] = [
+const BLOQUES: Omit<Bloque, 'vzla' | 'minutos'>[] = [
   { espana: '10:00', tipo: 'seguimiento', titulo: 'Seguimientos y tareas', duracion: '30 min' },
   { espana: '10:30', tipo: 'contactar', titulo: 'Por contactar', duracion: '3 h 15' },
   { espana: '13:45', tipo: 'seguimiento', titulo: 'Seguimientos y tareas', duracion: '15 min' },
@@ -48,11 +50,27 @@ function restarHoras(hora: string, horas: number): string {
   return `${String((h - horas + 24) % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`
 }
 
+function aMinutos(hora: string): number {
+  const [h, m] = hora.split(':').map(Number)
+  return h * 60 + m
+}
+
+/** Alto en px del bloque en el planning. Crece con la raíz de la duración y no en línea recta:
+ *  así 3 h 15 se ve bastante más grande que 30 min (≈2,6 veces y no 6,5), y los bloques cortos
+ *  de seguimiento siguen siendo legibles. La jornada entera entra sin scroll (~490 px). */
+export function alturaDeBloque(minutos: number): number {
+  return Math.max(30, Math.round(9 * Math.sqrt(minutos)))
+}
+
 function jornada(titulo: string, bajada: string, diferencia: number): Jornada {
   return {
     titulo,
     bajada,
-    bloques: BLOQUES.map(b => ({ ...b, vzla: restarHoras(b.espana, diferencia) })),
+    bloques: BLOQUES.map((b, i) => ({
+      ...b,
+      vzla: restarHoras(b.espana, diferencia),
+      minutos: aMinutos(BLOQUES[i + 1]?.espana ?? FIN_ESPANA) - aMinutos(b.espana),
+    })),
     fin: { vzla: restarHoras(FIN_ESPANA, diferencia), espana: FIN_ESPANA },
   }
 }
