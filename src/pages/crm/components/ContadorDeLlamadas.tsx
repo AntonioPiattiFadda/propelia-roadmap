@@ -46,6 +46,12 @@ const COLUMNAS: (Explicado & { k: Objetivo })[] = [
     explicacion: 'Cada «Llamada» registrada: alguien de la inmobiliaria atendió, decida o no. Cuenta llamadas.',
     fuente: `${LLAMADAS_DE_LA_PERSONA}, de tipo llamada y resultado contestada.`,
   },
+  // «Mails de presentación» va a la izquierda de «Con decisor» (18/11/2026, por pedido).
+  {
+    k: 'presentaciones', label: 'Mails de presentación', title: 'Mails «Presentación con vídeo» enviados',
+    explicacion: 'Mails «Presentación con vídeo» que mandaste desde «Mensajes» del lead. No cuentan los que no salieron (falló el envío o la dirección estaba suprimida).',
+    fuente: 'Tabla crm_emails: plantilla = presentacion-video, enviados por la persona (sent_by) en el período (sent_at), sin status failed ni suppressed.',
+  },
   {
     k: 'decisores', label: 'Con decisor', title: 'De las contestadas, en cuántas hablaste con alguien que decide',
     explicacion: 'De las contestadas, las que se registraron con «¿Es decisor?» en Sí (o con alguien que el perfil ya marca como decisor). Cuenta llamadas.',
@@ -55,11 +61,6 @@ const COLUMNAS: (Explicado & { k: Objetivo })[] = [
     k: 'decisoresNuevos', label: 'Decisores nuevos', title: 'Llamadas en las que hablaste por primera vez con un decisor: con quien ya había hablado alguien del equipo no cuenta',
     explicacion: 'De las llamadas con decisor, aquellas en las que se habló con un decisor con quien nadie del equipo había hablado antes en ese lead (se compara por nombre). Sin nombre, cuenta solo si el lead nunca había tenido una llamada con decisor.',
     fuente: `${LLAMADAS_DE_LA_PERSONA}, con decisor, comparadas contra todas las actividades anteriores de esos leads en crm_comments, de cualquier persona.`,
-  },
-  {
-    k: 'presentaciones', label: 'Mails de presentación', title: 'Mails «Presentación con vídeo» enviados',
-    explicacion: 'Mails «Presentación con vídeo» que mandaste desde «Mensajes» del lead. No cuentan los que no salieron (falló el envío o la dirección estaba suprimida).',
-    fuente: 'Tabla crm_emails: plantilla = presentacion-video, enviados por la persona (sent_by) en el período (sent_at), sin status failed ni suppressed.',
   },
   {
     k: 'demos', label: 'Demos agendadas', title: 'Demos que agendaste (cuenta el día en que se agendaron, no para cuándo son)',
