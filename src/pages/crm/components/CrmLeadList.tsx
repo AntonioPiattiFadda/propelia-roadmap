@@ -16,7 +16,7 @@ import { etapaDelLead } from '../lib/effectiveStage'
 import { estadoDeLista } from '../lib/estadoDeLista'
 import { vecinoMarcable } from '../lib/seleccionConFlechas'
 import { claveDeFiltros, fijarLista, ordenarComo, type FotoDeLista } from '../lib/listaFija'
-import { vecinosEnRecorrido, type UltimaPosicion } from '../lib/recorrido'
+import { leadParaAbrir, vecinosEnRecorrido, type UltimaPosicion } from '../lib/recorrido'
 import { fmtUltimaActividad, ordenarPorUltimaActividad } from '../lib/ultimaActividad'
 import { fmtIngresoDate, fmtShortDate } from '../lib/leadCellFormat'
 import {
@@ -27,7 +27,7 @@ import { agruparPorEtapa } from '../lib/columnasPorEtapa'
 import { filterLeads, leadsDeCarteras, type LeadFilterContext, type LeadFilterState, type OrdenLeads } from '../lib/leadFilters'
 import { estaVencida, idsConTareasParaHoy, idsConTareasVencidas, ordenarPorEstado, ordenarPorProximaTarea, proximaTareaPorLead, type ProximaTarea } from '../lib/tareas'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
-import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
+import { useCrmLeads, useLead, useTareasPendientes } from '../hooks/useCrmLeads'
 import { useActualizarLead, useReasignar } from '../hooks/useLeadMutaciones'
 import { useObjetivos } from '../hooks/useObjetivos'
 import { useVisibleAgents } from '../hooks/useVisibleAgents'
@@ -442,7 +442,9 @@ export function CrmLeadList({ resumen = false, conDashboard = false, conCarteras
   // El lead abierto sale de TODOS los leads y no de los visibles: un enlace a `?lead=` tiene que
   // abrirlo aunque los filtros lo escondan. Las flechas recorren la lista tal como se ve.
   const leadAbiertoId = searchParams.get(LEAD_PARAM)
-  const leadAbierto = leadAbiertoId ? (leadsQ.data ?? []).find(l => l.id === leadAbiertoId) ?? null : null
+  // Con un enlace directo no se espera a la lista entera: se pide ese lead solo mientras tanto.
+  const leadSueltoQ = useLead(leadAbiertoId && !leadsQ.data ? leadAbiertoId : undefined)
+  const leadAbierto = leadParaAbrir(leadAbiertoId, leadsQ.data, leadSueltoQ.data)
   // El último en el que se entró queda resaltado en la lista. Se anota al abrirlo, venga de donde
   // venga el `?lead=` (la lista, las flechas del dialog, un enlace).
   // El estado se ajusta en el render (sin esperar al efecto); el efecto solo lo escribe en el navegador.
