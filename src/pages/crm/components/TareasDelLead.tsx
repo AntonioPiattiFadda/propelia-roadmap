@@ -79,7 +79,49 @@ export function ChipsDeVencimiento({ value, onChange, compacto = false }: {
   )
 }
 
-type CamposTarea = { title: string; dueDate: string | null; dueTime: string; assignedTo?: string }
+/** La hora de España de una tarea: el desplegable y el campo a mano. Lo usan «Nueva tarea» y el
+ *  «Próximo contacto» del bloque del decisor (19/11/2026), así la hora se elige igual en los dos.
+ *  `opcional` agrega «Sin hora»; sin él, vacío muestra «Hora» y la elección es obligatoria. */
+export function HoraDeEspana({ dueDate, value, onChange, opcional = false, compacto = false, rojo = false }: {
+  dueDate: string | null
+  value: string
+  onChange: (v: string) => void
+  opcional?: boolean
+  compacto?: boolean
+  rojo?: boolean
+}) {
+  const alto = compacto ? 'h-7 text-base md:text-[12.5px]' : 'h-9 text-base md:text-[13.5px]'
+  return (
+    /* Un desplegable de 15 en 15 como el de Google Calendar (17/10/2026, por pedido), con la
+       hora de Venezuela al lado de cada opción. La hora que se guarda es la de España.
+       También a mano (17/10/2026, por pedido): una hora que no esté en la lista, como 10:10. La
+       escrita entra al desplegable como una opción más, así se ve elegida ahí también. */
+    <div className="flex flex-wrap items-center gap-2">
+      <Select value={dueDate == null || value === '' ? (opcional ? SIN_HORA : '') : value} disabled={dueDate == null}
+        onValueChange={v => onChange(v === SIN_HORA ? '' : v)}>
+        <SelectTrigger aria-label="Hora de España" aria-invalid={rojo}
+          className={cn(alto, compacto ? 'w-52 bg-card' : 'w-64', rojo && '[border-color:var(--danger)]')}>
+          <SelectValue placeholder="Hora de España" />
+        </SelectTrigger>
+        <SelectContent className="max-h-72">
+          {opcional && <SelectItem value={SIN_HORA}>Sin hora</SelectItem>}
+          {dueDate != null && opcionesConLaEscrita(dueDate, value).map(o => (
+            <SelectItem key={o.value} value={o.value}>
+              <span className="tabular-nums">{o.value}</span>
+              <span className="tabular-nums text-(--fg-muted)">· {textoVenezuela({ hora: o.venezuela, dias: o.dias })}</span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {/* 16px en el teléfono: abajo de eso el navegador hace zoom solo al tocar el campo. */}
+      <Input type="time" aria-label="Escribir la hora de España a mano" title="Escribir la hora a mano"
+        value={dueDate == null ? '' : value} disabled={dueDate == null}
+        onChange={e => onChange(e.target.value)} className={cn(alto, compacto ? 'w-28 bg-card' : 'w-32')} />
+    </div>
+  )
+}
+
+type CamposTarea ={ title: string; dueDate: string | null; dueTime: string; assignedTo?: string }
 
 /** Crear tarea en la ventana flotante (`VentanaFlotante`): se escribe mirando el lead. Enter crea.
  *  Con `editando` es la misma ventana, «Editar tarea», precargada con la tarea (20/10/2026). */
@@ -131,31 +173,7 @@ function NewTaskSheet({ open, onOpenChange, onGuardar, isPending, editando, asig
           <span className="text-[12px] font-medium text-(--fg-2)">
             Hora de España <span className="font-normal text-(--fg-muted)">(opcional, te avisa 5 minutos antes)</span>
           </span>
-          {/* Un desplegable de 15 en 15 como el de Google Calendar (17/10/2026, por pedido), con la
-              hora de Venezuela al lado de cada opción. La hora que se guarda es la de España. */}
-          {/* También a mano (17/10/2026, por pedido): una hora que no esté en la lista, como 10:10. La
-              escrita entra al desplegable como una opción más, así se ve elegida ahí también. */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Select value={dueDate == null || dueTime === '' ? SIN_HORA : dueTime} disabled={dueDate == null}
-              onValueChange={v => setDueTime(v === SIN_HORA ? '' : v)}>
-              <SelectTrigger aria-label="Hora de España" className="h-9 w-64 text-base md:text-[13.5px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="max-h-72">
-                <SelectItem value={SIN_HORA}>Sin hora</SelectItem>
-                {dueDate != null && opcionesConLaEscrita(dueDate, dueTime).map(o => (
-                  <SelectItem key={o.value} value={o.value}>
-                    <span className="tabular-nums">{o.value}</span>
-                    <span className="tabular-nums text-(--fg-muted)">· {textoVenezuela({ hora: o.venezuela, dias: o.dias })}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {/* 16px en el teléfono: abajo de eso el navegador hace zoom solo al tocar el campo. */}
-            <Input type="time" aria-label="Escribir la hora de España a mano" title="Escribir la hora a mano"
-              value={dueDate == null ? '' : dueTime} disabled={dueDate == null}
-              onChange={e => setDueTime(e.target.value)} className="h-9 w-32 text-base md:text-[13.5px]" />
-          </div>
+          <HoraDeEspana dueDate={dueDate} value={dueTime} onChange={setDueTime} opcional />
           {veDeLaElegida && (
             <span className="text-[12px] text-(--fg-muted)">En Venezuela: {textoVenezuela(veDeLaElegida)}</span>
           )}

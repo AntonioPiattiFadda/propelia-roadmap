@@ -615,6 +615,17 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   **Ese mismo día (por pedido) entró una cuarta, «Horario del decisor conseguido»**, después del teléfono:
   obligatoria como las otras y con el Sí un texto libre obligatorio («Ej.: martes y jueves de 10 a 12»; el
   doorkeeper da horarios vagos) que va solo a la meta (`horarioDecisor`) y a «Decisor conseguido», no al perfil.
+  **Y una quinta, la última del bloque, «Próximo contacto: ¿se acordó horario para llamar al decisor?»**
+  (19/11/2026, por pedido): obligatoria igual; con Sí, día (las pastillas de «Nueva tarea»,
+  `ChipsDeVencimiento`) y hora de España (`HoraDeEspana`, el mismo desplegable con la hora de Venezuela,
+  ahora compartido con `NewTaskSheet`), los dos obligatorios (`proximoContactoDelBloque`, `lib/actividad.ts`).
+  Va a la meta como `proximoContactoDecisor: {fecha, hora}` y la actividad lo dice en su renglón
+  «Próximo contacto: 20/11 a las 10:30 (hora de España)» (`lineaDeTiempo`). Al registrar, **después de
+  guardar la etapa** (la mira el trigger), crea la tarea «Llamar al decisor <nombre>»
+  (`tituloDeLlamarAlDecisor`: el nombre conseguido en el bloque o el primer decisor del perfil) con ese
+  día y hora, de quien registra (`myId`, nunca el «Ver como»). Si la etapa en la que queda no deja
+  agendar (`permiteAgendarTarea`), lo avisa debajo del Sí y no la crea; si el insert falla, la actividad
+  queda y un toast lo explica (`mensajeDeError`). No suma objetivos ni toca el MCP. Sin migración.
 - **La llamada con el decisor lo fija en el perfil** (17/10/2026): reemplazó al cartel «Decisor
   contactado» (16/10). El contacto queda marcado como decisor (y se crea si se escribió a mano) y
   se fija (`decisoresDeLaLlamada()`, `lib/clientData.ts`; el fijado es de cada navegador). Con varios

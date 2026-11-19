@@ -3,9 +3,11 @@ import { Plus, X } from 'lucide-react'
 import { Icon } from '@/components/ui/icon'
 import { Select, SelectContent, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { horaEnVenezuela, textoVenezuela } from '../lib/alarmas'
 import { conPrefijoDePais, PREFIJOS_DE_PAIS, type CampoDecisor } from '../lib/clientData'
 import type { CrmStage } from '../types'
 import { OpcionesDeEtapa } from './leadCells'
+import { ChipsDeVencimiento, HoraDeEspana } from './TareasDelLead'
 
 /* Los renglones del registro de actividad que comparten la llamada y la demo (23/10/2026, por
    pedido: «mismo orden y diseño, para no marear»). Solo pintan: el estado y las reglas son de quien
@@ -252,9 +254,13 @@ export type BloqueDelDecisor = {
   telefono: boolean | null; telefonoValor: string; prefijo: string
   horario: boolean | null; horarioValor: string
   email: boolean | null; emailValor: string
+  /** «Próximo contacto» (19/11/2026, por pedido): si se acordó horario para llamar al decisor y,
+   *  con Sí, el día y la hora de España (sin elegir de entrada: hay que mirarlos). */
+  proximo: boolean | null; proximoFecha: string | null; proximoHora: string
 }
 export const BLOQUE_DEL_DECISOR_VACIO: BloqueDelDecisor = {
   nombre: null, nombreValor: '', telefono: null, telefonoValor: '', prefijo: PREFIJOS_DE_PAIS[0].prefijo, horario: null, horarioValor: '', email: null, emailValor: '',
+  proximo: null, proximoFecha: null, proximoHora: '',
 }
 
 function FilaSiNo({ rotulo, valor, onCambiar, rojo, children }: {
@@ -277,11 +283,14 @@ function FilaSiNo({ rotulo, valor, onCambiar, rojo, children }: {
   )
 }
 
-export function BloqueDecisor({ valor, onCambiar, rojo }: {
+export function BloqueDecisor({ valor, onCambiar, rojo, avisoProximo }: {
   valor: BloqueDelDecisor
   onCambiar: (parcial: Partial<BloqueDelDecisor>) => void
-  rojo: { nombre: boolean; telefono: boolean; horario: boolean; email: boolean }
+  rojo: { nombre: boolean; telefono: boolean; horario: boolean; email: boolean; proximo: boolean }
+  /** Debajo del Sí de «Próximo contacto»: por qué no se va a poder crear la tarea (la etapa no deja). */
+  avisoProximo?: string | null
 }) {
+  const ve = valor.proximoFecha && valor.proximoHora ? horaEnVenezuela(valor.proximoFecha, valor.proximoHora) : null
   return (
     <fieldset className="flex flex-col gap-1 rounded-md px-3 pt-1 pb-2 [border:1px_solid_var(--line-soft)]">
       <legend className="px-1 text-[11.5px] font-semibold text-(--fg-2)">Avances para contactar al decisor</legend>
@@ -312,6 +321,22 @@ export function BloqueDecisor({ valor, onCambiar, rojo }: {
         <input value={valor.emailValor} onChange={e => onCambiar({ emailValor: e.target.value })}
           type="email" aria-label="Email del decisor" aria-invalid={rojo.email} placeholder="casilla@inmobiliaria.com"
           title="Al registrar se abre «Mensajes» con este «Para»" className={campoEscrito} />
+      </FilaSiNo>
+      {/* «Próximo contacto» (19/11/2026, por pedido): con Sí, el día y la hora como en «Nueva tarea»
+          (mismas pastillas y misma hora de España); al registrar queda como tarea «Llamar al decisor». */}
+      <FilaSiNo rotulo="Próximo contacto: ¿se acordó horario para llamar al decisor?" valor={valor.proximo}
+        onCambiar={v => onCambiar({ proximo: v })} rojo={rojo.proximo}>
+        <div className="flex basis-full flex-col gap-1.5 pt-0.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <ChipsDeVencimiento value={valor.proximoFecha} onChange={v => onCambiar({ proximoFecha: v })} compacto />
+          </div>
+          <HoraDeEspana dueDate={valor.proximoFecha} value={valor.proximoHora} onChange={v => onCambiar({ proximoHora: v })}
+            compacto rojo={rojo.proximo && valor.proximoFecha != null && !valor.proximoHora} />
+          <span className="text-[11.5px] text-(--fg-muted)">
+            {ve ? `En Venezuela: ${textoVenezuela(ve)} · ` : ''}Al registrar se crea la tarea «Llamar al decisor», tuya, con alarma.
+          </span>
+          {avisoProximo && <span className="text-[11.5px] font-semibold text-(--danger)">{avisoProximo}</span>}
+        </div>
       </FilaSiNo>
     </fieldset>
   )

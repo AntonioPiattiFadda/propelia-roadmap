@@ -28,6 +28,9 @@ export type ItemActividad = {
   /** Solo notas y llamadas: lo conseguido del decisor («Avances para contactar al decisor»), en un
    *  renglón: nombre · teléfono · email, lo que haya. Aparte de `texto`, que se edita. */
   decisorConseguido?: string
+  /** Solo notas y llamadas: cuándo se acordó llamar al decisor (19/11/2026), ya escrito
+   *  («20/11 a las 10:30 (hora de España)»). */
+  proximoContactoDecisor?: string
   /** Solo demos con su reunión viva: cuál es y en qué estado está. Cancelar la demo desde la
    *  actividad (23/10/2026, por pedido) se ofrece mientras esté `scheduled`. */
   reunion?: { id: string; estado: CrmMeeting['status'] }
@@ -68,6 +71,9 @@ export type MetaDeActividad = {
    *  doorkeeper da horarios vagos: «martes y jueves de 10 a 12», «por la tarde»). */
   horarioDecisor?: string
   emailDecisor?: string
+  /** Llamadas (19/11/2026, por pedido): el día y la hora de España que se acordaron para llamar al
+   *  decisor («Próximo contacto» del bloque). Solo si se contestó Sí; con él se crea la tarea. */
+  proximoContactoDecisor?: ProximoContactoDecisor
   /** Solo demos: el id de la reunión en `crm_meetings`. La actividad y la reunión se pintan como un
    *  solo renglón, y el día y la hora salen de la reunión: si la mueven, el registro no miente. */
   reunion?: string
@@ -95,9 +101,42 @@ export function pideAvancesDelDecisor(tipo: string, esDecisor: boolean | null): 
   return tipo === 'llamada' && esDecisor === false
 }
 
+/** Día (`YYYY-MM-DD`) y hora de España (`HH:MM`) para volver a llamar al decisor. */
+export type ProximoContactoDecisor = { fecha: string; hora: string }
+const FORMA_DE_FECHA = /^\d{4}-\d{2}-\d{2}$/
+const FORMA_DE_HORA = /^([01]\d|2[0-3]):[0-5]\d$/
+
+function esProximoContacto(p: unknown): p is ProximoContactoDecisor {
+  if (typeof p !== 'object' || p === null) return false
+  const { fecha, hora } = p as Record<string, unknown>
+  return typeof fecha === 'string' && FORMA_DE_FECHA.test(fecha) && typeof hora === 'string' && FORMA_DE_HORA.test(hora)
+}
+
+/** «Próximo contacto» del bloque del decisor (19/11/2026, por pedido): «¿Se acordó horario para
+ *  llamar al decisor?». Obligatoria como las otras del bloque (`null` = sin contestar, falta); con
+ *  Sí, el día y la hora también lo son. `valor` es lo que va a la meta y a la tarea. */
+export function proximoContactoDelBloque(
+  acordado: boolean | null, fecha: string | null, hora: string,
+): { falta: boolean; valor: ProximoContactoDecisor | null } {
+  if (acordado === null) return { falta: true, valor: null }
+  if (!acordado) return { falta: false, valor: null }
+  const valor = { fecha: fecha ?? '', hora: hora.slice(0, 5) }
+  return esProximoContacto(valor) ? { falta: false, valor } : { falta: true, valor: null }
+}
+
+/** El título de la tarea del próximo contacto: con el nombre conseguido en la misma llamada o, si
+ *  no, con el primer decisor marcado en el perfil. */
+export function tituloDeLlamarAlDecisor(apuntado: string, delPerfil: readonly string[]): string {
+  const nombre = apuntado.trim() || delPerfil.map(n => n.trim()).find(Boolean)
+  return nombre ? `Llamar al decisor ${nombre}` : 'Llamar al decisor'
+}
+
+/** «20/11 a las 10:30 (hora de España)». */
+const textoDelProximoContacto = (p: ProximoContactoDecisor) => `${fmtDayMonth(p.fecha)} a las ${p.hora} (hora de España)`
+
 /** Lo que va a `long_description`. Una nota sin nadie no guarda nada: es un comentario de siempre. */
 export function armarMetaDeActividad(meta: MetaDeActividad): string | null {
-  const conDecisor = meta.decisorApuntado || meta.telefonoDecisor || meta.horarioDecisor || meta.emailDecisor
+  const conDecisor = meta.decisorApuntado || meta.telefonoDecisor || meta.horarioDecisor || meta.emailDecisor || meta.proximoContactoDecisor
   if (meta.tipo === 'nota' && meta.con.length === 0 && !conDecisor) return null
   return MARCA_ACTIVIDAD + JSON.stringify(meta)
 }
@@ -113,7 +152,7 @@ export function leerMetaDeActividad(guardado: string | null): MetaDeActividad | 
   try {
     const m: unknown = JSON.parse(guardado.slice(MARCA_ACTIVIDAD.length))
     if (typeof m !== 'object' || m === null) return null
-    const { tipo, con, resultado, decisor, telefono, decisorApuntado, telefonoDecisor, horarioDecisor, emailDecisor, reunion } = m as Record<string, unknown>
+    const { tipo, con, resultado, decisor, telefono, decisorApuntado, telefonoDecisor, horarioDecisor, emailDecisor, proximoContactoDecisor, reunion } = m as Record<string, unknown>
     if (tipo !== 'nota' && tipo !== 'llamada' && tipo !== 'demo' && tipo !== 'demoHecha') return null
     if (!Array.isArray(con) || !con.every(c => typeof c === 'string')) return null
     if (resultado !== undefined && resultado !== 'contestada' && resultado !== 'no_respondida') return null
@@ -123,6 +162,7 @@ export function leerMetaDeActividad(guardado: string | null): MetaDeActividad | 
     if (telefonoDecisor !== undefined && typeof telefonoDecisor !== 'string') return null
     if (horarioDecisor !== undefined && typeof horarioDecisor !== 'string') return null
     if (emailDecisor !== undefined && typeof emailDecisor !== 'string') return null
+    if (proximoContactoDecisor !== undefined && !esProximoContacto(proximoContactoDecisor)) return null
     if (reunion !== undefined && typeof reunion !== 'string') return null
     return {
       tipo, con,
@@ -133,6 +173,8 @@ export function leerMetaDeActividad(guardado: string | null): MetaDeActividad | 
       ...(telefonoDecisor !== undefined && { telefonoDecisor }),
       ...(horarioDecisor !== undefined && { horarioDecisor }),
       ...(emailDecisor !== undefined && { emailDecisor }),
+      ...(proximoContactoDecisor !== undefined && {
+        proximoContactoDecisor: { fecha: proximoContactoDecisor.fecha, hora: proximoContactoDecisor.hora } }),
       ...(reunion !== undefined && { reunion }),
     }
   } catch { return null }
@@ -240,6 +282,7 @@ export function lineaDeTiempo(detalle: LeadDetalle, usuarios: Usuario[]): ItemAc
         fecha: c.created_at, texto: c.description, autorId: c.created_by, con: meta?.con ?? [],
         resultado: meta?.resultado, decisor: meta?.decisor, telefono: meta?.telefono,
         ...(conseguido(meta) && { decisorConseguido: conseguido(meta) }),
+        ...(meta?.proximoContactoDecisor && { proximoContactoDecisor: textoDelProximoContacto(meta.proximoContactoDecisor) }),
       }
     }),
     ...detalle.events.map(e => ({

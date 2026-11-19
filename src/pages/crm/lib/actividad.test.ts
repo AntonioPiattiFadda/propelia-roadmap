@@ -2,8 +2,41 @@ import { describe, expect, it } from 'vitest'
 import type { CrmMeeting, CrmTask, LeadDetalle, Usuario } from '../types'
 import {
   agruparPorDia, armarMetaDeActividad, decisorContactado, horaDe, leerMetaDeActividad, lineaDeTiempo, primeroLosUltimos, resumenDeLlamadas, textoEditado,
-  pideAvancesDelDecisor, ultimoContacto, type ItemActividad, type MetaDeActividad,
+  pideAvancesDelDecisor, proximoContactoDelBloque, tituloDeLlamarAlDecisor, ultimoContacto, type ItemActividad, type MetaDeActividad,
 } from './actividad'
+
+describe('proximoContactoDelBloque', () => {
+  it('sin contestar falta', () => {
+    expect(proximoContactoDelBloque(null, null, '')).toEqual({ falta: true, valor: null })
+  })
+  it('con No no falta nada y no hay próximo contacto', () => {
+    expect(proximoContactoDelBloque(false, '2026-11-20', '10:30')).toEqual({ falta: false, valor: null })
+  })
+  it('con Sí pide día y hora', () => {
+    expect(proximoContactoDelBloque(true, null, '10:30')).toEqual({ falta: true, valor: null })
+    expect(proximoContactoDelBloque(true, '2026-11-20', '')).toEqual({ falta: true, valor: null })
+    expect(proximoContactoDelBloque(true, '2026-11-20', '10:30')).toEqual({ falta: false, valor: { fecha: '2026-11-20', hora: '10:30' } })
+  })
+  it('la hora se guarda corta (el campo a mano puede traer segundos)', () => {
+    expect(proximoContactoDelBloque(true, '2026-11-20', '09:05:00').valor).toEqual({ fecha: '2026-11-20', hora: '09:05' })
+  })
+  it('un día o una hora con otra forma falta', () => {
+    expect(proximoContactoDelBloque(true, '20/11', '10:30').falta).toBe(true)
+    expect(proximoContactoDelBloque(true, '2026-11-20', '25 hs').falta).toBe(true)
+  })
+})
+
+describe('tituloDeLlamarAlDecisor', () => {
+  it('con el nombre conseguido en la llamada', () => {
+    expect(tituloDeLlamarAlDecisor('Jordi', ['Marta'])).toBe('Llamar al decisor Jordi')
+  })
+  it('si no, con el decisor marcado en el perfil', () => {
+    expect(tituloDeLlamarAlDecisor('', ['Marta', 'Pablo'])).toBe('Llamar al decisor Marta')
+  })
+  it('sin nombre, solo «Llamar al decisor»', () => {
+    expect(tituloDeLlamarAlDecisor('  ', [])).toBe('Llamar al decisor')
+  })
+})
 
 describe('pideAvancesDelDecisor', () => {
   it('solo en la llamada y solo cuando quien atendió no decide', () => {
@@ -74,6 +107,19 @@ describe('lineaDeTiempo', () => {
     expect(soloTel.decisorConseguido).toBe('+34 600 000 000')
     expect(nada.decisorConseguido).toBeUndefined()
     expect(soloHorario.decisorConseguido).toBe('por la tarde')
+  })
+
+  it('la llamada dice el próximo contacto acordado con el decisor, en su propio renglón (19/11/2026)', () => {
+    const [con, sin] = lineaDeTiempo({ ...vacio, comments: [
+      { id: 'p', lead_id: 'x', description: 'Pidió precio', comment_type: 'MANUAL', created_by: 'a', created_at: '2026-11-19T10:00:00Z', deleted_at: null,
+        long_description: armarMetaDeActividad({ tipo: 'llamada', con: ['Ana'], resultado: 'contestada', decisor: false,
+          proximoContactoDecisor: { fecha: '2026-11-20', hora: '10:30' } }) },
+      { id: 'q', lead_id: 'x', description: 'Nada', comment_type: 'MANUAL', created_by: 'a', created_at: '2026-11-19T11:00:00Z', deleted_at: null,
+        long_description: armarMetaDeActividad({ tipo: 'llamada', con: ['Ana'], resultado: 'contestada', decisor: false }) },
+    ] }, usuarios)
+    expect(con.proximoContactoDecisor).toBe('20/11 a las 10:30 (hora de España)')
+    expect(con.decisorConseguido).toBeUndefined()
+    expect(sin.proximoContactoDecisor).toBeUndefined()
   })
 
   it('ordena de lo más viejo a lo más nuevo (el chat se lee de arriba abajo)', () => {
@@ -246,6 +292,18 @@ describe('metaDeActividad', () => {
     expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"telefonoDecisor":3}')).toBeNull()
     expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"horarioDecisor":10}')).toBeNull()
     expect(leerMetaDeActividad('<!--act-->{"tipo":"nota","con":[],"emailDecisor":false}')).toBeNull()
+  })
+  it('ida y vuelta: el próximo contacto acordado con el decisor (19/11/2026)', () => {
+    const llamada = { tipo: 'llamada' as const, con: ['Laura'], resultado: 'contestada' as const, decisor: false,
+      proximoContactoDecisor: { fecha: '2026-11-20', hora: '10:30' } }
+    expect(leerMetaDeActividad(armarMetaDeActividad(llamada))).toEqual(llamada)
+    const nota = { tipo: 'nota' as const, con: [], proximoContactoDecisor: { fecha: '2026-11-20', hora: '10:30' } }
+    expect(leerMetaDeActividad(armarMetaDeActividad(nota))).toEqual(nota)
+  })
+  it('un próximo contacto con otra forma no es meta', () => {
+    expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"proximoContactoDecisor":"mañana"}')).toBeNull()
+    expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"proximoContactoDecisor":{"fecha":"20/11","hora":"10:30"}}')).toBeNull()
+    expect(leerMetaDeActividad('<!--act-->{"tipo":"llamada","con":[],"proximoContactoDecisor":{"fecha":"2026-11-20"}}')).toBeNull()
   })
 })
 

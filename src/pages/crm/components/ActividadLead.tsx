@@ -18,18 +18,23 @@ import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useActualizarCliente, useActualizarLead, useMutacionDelDetalle } from '../hooks/useLeadMutaciones'
 import {
   agruparPorDia, armarMetaDeActividad, horaDe, INTENTOS_DE_CONTACTO, lineaDeTiempo, primeroLosUltimos, TEXTO_DE_LLAMADA, textoEditado,
-  pideAvancesDelDecisor, ultimoContacto, type ItemActividad, type MetaDeActividad, type ResultadoDeLlamada,
+  pideAvancesDelDecisor, proximoContactoDelBloque, tituloDeLlamarAlDecisor, ultimoContacto,
+  type ItemActividad, type MetaDeActividad, type ProximoContactoDecisor, type ResultadoDeLlamada,
 } from '../lib/actividad'
 import {
   campoDelNuevoDecisor, casilleroDelTelefonoNuevo, conDatosDelDecisor, conPrefijoDePais, contactosConDecisor, decisorDelContactoNuevo, decisorSabido,
-  decisoresDeLaLlamada, nombreDelLead, patchDeContactosNuevos, telefonoEscrito, telefonosDelCliente, type CampoDecisor,
+  decisoresDeLaLlamada, nombreDelLead, nombresDeDecisores, patchDeContactosNuevos, telefonoEscrito, telefonosDelCliente, type CampoDecisor,
 } from '../lib/clientData'
+import { mensajeDeError } from '../lib/errores'
+import { permiteAgendarTarea } from '../lib/gestionDeEtapa'
+import { CRM_KEYS } from '../hooks/keys'
+import { useQueryClient } from '@tanstack/react-query'
 import { MensajesPredeterminadosDialog } from './MensajesPredeterminados'
 import { MeetingFormContent } from '@/pages/agenda/components/meetings/MeetingFormContent'
 import { GUIA_DE_DEMO, GUIA_DE_LLAMADA, type SeccionDeGuia } from '../lib/guiaDeLlamada'
 import { DESCRIPCION_DE_DEMO, esEmailValido, invitadosDeLaDemo, RECORDATORIO_DE_DEMO, registroDeDemoDesdeLaActividad, tituloDeLaDemo } from '../lib/reuniones'
-import { actualizarComentario, cancelarReunion, crearComentario, marcarComentarioBorrado } from '../service/crm.service'
-import type { CrmLeadRow, CrmMeeting, LeadDetalle } from '../types'
+import { actualizarComentario, cancelarReunion, crearComentario, crearTarea, marcarComentarioBorrado } from '../service/crm.service'
+import type { CrmLeadRow, CrmMeeting, CrmStage, LeadDetalle } from '../types'
 import { CancelarDemoDialog } from './CancelarDemoDialog'
 import { GuionDeDemo } from './GuionDeDemo'
 import { InmobiliariaDelLead } from './InmobiliariaDelLead'
@@ -234,7 +239,9 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   emailsSueltos?: ReactNode
 }) {
   const { etapasPorId, etapasActivas, descartada } = useCrmCatalogos()
-  const { usuarios } = useCarteras()
+  // `myId` es la sesión de verdad y no el «yo» de «Ver como»: la tarea del próximo contacto es tuya.
+  const { usuarios, myId } = useCarteras()
+  const qc = useQueryClient()
   const [abierto, setAbierto] = useState(false)
   // La demo recién agendada: abre el aviso por WhatsApp (`DemoAgendadaDialog`).
   const [demoAgendada, setDemoAgendada] = useState<DemoAgendada | null>(null)
@@ -326,12 +333,16 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     ? telefonoEscrito([], conPrefijoDePais(bloqueDecisor.prefijo, bloqueDecisor.telefonoValor))?.numero ?? '' : ''
   const horarioDelDecisor = bloqueDecisor.horario ? bloqueDecisor.horarioValor.trim().replace(/\s+/g, ' ') : ''
   const emailDelDecisor = bloqueDecisor.email && esEmailValido(bloqueDecisor.emailValor) ? bloqueDecisor.emailValor.trim() : ''
+  /* «Próximo contacto» (19/11/2026, por pedido): con Sí, día y hora de España obligatorios, y al
+     registrar se crea la tarea «Llamar al decisor» (`crearTareaDeProximoContacto`). */
+  const proximoContacto = proximoContactoDelBloque(bloqueDecisor.proximo, bloqueDecisor.proximoFecha, bloqueDecisor.proximoHora)
   // Las cuatro se contestan siempre, Sí o No (18/11/2026, por pedido); el Sí además pide su campo.
   const faltaDelDecisor = {
     nombre: pideDecisorApuntado && (bloqueDecisor.nombre === null || (bloqueDecisor.nombre && !decisorApuntado)),
     telefono: pideDecisorApuntado && (bloqueDecisor.telefono === null || (bloqueDecisor.telefono && !telefonoDelDecisor)),
     horario: pideDecisorApuntado && (bloqueDecisor.horario === null || (bloqueDecisor.horario && !horarioDelDecisor)),
     email: pideDecisorApuntado && (bloqueDecisor.email === null || (bloqueDecisor.email && !emailDelDecisor)),
+    proximo: pideDecisorApuntado && proximoContacto.falta,
   }
   // Lo del decisor que va en la meta de la actividad: solo lo que se pidió y se escribió.
   const metaDelDecisor = pideDecisorApuntado ? {
@@ -339,6 +350,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     ...(telefonoDelDecisor && { telefonoDecisor: telefonoDelDecisor }),
     ...(horarioDelDecisor && { horarioDecisor: horarioDelDecisor }),
     ...(emailDelDecisor && { emailDecisor: emailDelDecisor }),
+    ...(proximoContacto.valor && { proximoContactoDecisor: proximoContacto.valor }),
   } : {}
   // El mail al decisor se abre con la actividad ya registrada; `n` remonta el dialog cada vez.
   const [mailAlDecisor, setMailAlDecisor] = useState<{ para: string; n: number } | null>(null)
@@ -387,19 +399,46 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
 
   /* Recién con la actividad guardada se mueve la etapa: si el registro falla, el lead no avanza por
      algo que no quedó escrito. Lo que se confirmó igual a la actual no toca la base. */
-  const moverEtapa = () => {
+  /* Devuelven cuándo terminó de guardarse la etapa: la tarea del próximo contacto se crea recién
+     ahí, porque el trigger `crm_tasks_etapa_permite` mira la etapa en la que quedó el lead. */
+  const moverEtapa = async () => {
     setEtapaElegida(null)
     setFaltaEtapa(false)
-    if (pideEtapa) moverA(etapaFinal)
+    if (pideEtapa) await moverA(etapaFinal)
   }
-  const moverA = (etapaId: string) => {
+  const moverA = async (etapaId: string) => {
     const destino = etapasPorId.get(etapaId)
     if (!destino || destino.id === lead.funnel_stage_id) return
     if (destino.id === descartada?.id) { setDescartando(true); return }
-    actualizarLead.mutate(
-      { id: lead.id, patch: { funnel_stage_id: destino.id, discard_reason: null, recontact_at: null } },
-      { onSuccess: () => toast.success(`Lead en «${destino.label}»`) })
     if (esBuscarContacto(destino)) setPreguntandoCualifica(true)
+    try {
+      await actualizarLead.mutateAsync({ id: lead.id, patch: { funnel_stage_id: destino.id, discard_reason: null, recontact_at: null } })
+      toast.success(`Lead en «${destino.label}»`)
+    } catch { /* el toast lo da `useActualizarLead` */ }
+  }
+  /* Dónde va a quedar el lead al registrar: la elegida, salvo Descartado (que espera su motivo y,
+     mientras, deja al lead donde estaba). De ahí sale si la tarea del próximo contacto se puede crear. */
+  const etapaElegidaObj = etapaElegida ? etapasPorId.get(etapaElegida) : undefined
+  const etapaAlRegistrar = etapaElegidaObj && etapaElegidaObj.id !== descartada?.id ? etapaElegidaObj : actual
+  const avisoProximo = bloqueDecisor.proximo && etapaAlRegistrar && !permiteAgendarTarea(etapaAlRegistrar)
+    ? `En la etapa «${etapaAlRegistrar.label}» no se agendan tareas: el horario queda en la actividad, pero la tarea no se crea.`
+    : null
+  /* La tarea «Llamar al decisor» (19/11/2026, por pedido): de quien registra (`myId`, la sesión de
+     verdad, nunca el «Ver como»), para el día y la hora acordados. Si falla, la actividad queda. */
+  const crearTareaDeProximoContacto = async (p: ProximoContactoDecisor, titulo: string, etapaFinalDelLead: CrmStage | undefined) => {
+    if (etapaFinalDelLead && !permiteAgendarTarea(etapaFinalDelLead)) {
+      toast(`La actividad quedó registrada, pero en la etapa «${etapaFinalDelLead.label}» no se agendan tareas: «${titulo}» no se creó`)
+      return
+    }
+    if (!myId) { toast.error(`La actividad quedó registrada, pero no se pudo crear «${titulo}»: no se sabe quién sos.`); return }
+    try {
+      await crearTarea({ lead_id: lead.id, title: titulo, due_date: p.fecha, due_time: p.hora, assigned_to: myId })
+      toast.success(`Tarea creada: «${titulo}»`)
+    } catch (e) {
+      toast.error(`La actividad quedó registrada, pero no se pudo crear «${titulo}»: ${mensajeDeError(e)}`)
+    }
+    void qc.invalidateQueries({ queryKey: CRM_KEYS.detalle(lead.id) })
+    void qc.invalidateQueries({ queryKey: CRM_KEYS.tareasPendientes })
   }
   const [preguntandoCualifica, setPreguntandoCualifica] = useState(false)
 
@@ -442,6 +481,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     decisorTelefono: faltaDelDecisor.telefono,
     decisorHorario: faltaDelDecisor.horario,
     decisorEmail: faltaDelDecisor.email,
+    decisorProximo: faltaDelDecisor.proximo,
   }
   const enRojo = (k: keyof typeof falta) => intento && falta[k]
 
@@ -509,6 +549,10 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
         : { tipo: 'llamada', con: [], resultado, ...marcado }
       // Contestó que sí: el contacto queda como decisor en el perfil y la próxima no se pregunta.
       const nuevoDecisor = tipo === 'llamada' && sabido === null ? campoDelNuevoDecisor(conDecisor, elegidos, esDecisor) : null
+      // Se toman antes de limpiar el formulario: el registro los vacía.
+      const proximo = tipo === 'llamada' && pideDecisorApuntado ? proximoContacto.valor : null
+      const tituloProximo = tituloDeLlamarAlDecisor(decisorApuntado, nombresDeDecisores(lead.client))
+      const etapaDeLaTarea = etapaAlRegistrar
       // Si el único con quien se habló es uno escrito a mano y decide, se carga ya como decisor.
       const decisorNuevo = tipo === 'llamada' && esDecisor && elegidos.length === 1 && nuevos.includes(elegidos[0]) ? elegidos[0] : null
       comentar.mutate({ description: limpio || TEXTO_DE_LLAMADA[resultado], meta },
@@ -524,15 +568,17 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
           if (nuevoDecisor && lead.client) {
             actualizarCliente.mutate({ clientId: lead.client.id, patch: { [nuevoDecisor]: true } })
           }
-          moverEtapa()
+          // El mail se abre ya; la tarea espera a que la etapa quede guardada (la mira el trigger).
+          const etapaGuardada = moverEtapa()
           abrirMailAlDecisor()
+          if (proximo) void etapaGuardada.then(() => crearTareaDeProximoContacto(proximo, tituloProximo, etapaDeLaTarea))
         } })
     }
     else if (tipo === 'nota') {
       const meta: MetaDeActividad = { tipo, con: con.filter(c => elegibles.includes(c)) }
       comentar.mutate({ description: limpio, meta }, { onSuccess: () => {
         cargarContactosNuevos(null)
-        setTexto(''); limpiarConQuien(); setAbierto(false); moverEtapa()
+        setTexto(''); limpiarConQuien(); setAbierto(false); void moverEtapa()
       } })
     }
   }
@@ -600,6 +646,12 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                         {i.decisorConseguido && (
                           <p className="mt-0.5 text-[12px] leading-snug text-(--fg-2)">
                             <span className="font-semibold text-foreground">Decisor conseguido:</span> {i.decisorConseguido}
+                          </p>
+                        )}
+                        {/* El horario acordado para llamar al decisor (19/11/2026, por pedido). */}
+                        {i.proximoContactoDecisor && (
+                          <p className="mt-0.5 text-[12px] leading-snug text-(--fg-2)">
+                            <span className="font-semibold text-foreground">Próximo contacto:</span> {i.proximoContactoDecisor}
                           </p>
                         )}
                       </div>
@@ -732,7 +784,9 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
             {tipo === 'llamada' && eligioConQuien && sabido !== null && <NotaDeDecisorSabido sabido={sabido} />}
             {pideDecisorApuntado && (
               <BloqueDecisor valor={bloqueDecisor} onCambiar={cambiarBloqueDecisor}
-                rojo={{ nombre: enRojo('decisorNombre'), telefono: enRojo('decisorTelefono'), horario: enRojo('decisorHorario'), email: enRojo('decisorEmail') }} />
+                rojo={{ nombre: enRojo('decisorNombre'), telefono: enRojo('decisorTelefono'), horario: enRojo('decisorHorario'), email: enRojo('decisorEmail'),
+                  proximo: enRojo('decisorProximo') }}
+                avisoProximo={avisoProximo} />
             )}
             <textarea
               value={texto}
@@ -794,7 +848,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
           opciones={opcionesEtapa} actual={actual} cancelando={cancelarDemo.isPending}
           onCerrar={() => setDemoACancelar(null)}
           onConfirmar={({ motivo, etapaId }) => cancelarDemo.mutate({ reunion: demoACancelar, motivo }, {
-            onSuccess: () => { setDemoACancelar(null); moverA(etapaId) },
+            onSuccess: () => { setDemoACancelar(null); void moverA(etapaId) },
           })} />
       )}
       {editandoActividad && (
