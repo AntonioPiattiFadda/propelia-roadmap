@@ -244,6 +244,15 @@ export async function presentacionesEnviadas(autor: string, desde: string, hasta
   return data ?? []
 }
 
+/** Los minutos sin llamar de `persona` el día `fecha` (de España), o null si el cron de Aircall
+ *  todavía no lo guardó (`crm_call_gaps`, migración 20261119181855_crm_call_gaps). */
+export async function minutosSinLlamarDelDia(persona: string, fecha: string): Promise<{ min_sin_llamar: number; baches: number; updated_at: string } | null> {
+  const { data, error } = await supabase.from('crm_call_gaps').select('min_sin_llamar, baches, updated_at')
+    .eq('persona_id', persona).eq('fecha', fecha).maybeSingle()
+  if (error) throw error
+  return data
+}
+
 /** Las demos que `autor` agendó en [desde, hasta): cuenta cuándo se agendaron, no para cuándo son. */
 export async function demosAgendadas(autor: string, desde: string, hasta: string): Promise<{ lead_id: string | null; created_at: string }[]> {
   const { data, error } = await supabase.from('crm_meetings').select('lead_id, created_at')

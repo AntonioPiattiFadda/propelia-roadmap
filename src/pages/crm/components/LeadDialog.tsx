@@ -34,6 +34,7 @@ import type { ClienteExtra } from './ClientFields'
 import { OpcionesDeEtapa } from './leadCells'
 import { LeadRowActions } from './LeadRowActions'
 import { EmailsQueNoLlegaronDelLead } from './EmailsQueNoLlegaron'
+import { AvisosDelLead } from './AvisosDelLead'
 import { BotonMensajes } from './MensajesPredeterminados'
 import { TareasDelLead } from './TareasDelLead'
 
@@ -825,6 +826,10 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
           )}
         </div>
       )}
+
+      {/* Los avisos para la SDR que dejó el conector MCP (19/11/2026): arriba de todo, en rojo.
+          «Listo» lo marca quien escribe la cartera (aunque el lead esté en onboarding) o el destinatario. */}
+      <AvisosDelLead leadId={lead.id} escribeElLead={escribeTareas} />
 
       {/* Abajo de lg se apila: el perfil y debajo la actividad, con el compositor al pie de ella.
           Desde lg el perfil es una sola columna (inmobiliaria, tareas, notas) al lado de la actividad. */}

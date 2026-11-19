@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  CalendarCheckIcon, CalendarDaysIcon, ChartColumnIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClockAlertIcon,
+  CalendarCheckIcon, CalendarDaysIcon, ChartColumnIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CirclePauseIcon, ClockAlertIcon,
   ContactIcon, HandshakeIcon, InfoIcon, MailIcon, PercentIcon, PhoneCallIcon, PhoneIcon, PhoneMissedIcon, SmartphoneIcon,
   SparklesIcon, SproutIcon, TargetIcon, UserCheckIcon, UsersIcon,
   type LucideIcon,
@@ -17,7 +17,8 @@ import { useCarteras } from '../hooks/useCarteras'
 import { useCommits, useGuardarCommit } from '../hooks/useCommits'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
-import { useHaciaLaProximaDemo, useObjetivos, useObjetivosDeVarios, usePersonaDeObjetivos } from '../hooks/useObjetivos'
+import { useHaciaLaProximaDemo, useMinutosSinLlamar, useObjetivos, useObjetivosDeVarios, usePersonaDeObjetivos } from '../hooks/useObjetivos'
+import { horasYMinutos, tonoSinLlamar, type TonoSinLlamar } from '../lib/minutosSinLlamar'
 import { useVerComo } from '../hooks/useVerComo'
 import { commitDelPeriodo, esDiaHabil, tonoDelCommit, type CampoDeCommit, type Commits } from '../lib/commits'
 import { escribirFiltros, filtrosDesdeUrl } from '../lib/leadFilterParams'
@@ -97,6 +98,15 @@ const NUTRICION: Explicado = {
   fuente: 'La suma de las tres columnas del grupo: crm_emails (presentacion-video) y la meta de las actividades en crm_comments (decisorApuntado y telefonoDecisor).',
 }
 
+/* «Minutos sin llamar» (19/11/2026, por pedido): primera tarjeta, solo en el contador del día. No
+   filtra (no es un conjunto de leads): tocarla la explica, como la tasa. */
+const SIN_LLAMAR: Explicado = {
+  label: 'Minutos sin llamar',
+  title: 'Tiempo en horario sin llamar, en baches de 15 minutos o más',
+  explicacion: 'Los minutos en horario (10 a 14 y 15 a 19, hora de España) en que pasaron 15 minutos o más sin llamar, sumados (cada bache redondeado a minutos). Sale de Aircall: lo calcula un proceso que corre a las 19:05 de lunes a viernes, así que durante el día se ve «–». Se escribe en horas y minutos: 1:05 es una hora y cinco minutos. El círculo va en verde con menos de 30 minutos, en amarillo hasta una hora y en rojo con más.',
+  fuente: 'Tabla crm_call_gaps (min_sin_llamar y baches) de la persona y el día de hoy en España. La carga el cron de Aircall por el conector MCP (save_call_gaps).',
+}
+
 /** El orden en que se dibujan las columnas: el grupo entra antes de su primera columna, y las
  *  suyas solo con el grupo desplegado. */
 const GRUPO = 'nutricion'
@@ -174,6 +184,7 @@ export function ContadorDeLlamadas() {
   const { data, isError } = useObjetivos(localTodayIso())
   const { personaId, elegibles, elegir } = usePersonaDeObjetivos()
   const haciaDemo = useHaciaLaProximaDemo(personaId)
+  const sinLlamar = useMinutosSinLlamar(personaId)
   // Nace plegado, salvo que la URL ya filtre por uno de los suyos (un enlace viejo a
   // `?objetivo=presentaciones`): si no, la tarjeta prendida quedaría escondida.
   const [nutricionAbierta, setNutricionAbierta] = useState(
@@ -218,6 +229,16 @@ export function ContadorDeLlamadas() {
         <div className="flex flex-wrap gap-2 lg:flex-nowrap">
           <div role="group" aria-label="Lo registrado hoy"
             className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(96px,1fr))] justify-items-center gap-2">
+            <Explicacion c={SIN_LLAMAR} align="start" className={TARJETA}>
+              <ContenidoDeTarjeta icono={CirclePauseIcon} label={SIN_LLAMAR.label} tono={tonoSinLlamar(sinLlamar.data?.min_sin_llamar)}>
+                <span className={cn('tabular-nums', !sinLlamar.data && 'text-(--fg-faint)')}
+                  title={sinLlamar.data
+                    ? `${sinLlamar.data.min_sin_llamar} min en ${sinLlamar.data.baches} ${sinLlamar.data.baches === 1 ? 'bache' : 'baches'}`
+                    : 'Todavía sin dato: se carga a las 19:05'}>
+                  {horasYMinutos(sinLlamar.data?.min_sin_llamar)}
+                </span>
+              </ContenidoDeTarjeta>
+            </Explicacion>
             {piezas(nutricionAbierta).map(c => c === GRUPO ? (
               // El grupo no filtra (16 leads de tres orígenes no son una pregunta): despliega los suyos.
               <button key="nutricion" type="button" aria-expanded={nutricionAbierta}
@@ -261,8 +282,15 @@ export function ContadorDeLlamadas() {
    debajo. Elegido, el círculo se llena del color de la marca. */
 const TARJETA = 'group flex cursor-pointer flex-col items-center gap-1.5 rounded-xl px-1 py-1 text-center'
 
-function ContenidoDeTarjeta({ icono: Icono, label, activo = false, children }: {
-  icono: LucideIcon; label: React.ReactNode; activo?: boolean; children: React.ReactNode
+/* El semáforo de «Sin llamar» (`tonoSinLlamar`): borde, fondo, ícono y número del color. */
+const TONOS_SIN_LLAMAR: Record<TonoSinLlamar, { circulo: string; icono: string }> = {
+  bien: { circulo: 'bg-(--success-soft) text-(--success-strong) [border-color:var(--success)]', icono: 'text-(--success)' },
+  atento: { circulo: 'bg-(--warning-soft) text-(--warning-fg) [border-color:var(--warning)]', icono: 'text-(--warning)' },
+  mal: { circulo: 'bg-(--danger-soft) text-(--danger-strong) [border-color:var(--danger)]', icono: 'text-(--danger)' },
+}
+
+function ContenidoDeTarjeta({ icono: Icono, label, activo = false, tono = null, children }: {
+  icono: LucideIcon; label: React.ReactNode; activo?: boolean; tono?: TonoSinLlamar | null; children: React.ReactNode
 }) {
   return (
     <>
@@ -270,9 +298,11 @@ function ContenidoDeTarjeta({ icono: Icono, label, activo = false, children }: {
         'grid size-[72px] place-items-center content-center gap-0.5 rounded-full transition-all [border:2px_solid]',
         activo
           ? 'bg-(--brand) text-white [border-color:var(--brand)] shadow-(--shadow-md)'
-          : 'bg-(--surface-2) text-foreground [border-color:var(--brand-200)] group-hover:[border-color:var(--brand)] group-hover:shadow-(--shadow-sm)',
+          : tono
+            ? cn(TONOS_SIN_LLAMAR[tono].circulo, 'group-hover:shadow-(--shadow-sm)')
+            : 'bg-(--surface-2) text-foreground [border-color:var(--brand-200)] group-hover:[border-color:var(--brand)] group-hover:shadow-(--shadow-sm)',
       )}>
-        <Icono className={cn('size-3.5', activo ? 'text-white/85' : 'text-(--brand)')} aria-hidden />
+        <Icono className={cn('size-3.5', activo ? 'text-white/85' : tono ? TONOS_SIN_LLAMAR[tono].icono : 'text-(--brand)')} aria-hidden />
         {/* En el círculo no entra el «4/10» de la tasa: queda en el title. */}
         <span className="text-[20px] leading-none font-semibold [&_span]:text-inherit [&_span_span]:hidden">{children}</span>
       </span>

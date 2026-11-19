@@ -6,7 +6,7 @@
 // Es una interfaz chica a propósito: las tools se testean con una base de mentira
 // (mcp/index.test.ts) y la traducción a PostgREST vive sólo acá.
 
-import type { McpRelation, McpRpc } from './relations.ts'
+import type { McpRelation, McpRpc, McpWriteRpc } from './relations.ts'
 
 export type Filter =
   | { op: 'eq'; column: string; value: string | number | boolean }
@@ -34,6 +34,8 @@ export type Row = Record<string, any>
 export interface McpDb {
   select(query: ViewQuery): Promise<{ rows: Row[]; total: number | null }>
   rpc(name: McpRpc, args: Record<string, unknown>): Promise<unknown>
+  /** Las RPC de escritura, por POST: en GET PostgREST abre la transacción de sólo lectura. */
+  write(name: McpWriteRpc, args: Record<string, unknown>): Promise<unknown>
 }
 
 /** Para `ilike`: un `%` o `_` que escribe el usuario es literal, no comodín. */
@@ -73,6 +75,12 @@ export function createSupabaseMcpDb(client: any): McpDb {
       // un null como el texto "null" (`p_m2_min=null` → error al pasarlo a numeric): los null no
       // se mandan y la función usa su default.
       const { data, error } = await client.rpc(name, withoutNulls(args), { get: true })
+      if (error) throw error
+      return data
+    },
+    async write(name, args) {
+      // POST, con los null tal cual: en el cuerpo JSON un null es null.
+      const { data, error } = await client.rpc(name, args)
       if (error) throw error
       return data
     },

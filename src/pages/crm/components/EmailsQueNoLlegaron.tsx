@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Bell, Check, ChevronDown, MailX, RotateCcw, X } from 'lucide-react'
+import { Bell, BellRing, Check, ChevronDown, MailX, RotateCcw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Icon } from '@/components/ui/icon'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useUserSession } from '@/hooks/useUserSession'
 import { useEmailsQueNoLlegaron, useMarcarEmailVisto } from '../hooks/useEmails'
+import { useAvisosPendientes } from '../hooks/useAvisosDelLead'
+import { avisosPendientesPara } from '../lib/avisosDelLead'
 import { useVerComo } from '../hooks/useVerComo'
 import { cn } from '@/lib/utils'
 import { avisosSinVer, cuandoSeMando, motivoLegible, noLlegaronDelLead, noLlego, rotuloDelEstado, sigueEnElPerfil } from '../lib/emails'
@@ -31,6 +33,11 @@ export function CampanaDeEmails() {
   const [, setSearchParams] = useSearchParams()
   const sinVer = avisosSinVer(emails.data ?? [], yo)
   const vistos = (emails.data ?? []).filter(e => e.sent_by === yo && noLlego(e) && e.seen_at).slice(0, VISTOS_EN_LA_CAMPANA)
+  // Los avisos del conector para mí (19/11/2026): arriba de los emails, hasta que se marcan «Listo»
+  // en el lead. Abrirlos no los marca: el aviso pide hacer algo, no solo leerlo.
+  const avisos = useAvisosPendientes()
+  const misAvisos = avisosPendientesPara(avisos.data ?? [], yo)
+  const total = sinVer.length + misAvisos.length
 
   const abrir = (id: string, leadId: string | null) => {
     visto.mutate({ id })
@@ -40,12 +47,15 @@ export function CampanaDeEmails() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button variant="ghost" className="relative" aria-label={sinVer.length ? `Notificaciones: ${sinVer.length} sin ver` : 'Notificaciones'}
-          title={sinVer.length ? `${sinVer.length} ${sinVer.length === 1 ? 'email no llegó' : 'emails no llegaron'}` : 'Notificaciones'}>
+        <Button variant="ghost" className="relative" aria-label={total ? `Notificaciones: ${total} sin ver` : 'Notificaciones'}
+          title={[
+            misAvisos.length ? `${misAvisos.length} ${misAvisos.length === 1 ? 'aviso en un lead' : 'avisos en leads'}` : '',
+            sinVer.length ? `${sinVer.length} ${sinVer.length === 1 ? 'email no llegó' : 'emails no llegaron'}` : '',
+          ].filter(Boolean).join(' · ') || 'Notificaciones'}>
           <Icon icon={Bell} size="xs" />
-          {sinVer.length > 0 && (
+          {total > 0 && (
             <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
-              {sinVer.length}
+              {total}
             </span>
           )}
         </Button>
@@ -58,10 +68,26 @@ export function CampanaDeEmails() {
               className="cursor-pointer text-[12px] font-medium text-(--fg-2) hover:text-foreground">Marcar todo como visto</button>
           )}
         </div>
-        {sinVer.length + vistos.length === 0 ? (
-          <p className="px-3 py-6 text-center text-[12.5px] text-(--fg-muted)">Sin notificaciones. Si un email tuyo rebota o no sale, aparece acá.</p>
+        {sinVer.length + vistos.length + misAvisos.length === 0 ? (
+          <p className="px-3 py-6 text-center text-[12.5px] text-(--fg-muted)">Sin notificaciones. Si te dejan un aviso en un lead, o un email tuyo rebota o no sale, aparece acá.</p>
         ) : (
           <ul className="max-h-[60vh] overflow-y-auto">
+            {misAvisos.map(a => (
+              <li key={a.id} className="[border-bottom:1px_solid_var(--line)] last:border-0">
+                <button type="button" onClick={() => setSearchParams(prev => escribirLeadAbierto(prev, a.lead_id), { replace: true })}
+                  className="flex w-full cursor-pointer gap-2.5 px-3 py-2.5 text-left hover:bg-(--surface-2)">
+                  <BellRing size={16} className="mt-0.5 shrink-0 text-red-600" />
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="text-[13px] font-semibold text-red-700">
+                      Aviso{a.lead?.client?.company_name ? ` · ${a.lead.client.company_name}` : ''}
+                    </span>
+                    <span className="line-clamp-3 whitespace-pre-wrap text-[12.5px] text-foreground">{a.texto}</span>
+                    <span className="text-[12px] text-(--fg-muted)">{cuandoSeMando(a.created_at)}</span>
+                    <span className="text-[12px] font-medium text-[#0147FE]">Abrir lead</span>
+                  </span>
+                </button>
+              </li>
+            ))}
             {[...sinVer, ...vistos].map(e => {
               const nuevo = !e.seen_at
               const motivo = motivoLegible(e)

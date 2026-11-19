@@ -15,6 +15,7 @@ export const MCP_RELATIONS = [
   'mcp_team', 'mcp_roadmap_tareas', 'mcp_roadmap_grupos', 'mcp_crm_stages', 'mcp_crm_leads',
   'mcp_crm_tasks', 'mcp_crm_meetings', 'mcp_crm_comments', 'mcp_crm_stage_history',
   'mcp_onboardings', 'mcp_expenses', 'mcp_crm_assignment_history', 'mcp_crm_emails', 'mcp_crm_demo_notas', 'mcp_crm_meta_sdr',
+  'mcp_crm_lead_avisos', 'mcp_crm_call_gaps',
 ] as const
 
 export type McpRelation = (typeof MCP_RELATIONS)[number]
@@ -22,3 +23,10 @@ export type McpRelation = (typeof MCP_RELATIONS)[number]
 export const MCP_RPCS = ['mcp_whoami'] as const
 
 export type McpRpc = (typeof MCP_RPCS)[number]
+
+// Las RPC de ESCRITURA (`security definer`, hacen ellas sus chequeos): lo único que el conector
+// puede llamar por POST. Misma lista que `public.mcp_oauth_write_rpcs()` (migración
+// 20261119181041_crm_lead_avisos y 20261119181855_crm_call_gaps, patrón de 20261101191634_mcp_lead_writes de propelia-frontend).
+export const MCP_WRITE_RPCS = ['mcp_crm_avisar_lead', 'mcp_crm_save_call_gaps'] as const
+
+export type McpWriteRpc = (typeof MCP_WRITE_RPCS)[number]
