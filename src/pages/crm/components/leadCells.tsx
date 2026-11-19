@@ -17,17 +17,18 @@ import type { CrmStage, CrmTask } from '../types'
 export type OverdueTask = Pick<CrmTask, 'id' | 'title' | 'due_date'>
 
 /** Las opciones de un select de etapas, en subgrupos (Primer contacto, Seguimiento, Otros). Va
-    adentro de un `SelectContent`; lo usan el estado del perfil y «El lead queda en». */
-export function OpcionesDeEtapa({ etapas, grande }: { etapas: CrmStage[]; grande?: boolean }) {
+    adentro de un `SelectContent`; lo usan el estado del perfil y «El lead queda en». `compacta` (la
+    del perfil, 19/11/2026, por pedido) achica los renglones para que entren todas sin scroll. */
+export function OpcionesDeEtapa({ etapas, compacta }: { etapas: CrmStage[]; compacta?: boolean }) {
   return etapasPorGestion(etapas).map((g, i) => (
     <SelectGroup key={g.label}>
-      {i > 0 && <SelectSeparator className="my-1.5" />}
+      {i > 0 && <SelectSeparator className={compacta ? 'my-0.5' : 'my-1.5'} />}
       <SelectLabel className={cn('font-bold uppercase tracking-[0.06em] text-(--fg-muted)',
-        grande ? 'px-3 pt-2 pb-1 text-[11px]' : 'text-[10.5px]')}>
+        compacta ? 'px-2.5 pt-1 pb-0.5 text-[10px]' : 'text-[10.5px]')}>
         {g.label}
       </SelectLabel>
       {g.etapas.map(e => (
-        <SelectItem key={e.id} value={e.id} className={cn(grande && 'rounded-md py-2 pl-3 text-[14px] font-medium')}>
+        <SelectItem key={e.id} value={e.id} className={cn(compacta && 'rounded-md py-1 pl-2.5 text-[12.5px] font-medium')}>
           {e.deleted_at ? `${e.label} (borrada)` : e.label}
         </SelectItem>
       ))}

@@ -195,8 +195,11 @@ acá son las reuniones del CRM (`crm_meetings`, las demos incluidas). Migración
   con hora para que suene la alarma (`tareasDeConfirmacionDeDemo`, `lib/confirmacionDeDemo.ts`). Se
   crean después de mover la etapa (el trigger mira la final); si fallan, la demo queda y un toast
   avisa. Reprogramar o cancelar la demo no las toca. **Y las de cerrar la venta** (18/11/2026, por
-  pedido): con las de confirmar nacen «Cerrar venta» a los 5 días de la demo y «Cerrar venta con
-  promoción (descuento)» a los 10, a las 10:00 de España (`tareasDeCierreDeDemo`, `lib/cierreDeDemo.ts`). **Guardada la demo, `DemoAgendadaDialog` ofrece «Avisar por WhatsApp»** (23/10/2026,
+  pedido): con las de confirmar nacen «Cerrar venta» a los 3 días de la demo y «Cerrar venta con
+  promoción (descuento)» a los 7, a las 10:00 de España (`tareasDeCierreDeDemo`, `lib/cierreDeDemo.ts`;
+  hasta el 19/11/2026 eran 5 y 10). **Son siempre de Lorenzo** (19/11/2026, por pedido;
+  `RESPONSABLE_DEL_CIERRE`, `responsableDelCierre` busca su cuenta activa por email), no de quien agenda:
+  el cierre lo hace él. Sin esa cuenta activa no se crean y un toast lo avisa. Se siguen creando al agendar. **Guardada la demo, `DemoAgendadaDialog` ofrece «Avisar por WhatsApp»** (23/10/2026,
   por pedido): abre el chat con `+34 675 24 91 46` (`WHATSAPP_AVISO_DE_DEMO`) y un mensaje festivo con
   inmobiliaria, día y hora **de España**, responsable, quién la agendó, invitación, asistentes, decisor,
   etapa y notas (`mensajeDeDemoAgendada`, `lib/avisoDeDemo.ts`). No manda nada solo: lo envía quien agenda.
@@ -346,7 +349,9 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   de la tarea en /clientes, en el lead y en la campana, y el trigger `crm_emails_acceso_no_llego`
   (migración `20261027154657_onboarding_mail_de_acceso_no_llego`, que **la aplica Antonio**) crea en
   el lead la tarea del CRM «Revisar el mail de acceso que no llegó a …», con alarma en 5 minutos,
-  para quien lleva el alta (o el responsable del lead). Los envíos de antes van sin lead: no la crean.
+  **para quien mandó el mail** (19/11/2026, por pedido, migración
+  `20261119155551_crm_emails_acceso_tarea_a_quien_lo_mando`, que **la aplica Antonio**; hasta ese día
+  era de quien lleva el alta o del responsable del lead). Los envíos de antes van sin lead: no la crean.
   Con alguno que no llegó, debajo aparece además el tilde «Enviar mensaje al cliente para que corrija
   los mails que están mal» (`TAREA_CORREGIR_MAILS`, `contacto.corregir-mails`, a mano).
   **Un solo WhatsApp avisa todo** (28/10/2026, por pedido, migración
@@ -593,8 +598,11 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   **Desde el 18/11/2026 (por pedido), en la llamada es el bloque «Avances para contactar al decisor»**
   (`BloqueDecisor`, `FilasDelRegistro.tsx`; la nota ya no lo lleva y la demo sigue con el campo libre).
   La llamada pregunta primero «¿Es decisor?» (obligatoria; si el perfil ya lo sabe, vale eso) y el
-  bloque va justo debajo **solo si la respuesta es No** (`pideAvancesDelDecisor`, `lib/actividad.ts`),
-  haya o no un decisor en el perfil; pasar a Sí lo esconde y vacía lo contestado. Tres Sí/No —«Nombre
+  bloque aparece **solo si la respuesta es No** (`pideAvancesDelDecisor`, `lib/actividad.ts`),
+  haya o no un decisor en el perfil. **Desde el 19/11/2026 (por pedido) va como panel a la derecha,
+  afuera de la ventana** (`derecha` de `VentanaFlotante`, `ANCHO_DEL_COSTADO`), y el registro nace
+  corrido a la izquierda (`corrida`) para dejarle lugar: así la ventana no crece hasta scrollear. Si
+  ventana más panel no entran en la pantalla (`useEntraAlCostado`), va adentro, debajo, como antes; pasar a Sí lo esconde y vacía lo contestado. Tres Sí/No —«Nombre
   del decisor conseguido», «Teléfono del decisor conseguido» (con prefijo, España de entrada) y «Email
   para enviar» (precargado con el primer email de la inmobiliaria)—; **las tres son obligatorias**
   mientras se ve (registrar con una sin contestar la pinta en rojo y no registra, como la etapa) y el
@@ -634,7 +642,9 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   una actividad): `decisoresQueSeMarcaron()` compara la foto anterior de `lead.client` con la nueva.
   Solo el paso a «sí»: el que ya era decisor al abrir no se refija, así desfijarlo a mano dura.
   **Lo fijado se queda fijado hasta que el usuario lo cambie** (18/11/2026, por pedido): nada desfija
-  solo; desfijan el pin y quitar a la persona. Se guarda por casillero (`principal` /
+  solo; desfijan el pin y quitar a la persona. **Un decisor va siempre fijado** (19/11/2026, por
+  pedido): sale de la base (`esDecisorMarcado` en `LeadDialog`), en cualquier navegador, y su pin no
+  se suelta («Fijado siempre: es decisor») mientras siga marcado como decisor. Se guarda por casillero (`principal` /
   `alternative_phone_N`) en `localStorage` (`crm-contactos-fijados:<clientId>`): es de cada navegador
   y, si el casillero pasa a ser de otra persona, el fijado la sigue a ella. La etiqueta «Contactado» del
   contacto sigue saliendo de `decisorContactado()` (`lib/actividad.ts`). El 16/10/2026 salió del perfil el bloque del motivo de descarte
@@ -755,8 +765,9 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   la mañana. Las reglas son puras, en `lib/alarmas.ts`. Sin la migración corrida, la tarea sin hora
   se crea igual (no manda la columna) y la que tiene hora contesta `FALTA_MIGRACION`.
 - **Descartar pregunta primero «¿Cualifica?»** (17/11/2026, por pedido; `DescartarLeadDialog`):
-  «Podría calificar» muestra los motivos del catálogo más «Otro» escrito a mano, y los dos llevan
-  `recontact_at` a 6 meses (el grupo viaja en `VarsDescarte.grupo` y manda en `recontactoDeMotivo`,
+  «Podría calificar» pide **la objeción real del cliente escrita a mano** (19/11/2026, por pedido:
+  sin opciones; hasta ese día eran los motivos del catálogo más «Otro»), con una ayuda que lo pide
+  con sus palabras, y lleva `recontact_at` a 6 meses (el grupo viaja en `VarsDescarte.grupo` y manda en `recontactoDeMotivo`,
   porque un texto libre no tiene código del que sacarlo). «No califica ni calificará» es el descarte
   definitivo: motivo escrito a mano, obligatorio, sin recontacto. Sin migración.
 - **Los descartados se ven eligiendo «Descartado» en el filtro «Estado»** (16/10/2026): por
@@ -1047,8 +1058,11 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   (`useAvisosDeEmails`, montado en `AppLayout` como las alarmas; fuera del CRM pregunta cada 30 s);
   la **campana** de la cabecera del CRM (`CampanaDeEmails`, siempre a la vista, número rojo con lo
   tuyo sin ver; tocar uno abre el lead y lo marca visto con `crm_email_visto`), y el **cartel del
-  lead** debajo de «Mensajes» (todos, plegado de entrada, y si la dirección sigue en el perfil lo
-  dice). Cada línea del cartel lleva **«Listo»** (con «Deshacer»): es el mismo `seen_at`, así que
+  lead** debajo de «Mensajes» (plegado de entrada, y si la dirección sigue en el perfil lo
+  dice). **Los tres, y la lista de accesos que no llegaron de /clientes, muestran solo lo que mandaste
+  vos** (19/11/2026, por pedido: el cartel y /clientes mostraban los de todos; `noLlegaronDelLead`
+  recibe quién mira). El rebote de otro no te avisa; «Emails enviados» de Herramientas sigue
+  mostrando todo. Cada línea del cartel lleva **«Listo»** (con «Deshacer»): es el mismo `seen_at`, así que
   marcarlo apaga también la campana de quien lo mandó; la línea queda gris y con todas en gris el
   cartel deja de ser rojo. Lo marca quien lo mandó o quien escribe el lead (`crm_email_visto(id,
   visto)`, migración `20261020174926_crm_emails_listo`, que agregó `seen_by`).

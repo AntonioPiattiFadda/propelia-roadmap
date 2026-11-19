@@ -8,10 +8,10 @@ import {
   patchDeContactosNuevos, telefonoEscrito, telefonosDelCliente, tieneDecisor, tienePrefijoDePais, type CasilleroDeTelefono,
 } from '../lib/clientData'
 import { tareasDeConfirmacionDeDemo } from '../lib/confirmacionDeDemo'
-import { tareasDeCierreDeDemo } from '../lib/cierreDeDemo'
+import { RESPONSABLE_DEL_CIERRE, responsableDelCierre, tareasDeCierreDeDemo } from '../lib/cierreDeDemo'
 import { mensajeDeError } from '../lib/errores'
 import { esEmailValido, type RegistroInicialDeDemo } from '../lib/reuniones'
-import { crearComentario, crearTarea } from '../service/crm.service'
+import { crearComentario, crearTarea, getUsuarios } from '../service/crm.service'
 import { CRM_KEYS } from './keys'
 import { useCrmCatalogos } from './useCrmCatalogos'
 import { useLead } from './useCrmLeads'
@@ -189,16 +189,26 @@ export function useRegistroDeDemo(leadId: string | undefined, open: boolean, ini
 
     // Las tareas para confirmar la demo (4/11/2026, por pedido). Si no se pueden crear (la etapa no
     // deja agendar tareas, o falla el insert), la demo queda igual y se avisa.
-    // Y las de cerrar la venta a los 5 y 10 días de la demo (`tareasDeCierreDeDemo`, 18/11/2026).
-    const tareas = [...tareasDeConfirmacionDeDemo(startsAt, new Date()), ...tareasDeCierreDeDemo(startsAt)]
-    if (myId) {
-      const resultados = await Promise.allSettled(tareas.map(t => crearTarea({ ...t, lead_id: lead.id, assigned_to: myId })))
+    // Y las de cerrar la venta a los 3 y 7 días de la demo (`tareasDeCierreDeDemo`), que desde el
+    // 19/11/2026 son siempre de Lorenzo (`responsableDelCierre`), agende quien agende.
+    const confirmar = myId ? tareasDeConfirmacionDeDemo(startsAt, new Date()).map(t => ({ ...t, assigned_to: myId })) : []
+    if (!myId) toast.error('La demo quedó agendada, pero no se pudieron crear las tareas para confirmarla: no se sabe quién sos.')
+    let cerrar: typeof confirmar = []
+    try {
+      const usuarios = await qc.fetchQuery({ queryKey: CRM_KEYS.usuarios, queryFn: getUsuarios, staleTime: 5 * 60_000 })
+      const responsable = responsableDelCierre(usuarios)
+      if (responsable) cerrar = tareasDeCierreDeDemo(startsAt).map(t => ({ ...t, assigned_to: responsable }))
+      else toast.error(`La demo quedó agendada, pero no se crearon las tareas de cerrar la venta: no hay una cuenta activa de ${RESPONSABLE_DEL_CIERRE}.`)
+    } catch (error) {
+      toast.error(`La demo quedó agendada, pero no se crearon las tareas de cerrar la venta: ${mensajeDeError(error)}`)
+    }
+    const tareas = [...confirmar, ...cerrar]
+    if (tareas.length > 0) {
+      const resultados = await Promise.allSettled(tareas.map(t => crearTarea({ ...t, lead_id: lead.id })))
       const fallo = resultados.find((x): x is PromiseRejectedResult => x.status === 'rejected')
       if (fallo) toast.error(`La demo quedó agendada, pero no se pudieron crear sus tareas: ${mensajeDeError(fallo.reason)}`)
       void qc.invalidateQueries({ queryKey: CRM_KEYS.detalle(lead.id) })
       void qc.invalidateQueries({ queryKey: CRM_KEYS.tareasPendientes })
-    } else {
-      toast.error('La demo quedó agendada, pero no se pudieron crear sus tareas: no se sabe quién sos.')
     }
   }
 

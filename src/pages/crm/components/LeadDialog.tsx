@@ -331,7 +331,11 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
       && ![...f.nombres.map(n => n.campo), f.telefono, f.rol, f.notas].some(cargado)
   }
   const personas = contactos.filter(c => !esOficina(c) && !esSoloEmail(c))
-  const arriba = personas.filter(c => fijados.includes(c))
+  /* Un decisor va siempre fijado (19/11/2026, por pedido): sale de la base, no de lo guardado en el
+     navegador, así que vale en cualquier máquina y su pin no se suelta mientras siga siendo decisor. */
+  const esDecisorMarcado = (c: Contacto) => lead.client?.[camposDe(c).decisor] === true
+  const estaFijado = (c: Contacto) => fijados.includes(c) || esDecisorMarcado(c)
+  const arriba = personas.filter(estaFijado)
 
   /* Teléfonos y emails sueltos (pestaña de la inmobiliaria). Sin nada guardado, el de Google Maps
      nace fijado: es el número de la agencia y casi siempre a quien se llama primero. */
@@ -503,12 +507,15 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
     </div>
   )
 
-  const botonFijar = (c: Contacto) => botonPin(fijados.includes(c), () => alternarFijado(c))
-  const botonPin = (fijo: boolean, onClick: () => void) => {
+  const botonFijar = (c: Contacto) => esDecisorMarcado(c)
+    ? botonPin(true, () => {}, 'Fijado siempre: es decisor')
+    : botonPin(fijados.includes(c), () => alternarFijado(c))
+  const botonPin = (fijo: boolean, onClick: () => void, bloqueado?: string) => {
     return (
-      <button type="button" onClick={onClick} aria-pressed={fijo}
-        aria-label={fijo ? 'Desfijar contacto' : 'Fijar arriba'} title={fijo ? 'Desfijar' : 'Fijar arriba'}
-        className={cn('flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md hover:bg-(--surface-2)',
+      <button type="button" onClick={onClick} aria-pressed={fijo} disabled={!!bloqueado}
+        aria-label={bloqueado ?? (fijo ? 'Desfijar contacto' : 'Fijar arriba')} title={bloqueado ?? (fijo ? 'Desfijar' : 'Fijar arriba')}
+        className={cn('flex size-7 shrink-0 items-center justify-center rounded-md',
+          bloqueado ? 'cursor-default' : 'cursor-pointer hover:bg-(--surface-2)',
           fijo ? 'text-foreground' : 'text-(--fg-faint) hover:text-foreground')}>
         <Pin size={14} className={cn(fijo && 'fill-current')} />
       </button>
@@ -870,8 +877,8 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
                       </span>
                     </span>
                   </SelectTrigger>
-                  <SelectContent align="end" className="min-w-[260px] rounded-xl p-1 shadow-lg">
-                    <OpcionesDeEtapa etapas={opcionesEtapa} grande />
+                  <SelectContent align="end" className="min-w-[240px] rounded-xl p-1 shadow-lg">
+                    <OpcionesDeEtapa etapas={opcionesEtapa} compacta />
                   </SelectContent>
                 </Select>
               </div>

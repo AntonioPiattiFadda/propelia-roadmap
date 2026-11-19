@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { leerHojaYOtra } from '@/pages/crm/service/excel'
 import { useEmailsQueNoLlegaron } from '@/pages/crm/hooks/useEmails'
+import { useUserSession } from '@/hooks/useUserSession'
 import { motivoLegible, noLlegaronDelLead, rotuloDelEstado } from '@/pages/crm/lib/emails'
 import type { Celda } from '@/pages/crm/lib/importarLote'
 import { MeetingFormDialog, type EditableMeeting } from '@/pages/agenda/components/meetings/MeetingFormDialog'
@@ -69,8 +70,10 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
   /* Los mails de accesos que no llegaron: los trae el webhook de Resend a `crm_emails` (la misma
      query de la campana, que `useAvisosDeEmails` refresca cada 30 s). La tarea del CRM la crea la base. */
   const emails = useEmailsQueNoLlegaron({ enabled: clave === TAREA_CREDENCIALES })
+  // Solo los que mandaste vos (19/11/2026, por pedido): el rebote le avisa a quien mandó el mail.
+  const { userSession } = useUserSession()
   const accesosQueNoLlegaron = clave === TAREA_CREDENCIALES
-    ? noLlegaronDelLead(emails.data ?? [], datos.o.lead.id).filter(e => e.plantilla === 'acceso')
+    ? noLlegaronDelLead(emails.data ?? [], datos.o.lead.id, userSession?.user.id ?? null).filter(e => e.plantilla === 'acceso')
     : []
   /* El WhatsApp de los accesos es UNO (28/10/2026, por pedido): «ya tenéis los accesos» y, si algún
      mail no llegó, debajo el pedido de los emails bien escritos (`corregir_mails`). */

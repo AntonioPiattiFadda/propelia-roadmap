@@ -124,7 +124,8 @@ export function EmailsQueNoLlegaronDelLead({ leadId, client, puedeEscribir }: {
   const emails = useEmailsQueNoLlegaron()
   const visto = useMarcarEmailVisto()
   const [ocultos, setOcultos] = useState(leerOcultos)
-  const fallidos = noLlegaronDelLead(emails.data ?? [], leadId)
+  // Solo los tuyos (19/11/2026, por pedido): el rebote de otro no te avisa a vos.
+  const fallidos = noLlegaronDelLead(emails.data ?? [], leadId, yo)
   // Con la cruz se saca (12/11/2026, por pedido); un rebote nuevo lo vuelve a mostrar.
   if (fallidos.length === 0 || fallidos.every(e => ocultos.has(e.id))) return null
   const pendientes = fallidos.filter(e => !e.seen_at).length

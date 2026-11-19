@@ -29,14 +29,18 @@ describe('avisosSinVer', () => {
 })
 
 describe('noLlegaronDelLead', () => {
-  it('los del lead que no llegaron, vistos o no y de quien sea', () => {
+  it('los del lead que no llegaron, vistos o no, solo de quien los mandó', () => {
     const lista = [
-      email({ id: '1', status: 'bounced', seen_at: 'x' }),
-      email({ id: '2', status: 'suppressed', sent_by: 'otro' }),
-      email({ id: '3', status: 'delivered' }),
-      email({ id: '4', status: 'bounced', lead_id: 'M' }),
+      email({ id: '1', status: 'bounced', seen_at: 'x', sent_by: 'yo' }),
+      email({ id: '2', status: 'suppressed', sent_by: 'yo' }),
+      email({ id: '3', status: 'delivered', sent_by: 'yo' }),
+      email({ id: '4', status: 'bounced', lead_id: 'M', sent_by: 'yo' }),
+      email({ id: '5', status: 'bounced', sent_by: 'otro' }),
     ]
-    expect(noLlegaronDelLead(lista, 'L').map(e => e.id).sort()).toEqual(['1', '2'])
+    expect(noLlegaronDelLead(lista, 'L', 'yo').map(e => e.id).sort()).toEqual(['1', '2'])
+  })
+  it('sin saber quién mira, ninguno', () => {
+    expect(noLlegaronDelLead([email({ status: 'bounced', sent_by: 'yo' })], 'L', null)).toEqual([])
   })
 })
 

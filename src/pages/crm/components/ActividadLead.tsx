@@ -41,7 +41,10 @@ import { InmobiliariaDelLead } from './InmobiliariaDelLead'
 import { DescartarLeadDialog } from './DescartarLeadDialog'
 import { CualificaLeadDialog } from './CualificaLeadDialog'
 import { esBuscarContacto } from '../lib/buscarContacto'
-import { VentanaFlotante } from './VentanaFlotante'
+import { ANCHO_DEL_COSTADO, useEntraAlCostado, VentanaFlotante } from './VentanaFlotante'
+
+/** Ancho de la ventana de registrar actividad (salvo la demo, que se ensancha). */
+const ANCHO_DEL_REGISTRO = 520
 import { DemoAgendadaDialog } from './DemoAgendadaDialog'
 import type { DemoAgendada } from '../lib/avisoDeDemo'
 import {
@@ -590,6 +593,15 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     setMailAbierto(true)
   }
 
+  /* El bloque se dibuja en un solo lugar: a la derecha de la ventana si entra en la pantalla, adentro
+     si no (`useEntraAlCostado`). */
+  const decisorAlCostado = useEntraAlCostado(ANCHO_DEL_REGISTRO)
+  const bloqueDelDecisor = (
+    <BloqueDecisor valor={bloqueDecisor} onCambiar={cambiarBloqueDecisor}
+      rojo={{ nombre: enRojo('decisorNombre'), telefono: enRojo('decisorTelefono'), horario: enRojo('decisorHorario'), email: enRojo('decisorEmail'),
+        proximo: enRojo('decisorProximo') }}
+      avisoProximo={avisoProximo} />
+  )
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
@@ -708,9 +720,14 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
           mirar el perfil, copiar un teléfono, scrollear la actividad. Cerrar sin registrar conserva
           lo escrito: el estado es de este componente, no de la ventana. */}
       {puedeEscribir && (
-        <VentanaFlotante open={abierto} onOpenChange={setAbierto} ancho={esDemo ? ANCHO_DE_DEMO : 520}
+        <VentanaFlotante open={abierto} onOpenChange={setAbierto} ancho={esDemo ? ANCHO_DE_DEMO : ANCHO_DEL_REGISTRO}
           titulo={`Registrar actividad · ${nombreDelLead(lead.client)}`}
           descripcion="Qué pasó con el lead y en qué etapa queda."
+          /* «Avances para contactar al decisor» va a la derecha, afuera de la ventana (19/11/2026, por
+             pedido), y la ventana nace corrida a la izquierda para dejarle lugar: así no crece hasta
+             scrollear. Si no entra en la pantalla, va adentro, como antes. */
+          derecha={!esDemo && pideDecisorApuntado && decisorAlCostado ? bloqueDelDecisor : undefined}
+          corrida={!esDemo && decisorAlCostado ? (ANCHO_DEL_COSTADO + 8) / 2 : 0}
           lateral={tipo === 'llamada' ? <GuiaDelCompositor key="llamada" titulo="Guía de la llamada" secciones={GUIA_DE_LLAMADA} />
             : esDemo ? <GuiaDelCompositor key="demo" titulo="Guía de la demo" secciones={GUIA_DE_DEMO} />
             : undefined}>
@@ -782,18 +799,13 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
                 title="Quien atendió decide en la inmobiliaria" />
             )}
             {tipo === 'llamada' && eligioConQuien && sabido !== null && <NotaDeDecisorSabido sabido={sabido} />}
-            {pideDecisorApuntado && (
-              <BloqueDecisor valor={bloqueDecisor} onCambiar={cambiarBloqueDecisor}
-                rojo={{ nombre: enRojo('decisorNombre'), telefono: enRojo('decisorTelefono'), horario: enRojo('decisorHorario'), email: enRojo('decisorEmail'),
-                  proximo: enRojo('decisorProximo') }}
-                avisoProximo={avisoProximo} />
-            )}
+            {pideDecisorApuntado && !decisorAlCostado && bloqueDelDecisor}
             <textarea
               value={texto}
               onChange={e => setTexto(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); enviar() } }}
-              // Con «Avances para contactar al decisor» a la vista, más bajo: así la ventana no scrollea.
-              rows={pideDecisorApuntado ? 3 : 6}
+              // Con «Avances para contactar al decisor» adentro (pantalla angosta), más bajo: así la ventana no scrollea.
+              rows={pideDecisorApuntado && !decisorAlCostado ? 3 : 6}
               aria-label="Registrar actividad"
               placeholder={tipo === 'llamada' ? 'Qué se habló (opcional)…'
                 : tipo === 'fallido' ? 'Detalle (opcional): no atendió, buzón, número equivocado…'

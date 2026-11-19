@@ -2779,8 +2779,9 @@ create trigger client_onboardings_alta_recibida
 -- Un mail de accesos del onboarding que no llegó (27/10/2026, por pedido): cuando Resend avisa que
 -- rebotó, falló o no se envió (`resend-webhook` → `crm_email_evento`), una tarea del CRM en el lead,
 -- «Revisar el mail de acceso que no llegó a …», para hoy y con hora dentro de 5 minutos, así suena
--- ya (igual que `client_onboardings_alta_recibida`). Quien la recibe: quien lleva el alta
--- (`client_onboardings.assigned_to`), si no el responsable del lead, si no quien mandó el mail.
+-- ya (igual que `client_onboardings_alta_recibida`). Quien la recibe: quien mandó el mail
+-- (`crm_emails.sent_by`, desde el 19/11/2026: el aviso de un rebote es de quien lo mandó); si no tiene
+-- remitente, quien lleva el alta (`client_onboardings.assigned_to`) o el responsable del lead.
 --
 -- Solo `plantilla = 'acceso'` con lead: desde esta fecha /clientes manda el `leadId` con cada mail de
 -- accesos. `complained` no cuenta: el mail llegó. Solo el paso a «no llegó»: un `bounced` que después
@@ -2796,7 +2797,7 @@ declare
   v_titulo   text := 'Revisar el mail de acceso que no llegó a ' || new.to_email;
   v_cuando   timestamp := (now() + interval '5 minutes') at time zone 'Europe/Madrid';
 begin
-  select coalesce(o.assigned_to, l.assigned_to, new.sent_by), coalesce(s.allows_tasks, true)
+  select coalesce(new.sent_by, o.assigned_to, l.assigned_to), coalesce(s.allows_tasks, true)
     into v_quien, v_permite
   from public.crm_leads l
   left join public.client_onboardings o on o.lead_id = l.id

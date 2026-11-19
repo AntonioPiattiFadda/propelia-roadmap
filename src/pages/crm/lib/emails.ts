@@ -44,9 +44,11 @@ export function avisosSinVer<T extends CrmEmail>(emails: readonly T[], yo: strin
     .sort((a, b) => b.sent_at.localeCompare(a.sent_at))
 }
 
-/** Los que no llegaron de un lead, más nuevo primero. */
-export function noLlegaronDelLead<T extends CrmEmail>(emails: readonly T[], leadId: string): T[] {
-  return emails.filter(e => e.lead_id === leadId && noLlego(e))
+/** Los que no llegaron de un lead, más nuevo primero. Solo los que mandó `yo` (19/11/2026, por
+ *  pedido): el aviso de un rebote es de quien lo mandó, como la campana y el toast. */
+export function noLlegaronDelLead<T extends CrmEmail>(emails: readonly T[], leadId: string, yo: string | null): T[] {
+  if (!yo) return []
+  return emails.filter(e => e.lead_id === leadId && e.sent_by === yo && noLlego(e))
     .sort((a, b) => b.sent_at.localeCompare(a.sent_at))
 }
 
