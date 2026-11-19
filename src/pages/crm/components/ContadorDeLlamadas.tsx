@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
-  CalendarCheckIcon, CalendarDaysIcon, ChartColumnIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, ClockAlertIcon, ClockIcon,
+  CalendarCheckIcon, CalendarDaysIcon, ChartColumnIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CirclePauseIcon, ClockAlertIcon, ClockIcon,
   ContactIcon, HandshakeIcon, InfoIcon, MailIcon, PercentIcon, PhoneCallIcon, PhoneIcon, PhoneMissedIcon, SmartphoneIcon,
   SparklesIcon, SproutIcon, TargetIcon, UserCheckIcon, UsersIcon,
   type LucideIcon,
@@ -17,7 +17,8 @@ import { useCarteras } from '../hooks/useCarteras'
 import { useCommits, useGuardarCommit } from '../hooks/useCommits'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useCrmLeads, useTareasPendientes } from '../hooks/useCrmLeads'
-import { useDiaDeObjetivos, useHaciaLaProximaDemo, useObjetivos, useObjetivosDeVarios, usePersonaDeObjetivos } from '../hooks/useObjetivos'
+import { useDiaDeObjetivos, useHaciaLaProximaDemo, useMinutosSinLlamar, useObjetivos, useObjetivosDeVarios, usePersonaDeObjetivos } from '../hooks/useObjetivos'
+import { haceCuanto, horasYMinutos, tonoSinLlamar } from '../lib/minutosSinLlamar'
 import { useVerComo } from '../hooks/useVerComo'
 import { commitDelPeriodo, esDiaHabil, tonoDelCommit, type CampoDeCommit, type Commits } from '../lib/commits'
 import { escribirFiltros, filtrosDesdeUrl } from '../lib/leadFilterParams'
@@ -101,6 +102,15 @@ const NUTRICION: Explicado = {
   title: 'Mails de presentación, nombres, teléfonos y horarios de decisores conseguidos, sumados',
   explicacion: 'Lo que se consiguió de la cuenta además de hablar: la suma de «Mails de presentación», «Nombres de decisores conseguidos», «Teléfonos de decisores conseguidos» y «Horarios del decisor conseguidos». Tocalo para desplegar o plegar los cuatro; cada uno filtra la lista, el grupo no.',
   fuente: 'La suma de las cuatro columnas del grupo: crm_emails (presentacion-video) y la meta de las actividades en crm_comments (decisorApuntado, telefonoDecisor y horarioDecisor).',
+}
+
+/* «Minutos sin llamar» (19/11/2026, por pedido): primera tarjeta, solo en el contador del día. No
+   filtra (no es un conjunto de leads): tocarla la explica, como la tasa. */
+const SIN_LLAMAR: Explicado = {
+  label: 'Minutos sin llamar',
+  title: 'Tiempo en horario sin llamar, en baches de 15 minutos o más',
+  explicacion: 'Los minutos en horario (10 a 14 y 15 a 19, hora de España) en que pasaron 15 minutos o más sin llamar, sumados (cada bache redondeado a minutos). Sale de Aircall: lo calcula un proceso que corre a las 19:05 de lunes a viernes, así que durante el día se ve «–». Se escribe en horas y minutos: 1:05 es una hora y cinco minutos. El círculo va en verde con menos de 30 minutos, en amarillo hasta una hora y en rojo con más.',
+  fuente: 'Tabla crm_call_gaps (min_sin_llamar y baches) de la persona y el día de hoy en España. La carga el cron de Aircall por el conector MCP (save_call_gaps).',
 }
 
 /** El orden en que se dibujan las columnas: el grupo entra antes de su primera columna, y las
@@ -191,6 +201,8 @@ export function ContadorDeLlamadas() {
   const titulo = tituloDeObjetivos(dia, hoy)
   const { personaId, elegibles, elegir } = usePersonaDeObjetivos()
   const haciaDemo = useHaciaLaProximaDemo(personaId)
+  const sinLlamar = useMinutosSinLlamar(personaId, esHoy ? undefined : dia)
+  const calculado = haceCuanto(sinLlamar.data?.updated_at)
   // Nace plegado, salvo que la URL ya filtre por uno de los suyos (un enlace viejo a
   // `?objetivo=presentaciones`): si no, la tarjeta prendida quedaría escondida.
   const [nutricionAbierta, setNutricionAbierta] = useState(
@@ -248,6 +260,25 @@ export function ContadorDeLlamadas() {
         <div className="flex flex-wrap gap-2 lg:flex-nowrap">
           <div role="group" aria-label={esHoy ? 'Lo registrado hoy' : `Lo registrado el ${dia}`}
             className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(96px,1fr))] justify-items-center gap-2">
+            <Explicacion c={SIN_LLAMAR} align="start" className={TARJETA}>
+              {/* Debajo del nombre, hace cuánto lo calculó el cron (19/11/2026, por pedido). */}
+              <ContenidoDeTarjeta icono={CirclePauseIcon} tono={tonoSinLlamar(sinLlamar.data?.min_sin_llamar)} label={<>
+                {SIN_LLAMAR.label}
+                {calculado && (
+                  <span className="block text-[10.5px] text-(--fg-muted)"
+                    title={`Último cálculo: ${new Date(sinLlamar.data!.updated_at).toLocaleString()}`}>
+                    calculado {calculado}
+                  </span>
+                )}
+              </>}>
+                <span className={cn('tabular-nums', !sinLlamar.data && 'text-(--fg-faint)')}
+                  title={sinLlamar.data
+                    ? `${sinLlamar.data.min_sin_llamar} min en ${sinLlamar.data.baches} ${sinLlamar.data.baches === 1 ? 'bache' : 'baches'}`
+                    : esHoy ? 'Todavía sin dato: se carga a las 19:05' : 'Sin dato para ese día'}>
+                  {horasYMinutos(sinLlamar.data?.min_sin_llamar)}
+                </span>
+              </ContenidoDeTarjeta>
+            </Explicacion>
             {piezas(nutricionAbierta).map(c => c === GRUPO ? (
               // El grupo no filtra (16 leads de cuatro orígenes no son una pregunta): despliega los suyos.
               <button key="nutricion" type="button" aria-expanded={nutricionAbierta}
@@ -293,9 +324,10 @@ const TARJETA = 'group flex cursor-pointer flex-col items-center gap-1.5 rounded
 
 /* El círculo de un objetivo, compartido por las tarjetas y el diálogo «Comparar» (18/11/2026, por
    pedido: la tabla lleva el mismo diseño). `compacto` es el de la tabla; `tono`, el verde o rojo de
-   un commit; `hover`, si reacciona al `group` de afuera (en la tabla el `group` es la fila). */
+   un commit o el semáforo de «Sin llamar»; `hover`, si reacciona al `group` de afuera (en la tabla el `group` es la fila). */
 const TONOS_DEL_CIRCULO = {
   verde: 'bg-(--success-soft) text-(--success-fg) [border-color:color-mix(in_oklab,var(--success)_45%,transparent)]',
+  amarillo: 'bg-(--warning-soft) text-(--warning-fg) [border-color:color-mix(in_oklab,var(--warning)_55%,transparent)]',
   rojo: 'bg-(--danger-soft) text-(--danger-fg) [border-color:color-mix(in_oklab,var(--danger)_40%,transparent)]',
 } as const
 
@@ -321,12 +353,12 @@ function Circulo({ icono: Icono, activo = false, compacto = false, tono, hover =
   )
 }
 
-function ContenidoDeTarjeta({ icono, label, activo = false, children }: {
-  icono: LucideIcon; label: React.ReactNode; activo?: boolean; children: React.ReactNode
+function ContenidoDeTarjeta({ icono, label, activo = false, tono, children }: {
+  icono: LucideIcon; label: React.ReactNode; activo?: boolean; tono?: keyof typeof TONOS_DEL_CIRCULO | null; children: React.ReactNode
 }) {
   return (
     <>
-      <Circulo icono={icono} activo={activo}>{children}</Circulo>
+      <Circulo icono={icono} activo={activo} tono={tono ?? undefined}>{children}</Circulo>
       <span className={cn('max-w-[96px] text-[11.5px] leading-tight', activo ? 'font-semibold text-(--brand)' : 'text-(--fg-2)')}>{label}</span>
     </>
   )

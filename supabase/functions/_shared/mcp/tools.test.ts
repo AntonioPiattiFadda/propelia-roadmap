@@ -1,8 +1,9 @@
 import { assert, assertEquals } from 'jsr:@std/assert@1'
 import type { McpDb, Row, ViewQuery } from './db.ts'
-import { MCP_RELATIONS } from './relations.ts'
-import { inicioDelDiaEnEspana, siguienteDia, tareasDelAlta, TOOLS, type ToolContext } from './tools.ts'
+import { MCP_RELATIONS, MCP_WRITE_RPCS } from './relations.ts'
+import { inicioDelDiaEnEspana, MOTIVO_DE_LOS_BACHES, MOTIVO_DEL_AVISO, siguienteDia, tareasDelAlta, TOOLS, type ToolContext } from './tools.ts'
 import { sanitizeOutput } from './sanitize.ts'
+import { hoyEnEspana } from './crm.ts'
 
 const EQUIPO: Row[] = [
   { id: 'u1', nombre: 'Lorenzo', last_name: 'Piatti', rol: 'SUPERADMIN', activo: true },
@@ -10,8 +11,9 @@ const EQUIPO: Row[] = [
   { id: 'u3', nombre: 'Luis', last_name: null, rol: 'SDR', activo: false },
 ]
 
-function base(rowsByView: Record<string, Row[]> = {}) {
+function base(rowsByView: Record<string, Row[]> = {}, escritura: unknown = { status: 'ok', aviso_id: 'a1', para: 'u2' }) {
   const queries: ViewQuery[] = []
+  const escrituras: Array<{ name: string; args: Record<string, unknown> }> = []
   const db: McpDb = {
     select(query) {
       queries.push(query)
@@ -19,9 +21,13 @@ function base(rowsByView: Record<string, Row[]> = {}) {
       return Promise.resolve({ rows, total: rows.length })
     },
     rpc: () => Promise.resolve({ nombre: 'Lorenzo', rol: 'SUPERADMIN' }),
+    write: (name, args) => {
+      escrituras.push({ name, args })
+      return Promise.resolve(escritura)
+    },
   }
   const ctx: ToolContext = { db, userId: 'u1' }
-  return { ctx, queries, de: (view: string) => queries.find((q) => q.view === view)! }
+  return { ctx, queries, escrituras, de: (view: string) => queries.find((q) => q.view === view)! }
 }
 
 const DEMO = '00000000-0000-0000-0000-0000000000d1'
@@ -37,11 +43,16 @@ Deno.test('toda tool lee sólo vistas de la lista blanca y su salida pasa el san
     mcp_crm_meetings: [{ id: DEMO, lead_id: 'l1', status: 'scheduled', starts_at: '2099-01-01T10:00:00Z', ends_at: '2099-01-01T10:30:00Z', description: 'Invitación a: a@b.es', invitados: 3 }],
     mcp_crm_comments: [{ comment_type: 'MANUAL', description: 'Demo agendada.', long_description: `<!--act-->{"tipo":"demo","con":["Pedro"],"reunion":"${DEMO}"}`, created_by: 'u2', created_at: '2026-10-30T10:00:00Z' }],
     mcp_crm_emails: [{ subject: 'Presentación', plantilla: 'video', status: 'delivered', sent_at: '2026-10-29T10:00:00Z', sent_by: 'u1' }],
+    mcp_crm_call_gaps: [{ fecha: '2026-11-19', persona_id: 'u2', min_sin_llamar: 60, baches: 2, detalle: [{ inicio: '10:00', fin: '10:36', min: 36 }], updated_at: 'x' }],
+    mcp_crm_lead_avisos: [{ id: 'a1', lead_id: 'l1', texto: 'Falta el decisor', para: 'u2', created_by: 'u1', created_at: '2026-11-19T10:00:00Z', resuelto_at: null, resuelto_por: null }],
   }
   for (const t of TOOLS) {
     const { ctx, queries } = base(filas)
     const args = t.name === 'get_roadmap_task' ? { id: 'T-1' }
       : t.name === 'get_crm_lead' ? { lead_id: 'l1' }
+      : t.name === 'add_crm_lead_notice' ? { lead_id: 'l1', texto: 'Falta el decisor' }
+      : t.name === 'save_call_gaps' ? { fecha: '2026-11-19', filas: [{ persona_id: 'u2', min_sin_llamar: 60, baches: 2 }] }
+      : t.name === 'get_call_gaps' ? { desde: '2026-11-19' }
       : t.name === 'get_demo_briefing' ? { demo_id: DEMO }
       : {}
     const out = await t.run(ctx, args)
@@ -307,6 +318,8 @@ Deno.test('get_crm_goals: los números de cada persona, el total y lo pendiente 
   assertEquals(p.decisor_por_contactado.tasa, 1)
   assertEquals(out.periodos[0].total.contestadas, 2)
   assertEquals(out.pendiente_ahora.length, 2)
+  // Sin ninguna fila de crm_call_gaps, los minutos sin llamar son null (no 0).
+  assertEquals([p.min_sin_llamar, p.baches, p.dias_con_dato], [null, null, 0])
   const demasiado = (await run('get_crm_goals', base().ctx, { semanas: 12, personas: [a1, a1, a1] })) as Row
   assert(typeof demasiado.error === 'string')
 })
@@ -395,4 +408,90 @@ Deno.test('get_crm_sdr_dashboard: demos de la persona con registro, confirmació
   assertEquals([luna.estado, luna.motivo_cancelacion, luna.asistentes, luna.contacto], ['Cancelada', 'No podía', 1, 'Marta'])
   assertEquals(out.second_chance.map((d: Row) => d.inmobiliaria), ['Inmo Luna'])
   assertEquals(out.asistencia.pct, 50)
+})
+
+const LEAD = '00000000-0000-0000-0000-0000000000a1'
+
+Deno.test('add_crm_lead_notice: escribe por la RPC de la lista blanca y dice para quién quedó', async () => {
+  const { ctx, escrituras } = base()
+  const out = (await run('add_crm_lead_notice', ctx, { lead_id: LEAD, texto: 'Te olvidaste de cargar el decisor' })) as Record<string, any>
+  assertEquals(escrituras, [{ name: 'mcp_crm_avisar_lead', args: { p_lead_id: LEAD, p_texto: 'Te olvidaste de cargar el decisor', p_para: null } }])
+  assert((MCP_WRITE_RPCS as readonly string[]).includes(escrituras[0].name))
+  assertEquals(out, { guardado: true, aviso_id: 'a1', para: 'Ana' })
+})
+
+Deno.test('add_crm_lead_notice: lo que la RPC rechaza vuelve explicado, sin tirar error', async () => {
+  for (const status of Object.keys(MOTIVO_DEL_AVISO)) {
+    const { ctx } = base({}, { status })
+    const out = (await run('add_crm_lead_notice', ctx, { lead_id: LEAD, texto: 'x', para_id: LEAD })) as Record<string, any>
+    assertEquals(out, { guardado: false, motivo: MOTIVO_DEL_AVISO[status] }, status)
+  }
+})
+
+Deno.test('list_crm_lead_notices: por defecto los pendientes, con la inmobiliaria y quién lo dejó', async () => {
+  const { ctx, de } = base({
+    mcp_crm_lead_avisos: [
+      { id: 'a2', lead_id: 'l1', texto: 'Viejo', para: 'u2', created_by: 'u1', created_at: '2026-11-18T10:00:00Z', resuelto_at: '2026-11-18T12:00:00Z', resuelto_por: 'u2' },
+      { id: 'a1', lead_id: 'l1', texto: 'Falta el decisor', para: 'u2', created_by: 'u1', created_at: '2026-11-17T10:00:00Z', resuelto_at: null, resuelto_por: null },
+    ],
+    mcp_crm_leads: [{ id: 'l1', company_name: 'Inmo Sol' }],
+  })
+  const out = (await run('list_crm_lead_notices', ctx, {})) as Record<string, any>
+  assert(de('mcp_crm_lead_avisos').filters!.some((f) => f.op === 'is_null' && f.column === 'resuelto_at'))
+  assertEquals(out.avisos.map((a: Row) => a.id), ['a1', 'a2'])
+  assertEquals(out.avisos[0], {
+    id: 'a1', texto: 'Falta el decisor', para: 'Ana', dejado_por: 'Lorenzo Piatti', fecha: '2026-11-17T10:00:00Z',
+    pendiente: true, listo_el: null, listo_por: null, lead_id: 'l1', inmobiliaria: 'Inmo Sol',
+  })
+})
+
+Deno.test('get_crm_goals: minutos sin llamar sumados por persona y en el total, con los días con dato', async () => {
+  const a1 = '00000000-0000-0000-0000-0000000000a1'
+  const a2 = '00000000-0000-0000-0000-0000000000a2'
+  const hoy = hoyEnEspana()
+  const { ctx, de } = base({
+    mcp_crm_call_gaps: [
+      { fecha: hoy, persona_id: a1, min_sin_llamar: 60, baches: 2 },
+      { fecha: hoy, persona_id: a2, min_sin_llamar: 15, baches: 1 },
+      { fecha: '2000-01-03', persona_id: a1, min_sin_llamar: 999, baches: 9 },
+    ],
+  })
+  const out = (await run('get_crm_goals', ctx, { periodo: 'semana', personas: [a1, a2] })) as Record<string, any>
+  const [p1, p2] = out.periodos[0].personas
+  assertEquals([p1.min_sin_llamar, p1.baches, p1.dias_con_dato], [60, 2, 1])
+  assertEquals([p2.min_sin_llamar, p2.baches], [15, 1])
+  assertEquals([out.periodos[0].total.min_sin_llamar, out.periodos[0].total.baches], [75, 3])
+  assert(de('mcp_crm_call_gaps').filters!.some((f) => f.op === 'in' && f.column === 'persona_id'))
+})
+
+Deno.test('save_call_gaps: escribe por la RPC de la lista blanca y devuelve lo guardado con nombres', async () => {
+  const filas = [{ persona_id: LEAD, min_sin_llamar: 60, baches: 2, detalle: [{ inicio: '10:00', fin: '10:37', min: 37 }] }]
+  const guardadas = [{ persona_id: 'u2', fecha: '2026-11-19', min_sin_llamar: 60, baches: 2, detalle: filas[0].detalle, updated_at: 't' }]
+  const { ctx, escrituras } = base({}, { status: 'ok', filas: guardadas })
+  const out = (await run('save_call_gaps', ctx, { fecha: '2026-11-19', filas })) as Record<string, any>
+  assertEquals(escrituras, [{ name: 'mcp_crm_save_call_gaps', args: { p_fecha: '2026-11-19', p_filas: filas } }])
+  assert((MCP_WRITE_RPCS as readonly string[]).includes(escrituras[0].name))
+  assertEquals(out.guardado, true)
+  assertEquals(out.filas[0], { fecha: '2026-11-19', persona_id: 'u2', persona: 'Ana', min_sin_llamar: 60, baches: 2, detalle: filas[0].detalle, actualizado: 't' })
+})
+
+Deno.test('save_call_gaps: un SDR recibe el error de permisos, y lo inválido vuelve explicado', async () => {
+  const sdr = base({}, { status: 'forbidden' })
+  const out = (await run('save_call_gaps', sdr.ctx, { fecha: '2026-11-19', filas: [{ persona_id: LEAD, min_sin_llamar: 1, baches: 1 }] })) as Row
+  assertEquals(out, { guardado: false, motivo: MOTIVO_DE_LOS_BACHES.forbidden })
+  const mal = base({}, { status: 'invalid', error: 'No hay nadie del equipo con el id x.' })
+  assertEquals(((await run('save_call_gaps', mal.ctx, { fecha: '2026-11-19', filas: [] })) as Row).motivo, 'No hay nadie del equipo con el id x.')
+})
+
+Deno.test('get_call_gaps: por día, con el detalle y entre los dos días inclusive', async () => {
+  const { ctx, de } = base({
+    mcp_crm_call_gaps: [{ fecha: '2026-11-19', persona_id: 'u2', min_sin_llamar: 60, baches: 2, detalle: [{ inicio: '10:00', fin: '10:36', min: 36 }], updated_at: 't' }],
+  })
+  const out = (await run('get_call_gaps', ctx, { desde: '2026-11-17', hasta: '2026-11-19' })) as Record<string, any>
+  const f = de('mcp_crm_call_gaps').filters!
+  assert(f.some((x) => x.op === 'gte' && x.value === '2026-11-17'))
+  assert(f.some((x) => x.op === 'lte' && x.value === '2026-11-19'))
+  assertEquals(out.dias[0].persona, 'Ana')
+  assertEquals(out.dias[0].detalle[0].min, 36)
+  assert(typeof ((await run('get_call_gaps', ctx, { desde: '2026-01-01', hasta: '2026-12-31' })) as Row).error === 'string')
 })

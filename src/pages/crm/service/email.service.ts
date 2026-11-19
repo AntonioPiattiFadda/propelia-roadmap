@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import type { CamposEmail, DatosDeAcceso, PlantillaEmailId } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
 import { ESTADOS_QUE_NO_LLEGARON } from '../lib/emails'
 import type { EmailDelHistorial } from '../lib/historialDeEmails'
+import type { AvisoDelLead } from '../lib/avisosDelLead'
 import type { CrmEmail } from '../types'
 
 export type EmailAttachment = { filename: string; content: string }
@@ -107,4 +108,26 @@ export async function getPlantillasGuardadas(): Promise<Partial<Record<Plantilla
   const { data, error } = await supabase.from('crm_email_plantillas').select('plantilla, campos')
   if (error) return {}
   return Object.fromEntries((data ?? []).map(f => [f.plantilla, f.campos]))
+}
+
+/* Los avisos para la SDR que siguen pendientes (`crm_lead_avisos`, 19/11/2026), de todo lo que la
+   RLS deja ver: los de los leads que leo. Viven acá y no en un servicio propio porque comparten
+   el mismo camino que los emails que no llegaron: campana, toast y cartel del lead. */
+export async function getAvisosPendientes(): Promise<AvisoDelLead[]> {
+  const { data, error } = await supabase
+    .from('crm_lead_avisos')
+    .select('id, lead_id, texto, para, created_by, created_at, resuelto_at, resuelto_por, lead:crm_leads!crm_lead_avisos_lead_id_fkey(client:crm_clients(company_name))')
+    .is('resuelto_at', null)
+    .order('created_at', { ascending: false })
+    .limit(500)
+  if (error) throw error
+  return (data ?? []) as unknown as AvisoDelLead[]
+}
+
+/** «Listo» (o deshacerlo). Quién lo marcó lo pone la base. */
+export async function marcarAvisoListo({ id, listo = true }: { id: string; listo?: boolean }): Promise<void> {
+  const { error } = await supabase.from('crm_lead_avisos')
+    .update({ resuelto_at: listo ? new Date().toISOString() : null })
+    .eq('id', id)
+  if (error) throw error
 }

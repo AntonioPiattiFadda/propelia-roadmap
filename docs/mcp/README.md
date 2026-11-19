@@ -4,7 +4,8 @@ Copiado de `propelia-frontend` (`docs/mcp/README.md` de allá tiene la historia 
 blindaje del token, la auditoría y la pantalla de consentimiento (migración
 `20261030115614_mcp_oauth_infra`), y las tools sobre vistas `mcp_*` (migración
 `20261031135450_mcp_tools`, y desde el 6/11/2026 `20261106185846_mcp_crm_flujos`, que **la aplica Antonio**). **Todas de
-sólo lectura.** La meta (6/11/2026, por pedido): que se pueda leer todo lo que muestran las páginas, cada una con su flow.
+sólo lectura salvo una**: desde el 19/11/2026 (por pedido) `add_crm_lead_notice` deja un aviso en un lead para la SDR
+(ver «Avisos para la SDR», abajo). La meta (6/11/2026, por pedido): que se pueda leer todo lo que muestran las páginas, cada una con su flow.
 Se arrancó por el CRM; faltan Roadmap (hoja de notas), Clientes (ficha del alta), Equipo (visibilidad), Caja (por mes,
 saldos, «Claude Toni») y Ajustes. Lo que vive fuera de la base (Google Calendar, el estado en Propelia por el puente) queda
 para después, y teléfonos y emails siguen sin salir.
@@ -28,6 +29,10 @@ para después, y teléfonos y emails siguen sin salir.
 | `list_crm_meetings` | Reuniones y demos, por defecto las próximas | `mcp_crm_meetings` |
 | `list_demos` | Las demos agendadas (por defecto las próximas): hora de España, inmobiliaria y su etapa, quién asiste, decisor apuntado y notas de quien la agendó (del registro de la demo; las de antes del 22/10/2026, de `description` sin el email) | `mcp_crm_meetings`, `mcp_crm_leads`, `mcp_crm_comments` |
 | `get_demo_briefing` | Para preparar una demo: la demo y el lead entero, con notas de cada contacto, notas de la inmobiliaria, oficina, cómo llegó, toda la actividad, reasignaciones, correos enviados (asunto y estado), otras reuniones y un resumen con números | las de arriba + `mcp_crm_emails`, `mcp_crm_assignment_history` |
+| `list_crm_lead_notices` | Los avisos dejados en los leads para las SDR: por defecto los pendientes que ves; por destinatario, por lead y con los ya «Listo» | `mcp_crm_lead_avisos`, `mcp_crm_leads` |
+| **`add_crm_lead_notice`** (escribe) | Deja un aviso en un lead («Te olvidaste de cargar el decisor»), por defecto para su responsable | RPC `mcp_crm_avisar_lead` (POST) |
+| `get_call_gaps` | Los minutos sin llamar de cada SDR día por día (hora de España), con cada bache (inicio, fin, minutos). La suma por período está en `get_crm_goals` (`min_sin_llamar`, `baches`, `dias_con_dato`; null si el período no tiene ningún día cargado) | `mcp_crm_call_gaps` |
+| `save_call_gaps` | **Escribe.** Guarda los minutos sin llamar y los baches de hasta 10 SDR en un día; upsert por (día, persona). La usa el cron de Aircall de las 19:05 (lunes a viernes). Sólo SUPERADMIN (a otro rol: «Sólo un SUPERADMIN…»). El mapeo Aircall → cuenta está en `users.aircall_ids` y sale por `list_team` (`aircall`) | RPC `mcp_crm_save_call_gaps` (`20261119181855_crm_call_gaps`) |
 | `list_onboardings` | Altas de clientes (sólo SUPERADMIN) | `mcp_onboardings` |
 | `list_expenses` | La caja, con total y cuánto pagó cada uno de lo filtrado (sólo SUPERADMIN) | `mcp_expenses` |
 
@@ -95,7 +100,7 @@ toda la API con los permisos de la persona: la caja, los leads, escribir, mandar
 
 | Capa | Qué hace con un token con `client_id` |
 |---|---|
-| `db_pre_request` de PostgREST (`oauth_client_request_guard`) | Sólo `GET`/`HEAD` a las vistas de `mcp_oauth_relations()` y a las RPC de `mcp_oauth_rpcs()` (hoy `mcp_whoami`). Todo lo demás: 403. |
+| `db_pre_request` de PostgREST (`oauth_client_request_guard`) | Sólo `GET`/`HEAD` a las vistas de `mcp_oauth_relations()` y a las RPC de `mcp_oauth_rpcs()` (hoy `mcp_whoami`), y `POST` a las RPC de escritura de `mcp_oauth_write_rpcs()` (hoy `mcp_crm_avisar_lead`). Todo lo demás: 403. |
 | RLS restrictiva `oauth_clients_no_access` en **todas** las tablas de `public` | Cero filas y ninguna escritura. Cubre embeds y realtime. |
 | `oauth_clients_no_storage` en `storage.objects` | Nada de archivos. |
 | `withoutOAuthClients` en todas las edge functions salvo `mcp` | 403 de entrada. |
@@ -216,6 +221,27 @@ encuentra los `.d.ts` del SDK de MCP; por eso los módulos de las tools se chequ
 `tools.test.ts` corre cada tool contra una base de mentira y falla si lee algo fuera de la lista
 blanca o si el sanitizador tiene que sacarle una clave.
 
+## Avisos para la SDR (19/11/2026)
+
+Pedido: «que vía MCP podamos registrar en cada lead una especie de notificación para la SDR, ej. te
+olvidaste de agregar tal y tal». Migración `20261119181041_crm_lead_avisos` (la aplica Antonio).
+
+- **Tabla `crm_lead_avisos`**: lead, texto (hasta 1000), `para` (siempre alguien: si no se elige, el
+  responsable del lead), quién lo dejó, `source = 'mcp'` y el «Listo» (`resuelto_at` / `resuelto_por`,
+  que pone un trigger con `auth.uid()`). La RLS: lo ve quien ve el lead; el «Listo» lo marca quien
+  escribe la cartera o el destinatario, y por grant de columnas la app sólo toca `resuelto_at`. No hay
+  insert ni delete desde la app.
+- **Escribir por el conector** es el patrón de propelia-frontend (`20261101191634_mcp_lead_writes`):
+  la RPC `mcp_crm_avisar_lead` es `security definer` y está en `mcp_oauth_write_rpcs()`, lo único que el
+  token del conector puede llamar por **POST** (`McpDb.write`, `MCP_WRITE_RPCS`). Hace sus chequeos:
+  usuario activo, `crm_puede_lead(…, 'write')` (que corta también los leads de prueba), destinatario
+  activo que vea esa cartera, y 30 por hora. Contesta `{status}`; la tool lo traduce
+  (`MOTIVO_DEL_AVISO`). La tool lleva `write: 'additive'` → `readOnlyHint: false`, `idempotentHint: false`.
+- **En la app**: cartel rojo arriba del lead (`AvisosDelLead`, con «Listo» y «Deshacer»), en la campana
+  del CRM para el destinatario, y un toast con «Abrir lead» esté donde esté (`useToastsDeAvisos` en
+  `AppLayout`, una vez por navegador, `crm-avisos-avisados`). Realtime en `crm_lead_avisos`.
+- `get_crm_lead` trae los avisos del lead; `supabase/tests/mcp-permisos.sql` › 7 prueba quién puede qué.
+
 ## Agregar una tool
 
 1. Si lee datos: **una vista `mcp_*` nueva**, nunca la tabla (una tabla en la lista blanca expone
@@ -223,6 +249,8 @@ blanca o si el sanitizador tiene que sacarle una clave.
    `es_usuario()`, sólo con columnas que se pueden entregar, revocada de `anon`, y
    `mcp_oauth_relations()` redefinida completa con la vista. Sumarla en `MCP_RELATIONS`.
 2. Definirla en `tools.ts` y sumarla a `TOOLS`. Sólo lectura (`readOnlyHint` lo pone `index.ts`).
-   Escribir requiere además abrir el método en `oauth_client_request_guard`.
+   Si escribe: una RPC `security definer` con sus propios chequeos, sumada a
+   `mcp_oauth_write_rpcs()` y `MCP_WRITE_RPCS`, llamada con `db.write`, y `write` en la tool
+   (como `add_crm_lead_notice`).
 3. Actualizar «Va a poder» / «No va a poder» de `OAuthConsent.tsx`, la tabla de arriba y las
    `instructions` de `mcp/index.ts`, que le dicen al modelo qué tool usar para qué.

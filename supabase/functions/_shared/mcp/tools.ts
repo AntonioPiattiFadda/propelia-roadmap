@@ -1,5 +1,7 @@
 // Tools del servidor MCP del tablero: Roadmap, CRM, clientes (onboarding) y caja. Todas de SÓLO
-// LECTURA y todas sobre las vistas `mcp_*` (db.ts, migración 20261031135450_mcp_tools), que ya
+// LECTURA salvo `add_crm_lead_notice` (19/11/2026: un aviso para la SDR en el lead, por la RPC
+// `mcp_crm_avisar_lead`, que hace sus propios chequeos) y `save_call_gaps` (los minutos sin llamar del cron
+// de Aircall, por `mcp_crm_save_call_gaps`, sólo SUPERADMIN), y todas leen sobre las vistas `mcp_*` (db.ts, migración 20261031135450_mcp_tools), que ya
 // recortan con los mismos permisos que la app: la cartera del CRM (`crm_puede`), y clientes y
 // caja sólo para SUPERADMIN. Acá no se vuelve a filtrar por permisos a propósito: si se hiciera,
 // taparía un agujero de una vista en vez de mostrarlo.
@@ -27,6 +29,7 @@ import {
   mesEnEspana, metricasDelPeriodo, periodoDeMes, PREFIJO_CONFIRMAR, type RegistroDeLaDemo, ROTULO_DE_ESTADO,
   segundaOportunidad, type TareaDeConfirmar, trimestreDe, ultimos12Meses,
 } from './dashboardSdr.ts'
+import { diaDe, type FilaDeBaches, minutosSinLlamar } from './minutosSinLlamar.ts'
 
 export interface ToolContext {
   db: McpDb
@@ -43,6 +46,11 @@ export interface McpToolDef {
   publicKeys?: readonly string[]
   /** Sale a internet (MCP `openWorldHint`). */
   openWorld?: boolean
+  /**
+   * La tool ESCRIBE (por una RPC de MCP_WRITE_RPCS): `additive` suma algo nuevo sin pisar nada
+   * (avisos). Sin esto, la tool es de sólo lectura. Como en propelia-frontend.
+   */
+  write?: 'additive' | 'overwrite'
   run(ctx: ToolContext, args: Record<string, unknown>): Promise<unknown>
 }
 
@@ -81,13 +89,20 @@ interface Persona {
   nombre: string
   rol: string
   activo: boolean
+  /** Cómo figura en Aircall (ids o nombres, `users.aircall_ids`): el mapeo del cron de minutos sin llamar. */
+  aircall: string[]
 }
 
 async function equipo(db: McpDb): Promise<Map<string, Persona>> {
-  const { rows } = await db.select({ view: 'mcp_team', columns: ['id', 'nombre', 'last_name', 'rol', 'activo'], range: [0, ALL] })
+  const { rows } = await db.select({ view: 'mcp_team', columns: ['id', 'nombre', 'last_name', 'rol', 'activo', 'aircall_ids'], range: [0, ALL] })
   return new Map(rows.map((r) => [
     r.id as string,
-    { nombre: [r.nombre, r.last_name].filter(Boolean).join(' ') || 'Sin nombre', rol: r.rol, activo: r.activo !== false },
+    {
+      nombre: [r.nombre, r.last_name].filter(Boolean).join(' ') || 'Sin nombre',
+      rol: r.rol,
+      activo: r.activo !== false,
+      aircall: Array.isArray(r.aircall_ids) ? r.aircall_ids.filter((x: unknown): x is string => typeof x === 'string') : [],
+    },
   ]))
 }
 
@@ -108,7 +123,9 @@ const getMe: McpToolDef = {
 const listTeam: McpToolDef = {
   name: 'list_team',
   title: 'Equipo',
-  description: 'Las personas del equipo con su id, nombre, rol (SUPERADMIN o SDR) y si están activas. Los ids sirven para filtrar por responsable.',
+  description:
+    'Las personas del equipo con su id, nombre, rol (SUPERADMIN o SDR), si están activas y cómo figuran en Aircall ' +
+    '(`aircall`: ids de usuario o nombres; es el mapeo para save_call_gaps). Los ids sirven para filtrar por responsable.',
   inputSchema: {
     incluir_inactivos: z.boolean().optional().describe('También a quienes se dieron de baja (por defecto no).'),
   },
@@ -116,7 +133,7 @@ const listTeam: McpToolDef = {
     const gente = await equipo(db)
     const lista = [...gente.entries()]
       .filter(([, p]) => args.incluir_inactivos === true || p.activo)
-      .map(([id, p]) => ({ id, nombre: p.nombre, rol: p.rol, activo: p.activo }))
+      .map(([id, p]) => ({ id, nombre: p.nombre, rol: p.rol, activo: p.activo, aircall: p.aircall }))
     return { equipo: lista }
   },
 }
@@ -554,7 +571,7 @@ async function fichaDelLead(db: McpDb, gente: Map<string, Persona>, leadId: stri
   if (!r) return null
 
   const vacio = Promise.resolve({ rows: [] as Row[], total: 0 })
-  const [tareas, reuniones, actividad, cambios, etapas, emails, reasignaciones, notasDeDemo] = await Promise.all([
+  const [tareas, reuniones, actividad, cambios, etapas, emails, reasignaciones, notasDeDemo, avisos] = await Promise.all([
     db.select({ view: 'mcp_crm_tasks', columns: ['title', 'due_date', 'due_time', 'completed', 'completed_at', 'assigned_to'], filters: porLead, order: [{ column: 'due_date', ascending: true }], range: [0, 49] }),
     db.select({ view: 'mcp_crm_meetings', columns: MEETING_COLUMNS, filters: porLead, order: [{ column: 'starts_at', ascending: false }], range: [0, 19] }),
     opts.actividad > 0
@@ -567,6 +584,7 @@ async function fichaDelLead(db: McpDb, gente: Map<string, Persona>, leadId: stri
       ? db.select({ view: 'mcp_crm_assignment_history', columns: ['from_user_id', 'to_user_id', 'changed_by', 'changed_at'], filters: porLead, order: [{ column: 'changed_at', ascending: false }], range: [0, 19] })
       : vacio,
     db.select({ view: 'mcp_crm_demo_notas', columns: ['texto', 'updated_at'], filters: porLead, range: [0, 0] }),
+    db.select({ view: 'mcp_crm_lead_avisos', columns: AVISO_COLUMNS, filters: porLead, order: [{ column: 'created_at', ascending: false }], range: [0, 29] }),
   ])
   const etapa = new Map(etapas.rows.map((e) => [e.id as string, e.label as string]))
   const nombreEtapa = (id: unknown) => (typeof id === 'string' ? (etapa.get(id) ?? 'una etapa borrada') : null)
@@ -637,6 +655,8 @@ async function fichaDelLead(db: McpDb, gente: Map<string, Persona>, leadId: stri
     notas_de_la_demo: notasDeDemo.rows[0]
       ? { texto: str(notasDeDemo.rows[0].texto) ?? '', actualizadas: notasDeDemo.rows[0].updated_at ?? null }
       : null,
+    // Los avisos para la SDR (add_crm_lead_notice), primero los pendientes.
+    avisos: ordenarAvisos(avisos.rows).map((a) => avisoSalida(a, gente)),
   }
   if (opts.completa) {
     const ahora = new Date().toISOString()
@@ -1207,6 +1227,21 @@ const QUE_ES_CADA_OBJETIVO = {
   demos_agendadas: 'Reuniones que esa persona agendó en el período (cuenta cuándo se agendaron, no para cuándo son).',
   decisor_por_contactado: 'De las inmobiliarias que contestaron, qué parte tuvo una llamada con decisor (cuenta inmobiliarias).',
   pendiente_ahora: 'Hoy, no en el período: tareas suyas vencidas (la de hoy no) y leads de su cartera en Seguimiento sin tarea suya.',
+  min_sin_llamar:
+    'Minutos sin llamar en horario (10–14 y 15–19, Madrid): suma de los baches de 15 min o más, desde Aircall (cron diario de las 19:05). ' +
+    'Null si el período no tiene ningún día cargado (hoy, antes del cron). Detalle por día: get_call_gaps.',
+  baches: 'Cuántos baches de 15 min o más sin llamar hubo (suma de los días con dato).',
+  dias_con_dato: 'Días del período con minutos sin llamar cargados: si falta alguno, las dos sumas se quedan cortas.',
+}
+
+/** Las filas de crm_call_gaps de esas personas entre esos días (`hasta` exclusivo). */
+async function bachesEntre(db: McpDb, personas: string[], desde: string, hasta: string): Promise<FilaDeBaches[]> {
+  const { rows } = await db.select({
+    view: 'mcp_crm_call_gaps', columns: ['fecha', 'persona_id', 'min_sin_llamar', 'baches'],
+    filters: [{ op: 'in', column: 'persona_id', values: personas }, { op: 'gte', column: 'fecha', value: desde }, { op: 'lt', column: 'fecha', value: hasta }],
+    range: [0, ALL],
+  })
+  return rows.map((r) => ({ fecha: diaDe(r.fecha), persona_id: r.persona_id, min_sin_llamar: Number(r.min_sin_llamar) || 0, baches: Number(r.baches) || 0 }))
 }
 
 const getCrmGoals: McpToolDef = {
@@ -1215,7 +1250,8 @@ const getCrmGoals: McpToolDef = {
   description:
     'Los «Objetivos» del CRM, como el contador de la cabecera y su diálogo: llamadas contestadas, con decisor, decisores ' +
     'nuevos, no respondidas, nutrición de la cuenta (mails de presentación y nombres, teléfonos y horarios de decisores ' +
-    'conseguidos), demos agendadas y la tasa «decisor por contactado», por persona y período ' +
+    'conseguidos), demos agendadas, la tasa «decisor por contactado» y los minutos sin llamar de Aircall (min_sin_llamar, ' +
+    'baches y dias_con_dato; null si el período no tiene ningún día cargado), por persona y período ' +
     '(hora de España). Con varias personas suma un total. También dice qué tiene pendiente ahora cada una. Por defecto, esta ' +
     'semana (desde el lunes) del usuario conectado. Los números de otro salen de lo que el usuario puede ver, como «Ver como».',
   inputSchema: {
@@ -1236,12 +1272,15 @@ const getCrmGoals: McpToolDef = {
     if (periodos.length * personas.length > 24) {
       return { error: 'Demasiadas combinaciones: pedí como mucho 24 (semanas × personas).' }
     }
-    const [gente, etapas, { rows: leads }, tareas, resultados] = await Promise.all([
+    const desdeTodo = periodos.reduce((m, p) => (p.desde < m ? p.desde : m), periodos[0].desde)
+    const hastaTodo = periodos.reduce((m, p) => (p.hasta > m ? p.hasta : m), periodos[0].hasta)
+    const [gente, etapas, { rows: leads }, tareas, resultados, baches] = await Promise.all([
       equipo(db),
       etapasDelFunnel(db),
       db.select({ view: 'mcp_crm_leads', columns: ['id', 'assigned_to', 'funnel_stage_id', 'descartado'], range: [0, ALL] }),
       tareasPendientes(db),
       Promise.all(periodos.map((per) => Promise.all(personas.map((id) => objetivosDePersona(db, id, per))))),
+      bachesEntre(db, personas, desdeTodo, hastaTodo),
     ])
     return {
       hoy_en_espana: hoy,
@@ -1255,12 +1294,14 @@ const getCrmGoals: McpToolDef = {
           nombre: nombreDe(gente, id),
           ...numerosDeObjetivos(resultados[i][j].resumen),
           decisor_por_contactado: tasaDeDecisor([resultados[i][j]]),
+          ...minutosSinLlamar(baches, [id], per),
         })),
         ...(personas.length > 1
           ? {
             total: {
               ...numerosDeObjetivos(sumarResumenes(resultados[i].map((o) => o.resumen))),
               decisor_por_contactado: tasaDeDecisor(resultados[i]),
+              ...minutosSinLlamar(baches, personas, per),
             },
           }
           : {}),
@@ -1653,11 +1694,204 @@ const getCrmSdrDashboard: McpToolDef = {
 
 const redondear = (n: number) => Math.round(n * 100) / 100
 
+// ─── avisos para la SDR (19/11/2026) ────────────────────────────────────────
+// «Te olvidaste de cargar el decisor»: un aviso en el lead que le suena a la SDR (toast, campana y
+// cartel rojo en el lead) hasta que lo marca «Listo». Tabla `crm_lead_avisos`, migración
+// 20261119181041_crm_lead_avisos. Escribir es la RPC `mcp_crm_avisar_lead` (POST, security
+// definer, con sus chequeos); leer, la vista `mcp_crm_lead_avisos`.
+
+const AVISO_COLUMNS = ['id', 'lead_id', 'texto', 'para', 'created_by', 'created_at', 'resuelto_at', 'resuelto_por'] as const
+
+/** Primero los pendientes y, dentro de cada grupo, el más nuevo arriba. */
+function ordenarAvisos(rows: Row[]): Row[] {
+  return [...rows].sort((a, b) =>
+    Number(!!a.resuelto_at) - Number(!!b.resuelto_at) || String(b.created_at).localeCompare(String(a.created_at)))
+}
+
+function avisoSalida(a: Row, gente: Map<string, Persona>) {
+  return {
+    id: a.id,
+    texto: str(a.texto) ?? '',
+    para: nombreDe(gente, a.para),
+    dejado_por: nombreDe(gente, a.created_by),
+    fecha: a.created_at,
+    pendiente: !a.resuelto_at,
+    listo_el: a.resuelto_at ?? null,
+    listo_por: nombreDe(gente, a.resuelto_por),
+  }
+}
+
+/** Lo que contesta la RPC cuando no guarda, dicho para el usuario. */
+export const MOTIVO_DEL_AVISO: Record<string, string> = {
+  invalid: 'El aviso tiene que tener entre 1 y 1000 caracteres.',
+  not_found: 'No encontré ese lead (o no lo ves).',
+  forbidden: 'Ves ese lead pero no podés escribir en su cartera.',
+  forbidden_para: 'Esa persona no está activa o no ve la cartera de ese lead.',
+  rate_limited: 'Llegaste al tope de 30 avisos por hora desde el conector.',
+  no_access: 'Tu cuenta no tiene acceso al tablero.',
+}
+
+const addCrmLeadNotice: McpToolDef = {
+  name: 'add_crm_lead_notice',
+  title: 'Dejar un aviso en un lead',
+  description:
+    'Deja un aviso en un lead del CRM para la SDR, del estilo «Te olvidaste de cargar el decisor» o «Faltó registrar la ' +
+    'llamada del martes». Le aparece en rojo arriba del lead, en la campana y en un aviso emergente hasta que lo marca ' +
+    '«Listo». Por defecto es para el responsable del lead; `para_id` (de list_team) lo dirige a otra persona que vea esa ' +
+    'cartera. Hace falta poder escribir la cartera del lead. Buscá el lead antes con list_crm_leads (búsqueda por nombre) ' +
+    'y, si hay dudas sobre cuál es, preguntá. Escribí el aviso en castellano, corto y concreto: qué falta y dónde.',
+  inputSchema: {
+    lead_id: uuid,
+    texto: z.string().trim().min(1).max(1000).describe('El aviso, tal como lo va a leer la SDR.'),
+    para_id: uuid.optional().describe('A quién (id de list_team). Por defecto, el responsable del lead.'),
+  },
+  write: 'additive',
+  async run({ db }, args) {
+    const res = (await db.write('mcp_crm_avisar_lead', {
+      p_lead_id: String(args.lead_id),
+      p_texto: String(args.texto),
+      p_para: typeof args.para_id === 'string' ? args.para_id : null,
+    })) as Record<string, unknown> | null
+    const status = typeof res?.status === 'string' ? res.status : 'error'
+    if (status !== 'ok') {
+      return { guardado: false, motivo: MOTIVO_DEL_AVISO[status] ?? 'No se pudo guardar el aviso.' }
+    }
+    const gente = await equipo(db)
+    return { guardado: true, aviso_id: res!.aviso_id, para: nombreDe(gente, res!.para) }
+  },
+}
+
+const listCrmLeadNotices: McpToolDef = {
+  name: 'list_crm_lead_notices',
+  title: 'Avisos en los leads',
+  description:
+    'Los avisos dejados en los leads para las SDR (add_crm_lead_notice). Por defecto, todos los pendientes que ves; se ' +
+    'filtran por destinatario (`para_id`), por lead, y se pueden sumar los ya marcados «Listo».',
+  inputSchema: {
+    para_id: uuid.optional().describe('Sólo los de esta persona (id de list_team).'),
+    lead_id: uuid.optional().describe('Sólo los de este lead.'),
+    incluir_listos: z.boolean().optional().describe('También los ya marcados «Listo» (por defecto no).'),
+    limit,
+    offset,
+  },
+  async run({ db }, args) {
+    const p = page(args)
+    const filters: Filter[] = []
+    if (typeof args.para_id === 'string') filters.push({ op: 'eq', column: 'para', value: args.para_id })
+    if (typeof args.lead_id === 'string') filters.push({ op: 'eq', column: 'lead_id', value: args.lead_id })
+    if (args.incluir_listos !== true) filters.push({ op: 'is_null', column: 'resuelto_at' })
+    const [gente, { rows, total }] = await Promise.all([
+      equipo(db),
+      db.select({
+        view: 'mcp_crm_lead_avisos', columns: AVISO_COLUMNS, filters,
+        order: [{ column: 'created_at', ascending: false }], range: [p.offset, p.offset + p.limit - 1], count: true,
+      }),
+    ])
+    const ids = [...new Set(rows.map((a) => a.lead_id as string))]
+    const leads = ids.length
+      ? (await db.select({ view: 'mcp_crm_leads', columns: ['id', 'company_name'], filters: [{ op: 'in', column: 'id', values: ids }], range: [0, ids.length - 1] })).rows
+      : []
+    const nombre = new Map(leads.map((l) => [l.id as string, l.company_name as string]))
+    return paged('avisos', ordenarAvisos(rows).map((a) => ({
+      ...avisoSalida(a, gente),
+      lead_id: a.lead_id,
+      inmobiliaria: nombre.get(a.lead_id) ?? null,
+    })), total, p)
+  },
+}
+
+// ─── minutos sin llamar (Aircall) ───────────────────────────────────────────
+
+export const MOTIVO_DE_LOS_BACHES: Record<string, string> = {
+  invalid: 'Los datos no son válidos.',
+  forbidden: 'Sólo un SUPERADMIN puede guardar los minutos sin llamar.',
+  no_access: 'Tu cuenta no tiene acceso al tablero.',
+}
+
+const bache = z.object({
+  inicio: z.string().min(1).max(40).describe('Hora de inicio, ej. "10:00" o ISO.'),
+  fin: z.string().min(1).max(40).describe('Hora de fin.'),
+  min: z.number().int().min(0).max(1440),
+})
+
+const saveCallGaps: McpToolDef = {
+  name: 'save_call_gaps',
+  title: 'Guardar minutos sin llamar',
+  description:
+    'Guarda los minutos sin llamar y los baches de cada SDR en un día (hora de España). Lo usa el cron diario. ' +
+    'Idempotente: volver a guardar el mismo día y la misma persona sobrescribe. Sólo SUPERADMIN. Los ids salen de list_team ' +
+    '(su campo `aircall` dice cómo figura cada uno en Aircall). Hasta 10 personas por llamada.',
+  inputSchema: {
+    fecha: day.describe('El día, en hora de España.'),
+    filas: z.array(z.object({
+      persona_id: uuid,
+      min_sin_llamar: z.number().int().min(0).max(1440),
+      baches: z.number().int().min(0).max(1440),
+      detalle: z.array(bache).max(100).optional().describe('Cada bache del día.'),
+    })).min(1).max(10),
+  },
+  write: 'overwrite',
+  async run({ db }, args) {
+    const res = (await db.write('mcp_crm_save_call_gaps', { p_fecha: String(args.fecha), p_filas: args.filas })) as Record<string, unknown> | null
+    const status = typeof res?.status === 'string' ? res.status : 'error'
+    if (status !== 'ok') {
+      const detalle = status === 'invalid' && typeof res?.error === 'string' ? res.error : null
+      return { guardado: false, motivo: detalle ?? MOTIVO_DE_LOS_BACHES[status] ?? 'No se pudieron guardar.' }
+    }
+    const gente = await equipo(db)
+    const filas = Array.isArray(res!.filas) ? (res!.filas as Row[]) : []
+    return { guardado: true, filas: filas.map((f) => filaDeBaches(f, gente)) }
+  },
+}
+
+function filaDeBaches(f: Row, gente: Map<string, Persona>) {
+  return {
+    fecha: diaDe(f.fecha),
+    persona_id: f.persona_id,
+    persona: nombreDe(gente, f.persona_id),
+    min_sin_llamar: f.min_sin_llamar,
+    baches: f.baches,
+    detalle: Array.isArray(f.detalle) ? f.detalle : null,
+    actualizado: f.updated_at ?? null,
+  }
+}
+
+const getCallGaps: McpToolDef = {
+  name: 'get_call_gaps',
+  title: 'Minutos sin llamar por día',
+  description:
+    'Los minutos sin llamar de cada SDR día por día (hora de España), con el detalle de cada bache (inicio, fin, minutos). ' +
+    'Para la suma de un período, get_crm_goals. Un día sin fila es que no hay dato (el cron no corrió), no que fue cero.',
+  inputSchema: {
+    desde: day.describe('Desde ese día (inclusive).'),
+    hasta: day.optional().describe('Hasta ese día (inclusive; por defecto, el mismo desde). Como mucho 92 días.'),
+    personas: z.array(uuid).min(1).max(10).optional().describe('Ids (list_team). Por defecto, todas las que el usuario ve.'),
+  },
+  async run({ db }, args) {
+    const desde = String(args.desde)
+    const hasta = typeof args.hasta === 'string' ? args.hasta : desde
+    if (hasta < desde) return { error: '`hasta` es anterior a `desde`.' }
+    if (sumarDias(desde, 92) <= hasta) return { error: 'Como mucho 92 días.' }
+    const filters: Filter[] = [{ op: 'gte', column: 'fecha', value: desde }, { op: 'lte', column: 'fecha', value: hasta }]
+    if (Array.isArray(args.personas) && args.personas.length) filters.push({ op: 'in', column: 'persona_id', values: args.personas as string[] })
+    const [gente, { rows }] = await Promise.all([
+      equipo(db),
+      db.select({
+        view: 'mcp_crm_call_gaps', columns: ['fecha', 'persona_id', 'min_sin_llamar', 'baches', 'detalle', 'updated_at'], filters,
+        order: [{ column: 'fecha', ascending: true }, { column: 'persona_id', ascending: true }], range: [0, ALL],
+      }),
+    ])
+    return { desde, hasta, dias: rows.map((f) => filaDeBaches(f, gente)) }
+  },
+}
+
 export const TOOLS: readonly McpToolDef[] = [
   getMe, listTeam,
   listRoadmapTasks, getRoadmapTask, listBacklogGroups,
   listCrmStages, listCrmLeads, getCrmLead, listCrmTasks, listCrmMeetings, listDemos, getDemoBriefing,
   getCrmDashboard, getCrmGoals, listCrmEmailProblems, listCrmActivity, getCrmSdrDashboard,
+  listCrmLeadNotices, addCrmLeadNotice,
+  getCallGaps, saveCallGaps,
   listOnboardings, listExpenses,
 ]
 

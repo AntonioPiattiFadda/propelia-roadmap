@@ -12,6 +12,7 @@ function setup(auth: AuthResult | null = null, whoami: unknown = { nombre: 'Lore
   const db: McpDb = {
     select: () => Promise.resolve({ rows: [], total: 0 }),
     rpc: () => (whoami instanceof Error ? Promise.reject(whoami) : Promise.resolve(whoami)),
+    write: () => Promise.resolve({ status: 'ok', aviso_id: 'a1', para: 'u1' }),
   }
   const deps: McpDeps = {
     getEnv: (k) => ENV[k],
@@ -125,14 +126,18 @@ Deno.test('initialize: responde como propelia-roadmap con tools', async () => {
   assertEquals(tokens, ['tok'])
 })
 
-Deno.test('tools/list: todas de sólo lectura', async () => {
+Deno.test('tools/list: todas de sólo lectura salvo el aviso al lead (suma) y los minutos sin llamar (pisan el día)', async () => {
   const { deps } = setup()
   const res = await handleRequest(rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' }), deps)
   const { result } = await res.json()
   assert(result.tools.length > 0)
+  // add_crm_lead_notice suma (no idempotente); save_call_gaps pisa el día (idempotente y destructiva).
+  const escriben = ['add_crm_lead_notice', 'save_call_gaps']
+  const pisan = ['save_call_gaps']
   for (const t of result.tools) {
-    assertEquals(t.annotations.readOnlyHint, true, t.name)
-    assertEquals(t.annotations.destructiveHint, false, t.name)
+    assertEquals(t.annotations.readOnlyHint, !escriben.includes(t.name), t.name)
+    assertEquals(t.annotations.destructiveHint, pisan.includes(t.name), t.name)
+    assertEquals(t.annotations.idempotentHint, !escriben.includes(t.name) || pisan.includes(t.name), t.name)
   }
 })
 

@@ -4,7 +4,8 @@ import { useQueries, useQuery } from '@tanstack/react-query'
 import { localTodayIso, shiftIsoDate } from '@/lib/calendarDate'
 import { diaDeObjetivos, leadsConDecisor, llamadasDesdeLaUltimaDemo, objetivosDe } from '../lib/objetivos'
 import { puedeVerComo } from '../lib/permisos'
-import { actividadDesde, demosAgendadas, historialDeActividad, metasDeActividad, presentacionesEnviadas, ultimaDemoAgendada } from '../service/crm.service'
+import { relojDeEspana } from '@/pages/agenda/lib/horaDeEspana'
+import { actividadDesde, demosAgendadas, historialDeActividad, metasDeActividad, minutosSinLlamarDelDia, presentacionesEnviadas, ultimaDemoAgendada } from '../service/crm.service'
 import type { Usuario } from '../types'
 import { useCarteras } from './useCarteras'
 import { useVerComo } from './useVerComo'
@@ -112,5 +113,17 @@ export function useHaciaLaProximaDemo(autor: string | null) {
 export function useObjetivosDeVarios(pedidos: readonly { autor: string; desde: string; hasta: string }[], activo: boolean) {
   return useQueries({
     queries: pedidos.map(p => ({ ...consultaDeObjetivos(p.autor, p.desde, p.hasta), enabled: activo })),
+  })
+}
+
+/** «Minutos sin llamar» del día elegido en los Objetivos (19/11/2026, por pedido): lo guarda una vez
+ *  por día el cron de Aircall (19:05, por el conector MCP), así que hoy hasta entonces es null. Sin
+ *  día, el de hoy en España, como el dato. */
+export function useMinutosSinLlamar(persona: string | null, diaElegido?: string) {
+  const dia = diaElegido ?? relojDeEspana(new Date()).ymd
+  return useQuery({
+    queryKey: CRM_KEYS.minutosSinLlamar(persona ?? '', dia),
+    queryFn: () => minutosSinLlamarDelDia(persona!, dia),
+    enabled: !!persona,
   })
 }
