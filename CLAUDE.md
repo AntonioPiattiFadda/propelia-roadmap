@@ -355,7 +355,7 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   (migración `20261027154657_onboarding_mail_de_acceso_no_llego`, que **la aplica Antonio**) crea en
   el lead la tarea del CRM «Revisar el mail de acceso que no llegó a …», con alarma en 5 minutos,
   **para quien mandó el mail** (19/11/2026, por pedido, migración
-  `20261119155551_crm_emails_acceso_tarea_a_quien_lo_mando`, que **la aplica Antonio**; hasta ese día
+  `20261119183447_crm_emails_acceso_tarea_a_quien_lo_mando`, que **la aplica Antonio**; hasta ese día
   era de quien lleva el alta o del responsable del lead). Los envíos de antes van sin lead: no la crean.
   Con alguno que no llegó, debajo aparece además el tilde «Enviar mensaje al cliente para que corrija
   los mails que están mal» (`TAREA_CORREGIR_MAILS`, `contacto.corregir-mails`, a mano).
