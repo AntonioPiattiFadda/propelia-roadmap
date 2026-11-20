@@ -94,6 +94,17 @@ export function useObjetivos(activo = true) {
   })
 }
 
+/** Los objetivos de `autor` en `dia`, sin mirar la URL: los avisos del ritmo del día (siempre los
+ *  míos, esté donde esté). Misma clave que el contador, así que mirándome es la misma consulta.
+ *  Cada 5 minutos se vuelve a pedir: fuera del CRM no llega el realtime. */
+export function useObjetivosDe(autor: string | null, dia: string) {
+  return useQuery({
+    ...consultaDeObjetivos(autor ?? '', dia, shiftIsoDate(dia, 1)),
+    enabled: !!autor,
+    refetchInterval: 5 * 60_000,
+  })
+}
+
 /** «Hacia la próxima demo» de `autor` (17/11/2026, por pedido): las llamadas desde su última demo
  *  agendada, **sin corte por día**. Solo agendar una demo lo vuelve a cero. */
 export function useHaciaLaProximaDemo(autor: string | null) {

@@ -8,6 +8,7 @@ import { useYo } from '@/hooks/useYo'
 import { useAlarmasDeTareas } from '@/pages/crm/hooks/useAlarmasDeTareas'
 import { useAvisosDeEmails } from '@/pages/crm/hooks/useEmails'
 import { useAvisosDeDemos } from '@/pages/demos/hooks/useDemos'
+import { AvisosDelRitmo } from '@/pages/crm/components/RitmoDelDia'
 
 // El del producto sin el asistente, las sugerencias ni el saludo al entrar.
 export function AppLayout() {
@@ -28,6 +29,8 @@ export function AppLayout() {
       <SidebarInset>
         <Outlet />
       </SidebarInset>
+      {/* El ritmo del día (19/11/2026): Propelin le avisa a cada SDR cómo va con sus contactados. */}
+      <AvisosDelRitmo yoId={yo?.id ?? null} activo={!!yo?.activo && yo.rol === 'SDR'} />
       <MobileTabBar />
     </SidebarProvider>
   )

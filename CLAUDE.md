@@ -906,6 +906,18 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
 - **«Dashboard SDR»** (11/11/2026, por pedido; inspirado en un «SDR Pro Dashboard» de afuera, sin su
   marca): botón del diálogo de Objetivos que abre un diálogo casi a pantalla completa
   (`DashboardSdrDialog`, reglas puras en `lib/dashboardSdr.ts`, datos en `useDashboardSdr`). Una
+- **El ritmo del día** (19/11/2026, por pedido): el círculo «Contestadas» de Objetivos va en verde,
+  amarillo o rojo según la meta que crece con la hora (jornada 10:30–18:00 con pausa 14–15, 390
+  minutos; al cierre < 40 rojo, 40–49 amarillo, ≥ 50 verde fijo; 45 minutos de gracia en verde).
+  Reglas puras en `lib/ritmoDelDia.ts` con la tabla de referencia como test. Al pasar el cursor,
+  Propelin explica el color, la proyección (desde las 12:30) y una barra hacia 60 con las marcas del
+  momento (`ConGloboDelRitmo`). Un día pasado se pinta cerrado. **A un SDR, Propelin le avisa con una
+  viñeta chica abajo al centro** (`AvisosDelRitmo`, montada en `AppLayout`): a las 12:30, 14:00, 16:30
+  y 18:00 (una vez por punto, hasta una hora después), al llegar a 50 y a 60 y cuando el color mejora;
+  el cierre compara con la media de los 5 días hábiles anteriores. Lo avisado se guarda por navegador
+  y día (`crm-ritmo-avisos:<yo>:<día>`). **Solo con la app abierta, sin servidor ni migración**: no
+  hay todavía copia a los SUPERADMIN (`paraSuperadmin` queda marcado en el aviso), ni parámetros por
+  SDR editables, ni marcar día libre o media jornada (la lógica ya los soporta: `tipoDeDia`).
   persona por vez (el «yo» de pantalla; quien ve otras carteras elige), últimos 12 meses, pestañas
   Mes / Trimestre / Últimos 12 meses / Second Chance. **Todo sale de la base, nada se carga a mano**:
   llamadas y decisores de la actividad registrada (como Objetivos); demos = `crm_meetings` que creó la

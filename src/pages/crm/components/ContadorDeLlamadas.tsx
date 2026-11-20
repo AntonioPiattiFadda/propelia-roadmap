@@ -22,6 +22,7 @@ import { useVerComo } from '../hooks/useVerComo'
 import { commitDelPeriodo, esDiaHabil, tonoDelCommit, type CampoDeCommit, type Commits } from '../lib/commits'
 import { escribirFiltros, filtrosDesdeUrl } from '../lib/leadFilterParams'
 import { hitoAlcanzado, mensajeDePropelin } from '../lib/propelin'
+import { ConGloboDelRitmo, useRitmoDelDia } from './RitmoDelDia'
 import {
   diasHaciaAtras, LLAMADAS_POR_DEMO, mesesHaciaAtras, NUTRICION_DE_LA_CUENTA, nutricionDeLaCuenta, pendientesDePersona,
   progresoHaciaDemo, semanasHaciaAtras, sumarResumenes, tasaDeDecisor, tituloDeObjetivos,
@@ -191,6 +192,8 @@ export function ContadorDeLlamadas() {
   const titulo = tituloDeObjetivos(dia, hoy)
   const { personaId, elegibles, elegir } = usePersonaDeObjetivos()
   const haciaDemo = useHaciaLaProximaDemo(personaId)
+  // El ritmo del día (19/11/2026, por pedido): «Contestadas» va en verde, amarillo o rojo.
+  const ritmo = useRitmoDelDia(data?.resumen.contestadas, dia, esHoy)
   // Nace plegado, salvo que la URL ya filtre por uno de los suyos (un enlace viejo a
   // `?objetivo=presentaciones`): si no, la tarjeta prendida quedaría escondida.
   const [nutricionAbierta, setNutricionAbierta] = useState(
@@ -262,11 +265,22 @@ export function ContadorDeLlamadas() {
               </button>
             ) : (
               <Fragment key={c.k}>
+                {c.k === 'contestadas' ? (
+                  // Propelin explica el color al pasar el cursor: sin `title`, que taparía el globo.
+                  <ConGloboDelRitmo estado={ritmo} contestadas={data?.resumen.contestadas}>
+                    <Tarjeta icono={ICONOS[c.k]} label={c.label} activo={elegido === c.k} className={celdaSub(c)}
+                      tono={ritmo?.color} title={ritmo ? undefined : `${c.title}. Tocá para ver esos leads.`}
+                      onClick={() => alternar(c.k)}>
+                      {numero(data?.resumen[c.k])}
+                    </Tarjeta>
+                  </ConGloboDelRitmo>
+                ) : (
                 <Tarjeta icono={ICONOS[c.k]} label={c.label} activo={elegido === c.k} className={celdaSub(c)}
                   title={elegido === c.k ? 'Quitar el filtro' : `${c.title}. Tocá para ver esos leads.`}
                   onClick={() => alternar(c.k)}>
                   {numero(data?.resumen[c.k])}
                 </Tarjeta>
+                )}
                 {/* La tasa no filtra (no es un conjunto de leads): tocarla la explica. */}
                 {c.k === TRAS && (
                   <Explicacion c={TASA} align="start" className={TARJETA}>
@@ -296,6 +310,7 @@ const TARJETA = 'group flex cursor-pointer flex-col items-center gap-1.5 rounded
    un commit; `hover`, si reacciona al `group` de afuera (en la tabla el `group` es la fila). */
 const TONOS_DEL_CIRCULO = {
   verde: 'bg-(--success-soft) text-(--success-fg) [border-color:color-mix(in_oklab,var(--success)_45%,transparent)]',
+  amarillo: 'bg-(--warning-soft) text-(--warning-fg) [border-color:color-mix(in_oklab,var(--warning)_55%,transparent)]',
   rojo: 'bg-(--danger-soft) text-(--danger-fg) [border-color:color-mix(in_oklab,var(--danger)_40%,transparent)]',
 } as const
 
@@ -321,23 +336,24 @@ function Circulo({ icono: Icono, activo = false, compacto = false, tono, hover =
   )
 }
 
-function ContenidoDeTarjeta({ icono, label, activo = false, children }: {
-  icono: LucideIcon; label: React.ReactNode; activo?: boolean; children: React.ReactNode
+function ContenidoDeTarjeta({ icono, label, activo = false, tono, children }: {
+  icono: LucideIcon; label: React.ReactNode; activo?: boolean; tono?: keyof typeof TONOS_DEL_CIRCULO; children: React.ReactNode
 }) {
   return (
     <>
-      <Circulo icono={icono} activo={activo}>{children}</Circulo>
+      <Circulo icono={icono} activo={activo} tono={tono}>{children}</Circulo>
       <span className={cn('max-w-[96px] text-[11.5px] leading-tight', activo ? 'font-semibold text-(--brand)' : 'text-(--fg-2)')}>{label}</span>
     </>
   )
 }
 
-function Tarjeta({ icono, label, activo, title, onClick, className, children }: {
-  icono: LucideIcon; label: string; activo: boolean; title: string; onClick: () => void; className?: string; children: React.ReactNode
+function Tarjeta({ icono, label, activo, title, tono, onClick, className, children }: {
+  icono: LucideIcon; label: string; activo: boolean; title?: string; tono?: keyof typeof TONOS_DEL_CIRCULO
+  onClick: () => void; className?: string; children: React.ReactNode
 }) {
   return (
     <button type="button" aria-pressed={activo} title={title} onClick={onClick} className={cn(TARJETA, className)}>
-      <ContenidoDeTarjeta icono={icono} label={label} activo={activo}>{children}</ContenidoDeTarjeta>
+      <ContenidoDeTarjeta icono={icono} label={label} activo={activo} tono={tono}>{children}</ContenidoDeTarjeta>
     </button>
   )
 }
