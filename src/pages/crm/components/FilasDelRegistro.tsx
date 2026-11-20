@@ -252,15 +252,15 @@ export function CampoDecisorApuntado({ id, valor, onCambiar, title }: { id: stri
 export type BloqueDelDecisor = {
   nombre: boolean | null; nombreValor: string
   telefono: boolean | null; telefonoValor: string; prefijo: string
-  horario: boolean | null; horarioValor: string
+  /** «Horario del decisor / próximo contacto» (19/11/2026, por pedido: eran dos preguntas): con Sí,
+   *  cuándo se lo encuentra (texto) y el día y la hora de España de la tarea «Llamar al decisor»
+   *  (sin elegir de entrada: hay que mirarlos). Los tres obligatorios. */
+  horario: boolean | null; horarioValor: string; proximoFecha: string | null; proximoHora: string
   email: boolean | null; emailValor: string
-  /** «Próximo contacto» (19/11/2026, por pedido): si se acordó horario para llamar al decisor y,
-   *  con Sí, el día y la hora de España (sin elegir de entrada: hay que mirarlos). */
-  proximo: boolean | null; proximoFecha: string | null; proximoHora: string
 }
 export const BLOQUE_DEL_DECISOR_VACIO: BloqueDelDecisor = {
-  nombre: null, nombreValor: '', telefono: null, telefonoValor: '', prefijo: PREFIJOS_DE_PAIS[0].prefijo, horario: null, horarioValor: '', email: null, emailValor: '',
-  proximo: null, proximoFecha: null, proximoHora: '',
+  nombre: null, nombreValor: '', telefono: null, telefonoValor: '', prefijo: PREFIJOS_DE_PAIS[0].prefijo,
+  horario: null, horarioValor: '', proximoFecha: null, proximoHora: '', email: null, emailValor: '',
 }
 
 function FilaSiNo({ rotulo, valor, onCambiar, rojo, children }: {
@@ -312,28 +312,29 @@ export function BloqueDecisor({ valor, onCambiar, rojo, avisoProximo }: {
             title="Se carga en el perfil, en el contacto del decisor, al registrar" className={campoEscrito} />
         </span>
       </FilaSiNo>
-      <FilaSiNo rotulo="Horario del decisor conseguido" valor={valor.horario} onCambiar={v => onCambiar({ horario: v })} rojo={rojo.horario}>
-        <input value={valor.horarioValor} onChange={e => onCambiar({ horarioValor: e.target.value })}
-          aria-label="Horario del decisor" aria-invalid={rojo.horario} placeholder="Ej.: martes y jueves de 10 a 12"
-          title="Cuándo se lo encuentra. Queda en la actividad" className={campoEscrito} />
-      </FilaSiNo>
       <FilaSiNo rotulo="Email para enviar" valor={valor.email} onCambiar={v => onCambiar({ email: v })} rojo={rojo.email}>
         <input value={valor.emailValor} onChange={e => onCambiar({ emailValor: e.target.value })}
           type="email" aria-label="Email del decisor" aria-invalid={rojo.email} placeholder="casilla@inmobiliaria.com"
           title="Al registrar se abre «Mensajes» con este «Para»" className={campoEscrito} />
       </FilaSiNo>
-      {/* «Próximo contacto» (19/11/2026, por pedido): con Sí, el día y la hora como en «Nueva tarea»
-          (mismas pastillas y misma hora de España); al registrar queda como tarea «Llamar al decisor». */}
-      <FilaSiNo rotulo="Próximo contacto: ¿se acordó horario para llamar al decisor?" valor={valor.proximo}
-        onCambiar={v => onCambiar({ proximo: v })} rojo={rojo.proximo}>
+      {/* «Horario del decisor / próximo contacto» (19/11/2026, por pedido: juntó «Horario del decisor
+          conseguido» y «Próximo contacto»): con Sí, cuándo se lo encuentra (texto libre, que el
+          doorkeeper da horarios vagos) y el día y la hora como en «Nueva tarea» (mismas pastillas y
+          misma hora de España). Los tres son obligatorios: al registrar se crea «Llamar al decisor». */}
+      <FilaSiNo rotulo="Horario del decisor / próximo contacto conseguido" valor={valor.horario}
+        onCambiar={v => onCambiar({ horario: v })} rojo={rojo.horario || rojo.proximo}>
         <div className="flex basis-full flex-col gap-1.5 pt-0.5">
+          <input value={valor.horarioValor} onChange={e => onCambiar({ horarioValor: e.target.value })}
+            aria-label="Horario del decisor" aria-invalid={rojo.horario} placeholder="Cuándo se lo encuentra. Ej.: martes y jueves de 10 a 12"
+            title="Queda en la actividad" className={cn(campoEscrito, rojo.horario && !valor.horarioValor.trim() && 'border-(--danger)')} />
+          <span className="text-[11.5px] text-(--fg-muted)">¿Cuándo lo llamás? Día y hora de la tarea:</span>
           <div className="flex flex-wrap items-center gap-1.5">
             <ChipsDeVencimiento value={valor.proximoFecha} onChange={v => onCambiar({ proximoFecha: v })} compacto />
           </div>
           <HoraDeEspana dueDate={valor.proximoFecha} value={valor.proximoHora} onChange={v => onCambiar({ proximoHora: v })}
             compacto rojo={rojo.proximo && valor.proximoFecha != null && !valor.proximoHora} />
           <span className="text-[11.5px] text-(--fg-muted)">
-            {ve ? `En Venezuela: ${textoVenezuela(ve)} · ` : ''}Al registrar se crea la tarea «Llamar al decisor», tuya, con alarma.
+            {ve ? `En Venezuela: ${textoVenezuela(ve)} · ` : ''}Día y hora obligatorios: al registrar se crea la tarea «Llamar al decisor», tuya, con alarma.
           </span>
           {avisoProximo && <span className="text-[11.5px] font-semibold text-(--danger)">{avisoProximo}</span>}
         </div>

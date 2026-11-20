@@ -336,16 +336,18 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     ? telefonoEscrito([], conPrefijoDePais(bloqueDecisor.prefijo, bloqueDecisor.telefonoValor))?.numero ?? '' : ''
   const horarioDelDecisor = bloqueDecisor.horario ? bloqueDecisor.horarioValor.trim().replace(/\s+/g, ' ') : ''
   const emailDelDecisor = bloqueDecisor.email && esEmailValido(bloqueDecisor.emailValor) ? bloqueDecisor.emailValor.trim() : ''
-  /* «Próximo contacto» (19/11/2026, por pedido): con Sí, día y hora de España obligatorios, y al
-     registrar se crea la tarea «Llamar al decisor» (`crearTareaDeProximoContacto`). */
-  const proximoContacto = proximoContactoDelBloque(bloqueDecisor.proximo, bloqueDecisor.proximoFecha, bloqueDecisor.proximoHora)
+  /* «Horario del decisor / próximo contacto» (19/11/2026, por pedido: eran dos preguntas): el mismo
+     Sí del horario pide además día y hora de España, obligatorios, y al registrar se crea la tarea
+     «Llamar al decisor» (`crearTareaDeProximoContacto`). */
+  const proximoContacto = proximoContactoDelBloque(bloqueDecisor.horario, bloqueDecisor.proximoFecha, bloqueDecisor.proximoHora)
   // Las cuatro se contestan siempre, Sí o No (18/11/2026, por pedido); el Sí además pide su campo.
   const faltaDelDecisor = {
     nombre: pideDecisorApuntado && (bloqueDecisor.nombre === null || (bloqueDecisor.nombre && !decisorApuntado)),
     telefono: pideDecisorApuntado && (bloqueDecisor.telefono === null || (bloqueDecisor.telefono && !telefonoDelDecisor)),
     horario: pideDecisorApuntado && (bloqueDecisor.horario === null || (bloqueDecisor.horario && !horarioDelDecisor)),
     email: pideDecisorApuntado && (bloqueDecisor.email === null || (bloqueDecisor.email && !emailDelDecisor)),
-    proximo: pideDecisorApuntado && proximoContacto.falta,
+    // Con Sí, sin día u hora no se registra: la tarea tiene que nacer con alarma.
+    proximo: pideDecisorApuntado && bloqueDecisor.horario === true && proximoContacto.falta,
   }
   // Lo del decisor que va en la meta de la actividad: solo lo que se pidió y se escribió.
   const metaDelDecisor = pideDecisorApuntado ? {
@@ -423,7 +425,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
      mientras, deja al lead donde estaba). De ahí sale si la tarea del próximo contacto se puede crear. */
   const etapaElegidaObj = etapaElegida ? etapasPorId.get(etapaElegida) : undefined
   const etapaAlRegistrar = etapaElegidaObj && etapaElegidaObj.id !== descartada?.id ? etapaElegidaObj : actual
-  const avisoProximo = bloqueDecisor.proximo && etapaAlRegistrar && !permiteAgendarTarea(etapaAlRegistrar)
+  const avisoProximo = bloqueDecisor.horario && etapaAlRegistrar && !permiteAgendarTarea(etapaAlRegistrar)
     ? `En la etapa «${etapaAlRegistrar.label}» no se agendan tareas: el horario queda en la actividad, pero la tarea no se crea.`
     : null
   /* La tarea «Llamar al decisor» (19/11/2026, por pedido): de quien registra (`myId`, la sesión de

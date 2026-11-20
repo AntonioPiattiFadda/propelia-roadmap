@@ -623,8 +623,11 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   **Ese mismo día (por pedido) entró una cuarta, «Horario del decisor conseguido»**, después del teléfono:
   obligatoria como las otras y con el Sí un texto libre obligatorio («Ej.: martes y jueves de 10 a 12»; el
   doorkeeper da horarios vagos) que va solo a la meta (`horarioDecisor`) y a «Decisor conseguido», no al perfil.
-  **Y una quinta, la última del bloque, «Próximo contacto: ¿se acordó horario para llamar al decisor?»**
-  (19/11/2026, por pedido): obligatoria igual; con Sí, día (las pastillas de «Nueva tarea»,
+  **Y una quinta, «Próximo contacto: ¿se acordó horario para llamar al decisor?»**, que **ese mismo
+  19/11 (por pedido) se juntó con la del horario en una sola, la última del bloque: «Horario del
+  decisor / próximo contacto conseguido»**. Con Sí pide tres cosas, todas obligatorias: el horario en
+  texto (el de arriba) y el día y la hora de la tarea, así nace con alarma (`BloqueDelDecisor` ya no
+  tiene `proximo`: el Sí es `horario`). Lo que sigue vale igual. Con Sí, día (las pastillas de «Nueva tarea»,
   `ChipsDeVencimiento`) y hora de España (`HoraDeEspana`, el mismo desplegable con la hora de Venezuela,
   ahora compartido con `NewTaskSheet`), los dos obligatorios (`proximoContactoDelBloque`, `lib/actividad.ts`).
   Va a la meta como `proximoContactoDecisor: {fecha, hora}` y la actividad lo dice en su renglón
@@ -903,9 +906,6 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   / `telefonosDecisor`; `presentaciones` sigue valiendo). Espejo en el MCP (`crmReglas.ts`, `get_crm_goals`).
   Ese mismo día (por pedido) el grupo sumó un cuarto, «Horarios del decisor conseguidos» (`horariosDecisor`,
   llamadas y notas con `horarioDecisor` en la meta, `?objetivo=horariosDecisor`), también en el MCP.
-- **«Dashboard SDR»** (11/11/2026, por pedido; inspirado en un «SDR Pro Dashboard» de afuera, sin su
-  marca): botón del diálogo de Objetivos que abre un diálogo casi a pantalla completa
-  (`DashboardSdrDialog`, reglas puras en `lib/dashboardSdr.ts`, datos en `useDashboardSdr`). Una
 - **El ritmo del día** (19/11/2026, por pedido): el círculo «Contestadas» de Objetivos va en verde,
   amarillo o rojo según la meta que crece con la hora (jornada 10:30–18:00 con pausa 14–15, 390
   minutos; al cierre < 40 rojo, 40–49 amarillo, ≥ 50 verde fijo; 45 minutos de gracia en verde).
@@ -918,6 +918,9 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   y día (`crm-ritmo-avisos:<yo>:<día>`). **Solo con la app abierta, sin servidor ni migración**: no
   hay todavía copia a los SUPERADMIN (`paraSuperadmin` queda marcado en el aviso), ni parámetros por
   SDR editables, ni marcar día libre o media jornada (la lógica ya los soporta: `tipoDeDia`).
+- **«Dashboard SDR»** (11/11/2026, por pedido; inspirado en un «SDR Pro Dashboard» de afuera, sin su
+  marca): botón del diálogo de Objetivos que abre un diálogo casi a pantalla completa
+  (`DashboardSdrDialog`, reglas puras en `lib/dashboardSdr.ts`, datos en `useDashboardSdr`). Una
   persona por vez (el «yo» de pantalla; quien ve otras carteras elige), últimos 12 meses, pestañas
   Mes / Trimestre / Últimos 12 meses / Second Chance. **Todo sale de la base, nada se carga a mano**:
   llamadas y decisores de la actividad registrada (como Objetivos); demos = `crm_meetings` que creó la
