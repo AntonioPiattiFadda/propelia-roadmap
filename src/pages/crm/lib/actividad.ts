@@ -131,6 +131,13 @@ export function tituloDeLlamarAlDecisor(apuntado: string, delPerfil: readonly st
   return nombre ? `Llamar al decisor ${nombre}` : 'Llamar al decisor'
 }
 
+/** El título de la tarea del próximo contacto (20/11/2026, por pedido: se elige y se escribe).
+ *  `escrito` null = el campo no se tocó, así sigue al sugerido (y al nombre que se va cargando);
+ *  vaciado da '', que es lo que falta para registrar. */
+export function tituloDeLaTareaDelProximo(escrito: string | null, sugerido: string): string {
+  return escrito === null ? sugerido : escrito.trim().replace(/\s+/g, ' ')
+}
+
 /** «20/11 a las 10:30 (hora de España)». */
 const textoDelProximoContacto = (p: ProximoContactoDecisor) => `${fmtDayMonth(p.fecha)} a las ${p.hora} (hora de España)`
 

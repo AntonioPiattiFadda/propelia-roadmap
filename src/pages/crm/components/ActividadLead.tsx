@@ -18,7 +18,7 @@ import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useActualizarCliente, useActualizarLead, useMutacionDelDetalle } from '../hooks/useLeadMutaciones'
 import {
   agruparPorDia, armarMetaDeActividad, horaDe, INTENTOS_DE_CONTACTO, lineaDeTiempo, primeroLosUltimos, TEXTO_DE_LLAMADA, textoEditado,
-  pideAvancesDelDecisor, proximoContactoDelBloque, tituloDeLlamarAlDecisor, ultimoContacto,
+  pideAvancesDelDecisor, proximoContactoDelBloque, tituloDeLaTareaDelProximo, tituloDeLlamarAlDecisor, ultimoContacto,
   type ItemActividad, type MetaDeActividad, type ProximoContactoDecisor, type ResultadoDeLlamada,
 } from '../lib/actividad'
 import {
@@ -31,7 +31,9 @@ import { CRM_KEYS } from '../hooks/keys'
 import { useQueryClient } from '@tanstack/react-query'
 import { MensajesPredeterminadosDialog } from './MensajesPredeterminados'
 import { MeetingFormContent } from '@/pages/agenda/components/meetings/MeetingFormContent'
-import { GUIA_DE_DEMO, GUIA_DE_LLAMADA, type SeccionDeGuia } from '../lib/guiaDeLlamada'
+import {
+  GUIA_DE_DEMO, GUIA_DE_DISCOVERY, GUIA_DE_LLAMADA, PLACEHOLDER_DE_DISCOVERY, muestraDiscovery, type SeccionDeGuia,
+} from '../lib/guiaDeLlamada'
 import { DESCRIPCION_DE_DEMO, esEmailValido, invitadosDeLaDemo, RECORDATORIO_DE_DEMO, registroDeDemoDesdeLaActividad, tituloDeLaDemo } from '../lib/reuniones'
 import { actualizarComentario, cancelarReunion, crearComentario, crearTarea, marcarComentarioBorrado } from '../service/crm.service'
 import type { CrmLeadRow, CrmMeeting, CrmStage, LeadDetalle } from '../types'
@@ -119,6 +121,35 @@ function GuiaDelCompositor({ titulo, secciones }: { titulo: string; secciones: r
                 <li key={p.titulo} className="flex gap-1.5 text-[11.5px] leading-snug text-(--fg-muted)">
                   <CircleCheck size={12} aria-hidden className="mt-px shrink-0 text-(--fg-faint)" />
                   <span><span className="font-semibold text-(--fg-2)">{p.titulo}</span>{p.pista && <> — {p.pista}</>}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </aside>
+  )
+}
+
+/* Discovery (20/11/2026, por pedido): asoma a la izquierda de la ventana en cuanto se empieza a
+   escribir en llamada o notas (`muestraDiscovery`). Sutil a propósito: sin sombra fuerte, texto
+   tenue y entrada lenta, para acompañar sin tapar. Mientras se ve, reemplaza a la pestaña de la
+   guía de la llamada (las dos cuelgan del mismo borde). En el teléfono no va: no hay costado. */
+function DiscoveryAlCostado() {
+  return (
+    <aside aria-label="Guía de discovery"
+      className="absolute top-0 right-full mr-2 flex max-h-full w-[250px] flex-col overflow-hidden rounded-xl bg-white/85 backdrop-blur-sm shadow-[0_4px_16px_rgba(0,0,0,0.06)] [border:1px_solid_var(--line)] animate-in fade-in-0 slide-in-from-right-1 duration-500 max-md:hidden">
+      <div className="shrink-0 px-3 pt-2.5 pb-1.5">
+        <span className="text-[11px] font-semibold tracking-wide text-(--fg-faint) uppercase">Discovery</span>
+      </div>
+      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto px-3 pb-3">
+        {GUIA_DE_DISCOVERY.map(s => (
+          <section key={s.titulo} className="flex flex-col gap-1">
+            <h3 className="text-[11.5px] font-semibold text-(--fg-2)">{s.titulo}</h3>
+            <ul className="flex flex-col gap-1">
+              {s.pasos.map(p => (
+                <li key={p.titulo} className="text-[11px] leading-snug text-(--fg-muted)">
+                  {p.titulo}{p.pista && <span className="text-(--fg-faint)"> — {p.pista}</span>}
                 </li>
               ))}
             </ul>
@@ -340,6 +371,9 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
      Sí del horario pide además día y hora de España, obligatorios, y al registrar se crea la tarea
      «Llamar al decisor» (`crearTareaDeProximoContacto`). */
   const proximoContacto = proximoContactoDelBloque(bloqueDecisor.horario, bloqueDecisor.proximoFecha, bloqueDecisor.proximoHora)
+  // El título de la tarea se elige y se escribe (20/11/2026, por pedido); sin tocar, el sugerido.
+  const tituloSugeridoProximo = tituloDeLlamarAlDecisor(decisorApuntado, nombresDeDecisores(lead.client))
+  const tituloProximo = tituloDeLaTareaDelProximo(bloqueDecisor.proximoTitulo, tituloSugeridoProximo)
   // Las cuatro se contestan siempre, Sí o No (18/11/2026, por pedido); el Sí además pide su campo.
   const faltaDelDecisor = {
     nombre: pideDecisorApuntado && (bloqueDecisor.nombre === null || (bloqueDecisor.nombre && !decisorApuntado)),
@@ -348,6 +382,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     email: pideDecisorApuntado && (bloqueDecisor.email === null || (bloqueDecisor.email && !emailDelDecisor)),
     // Con Sí, sin día u hora no se registra: la tarea tiene que nacer con alarma.
     proximo: pideDecisorApuntado && bloqueDecisor.horario === true && proximoContacto.falta,
+    tarea: pideDecisorApuntado && bloqueDecisor.horario === true && !tituloProximo,
   }
   // Lo del decisor que va en la meta de la actividad: solo lo que se pidió y se escribió.
   const metaDelDecisor = pideDecisorApuntado ? {
@@ -487,6 +522,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
     decisorHorario: faltaDelDecisor.horario,
     decisorEmail: faltaDelDecisor.email,
     decisorProximo: faltaDelDecisor.proximo,
+    decisorTarea: faltaDelDecisor.tarea,
   }
   const enRojo = (k: keyof typeof falta) => intento && falta[k]
 
@@ -556,7 +592,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
       const nuevoDecisor = tipo === 'llamada' && sabido === null ? campoDelNuevoDecisor(conDecisor, elegidos, esDecisor) : null
       // Se toman antes de limpiar el formulario: el registro los vacía.
       const proximo = tipo === 'llamada' && pideDecisorApuntado ? proximoContacto.valor : null
-      const tituloProximo = tituloDeLlamarAlDecisor(decisorApuntado, nombresDeDecisores(lead.client))
+      const tituloDeLaTarea = tituloProximo
       const etapaDeLaTarea = etapaAlRegistrar
       // Si el único con quien se habló es uno escrito a mano y decide, se carga ya como decisor.
       const decisorNuevo = tipo === 'llamada' && esDecisor && elegidos.length === 1 && nuevos.includes(elegidos[0]) ? elegidos[0] : null
@@ -576,7 +612,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
           // El mail se abre ya; la tarea espera a que la etapa quede guardada (la mira el trigger).
           const etapaGuardada = moverEtapa()
           abrirMailAlDecisor()
-          if (proximo) void etapaGuardada.then(() => crearTareaDeProximoContacto(proximo, tituloProximo, etapaDeLaTarea))
+          if (proximo) void etapaGuardada.then(() => crearTareaDeProximoContacto(proximo, tituloDeLaTarea, etapaDeLaTarea))
         } })
     }
     else if (tipo === 'nota') {
@@ -601,8 +637,8 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
   const bloqueDelDecisor = (
     <BloqueDecisor valor={bloqueDecisor} onCambiar={cambiarBloqueDecisor}
       rojo={{ nombre: enRojo('decisorNombre'), telefono: enRojo('decisorTelefono'), horario: enRojo('decisorHorario'), email: enRojo('decisorEmail'),
-        proximo: enRojo('decisorProximo') }}
-      avisoProximo={avisoProximo} />
+        proximo: enRojo('decisorProximo'), tarea: enRojo('decisorTarea') }}
+      avisoProximo={avisoProximo} tituloSugerido={tituloSugeridoProximo} />
   )
 
   return (
@@ -730,7 +766,8 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
              scrollear. Si no entra en la pantalla, va adentro, como antes. */
           derecha={!esDemo && pideDecisorApuntado && decisorAlCostado ? bloqueDelDecisor : undefined}
           corrida={!esDemo && decisorAlCostado ? (ANCHO_DEL_COSTADO + 8) / 2 : 0}
-          lateral={tipo === 'llamada' ? <GuiaDelCompositor key="llamada" titulo="Guía de la llamada" secciones={GUIA_DE_LLAMADA} />
+          lateral={muestraDiscovery(tipo, texto) ? <DiscoveryAlCostado />
+            : tipo === 'llamada' ? <GuiaDelCompositor key="llamada" titulo="Guía de la llamada" secciones={GUIA_DE_LLAMADA} />
             : esDemo ? <GuiaDelCompositor key="demo" titulo="Guía de la demo" secciones={GUIA_DE_DEMO} />
             : undefined}>
           <div className="flex flex-col gap-3 p-4">
@@ -809,7 +846,7 @@ export function ActividadLead({ lead, detalle, cargando, puedeEscribir, pestana,
               // Con «Avances para contactar al decisor» adentro (pantalla angosta), más bajo: así la ventana no scrollea.
               rows={pideDecisorApuntado && !decisorAlCostado ? 3 : 6}
               aria-label="Registrar actividad"
-              placeholder={tipo === 'llamada' ? 'Qué se habló (opcional)…'
+              placeholder={tipo === 'llamada' || tipo === 'nota' ? PLACEHOLDER_DE_DISCOVERY
                 : tipo === 'fallido' ? 'Detalle (opcional): no atendió, buzón, número equivocado…'
                 : 'Escribí qué pasó o qué querés registrar…'}
               aria-invalid={enRojo('texto')}

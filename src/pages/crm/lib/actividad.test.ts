@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CrmMeeting, CrmTask, LeadDetalle, Usuario } from '../types'
 import {
   agruparPorDia, armarMetaDeActividad, decisorContactado, horaDe, leerMetaDeActividad, lineaDeTiempo, primeroLosUltimos, resumenDeLlamadas, textoEditado,
-  pideAvancesDelDecisor, proximoContactoDelBloque, tituloDeLlamarAlDecisor, ultimoContacto, type ItemActividad, type MetaDeActividad,
+  pideAvancesDelDecisor, proximoContactoDelBloque, tituloDeLaTareaDelProximo, tituloDeLlamarAlDecisor, ultimoContacto, type ItemActividad, type MetaDeActividad,
 } from './actividad'
 
 describe('proximoContactoDelBloque', () => {
@@ -23,6 +23,18 @@ describe('proximoContactoDelBloque', () => {
   it('un día o una hora con otra forma falta', () => {
     expect(proximoContactoDelBloque(true, '20/11', '10:30').falta).toBe(true)
     expect(proximoContactoDelBloque(true, '2026-11-20', '25 hs').falta).toBe(true)
+  })
+})
+
+describe('tituloDeLaTareaDelProximo', () => {
+  it('sin tocar el campo, vale el sugerido', () => {
+    expect(tituloDeLaTareaDelProximo(null, 'Llamar al decisor Jordi')).toBe('Llamar al decisor Jordi')
+  })
+  it('lo escrito manda, sin espacios de más', () => {
+    expect(tituloDeLaTareaDelProximo('  Mandar   propuesta a Jordi ', 'Llamar al decisor')).toBe('Mandar propuesta a Jordi')
+  })
+  it('vaciado queda vacío: es lo que falta', () => {
+    expect(tituloDeLaTareaDelProximo('   ', 'Llamar al decisor')).toBe('')
   })
 })
 

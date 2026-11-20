@@ -637,8 +637,10 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   ahora compartido con `NewTaskSheet`), los dos obligatorios (`proximoContactoDelBloque`, `lib/actividad.ts`).
   Va a la meta como `proximoContactoDecisor: {fecha, hora}` y la actividad lo dice en su renglón
   «Próximo contacto: 20/11 a las 10:30 (hora de España)» (`lineaDeTiempo`). Al registrar, **después de
-  guardar la etapa** (la mira el trigger), crea la tarea «Llamar al decisor <nombre>»
-  (`tituloDeLlamarAlDecisor`: el nombre conseguido en el bloque o el primer decisor del perfil) con ese
+  guardar la etapa** (la mira el trigger), crea la tarea con **el título que se escribió en «Tarea»**
+  (20/11/2026, por pedido: se elige y se escribe; obligatorio, vacío no registra). Arranca con
+  «Llamar al decisor <nombre>» (`tituloDeLlamarAlDecisor`: el nombre conseguido en el bloque o el primer
+  decisor del perfil), que lo sigue mientras no se toque (`proximoTitulo` null, `tituloDeLaTareaDelProximo`), con ese
   día y hora, de quien registra (`myId`, nunca el «Ver como»). Si la etapa en la que queda no deja
   agendar (`permiteAgendarTarea`), lo avisa debajo del Sí y no la crea; si el insert falla, la actividad
   queda y un toast lo explica (`mensajeDeError`). No suma objetivos ni toca el MCP. Sin migración.

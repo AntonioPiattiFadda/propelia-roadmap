@@ -256,11 +256,14 @@ export type BloqueDelDecisor = {
    *  cuándo se lo encuentra (texto) y el día y la hora de España de la tarea «Llamar al decisor»
    *  (sin elegir de entrada: hay que mirarlos). Los tres obligatorios. */
   horario: boolean | null; horarioValor: string; proximoFecha: string | null; proximoHora: string
+  /** El título de la tarea (20/11/2026, por pedido: se elige y se escribe). null = sin tocar: se
+   *  muestra y se usa el sugerido (`tituloDeLaTareaDelProximo`). */
+  proximoTitulo: string | null
   email: boolean | null; emailValor: string
 }
 export const BLOQUE_DEL_DECISOR_VACIO: BloqueDelDecisor = {
   nombre: null, nombreValor: '', telefono: null, telefonoValor: '', prefijo: PREFIJOS_DE_PAIS[0].prefijo,
-  horario: null, horarioValor: '', proximoFecha: null, proximoHora: '', email: null, emailValor: '',
+  horario: null, horarioValor: '', proximoFecha: null, proximoHora: '', proximoTitulo: null, email: null, emailValor: '',
 }
 
 function FilaSiNo({ rotulo, valor, onCambiar, rojo, children }: {
@@ -283,12 +286,14 @@ function FilaSiNo({ rotulo, valor, onCambiar, rojo, children }: {
   )
 }
 
-export function BloqueDecisor({ valor, onCambiar, rojo, avisoProximo }: {
+export function BloqueDecisor({ valor, onCambiar, rojo, avisoProximo, tituloSugerido }: {
   valor: BloqueDelDecisor
   onCambiar: (parcial: Partial<BloqueDelDecisor>) => void
-  rojo: { nombre: boolean; telefono: boolean; horario: boolean; email: boolean; proximo: boolean }
+  rojo: { nombre: boolean; telefono: boolean; horario: boolean; email: boolean; proximo: boolean; tarea: boolean }
   /** Debajo del Sí de «Próximo contacto»: por qué no se va a poder crear la tarea (la etapa no deja). */
   avisoProximo?: string | null
+  /** El título que arranca escrito en «Tarea» mientras no se lo toque (`tituloDeLlamarAlDecisor`). */
+  tituloSugerido: string
 }) {
   const ve = valor.proximoFecha && valor.proximoHora ? horaEnVenezuela(valor.proximoFecha, valor.proximoHora) : null
   return (
@@ -322,19 +327,27 @@ export function BloqueDecisor({ valor, onCambiar, rojo, avisoProximo }: {
           doorkeeper da horarios vagos) y el día y la hora como en «Nueva tarea» (mismas pastillas y
           misma hora de España). Los tres son obligatorios: al registrar se crea «Llamar al decisor». */}
       <FilaSiNo rotulo="Horario del decisor / próximo contacto conseguido" valor={valor.horario}
-        onCambiar={v => onCambiar({ horario: v })} rojo={rojo.horario || rojo.proximo}>
+        onCambiar={v => onCambiar({ horario: v })} rojo={rojo.horario || rojo.proximo || rojo.tarea}>
         <div className="flex basis-full flex-col gap-1.5 pt-0.5">
           <input value={valor.horarioValor} onChange={e => onCambiar({ horarioValor: e.target.value })}
             aria-label="Horario del decisor" aria-invalid={rojo.horario} placeholder="Cuándo se lo encuentra. Ej.: martes y jueves de 10 a 12"
             title="Queda en la actividad" className={cn(campoEscrito, rojo.horario && !valor.horarioValor.trim() && 'border-(--danger)')} />
-          <span className="text-[11.5px] text-(--fg-muted)">¿Cuándo lo llamás? Día y hora de la tarea:</span>
+          {/* El título de la tarea se elige y se escribe (20/11/2026, por pedido): arranca con el
+              sugerido, que sigue al nombre del decisor mientras no se lo toque. Vacío no registra. */}
+          <label className="flex flex-col gap-1">
+            <span className={cn('text-[11.5px] text-(--fg-muted)', rojo.tarea && 'font-semibold text-(--danger)')}>Tarea</span>
+            <input value={valor.proximoTitulo ?? tituloSugerido} onChange={e => onCambiar({ proximoTitulo: e.target.value })}
+              aria-label="Título de la tarea del próximo contacto" aria-invalid={rojo.tarea} placeholder="Qué hay que hacer. Ej.: Llamar al decisor"
+              className={cn(campoEscrito, rojo.tarea && 'border-(--danger)')} />
+          </label>
+          <span className="text-[11.5px] text-(--fg-muted)">¿Cuándo? Día y hora de la tarea:</span>
           <div className="flex flex-wrap items-center gap-1.5">
             <ChipsDeVencimiento value={valor.proximoFecha} onChange={v => onCambiar({ proximoFecha: v })} compacto />
           </div>
           <HoraDeEspana dueDate={valor.proximoFecha} value={valor.proximoHora} onChange={v => onCambiar({ proximoHora: v })}
             compacto rojo={rojo.proximo && valor.proximoFecha != null && !valor.proximoHora} />
           <span className="text-[11.5px] text-(--fg-muted)">
-            {ve ? `En Venezuela: ${textoVenezuela(ve)} · ` : ''}Día y hora obligatorios: al registrar se crea la tarea «Llamar al decisor», tuya, con alarma.
+            {ve ? `En Venezuela: ${textoVenezuela(ve)} · ` : ''}Tarea, día y hora obligatorios: al registrar se crea, tuya, con alarma.
           </span>
           {avisoProximo && <span className="text-[11.5px] font-semibold text-(--danger)">{avisoProximo}</span>}
         </div>
