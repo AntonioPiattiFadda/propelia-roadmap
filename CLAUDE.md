@@ -74,14 +74,11 @@ supabase db push                  # aplica al remoto y lo registra
   remoto. `mcp__supabase__execute_sql` **sí**, pero **solo para leer**: inspeccionar el esquema,
   `pg_policies`, `pg_proc`, verificar que una migración quedó corrida, correr
   `supabase/tests/crm-permisos.sql` (que termina en `rollback`).
-- **Quién hace qué** — se mira `git config user.email` del repo, **no** el `userEmail` de la
-  sesión de Claude Code, que puede mostrar el de otra persona:
-  - **Lorenzo** (`lorenzopiattifadda@gmail.com`): crea la migración y la commitea en su rama,
-    **pero no la aplica**. No se le propone `db push` ni se le pasa el comando. Al terminar se le
-    recuerda que la aplica Antonio después de revisarla y mergearla.
-  - **Antonio** (`antonio.piattifadda@gmail.com`): revisa, mergea y aplica con `supabase db push`.
-    Si el archivo tiene un timestamp anterior a la última migración ya aplicada, se **renombra con
-    un timestamp nuevo** antes de aplicar (el contenido no cambia, solo el nombre).
+- **Lorenzo y Antonio pueden hacer todo** (17/11/2026, por pedido): cualquiera de los dos crea,
+  revisa, mergea y aplica con `supabase db push`. Lo que dicen las secciones de abajo como
+  «migración …, que la aplica Antonio» es historia de cuando había ese reparto.
+- Si el archivo tiene un timestamp anterior a la última migración ya aplicada, se **renombra con
+  un timestamp nuevo** antes de aplicar (el contenido no cambia, solo el nombre).
 - **`supabase/schema.sql` sigue siendo la foto entera** para levantar un proyecto vacío. Las
   migraciones son la historia sobre el proyecto que ya existe: todo cambio va en los dos lados.
 - **Las funciones se migran con `create or replace function` completo**, nunca un fragmento: el
@@ -274,6 +271,14 @@ Antonio**. Todo en `docs/mcp/README.md`, con la tabla de tools.
   Sin teléfonos ni emails, y sin lo que vive fuera de la base (Google Calendar, el puente), por pedido. Faltan
   Roadmap, Clientes, Equipo, Caja y Ajustes (`docs/mcp/README.md`).
 
+- **Avisos para la SDR por el conector** (19/11/2026, por pedido; migración `20261119181041_crm_lead_avisos`):
+  la **única escritura** del MCP. `add_crm_lead_notice` deja en un lead un aviso tipo «Te olvidaste de cargar
+  el decisor» (tabla `crm_lead_avisos`), por defecto para el responsable del lead. Va por la RPC `security
+  definer` `mcp_crm_avisar_lead`, la única en `mcp_oauth_write_rpcs()` (el guard deja POST solo ahí; patrón de
+  propelia-frontend), que exige poder escribir la cartera y un destinatario que la vea. La SDR lo ve en rojo
+  arriba del lead (`AvisosDelLead`), en la campana del CRM y en un toast (`useToastsDeAvisos`, en `AppLayout`)
+  hasta que alguien lo marca «Listo» (quien escribe la cartera o el destinatario; la app solo toca
+  `resuelto_at`). No se crean desde la app. Detalle en `docs/mcp/README.md` › Avisos para la SDR.
 - **El token del conector solo sirve para el MCP**: es un JWT del usuario con `client_id`, y la
   base (guard de PostgREST + RLS restrictiva en todas las tablas + Storage) y las edge functions
   (`withoutOAuthClients`) lo cortan en todo lo demás. **Una tabla nueva** termina su migración con
@@ -350,7 +355,7 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   (migración `20261027154657_onboarding_mail_de_acceso_no_llego`, que **la aplica Antonio**) crea en
   el lead la tarea del CRM «Revisar el mail de acceso que no llegó a …», con alarma en 5 minutos,
   **para quien mandó el mail** (19/11/2026, por pedido, migración
-  `20261119155551_crm_emails_acceso_tarea_a_quien_lo_mando`, que **la aplica Antonio**; hasta ese día
+  `20261119183447_crm_emails_acceso_tarea_a_quien_lo_mando`, que **la aplica Antonio**; hasta ese día
   era de quien lleva el alta o del responsable del lead). Los envíos de antes van sin lead: no la crean.
   Con alguno que no llegó, debajo aparece además el tilde «Enviar mensaje al cliente para que corrija
   los mails que están mal» (`TAREA_CORREGIR_MAILS`, `contacto.corregir-mails`, a mano).
@@ -918,6 +923,21 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   y día (`crm-ritmo-avisos:<yo>:<día>`). **Solo con la app abierta, sin servidor ni migración**: no
   hay todavía copia a los SUPERADMIN (`paraSuperadmin` queda marcado en el aviso), ni parámetros por
   SDR editables, ni marcar día libre o media jornada (la lógica ya los soporta: `tipoDeDia`).
+- **«Minutos sin llamar»** (19/11/2026, por pedido; migración `20261119181855_crm_call_gaps`): primera
+  tarjeta de «Objetivos de hoy», en horas y minutos («1:05»), de la persona elegida en los chips. Es la
+  **suma de los baches del día** y el círculo va en semáforo (`tonoSinLlamar`, `lib/minutosSinLlamar.ts`):
+  menos de 30 min verde, hasta 60 amarillo, más de 60 rojo; sin dato, gris. No filtra: tocarla la explica.
+  Sigue al día elegido con las flechas de los Objetivos y debajo del nombre dice «calculado hace …»
+  (`haceCuanto`, del `updated_at` de la fila). Sale de
+  `crm_call_gaps` (una fila por persona y día de España: `min_sin_llamar`, `baches`, `detalle`), que
+  **escribe solo el cron de Aircall** (19:05, lunes a viernes) por el conector MCP con `save_call_gaps`
+  (RPC `mcp_crm_save_call_gaps`, solo SUPERADMIN, upsert por día y persona). Hasta que corre, «–». El
+  cálculo vive en el cron (10–14 y 15–19 de Madrid, bache = 15 min o más) y el mapeo Aircall → cuenta en
+  `users.aircall_ids` (sale por `list_team`). Por el conector: `get_crm_goals` suma `min_sin_llamar`,
+  `baches` y `dias_con_dato` (null sin ningún día cargado) y `get_call_gaps` da el detalle por día.
+  La RLS es la de los Objetivos (`crm_puede(persona_id, 'read')`). Ojo: esa migración no llama a
+  `oauth_guard_apply()` (con `users` bloqueada chocaba con el tráfico vivo: deadlock) y pone la policy
+  restrictiva solo en su tabla.
 - **«Dashboard SDR»** (11/11/2026, por pedido; inspirado en un «SDR Pro Dashboard» de afuera, sin su
   marca): botón del diálogo de Objetivos que abre un diálogo casi a pantalla completa
   (`DashboardSdrDialog`, reglas puras en `lib/dashboardSdr.ts`, datos en `useDashboardSdr`). Una

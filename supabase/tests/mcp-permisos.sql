@@ -14,6 +14,9 @@
 --   2. Lo que va más allá de la RLS, por rol: roadmap, caja, altas y notas de la demo.
 --   3. Los leads de prueba (`solo_para`) no salen ni para otro SUPERADMIN.
 --   4. Con el token del conector (`client_id`), las tablas devuelven cero y las vistas lo mismo.
+--   5. La única escritura (`mcp_crm_avisar_lead`, avisos para la SDR): quién puede dejar un aviso
+--      en qué lead y para quién, que anda con el token del conector, y que el «Listo» de la app
+--      toca sólo `resuelto_at` (20261119181041_crm_lead_avisos).
 --
 -- Sólo mira filas de prueba (por id o por lead, con `= any`): recorrer la tabla entera con el rol
 -- `authenticated` paga la RLS de cada fila (README › Cuánto cuesta cada consulta).
@@ -81,6 +84,11 @@ insert into public.crm_emails (id, resend_id, sent_by, to_email, lead_id, status
   -- Sin lead: lo ve sólo quien lo mandó.
   ('00000000-0000-4000-9000-00000000f0f0', 'mcp-prueba-f', '00000000-0000-4000-9000-00000000a002', 'xf@prueba.test', null, 'bounced');
 
+insert into public.crm_lead_avisos (id, lead_id, texto, para, created_by) values
+  ('00000000-0000-4000-9000-0000000aa001', '00000000-0000-4000-9000-00000000c001', 'Falta el decisor', '00000000-0000-4000-9000-00000000a001', '00000000-0000-4000-9000-00000000a0a0'),
+  ('00000000-0000-4000-9000-0000000aa002', '00000000-0000-4000-9000-00000000c002', 'Falta el decisor', '00000000-0000-4000-9000-00000000a002', '00000000-0000-4000-9000-00000000a0a0'),
+  ('00000000-0000-4000-9000-0000000aa005', '00000000-0000-4000-9000-00000000c005', 'Falta el decisor', '00000000-0000-4000-9000-00000000a0a0', '00000000-0000-4000-9000-00000000a0a0');
+
 insert into public.client_onboardings (lead_id) values
   ('00000000-0000-4000-9000-00000000c001'), ('00000000-0000-4000-9000-00000000c005');
 
@@ -120,7 +128,8 @@ begin
     ['mcp_crm_comments', 'crm_comments', leads],
     ['mcp_crm_stage_history', 'crm_stage_history', leads],
     ['mcp_crm_assignment_history', 'crm_assignment_history', leads],
-    ['mcp_crm_emails', 'crm_emails', $f$id = any(array['00000000-0000-4000-9000-00000000f001','00000000-0000-4000-9000-00000000f002','00000000-0000-4000-9000-00000000f005','00000000-0000-4000-9000-00000000f0f0']::uuid[])$f$]
+    ['mcp_crm_emails', 'crm_emails', $f$id = any(array['00000000-0000-4000-9000-00000000f001','00000000-0000-4000-9000-00000000f002','00000000-0000-4000-9000-00000000f005','00000000-0000-4000-9000-00000000f0f0']::uuid[])$f$],
+    ['mcp_crm_lead_avisos', 'crm_lead_avisos', leads]
   ] loop
     vista := public.mcp_prueba_ids(par[1], par[3]);
     tabla := public.mcp_prueba_ids(par[2], par[3]);
@@ -213,6 +222,69 @@ begin
   if n <> 0 then raise exception 'FALLO (6b): con el token del conector, la tabla expenses devuelve % filas', n; end if;
 end $$;
 select public.mcp_prueba_cortes('ADMIN por el conector', roadmap => 1, caja => 1, altas => 2, notas_demo => 2, leads => 3);
+reset role;
+
+-- ---------- 7. Avisos para la SDR: la única escritura del conector ----------
+-- Lo que contesta la RPC, como quien llama.
+create function public.mcp_prueba_avisar(quien text, lead text, para text, esperado text)
+returns void language plpgsql as $$
+declare r jsonb;
+begin
+  r := public.mcp_crm_avisar_lead(lead::uuid, 'Te olvidaste de cargar el decisor', para::uuid);
+  if r ->> 'status' is distinct from esperado then
+    raise exception 'FALLO (%: avisar en % para %): contestó %, esperaba %', quien, lead, coalesce(para, 'el responsable'), r, esperado;
+  end if;
+end $$;
+grant execute on function public.mcp_prueba_avisar(text, text, text, text) to authenticated;
+
+-- SDR1 (con read sobre SDR2, del caso 2): en su lead sí, por defecto para él; en el de SDR2 lo ve
+-- pero no escribe; para SDR2 en su propio lead no (SDR2 no ve esa cartera); el de prueba ni lo ve.
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-9000-00000000a001","role":"authenticated"}';
+select public.mcp_prueba_avisar('SDR1', '00000000-0000-4000-9000-00000000c001', null, 'ok');
+select public.mcp_prueba_avisar('SDR1', '00000000-0000-4000-9000-00000000c002', null, 'forbidden');
+select public.mcp_prueba_avisar('SDR1', '00000000-0000-4000-9000-00000000c001', '00000000-0000-4000-9000-00000000a002', 'forbidden_para');
+select public.mcp_prueba_avisar('SDR1', '00000000-0000-4000-9000-00000000c005', null, 'not_found');
+-- El «Listo» del aviso que es para él: sí. Cambiarle el texto: no (sólo hay grant de resuelto_*).
+do $$
+declare n int;
+begin
+  update public.crm_lead_avisos set resuelto_at = now() where id = '00000000-0000-4000-9000-0000000aa001';
+  get diagnostics n = row_count;
+  if n <> 1 then raise exception 'FALLO (7a): SDR1 no pudo marcar «Listo» su aviso'; end if;
+  begin
+    update public.crm_lead_avisos set texto = 'otro' where id = '00000000-0000-4000-9000-0000000aa001';
+    raise exception 'FALLO (7b): SDR1 pudo cambiar el texto de un aviso';
+  exception when insufficient_privilege then null;
+  end;
+  update public.crm_lead_avisos set resuelto_at = now() where id = '00000000-0000-4000-9000-0000000aa002';
+  get diagnostics n = row_count;
+  if n <> 0 then raise exception 'FALLO (7c): SDR1 marcó «Listo» un aviso de un lead que sólo lee y no es para él'; end if;
+end $$;
+reset role;
+do $$
+begin
+  if (select resuelto_por from public.crm_lead_avisos where id = '00000000-0000-4000-9000-0000000aa001')
+     is distinct from '00000000-0000-4000-9000-00000000a001'::uuid then
+    raise exception 'FALLO (7d): el «Listo» no quedó a nombre de quien lo marcó';
+  end if;
+end $$;
+
+-- Un SUPERADMIN por el conector (token con client_id): avisa en cualquier cartera y para quien la
+-- ve; el lead de prueba de otro, no. Y la tabla sigue cerrada para el token.
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"00000000-0000-4000-9000-00000000a0a1","role":"authenticated","client_id":"00000000-0000-4000-9000-0000000000c1"}';
+select public.mcp_prueba_avisar('ADMIN2 por el conector', '00000000-0000-4000-9000-00000000c001', null, 'ok');
+select public.mcp_prueba_avisar('ADMIN2 por el conector', '00000000-0000-4000-9000-00000000c001', '00000000-0000-4000-9000-00000000a0a0', 'ok');
+select public.mcp_prueba_avisar('ADMIN2 por el conector', '00000000-0000-4000-9000-00000000c005', null, 'not_found');
+do $$
+declare n int;
+begin
+  n := public.mcp_prueba_cuantas('crm_lead_avisos', 'true');
+  if n <> 0 then raise exception 'FALLO (7e): con el token del conector, la tabla crm_lead_avisos devuelve % filas', n; end if;
+  n := public.mcp_prueba_cuantas('mcp_crm_lead_avisos', $f$lead_id = '00000000-0000-4000-9000-00000000c001'::uuid$f$);
+  if n <> 4 then raise exception 'FALLO (7f): por el conector se ven % avisos del lead de SDR1, esperaba 4 (el fixture y los tres de arriba)', n; end if;
+end $$;
 reset role;
 
 select 'mcp-permisos: OK' as resultado;

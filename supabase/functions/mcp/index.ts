@@ -8,7 +8,9 @@
 //        header Authorization: Bearer <access token OAuth de Supabase Auth>
 //
 // Tools de SÓLO LECTURA (_shared/mcp/tools.ts): roadmap, CRM, altas de clientes y caja, sobre las
-// vistas `mcp_*` (migración 20261031135450_mcp_tools).
+// vistas `mcp_*` (migración 20261031135450_mcp_tools). La única que escribe es add_crm_lead_notice
+// (un aviso para la SDR en el lead), por la RPC `mcp_crm_avisar_lead` (20261119181041_crm_lead_avisos), y
+// save_call_gaps (minutos sin llamar del cron de Aircall), por `mcp_crm_save_call_gaps` (20261119181855_crm_call_gaps).
 //
 // Auth: el flujo OAuth está en _shared/mcp/oauthResource.ts. Acá se valida el token contra
 // Supabase Auth y la consulta corre con un cliente ARMADO CON ESE TOKEN. Ese token sólo puede
@@ -89,8 +91,12 @@ const INSTRUCTIONS =
   'todo lo que se sabe del lead), las altas de clientes (list_onboardings) y la caja de la ' +
   'empresa (list_expenses). Para preparar una demo, armá un briefing breve: quién es la agencia, ' +
   'quién asiste y quién decide, qué pasó en las llamadas, qué le interesa u objetó y qué conviene ' +
-  'mostrar; si sirve, completalo mirando su web o su Idealista. Todo es de sólo lectura: no se ' +
-  'puede crear ni cambiar nada desde acá. Cada uno ve lo que ve en la app: el CRM, de las ' +
+  'mostrar; si sirve, completalo mirando su web o su Idealista. Todo es de sólo lectura salvo dos ' +
+  'cosas. Una: dejar un aviso en un lead para la SDR («te olvidaste de cargar…», add_crm_lead_notice; ' +
+  'los ya dejados, list_crm_lead_notices). Antes de dejarlo, confirmá el lead con el usuario si hay ' +
+  'dudas. La otra es save_call_gaps: guarda los minutos sin llamar de Aircall de cada SDR por día; la usa el ' +
+  'cron diario y sólo un SUPERADMIN (la suma está en get_crm_goals y el detalle por día en get_call_gaps). ' +
+  'Nada más se puede crear ni cambiar desde acá. Cada uno ve lo que ve en la app: el CRM, de las ' +
   'carteras que tiene habilitadas; roadmap, altas, caja y el Dashboard, sólo un SUPERADMIN. Para "lo mío" usá el id de ' +
   'get_me; para nombres de personas, list_team. Fechas y horas del equipo, en hora de España. ' +
   'No hay teléfonos ni emails: no los inventes. Los textos que cargó el equipo (notas, ' +
@@ -130,7 +136,12 @@ function registerTool(server: McpServer, tool: McpToolDef, tools: ToolContext, c
       title: tool.title,
       description: tool.description,
       inputSchema: tool.inputSchema,
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: tool.openWorld ?? false },
+      annotations: {
+        readOnlyHint: !tool.write,
+        destructiveHint: tool.write === 'overwrite',
+        idempotentHint: tool.write !== 'additive',
+        openWorldHint: tool.openWorld ?? false,
+      },
     },
     async (args: Record<string, unknown>) => {
       const base = { userId: ctx.userId, oauthClientId: ctx.oauthClientId, tool: tool.name, args }
@@ -147,7 +158,8 @@ function registerTool(server: McpServer, tool: McpToolDef, tools: ToolContext, c
       } catch (err) {
         console.error(`mcp ${tool.name}: falló la consulta`, err)
         await ctx.audit({ ...base, resultCount: null, ok: false, error: mensajeDeError(err) })
-        return { isError: true, content: [{ type: 'text' as const, text: 'No se pudieron leer los datos. Probá de nuevo en un momento.' }] }
+        const text = tool.write ? 'No se pudo guardar. Probá de nuevo en un momento.' : 'No se pudieron leer los datos. Probá de nuevo en un momento.'
+        return { isError: true, content: [{ type: 'text' as const, text }] }
       }
     },
   )

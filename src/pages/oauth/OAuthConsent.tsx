@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Building2, Check, ListChecks, Loader2, ShieldCheck, UserRound, Wallet, X } from 'lucide-react'
+import { BellRing, Building2, Check, Clock, ListChecks, Loader2, ShieldCheck, UserRound, Wallet, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { supabase } from '@/lib/supabase'
 import { redirectTrust } from '@/lib/oauthRedirectTrust'
@@ -102,9 +102,11 @@ export function OAuthConsent() {
           <Permiso icono={Building2} texto="Ver el CRM como lo ves vos: leads de tus carteras con los filtros de la lista, contactos (nombre, rol y notas), tareas, demos y sus notas, actividad, tus objetivos, el Dashboard y el asunto de los correos enviados y si llegaron." />
           {/* Lo que sólo un SUPERADMIN ve en la app: a otro rol las vistas le devuelven vacío. */}
           <Permiso icono={Wallet} texto="Si sos SUPERADMIN, también las altas de clientes y la caja." />
-          <Permiso icono={UserRound} texto="Ver los nombres y roles del equipo." />
+          <Permiso icono={UserRound} texto="Ver los nombres y roles del equipo, y cómo figura cada uno en Aircall." />
+          <Permiso icono={BellRing} texto="Dejar avisos en los leads de las carteras que podés editar, para quien los lleva (ej. «Te olvidaste de cargar el decisor»)." />
+          <Permiso icono={Clock} texto="Si sos SUPERADMIN, guardar los minutos sin llamar de cada SDR que calcula el cron de Aircall." />
           <p className="pt-1 text-xs font-medium text-muted-foreground">No va a poder:</p>
-          <Permiso icono={X} texto="Crear, modificar ni borrar nada." apagado />
+          <Permiso icono={X} texto="Crear, modificar ni borrar nada más que esos avisos y los minutos sin llamar." apagado />
           <Permiso icono={X} texto="Ver teléfonos ni emails, ni los archivos adjuntos." apagado />
         </div>
 

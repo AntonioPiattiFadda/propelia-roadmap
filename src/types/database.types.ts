@@ -210,6 +210,39 @@ export type Database = {
           },
         ]
       }
+      crm_call_gaps: {
+        Row: {
+          baches: number
+          detalle: Json | null
+          fecha: string
+          id: string
+          min_sin_llamar: number
+          persona_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          baches: number
+          detalle?: Json | null
+          fecha: string
+          id?: string
+          min_sin_llamar: number
+          persona_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          baches?: number
+          detalle?: Json | null
+          fecha?: string
+          id?: string
+          min_sin_llamar?: number
+          persona_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       crm_assignment_history: {
         Row: {
           changed_at: string
@@ -696,6 +729,71 @@ export type Database = {
             columns: ["priority_id"]
             isOneToOne: false
             referencedRelation: "crm_priorities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      crm_lead_avisos: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          lead_id: string
+          para: string
+          resuelto_at: string | null
+          resuelto_por: string | null
+          source: string | null
+          texto: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          lead_id: string
+          para: string
+          resuelto_at?: string | null
+          resuelto_por?: string | null
+          source?: string | null
+          texto: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          lead_id?: string
+          para?: string
+          resuelto_at?: string | null
+          resuelto_por?: string | null
+          source?: string | null
+          texto?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crm_lead_avisos_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_lead_avisos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "crm_leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_lead_avisos_para_fkey"
+            columns: ["para"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "crm_lead_avisos_resuelto_por_fkey"
+            columns: ["resuelto_por"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]

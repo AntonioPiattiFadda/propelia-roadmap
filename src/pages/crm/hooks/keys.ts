@@ -26,6 +26,8 @@ export const CRM_KEYS = {
   envio: (resendId: string) => ['crm', 'emails', 'envio', resendId] as const,
   /** El último enviado de cada plantilla, que es con lo que arranca el diálogo. */
   plantillasGuardadas: ['crm', 'emails', 'plantillas'] as const,
+  /** Los avisos para la SDR pendientes (`crm_lead_avisos`): campana, toast y cartel del lead. */
+  avisos: ['crm', 'avisos'] as const,
   /** Prefijo del contador de llamadas del día. */
   llamadas: ['crm', 'llamadas'] as const,
   /** Las llamadas de `autor` desde el día `desde` (incluido) hasta `hasta` (excluido). */
@@ -33,6 +35,7 @@ export const CRM_KEYS = {
   /** «Hacia la próxima demo» de `autor`: las llamadas desde su última demo, sin corte por día.
    *  Cuelga de `llamadas`: lo que invalida el contador (actividad y reuniones) lo refresca. */
   haciaLaProximaDemo: (autor: string) => ['crm', 'llamadas', 'hacia-demo', autor] as const,
+  minutosSinLlamar: (persona: string, dia: string) => ['crm', 'minutos-sin-llamar', persona, dia] as const,
   /** El Dashboard SDR de `persona`: los últimos 12 meses desde `desde`. */
   dashboardSdr: (persona: string, desde: string) => ['crm', 'dashboard-sdr', persona, desde] as const,
   /** La meta de demos realizadas por mes (fila `crm-meta-sdr` de `roadmap_notas`). */

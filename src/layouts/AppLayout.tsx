@@ -7,6 +7,7 @@ import { useUserSession } from '@/hooks/useUserSession'
 import { useYo } from '@/hooks/useYo'
 import { useAlarmasDeTareas } from '@/pages/crm/hooks/useAlarmasDeTareas'
 import { useAvisosDeEmails } from '@/pages/crm/hooks/useEmails'
+import { useToastsDeAvisos } from '@/pages/crm/hooks/useAvisosDelLead'
 import { useAvisosDeDemos } from '@/pages/demos/hooks/useDemos'
 import { AvisosDelRitmo } from '@/pages/crm/components/RitmoDelDia'
 
@@ -20,6 +21,8 @@ export function AppLayout() {
   useAlarmasDeTareas(conCrm)
   // Lo mismo con los emails que no llegaron (20/10/2026): el toast sale aunque estés en otra página.
   useAvisosDeEmails(conCrm)
+  // Y los avisos en un lead que deja el conector MCP para la SDR (19/11/2026).
+  useToastsDeAvisos(conCrm)
   // Y la demo nueva (20/10/2026): solo a quien puede entrar a Demos, o sea a los SUPERADMIN.
   useAvisosDeDemos(!!yo && puedeEntrar(yo.rol, '/demos'))
 
