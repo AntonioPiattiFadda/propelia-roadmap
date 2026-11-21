@@ -25,7 +25,7 @@ import { escribirFiltros, filtrosDesdeUrl } from '../lib/leadFilterParams'
 import { hitoAlcanzado, mensajeDePropelin } from '../lib/propelin'
 import { ConGloboDelRitmo, useRitmoDelDia } from './RitmoDelDia'
 import {
-  diasHaciaAtras, LLAMADAS_POR_DEMO, mesesHaciaAtras, NUTRICION_DE_LA_CUENTA, nutricionDeLaCuenta, pendientesDePersona,
+  diasHaciaAtras, LLAMADAS_POR_DEMO, MAX_PENDIENTES_DE_AGENDAR, mesesHaciaAtras, NUTRICION_DE_LA_CUENTA, tonoDeTareas, nutricionDeLaCuenta, pendientesDePersona,
   progresoHaciaDemo, semanasHaciaAtras, sumarResumenes, tasaDeDecisor, tituloDeObjetivos,
   type HaciaLaProximaDemo as DatosHaciaDemo, type Objetivo, type PeriodoDeObjetivos, type TonoDeProgreso,
 } from '../lib/objetivos'
@@ -112,6 +112,16 @@ const SIN_LLAMAR: Explicado = {
   title: 'Tiempo en horario sin llamar, en baches de 15 minutos o más',
   explicacion: 'Los minutos en horario (10 a 14 y 15 a 19, hora de España) en que pasaron 15 minutos o más sin llamar, sumados (cada bache redondeado a minutos). Sale de Aircall: lo calcula un proceso que corre a las 19:05 de lunes a viernes, así que durante el día se ve «–». Se escribe en horas y minutos: 1:05 es una hora y cinco minutos. El círculo va en verde con menos de 30 minutos, en amarillo hasta una hora y en rojo con más.',
   fuente: 'Tabla crm_call_gaps (min_sin_llamar y baches) de la persona y el día de hoy en España. La carga el cron de Aircall por el conector MCP (save_call_gaps).',
+}
+
+/* «Tareas» (21/11/2026, by request): the first card, overdue tasks and leads pending a task in one.
+   «Bien» in green with no overdue task and at most 10 pending; red otherwise. It is «now», not of
+   the chosen day, for the person chosen in the chips. It does not filter: tapping explains it. */
+const TAREAS: Explicado = {
+  label: 'Tareas vencidas y por agendar',
+  title: 'Tareas vencidas y leads pendientes de agendar tarea, juntos',
+  explicacion: `Junta dos cosas de ahora (no del día elegido): las tareas tuyas vencidas (la de hoy no cuenta) y los leads de tu cartera en una etapa de «Seguimiento» sin ninguna tarea tuya pendiente (lo mismo que el chip «Pendiente agendar tarea»). Dice «Bien» en verde si no hay ninguna vencida y hay ${MAX_PENDIENTES_DE_AGENDAR} leads o menos por agendar; con alguna vencida o más de ${MAX_PENDIENTES_DE_AGENDAR} por agendar se pone en rojo y muestra vencidas · por agendar.`,
+  fuente: 'Tabla crm_tasks (pendientes, asignadas a la persona, con vencimiento anterior a hoy) y crm_leads (de su cartera, en etapa con gestión por tarea, sin tarea suya pendiente).',
 }
 
 /** El orden en que se dibujan las columnas: el grupo entra antes de su primera columna, y las
@@ -206,6 +216,11 @@ export function ContadorDeLlamadas() {
   const ritmo = useRitmoDelDia(data?.resumen.contestadas, dia, esHoy)
   const sinLlamar = useMinutosSinLlamar(personaId, esHoy ? undefined : dia)
   const calculado = haceCuanto(sinLlamar.data?.updated_at)
+  const leadsQ = useCrmLeads()
+  const tareasQ = useTareasPendientes()
+  const { etapasPorId } = useCrmCatalogos()
+  const pendientes = personaId && leadsQ.data && tareasQ.data
+    ? pendientesDePersona(personaId, leadsQ.data, tareasQ.data, etapasPorId, hoy) : undefined
   // Nace plegado, salvo que la URL ya filtre por uno de los suyos (un enlace viejo a
   // `?objetivo=presentaciones`): si no, la tarjeta prendida quedaría escondida.
   const [nutricionAbierta, setNutricionAbierta] = useState(
@@ -263,6 +278,21 @@ export function ContadorDeLlamadas() {
         <div className="flex flex-wrap gap-2 lg:flex-nowrap">
           <div role="group" aria-label={esHoy ? 'Lo registrado hoy' : `Lo registrado el ${dia}`}
             className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(96px,1fr))] justify-items-center gap-2">
+            <Explicacion c={TAREAS} align="start" className={TARJETA}>
+              <ContenidoDeTarjeta icono={ClockAlertIcon} tono={pendientes ? tonoDeTareas(pendientes) : null} label={<>
+                {TAREAS.label}
+                {pendientes && (
+                  <span className="block text-[10.5px] text-(--fg-muted) tabular-nums">
+                    {pendientes.vencidas} {pendientes.vencidas === 1 ? 'vencida' : 'vencidas'} · {pendientes.sinTarea} por agendar
+                  </span>
+                )}
+              </>}>
+                <span className={cn('tabular-nums', !pendientes && 'text-(--fg-faint)')}
+                  title={pendientes ? `${pendientes.vencidas} vencidas · ${pendientes.sinTarea} leads por agendar` : undefined}>
+                  {!pendientes ? '–' : tonoDeTareas(pendientes) === 'verde' ? 'Bien' : `${pendientes.vencidas}·${pendientes.sinTarea}`}
+                </span>
+              </ContenidoDeTarjeta>
+            </Explicacion>
             <Explicacion c={SIN_LLAMAR} align="start" className={TARJETA}>
               {/* Debajo del nombre, hace cuánto lo calculó el cron (19/11/2026, por pedido). */}
               <ContenidoDeTarjeta icono={CirclePauseIcon} tono={tonoSinLlamar(sinLlamar.data?.min_sin_llamar)} label={<>

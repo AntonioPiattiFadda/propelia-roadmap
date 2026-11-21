@@ -960,7 +960,13 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   y día (`crm-ritmo-avisos:<yo>:<día>`). **Solo con la app abierta, sin servidor ni migración**: no
   hay todavía copia a los SUPERADMIN (`paraSuperadmin` queda marcado en el aviso), ni parámetros por
   SDR editables, ni marcar día libre o media jornada (la lógica ya los soporta: `tipoDeDia`).
-- **«Minutos sin llamar»** (19/11/2026, por pedido; migración `20261119181855_crm_call_gaps`): primera
+- **«Tareas vencidas y por agendar»** (21/11/2026, por pedido): **primera** tarjeta de «Objetivos de
+  hoy», de la persona elegida en los chips y siempre de ahora (no del día de las flechas). Junta las
+  tareas suyas vencidas y los leads pendientes de agendar tarea (`pendientesDePersona`, lo mismo que
+  «Pendiente ahora» de «Comparar»). Dice «Bien» en verde sin vencidas y con hasta 10 por agendar
+  (`MAX_PENDIENTES_DE_AGENDAR`); si no, rojo con «vencidas·por agendar» (`tonoDeTareas`,
+  `lib/objetivos.ts`). No filtra: tocarla la explica. Sin migración.
+- **«Minutos sin llamar»** (19/11/2026, por pedido; migración `20261119181855_crm_call_gaps`): segunda
   tarjeta de «Objetivos de hoy», en horas y minutos («1:05»), de la persona elegida en los chips. Es la
   **suma de los baches del día** y el círculo va en semáforo (`tonoSinLlamar`, `lib/minutosSinLlamar.ts`):
   menos de 30 min verde, hasta 60 amarillo, más de 60 rojo; sin dato, gris. No filtra: tocarla la explica.
