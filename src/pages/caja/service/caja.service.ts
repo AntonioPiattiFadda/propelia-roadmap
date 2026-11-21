@@ -62,8 +62,10 @@ export async function getUsoDeEtiquetas(): Promise<Record<string, number>> {
 }
 
 /** Quién puede haber pagado: la gente de `users`, también los inactivos (un gasto viejo dice quién lo pagó). */
+/** Solo quienes ponen plata en la caja (`users.caja`, hoy Lorenzo y Antonio; 21/11/2026, por
+    pedido): las SDR no salen en «Pagó» ni en el resumen por persona. */
 export async function getPagadores(): Promise<Pagador[]> {
-  const { data, error } = await supabase.from('users').select('id, nombre, iniciales, color, activo').order('nombre')
+  const { data, error } = await supabase.from('users').select('id, nombre, iniciales, color, activo').eq('caja', true).order('nombre')
   if (error) throw error
   return data
 }

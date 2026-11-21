@@ -4,7 +4,7 @@ import { aEtiqueta, aGasto } from './mapeo'
 
 const filaGasto = (o: Partial<Tables<'expenses'>> = {}): Tables<'expenses'> => ({
   id: 'g1', preset_id: 'e1', expense_name: 'Vercel', expense_type: 'FIXED', amount: 20, date: '2026-10-15',
-  period: '2026-10', recurrence: 'MONTHLY', status: 'PAID', notes: null, created_by: null, paid_by: 'u1',
+  period: '2026-10', recurrence: 'MONTHLY', status: 'PAID', notes: null, created_by: null, paid_by: 'u1', paid_by_both: false,
   created_at: '2026-10-01T00:00:00Z', updated_at: '2026-10-01T00:00:00Z', deleted_at: null, ...o,
 })
 const filaEtiqueta = (o: Partial<Tables<'expense_presets'>> = {}): Tables<'expense_presets'> => ({

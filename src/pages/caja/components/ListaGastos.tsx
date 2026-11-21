@@ -45,7 +45,7 @@ export function ListaGastos({ filas, pagadores, variosMeses, cargando, error, on
   const subtotales = new Map(subtotalesPorMes(filas).map(s => [s.period, s.total]))
   let mesActual: string | null = null
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-card">
+    <section className="overflow-hidden rounded-lg border border-border bg-card">
       {filas.map(f => {
         const p = periodOf(f.fecha)
         const separador = variosMeses && p !== mesActual
@@ -53,7 +53,7 @@ export function ListaGastos({ filas, pagadores, variosMeses, cargando, error, on
         return (
           <div key={claveDe(f)} className="border-t border-(--line-soft) first:border-t-0">
             {separador && (
-              <div className="flex items-center justify-between bg-(--surface-2) px-4 py-2 text-xs font-semibold text-(--fg-2)">
+              <div className="flex items-center justify-between bg-(--surface-2) px-4 py-1 text-xs font-semibold text-(--fg-2)">
                 <span className="capitalize">{tituloDePeriodo(p)}</span>
                 <span className="tabular-nums">{eur(subtotales.get(p) ?? 0)}</span>
               </div>

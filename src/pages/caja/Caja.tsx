@@ -26,6 +26,7 @@ import { PropagarCambioDialog } from './components/PropagarCambioDialog'
 import { ResumenCaja } from './components/ResumenCaja'
 import { Segmentado } from './components/Segmentado'
 import { useCajaMutaciones } from './hooks/useCajaMutaciones'
+import { ID_NOTAS_CRYPTOS, ID_NOTAS_PRORRATEAR } from './hooks/useNotasDeCaja'
 import { useEtiquetas, usePagadores, useUsoDeEtiquetas } from './hooks/useEtiquetas'
 import { useGastos } from './hooks/useGastos'
 import { nuevaEtiqueta } from './lib/altas'
@@ -48,6 +49,22 @@ const textoDeRango = (from: string, to: string) =>
   from === to
     ? parseCalendarDay(from).toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' })
     : `${parseCalendarDay(from).toLocaleDateString('es-ES', DIA_CORTO)} → ${parseCalendarDay(to).toLocaleDateString('es-ES', DIA_CORTO)}`
+
+/* La columna de la derecha, en las dos vistas: «Claude Toni · extra empresa» y debajo un cuadro de
+   notas para los gastos a prorratear (21/11/2026, por pedido; su propia fila de `roadmap_notas`). */
+function ColumnaDerecha() {
+  return (
+    <div className="flex flex-col gap-3 lg:sticky lg:top-4">
+      <ClaudeToni />
+      <NotasCaja
+        id={ID_NOTAS_PRORRATEAR}
+        titulo="Gastos a prorratear"
+        placeholder="Anotá los gastos que hay que repartir…"
+        campoClassName="min-h-[80px]"
+      />
+    </div>
+  )
+}
 
 /* La Caja se mira por mes: el selector arranca en «Este mes entero». Los filtros (tipo, pendientes)
    viven en la URL; las fechas, en useDatesValueParams. Acá se cablean los hooks y se decide qué
@@ -145,8 +162,9 @@ export function Caja() {
     // «Por mes» (la Caja Loro) va en dos columnas desde lg: a la izquierda los botones, el resumen
     // por persona y las notas (fijos al scrollear), a la derecha la planilla con todo el ancho.
     <div className={cn(
-      'ui-scale-md mx-auto flex flex-col gap-5 px-6 pb-16 pt-4 max-md:px-4',
-      porMes ? 'max-w-[1600px]' : 'max-w-[1400px]',
+      'ui-scale-md mx-auto flex flex-col px-6 max-md:px-4',
+      // La lista va apretada para que el mes entero entre en pantalla sin scrollear (21/11/2026, por pedido).
+      porMes ? 'max-w-[1600px] gap-5 pb-16 pt-4' : 'max-w-[1400px] gap-3 pb-6 pt-3',
     )}>
       {etiquetasQ.isError && (
         <p role="alert" className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-danger">
@@ -166,7 +184,13 @@ export function Caja() {
             </Button>
           </div>
           <ResumenPorPagador filas={filas} pagadores={pagadores} cargando={cargando} className="lg:grid-cols-1" />
-          <NotasCaja />
+          {/* Lo que se deposita en cryptos para pagar sueldos, para controlarlo (21/11/2026, por pedido).
+              Reemplazó al cuadro «Notas»; su fila `nota-caja` sigue en la base sin pantalla. */}
+          <NotasCaja
+            id={ID_NOTAS_CRYPTOS}
+            titulo="Cuenta de cryptos"
+            placeholder="Anotá cada depósito en cryptos para sueldos: fecha, monto, para quién…"
+          />
         </aside>
 
         <CajaPorMes
@@ -178,13 +202,18 @@ export function Caja() {
           onEditar={setEditandoGasto}
           onEditarEtiqueta={setEditando}
           onBorrar={id => m.borrarGasto.mutate(id)}
+          alta={etiquetas ? {
+            etiquetas, gastos: gastos ?? [], pagadores,
+            onCrearEtiqueta: crearEtiqueta,
+            onCrearGasto: insert => m.crearGasto.mutateAsync(insert),
+          } : null}
         />
-        <ClaudeToni className="lg:sticky lg:top-4" />
+        <ColumnaDerecha />
       </div>
       ) : (
       <>
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-4">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-2">
           <h1 className="text-lg font-semibold text-foreground">Caja</h1>
           <DatesSelectorV2 activatedModes={['single', 'range']} value={fechas} onChange={setFechas} />
         </div>
@@ -201,9 +230,9 @@ export function Caja() {
 
       <ResumenCaja resumen={resumen} conPendientes={conPendientes} cargando={cargando} />
 
-      <div className="flex flex-col gap-5 lg:grid lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start lg:gap-6">
+      <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start lg:gap-4">
       <div>
-        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <Segmentado
             label="Tipo de gasto" valor={tipo} onChange={t => setSearchParams(prev => escribirTipo(prev, t), { replace: true })}
             opciones={[
@@ -235,7 +264,7 @@ export function Caja() {
           onNuevo={sinEtiquetas ? () => {} : nuevo}
         />
       </div>
-      <ClaudeToni className="lg:sticky lg:top-4" />
+      <ColumnaDerecha />
       </div>
       </>
       )}

@@ -27,6 +27,8 @@ export interface Gasto {
   notes: string | null
   /** Quién pagó (id de `users`), que no tiene por qué ser quién lo cargó. Nulo solo en un PENDING. */
   paid_by: string | null
+  /** «Pagaron ambos»: se reparte en partes iguales entre los pagadores. `paid_by` igual va cargado. */
+  paid_by_both?: boolean
   created_at: string
   deleted_at: string | null
 }

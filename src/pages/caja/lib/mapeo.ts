@@ -23,7 +23,10 @@ export function aGasto(f: Tables<'expenses'>): Gasto {
     date: f.date, period: f.period,
     recurrence: uno(f.recurrence, RECURRENCIAS),
     status: uno(f.status, ESTADOS),
-    notes: f.notes, paid_by: f.paid_by, created_at: f.created_at, deleted_at: f.deleted_at,
+    notes: f.notes, paid_by: f.paid_by,
+    // Sin la migración `expenses_paid_by_both` corrida, la columna no llega: es «no».
+    paid_by_both: f.paid_by_both ?? false,
+    created_at: f.created_at, deleted_at: f.deleted_at,
   }
 }
 

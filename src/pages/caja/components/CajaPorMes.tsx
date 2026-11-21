@@ -2,12 +2,13 @@ import { PencilIcon, XIcon } from 'lucide-react'
 import { AvatarUsuario } from '@/components/AvatarUsuario'
 import { Icon } from '@/components/ui/icon'
 import { Skeleton } from '@/components/ui/skeleton'
-import { parseCalendarDay } from '@/lib/dates'
+import { parseCalendarDay, todayLocal } from '@/lib/dates'
 import { cn } from '@/lib/utils'
 import { eur } from '../lib/monto'
-import { tituloDePeriodo } from '../lib/periodos'
+import { periodOf, tituloDePeriodo } from '../lib/periodos'
 import { mesesDeLaCaja, totalesPorPagador } from '../lib/porMes'
 import type { Etiqueta, FilaCaja, Gasto, Pagador } from '../types'
+import { FilaRapida } from './FilaRapida'
 
 const claveDe = (f: FilaCaja) => f.gasto?.id ?? `${f.etiqueta?.id}:${f.period}`
 // Con todos los meses juntos, la fecha lleva el año: «05/10» sola no dice de cuál es.
@@ -46,7 +47,7 @@ export function ResumenPorPagador({ filas, pagadores, cargando, className }: {
    (por pedido, 25/10/2026; hubo unas horas un solo bloque sin cortar por mes y no se entendía de qué
    mes era cada gasto). Adentro, los fijos mensuales arriba y los variables abajo, renglones bajos
    para ver mucho sin scrollear. El resumen por persona es aparte (`ResumenPorPagador`). */
-export function CajaPorMes({ filas, pagadores, cargando, error, onPagar, onEditar, onEditarEtiqueta, onBorrar }: {
+export function CajaPorMes({ filas, pagadores, cargando, error, onPagar, onEditar, onEditarEtiqueta, onBorrar, alta }: {
   filas: FilaCaja[]
   pagadores: Pagador[]
   cargando: boolean
@@ -55,6 +56,8 @@ export function CajaPorMes({ filas, pagadores, cargando, error, onPagar, onEdita
   onEditar: (gasto: Gasto) => void
   onEditarEtiqueta: (etiqueta: Etiqueta) => void
   onBorrar: (gastoId: string) => void
+  /** Lo que necesita la fila rápida de cada bloque. Sin etiquetas cargadas no se dibuja. */
+  alta: Omit<React.ComponentProps<typeof FilaRapida>, 'tipo' | 'period'> | null
 }) {
   const acciones = { onPagar, onEditar, onEditarEtiqueta, onBorrar }
   if (error) {
@@ -63,13 +66,11 @@ export function CajaPorMes({ filas, pagadores, cargando, error, onPagar, onEdita
   if (cargando) {
     return <div className="flex flex-col gap-1" aria-busy>{[0, 1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-6 w-full" />)}</div>
   }
-  if (!filas.length) {
-    return <p className="rounded-lg border border-border bg-card px-4 py-8 text-center text-sm text-(--fg-muted)">No hay gastos en este período.</p>
-  }
 
+  // El mes de hoy va siempre, aunque esté vacío: es donde se carga el primer gasto del mes.
   return (
     <div className="flex flex-col gap-4 text-[13px]">
-      {mesesDeLaCaja(filas, pagadores).map(mes => (
+      {mesesDeLaCaja(filas, pagadores, periodOf(todayLocal())).map(mes => (
         <section key={mes.period} className="overflow-hidden rounded-lg border border-border bg-card">
           <header className="flex items-center justify-between bg-foreground px-3 py-1.5 font-semibold text-background">
             <span className="first-letter:uppercase">{tituloDePeriodo(mes.period)}</span>
@@ -77,19 +78,19 @@ export function CajaPorMes({ filas, pagadores, cargando, error, onPagar, onEdita
           </header>
           <table className="w-full table-fixed border-collapse">
             <colgroup>
-              <col className="w-[76px]" /><col /><col className="max-md:hidden md:w-[40%]" /><col className="w-[96px]" /><col className="w-[84px]" />
+              {/* La fecha mide lo que pide el campo de fecha de la fila rápida. */}
+              <col className="w-[104px]" /><col /><col className="max-md:hidden md:w-[36%]" /><col className="w-[96px]" /><col className="w-[84px]" />
             </colgroup>
             <tbody>
-              {mes.fijos.length > 0 && (
-                <Grupo titulo="Fijos mensuales" total={mes.totalFijos} fijo>
-                  {mes.fijos.map(f => <Renglon key={claveDe(f)} fila={f} fijo {...acciones} />)}
-                </Grupo>
-              )}
-              {mes.variables.length > 0 && (
-                <Grupo titulo="Variables" total={mes.totalVariables}>
-                  {mes.variables.map(f => <Renglon key={claveDe(f)} fila={f} {...acciones} />)}
-                </Grupo>
-              )}
+              {/* Los dos bloques van siempre, vacíos también: cada uno termina en su fila para cargar. */}
+              <Grupo titulo="Fijos mensuales" total={mes.totalFijos} fijo>
+                {mes.fijos.map(f => <Renglon key={claveDe(f)} fila={f} fijo {...acciones} />)}
+                {alta && <FilaRapida tipo="FIXED" period={mes.period} {...alta} />}
+              </Grupo>
+              <Grupo titulo="Variables" total={mes.totalVariables}>
+                {mes.variables.map(f => <Renglon key={claveDe(f)} fila={f} {...acciones} />)}
+                {alta && <FilaRapida tipo="VARIABLE" period={mes.period} {...alta} />}
+              </Grupo>
             </tbody>
           </table>
         </section>
