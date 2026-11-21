@@ -1,5 +1,30 @@
 import { describe, expect, it } from 'vitest'
-import { GUIA_DE_DEMO, GUIA_DE_LLAMADA } from './guiaDeLlamada'
+import { GUIA_DE_DEMO, GUIA_DE_DISCOVERY, GUIA_DE_LLAMADA, PLACEHOLDER_DE_DISCOVERY, muestraDiscovery } from './guiaDeLlamada'
+
+describe('discovery', () => {
+  it('el placeholder arranca con «Discovery» y trae preguntas', () => {
+    const [titulo, ...lineas] = PLACEHOLDER_DE_DISCOVERY.split('\n')
+    expect(titulo).toMatch(/^Discovery/)
+    expect(lineas.filter(l => l.includes('¿')).length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('la guía tiene secciones con preguntas', () => {
+    expect(GUIA_DE_DISCOVERY.length).toBeGreaterThan(0)
+    for (const s of GUIA_DE_DISCOVERY) {
+      expect(s.titulo?.trim()).toBeTruthy()
+      expect(s.pasos.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('se abre recién cuando se empieza a escribir, en llamada y notas', () => {
+    expect(muestraDiscovery('llamada', '')).toBe(false)
+    expect(muestraDiscovery('llamada', '   ')).toBe(false)
+    expect(muestraDiscovery('llamada', 'H')).toBe(true)
+    expect(muestraDiscovery('nota', 'Hablé')).toBe(true)
+    expect(muestraDiscovery('fallido', 'buzón')).toBe(false)
+    expect(muestraDiscovery('demo', 'algo')).toBe(false)
+  })
+})
 
 describe('guías del compositor', () => {
   it('cada sección tiene pasos y cada paso tiene título', () => {

@@ -56,6 +56,10 @@ describe('pideAvancesDelDecisor', () => {
     expect(pideAvancesDelDecisor('llamada', true)).toBe(false)
     expect(pideAvancesDelDecisor('llamada', null)).toBe(false) // todavía sin contestar
   })
+  it('con un decisor ya cargado en el perfil no lo pide', () => {
+    expect(pideAvancesDelDecisor('llamada', false, true)).toBe(false)
+    expect(pideAvancesDelDecisor('llamada', false, false)).toBe(true)
+  })
   it('la nota, el contacto fallido y la demo no lo piden', () => {
     expect(pideAvancesDelDecisor('nota', false)).toBe(false)
     expect(pideAvancesDelDecisor('fallido', false)).toBe(false)

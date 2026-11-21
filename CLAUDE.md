@@ -47,6 +47,30 @@ hasta que se mergee). Tres páginas en la barra lateral: Roadmap, CRM y Caja. Di
   `texto` es un JSON `{"2026-10":{"nota":"transferencia 3/10"}}` (clave presente = pagado) y se
   lee a la defensiva (`leerPagados`: vacío o roto es ninguno pagado, y la forma vieja
   `["2026-09"]`, que llegó a escribirse unas horas, se lee como pagado sin nota).
+- **«Gastos a prorratear»** (21/11/2026, por pedido): debajo de Claude Toni, en las dos vistas, un
+  cuadro de texto libre del equipo (el mismo `NotasCaja`, con `id`), en `roadmap_notas`, fila
+  `nota-caja-prorratear` (`ID_NOTAS_PRORRATEAR`). Sin migración y sin cuentas: es solo texto.
+  Igual, **«Cuenta de cryptos»** (21/11/2026, por pedido): en la columna izquierda de la vista por
+  mes, para anotar lo depositado en cryptos para pagar sueldos. Fila `nota-caja-cryptos`
+  (`ID_NOTAS_CRYPTOS`). **Reemplazó al cuadro «Notas»** (por pedido): su fila `nota-caja` sigue en
+  la base con lo que tenía, sin pantalla que la muestre.
+- **Fila rápida en la vista por mes** (21/11/2026, por pedido): cada bloque («Fijos mensuales» y
+  «Variables») de cada mes termina en una fila vacía para cargar como en una planilla, sin abrir
+  «Nuevo gasto» (`FilaRapida`, reglas en `lib/filaRapida.ts`). El bloque pone el tipo; el concepto
+  sugiere las etiquetas de ese tipo y, si no existe, la crea (un fijo nuevo con ese monto como
+  habitual); una etiqueta del otro tipo se rechaza. Sale siempre pagado y «Pagó» es un desplegable
+  que arranca vacío y en rojo: sin elegirlo no carga. Enter carga y deja el cursor en el concepto.
+  Los dos bloques se dibujan aunque estén vacíos y el mes de hoy va siempre (`mesesDeLaCaja`,
+  `asegurar`). Sin migración.
+  **«Pagaron ambos»** (21/11/2026, por pedido; migración `20261121204030_expenses_paid_by_both`):
+  opción del «Pagó» de la fila rápida. `expenses.paid_by_both` marca el gasto y `paid_by` igual va
+  cargado (lo exige `expenses_paid_by_check`; lleva al primero de los pagadores). Se dice «Pagaron
+  ambos» y en el resumen por persona se reparte en partes iguales entre los activos de `users.caja`
+  (`totalesPorPagador`). En la lista es la pastilla «Ambos», que no se cambia desde la fila. La marca
+  se manda solo si es «Ambos»: sin la migración, lo de una persona se sigue cargando. Pendiente: el
+  MCP (`list_expenses`, vista `mcp_expenses`) todavía dice solo `paid_by`.
+- **En la Caja solo pagan Lorenzo y Antonio** (21/11/2026, por pedido): `getPagadores` trae solo
+  `users.caja = true`, así las SDR no salen en «Pagó» ni en el resumen por persona.
 - **Un gasto cargado se edita** (25/10/2026, por pedido): el lápiz de la fila, en la lista y en la vista
   por mes, abre `EditarGastoDialog`: monto, fecha, período (fijo), notas (variable) y quién pagó (si
   está pagado). Etiqueta, tipo y estado no: un pendiente se paga con «Pagar». Reglas en
@@ -603,8 +627,9 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   **Desde el 18/11/2026 (por pedido), en la llamada es el bloque «Avances para contactar al decisor»**
   (`BloqueDecisor`, `FilasDelRegistro.tsx`; la nota ya no lo lleva y la demo sigue con el campo libre).
   La llamada pregunta primero «¿Es decisor?» (obligatoria; si el perfil ya lo sabe, vale eso) y el
-  bloque aparece **solo si la respuesta es No** (`pideAvancesDelDecisor`, `lib/actividad.ts`),
-  haya o no un decisor en el perfil. **Desde el 19/11/2026 (por pedido) va como panel a la derecha,
+  bloque aparece **solo si la respuesta es No** (`pideAvancesDelDecisor`, `lib/actividad.ts`)
+  **y el perfil todavía no tiene un decisor cargado** (21/11/2026, por pedido: hasta ese día salía
+  igual; `tieneDecisor`). **Desde el 19/11/2026 (por pedido) va como panel a la derecha,
   afuera de la ventana** (`derecha` de `VentanaFlotante`, `ANCHO_DEL_COSTADO`), y el registro nace
   corrido a la izquierda (`corrida`) para dejarle lugar: así la ventana no crece hasta scrollear. Si
   ventana más panel no entran en la pantalla (`useEntraAlCostado`), va adentro, debajo, como antes; pasar a Sí lo esconde y vacía lo contestado. Tres Sí/No —«Nombre
@@ -703,6 +728,11 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   La etapa se escribe recién con la actividad guardada. Reemplazó al toast «¿Pasar a …?».
   El formulario es la misma ventana flotante y no modal que «Nueva tarea» (`VentanaFlotante`):
   mientras se registra se puede usar el resto de la pantalla.
+  **Irse sin tarea pide confirmar** (21/11/2026, por pedido): registrada una actividad (llamada,
+  fallido o nota), si el lead queda en «Seguimiento» sin tarea pendiente del «yo» de pantalla
+  (`faltaTareaMia`, la regla de «Pendiente agendar tarea»), pasar a otro lead (flechas o ↑/↓) o
+  cerrar pregunta «¿Seguir sin agendar la próxima tarea?»: «Agendar tarea» abre «Nueva tarea» y
+  «Seguir sin tarea» sigue. Solo después de registrar en esa visita. Sin migración.
 - **Guía de la llamada y datos de la demo** (16/10/2026; la demo se mudó a la Agenda el 22/10/2026,
   ver la sección de Google Calendar, y lo de abajo sobre la demo es historia): «Llamada» y «Agendar demo» muestran una
   guía (qué no olvidarse) colgada del borde izquierdo de la ventana: plegada es una pestaña que
@@ -712,6 +742,11 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   `crm_meetings` no tiene columnas para eso, van a `description` (`descripcionDeDemo()`,
   `lib/reuniones.ts`): **sin migración, a propósito**. El título queda siempre «Demo». Si la
   inmobiliaria no tenía email, se le guarda el escrito; si falla, la demo queda igual.
+- **La investigación de Claude al costado del registro** (21/11/2026, por pedido): en la ventana
+  «Registrar actividad», al final de las pastillas, el botón «Investigación» (solo si el lead la
+  tiene) despliega a la izquierda la misma investigación de la pestaña de la inmobiliaria
+  (`InvestigacionAlCostado`, `investigacionDeClaude`). Solo lectura: se edita allá. Mientras está
+  abierta ocupa el borde izquierdo y tapa la guía y Discovery. Sin migración.
 - **Pestaña «Demo» del lead** (4/11/2026, por pedido): tercera pestaña al lado de Actividad e
   Inmobiliaria (`GuionDeDemo`). Arriba, el botón «Material para la demo», un popover que se abre
   solo cuando se lo usa (`MATERIAL_DE_DEMO`: propelia.es y los HTML de `public/demo/planes.html` y
@@ -1060,12 +1095,19 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   diálogo arranca desde ahí; «Restablecer» vuelve a eso. No se guardan el nombre del lead ni el
   botón armado solo (WhatsApp/`mailto:`); un enlace escrito a mano sí (`plantillaGuardable`,
   `conGuardada`). El texto de fábrica de `plantillasEmail.ts` queda solo para la primera vez o
-  sin la migración corrida.
+  sin la migración corrida. **Desde el 21/11/2026 (por pedido) enviar ya no cambia la plantilla**:
+  lo editado antes de mandar vale solo para ese envío. La plantilla se cambia con **«Editar
+  plantilla»** (al lado de «Restablecer»), que muestra los mismos campos sin «Para», «Nombre» ni
+  adjuntos y guarda con `guardarPlantilla` (`email.service.ts`) directo en la tabla; el borrador
+  del mail vuelve al cancelar (o sigue la plantilla nueva si no se había tocado). Lo escribe
+  cualquier usuario activo (migración `20261121213000_crm_email_plantillas_editables`, policies de
+  insert/update con `updated_by = auth.uid()`). Hace falta deployar `send-email` (ya no guarda).
 - **«Ver email» en todo mail con plantilla** (4/11/2026, por pedido; copiado de `EmailPreviewDialog` de
   `propelia-frontend`): un enlace que abre `EmailPreviewDialog` (`src/components/EmailPreviewDialog.tsx`,
   con `VerEmail`, el botón): asunto, «De:», «Para:» y el HTML en un iframe sin scripts. **Siempre con
-  el render del servidor**, nunca un HTML aparte. Está en la pestaña Email de «Mensajes» (al lado de
-  «Vista previa», `renderEmail`), en los accesos de /clientes (`renderEmailDeAcceso`; reemplazó al
+  el render del servidor**, nunca un HTML aparte. Está en la pestaña Email de «Mensajes» (arriba, al
+  lado de «Restablecer»; desde el 21/11/2026, por pedido, es la única vista previa: los campos ocupan
+  todo el ancho y el mail se ve solo al pedirlo), en los accesos de /clientes (`renderEmailDeAcceso`; reemplazó al
   desplegable «Ver cómo les llega»), en Ajustes › Avisos a leads (los tres de demo, con vos como
   responsable y una inmobiliaria de ejemplo) y en el formulario de reunión con lead («Demo agendada»
   al crear, «reprogramada» al cambiarle el horario), `CancelMeetingDialog` y `CancelarDemoDialog`

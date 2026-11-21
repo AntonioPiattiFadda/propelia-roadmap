@@ -96,9 +96,10 @@ export function textoEditado(i: Pick<ItemActividad, 'tipo' | 'resultado'>, texto
 
 /** «Avances para contactar al decisor» (18/11/2026, por pedido): solo en la llamada y solo cuando
  *  quien atendió NO decide (`esDecisor`: lo contestado o lo que ya sabe el perfil; null = sin
- *  contestar). Si decide, no hay a quién más buscar. */
-export function pideAvancesDelDecisor(tipo: string, esDecisor: boolean | null): boolean {
-  return tipo === 'llamada' && esDecisor === false
+ *  contestar). Si decide, no hay a quién más buscar. Tampoco si el perfil ya tiene un decisor
+ *  cargado (`hayDecisorCargado`, 21/11/2026, por pedido): ya se sabe a quién buscar. */
+export function pideAvancesDelDecisor(tipo: string, esDecisor: boolean | null, hayDecisorCargado = false): boolean {
+  return tipo === 'llamada' && esDecisor === false && !hayDecisorCargado
 }
 
 /** Día (`YYYY-MM-DD`) y hora de España (`HH:MM`) para volver a llamar al decisor. */

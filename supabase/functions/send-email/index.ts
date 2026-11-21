@@ -1,7 +1,6 @@
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 import { EmailConfigError, EmailProviderError, sendEmail } from '../_shared/email.ts'
-import { camposDesde, plantillaGuardable, type PlantillaEmailId } from '../_shared/plantillasEmail.ts'
 import { handleSendEmail } from './handler.ts'
 import { withoutOAuthClients } from '../_shared/auth/oauthClientGuard.ts'
 
@@ -72,16 +71,8 @@ Deno.serve(withoutOAuthClients(async req => {
       to_email: r.to, subject: r.subject, plantilla: r.plantilla ?? null,
     })
     if (error) console.error('crm_emails: no se pudo registrar el envío', r.id, error.message)
-    /* El último enviado pasa a ser la plantilla (21/10/2026). Los campos ya los validó el handler.
-       Si falla, el mail ya salió: solo se pierde que la próxima arranque con este texto. */
-    const campos = r.plantilla ? camposDesde(body.campos) : null
-    if (r.plantilla && campos) {
-      const { error: e } = await admin.from('crm_email_plantillas').upsert({
-        plantilla: r.plantilla, campos: plantillaGuardable(r.plantilla as PlantillaEmailId, campos),
-        updated_by: callerId, updated_at: new Date().toISOString(),
-      })
-      if (e) console.error('crm_email_plantillas: no se pudo guardar', r.plantilla, e.message)
-    }
+    /* Sending no longer changes the template (21/11/2026, by request): the edited fields are for
+       this email only. The template is written by «Editar plantilla» in the CRM. */
     return respond(200, { id: r.id })
   } catch (error) {
     if (error instanceof EmailConfigError) return respond(500, { error: 'El envío de emails no está configurado (falta RESEND_API_KEY)' })

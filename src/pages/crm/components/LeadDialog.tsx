@@ -1,7 +1,11 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type MutableRefObject, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
 import { Building2, Check, ChevronDown, ChevronUp, Copy, Link2, Lock, Mail, NotebookPen, Pencil, Phone, Pin, TriangleAlert, User, UserPlus, X } from 'lucide-react'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Icon } from '@/components/ui/icon'
 import { Input } from '@/components/ui/input'
@@ -12,6 +16,8 @@ import { cn } from '@/lib/utils'
 import { useCarteras } from '../hooks/useCarteras'
 import { useCrmCatalogos } from '../hooks/useCrmCatalogos'
 import { useLeadDetalle } from '../hooks/useLeadDetalle'
+import { useVerComo } from '../hooks/useVerComo'
+import { faltaTareaMia } from '../lib/leadFilters'
 import { useActualizarCliente, useActualizarLead } from '../hooks/useLeadMutaciones'
 import {
   contactosConDecisor, copiasDelTelefonoDeIdealista, esTelefonoDeIdealista, esTelefonoDeOficina, ETIQUETA_OFICINA, inicialesDe,
@@ -188,8 +194,13 @@ const TELEFONO = cn(
 /* El contenido del dialog, montado por lead (key = id): cambiar de lead con las flechas arranca
    de cero el borrador, igual que cerrar y abrir. Va el encabezado también, porque sus flechas
    y el menú de acciones operan sobre este lead. */
-function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana, setPestana, onPaso, onStartReassign }: {
+/** Lo que el cuerpo le deja al dialog para preguntar al irse: el lead quedó sin tarea tuya después
+ *  de registrar una actividad. `null` = se puede salir sin preguntar. */
+type SalidaSinTarea = { etapa: string; agendar: () => void } | null
+
+function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana, setPestana, onPaso, onStartReassign, salidaSinTarea }: {
   lead: CrmLeadRow
+  salidaSinTarea: MutableRefObject<SalidaSinTarea>
   indice: number
   total: number
   hayAnterior: boolean
@@ -225,6 +236,19 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
 
   const [creandoTarea, setCreandoTarea] = useState(false)
   const [editandoNotas, setEditandoNotas] = useState(false)
+
+  /* Registrar una actividad y dejar el lead en «Seguimiento» sin tarea tuya pide confirmar al irse
+     (21/11/2026, por pedido): pasar a otro lead o cerrar. Es la misma regla que «Pendiente agendar
+     tarea» (`faltaTareaMia`), con el «yo» de pantalla; solo después de registrar en esta visita. */
+  const { perspectivaId } = useVerComo()
+  const [registro, setRegistro] = useState(false)
+  const falta = registro && escribeTareas
+    && faltaTareaMia(lead, etapasPorId, detalleQ.data?.tasks ?? [], perspectivaId)
+  const etiquetaDeEtapa = etapaMostrada?.label ?? ''
+  useEffect(() => {
+    salidaSinTarea.current = falta ? { etapa: etiquetaDeEtapa, agendar: () => setCreandoTarea(true) } : null
+    return () => { salidaSinTarea.current = null }
+  }, [falta, etiquetaDeEtapa, salidaSinTarea])
 
   // Borrador local: se escribe acá y se guarda campo por campo al salir. Si llega un cambio de
   // otro por realtime mientras no estoy escribiendo, se toma.
@@ -961,7 +985,7 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
 
         <div className="flex min-h-[75vh] min-w-0 flex-col lg:min-h-0">
           <ActividadLead lead={lead} detalle={detalleQ.data} cargando={detalleQ.isLoading} puedeEscribir={escribe}
-            pestana={pestana} onDecisorContactado={fijarDecisores}
+            pestana={pestana} onDecisorContactado={fijarDecisores} onRegistrado={() => setRegistro(true)}
             onAbrirContacto={escribe ? campo => {
               const c = CONTACTOS.find(x => camposDe(x).decisor === campo)
               if (c) setContactoEnEditor(c)
@@ -999,14 +1023,24 @@ export function LeadDialog({ lead, indice, total, hayAnterior, haySiguiente, onP
   const abierto = lead != null
   useEffect(() => { if (!abierto) setPestana('actividad') }, [abierto])
 
+  /* Irse (otro lead o cerrar) con el lead sin tarea tuya después de registrar pregunta antes. */
+  const salidaSinTarea = useRef<SalidaSinTarea>(null)
+  const [preguntando, setPreguntando] = useState<{ etapa: string; agendar: () => void; seguir: () => void } | null>(null)
+  const salir = (seguir: () => void) => {
+    const s = salidaSinTarea.current
+    if (s) setPreguntando({ ...s, seguir })
+    else seguir()
+  }
+  const pasoGuardado = (delta: -1 | 1) => salir(() => onPaso(delta))
+
   /* ↑/↓ hacen lo mismo que los chevrones, con las excepciones del producto: no mientras se
      escribe, no en controles que ya usan flechas, no si alguien más atendió la tecla, no desde
      otro dialog encima (la confirmación de cierre, reasignar). Escucha el documento y no el
      DialogContent: un clic en una zona sin foco (el fondo del perfil) deja el foco en el body,
      y desde ahí la tecla nunca pasaba por el dialog. */
   const contenido = useRef<HTMLDivElement>(null)
-  const paso = useRef({ hayAnterior, haySiguiente, onPaso })
-  paso.current = { hayAnterior, haySiguiente, onPaso }
+  const paso = useRef({ hayAnterior, haySiguiente, onPaso: pasoGuardado })
+  paso.current = { hayAnterior, haySiguiente, onPaso: pasoGuardado }
   useEffect(() => {
     if (!abierto) return
     const alTeclear = (e: KeyboardEvent) => {
@@ -1028,7 +1062,8 @@ export function LeadDialog({ lead, indice, total, hayAnterior, haySiguiente, onP
   }, [abierto])
 
   return (
-    <Dialog open={lead != null} onOpenChange={open => { if (!open) onCerrar() }}>
+    <>
+    <Dialog open={lead != null} onOpenChange={open => { if (!open) salir(onCerrar) }}>
       <DialogContent
         ref={contenido}
         showCloseButton={false}
@@ -1038,9 +1073,25 @@ export function LeadDialog({ lead, indice, total, hayAnterior, haySiguiente, onP
         <DialogTitle className="sr-only">{lead ? nombreDelLead(lead.client) : 'Lead'}</DialogTitle>
         <DialogDescription className="sr-only">Estado, datos, tareas, notas y actividad del lead.</DialogDescription>
         {lead && (
-          <CuerpoDelLead key={lead.id} lead={lead} indice={indice} total={total} hayAnterior={hayAnterior} haySiguiente={haySiguiente} pestana={pestana} setPestana={setPestana} onPaso={onPaso} onStartReassign={onStartReassign} />
+          <CuerpoDelLead key={lead.id} lead={lead} indice={indice} total={total} hayAnterior={hayAnterior} haySiguiente={haySiguiente} pestana={pestana} setPestana={setPestana} onPaso={pasoGuardado} onStartReassign={onStartReassign} salidaSinTarea={salidaSinTarea} />
         )}
       </DialogContent>
     </Dialog>
+    <AlertDialog open={preguntando != null} onOpenChange={o => { if (!o) setPreguntando(null) }}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>¿Seguir sin agendar la próxima tarea?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Registraste una actividad y el lead quedó en «{preguntando?.etapa}» sin ninguna tarea tuya.
+            Sin tarea, nadie lo vuelve a llamar.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => preguntando?.seguir()}>Seguir sin tarea</AlertDialogCancel>
+          <AlertDialogAction onClick={() => preguntando?.agendar()}>Agendar tarea</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   )
 }

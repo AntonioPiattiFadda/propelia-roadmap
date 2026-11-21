@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { haceCuanto, horasYMinutos, tonoSinLlamar } from './minutosSinLlamar'
+import { avisoSinLlamar, haceCuanto, horasYMinutos, tonoSinLlamar } from './minutosSinLlamar'
 
 describe('horasYMinutos', () => {
   it('escribe horas y minutos con dos cifras', () => {
@@ -25,6 +25,20 @@ describe('tonoSinLlamar', () => {
   it('sin dato no tiene tono', () => {
     expect(tonoSinLlamar(null)).toBeNull()
     expect(tonoSinLlamar(undefined)).toBeNull()
+  })
+})
+
+describe('avisoSinLlamar', () => {
+  it('solo avisa en rojo, pasada la hora', () => {
+    expect(avisoSinLlamar(60)).toBeNull()
+    expect(avisoSinLlamar(null)).toBeNull()
+    expect(avisoSinLlamar(61)).not.toBeNull()
+  })
+  it('dice el tiempo y pide contactar a Lorenzo Piatti', () => {
+    const aviso = avisoSinLlamar(72)!
+    expect(aviso.titulo).toContain('1:12')
+    expect(aviso.texto).toContain('Lorenzo Piatti')
+    expect(aviso.texto).toMatch(/problemas técnicos/)
   })
 })
 

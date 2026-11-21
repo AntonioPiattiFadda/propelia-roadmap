@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Clock, Loader2, MailX, Paperclip, RotateCcw, Send, X } from 'lucide-react'
+import { CheckCircle2, Clock, Loader2, MailX, Paperclip, Pencil, RotateCcw, Save, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { VerEmail } from '@/components/EmailPreviewDialog'
 import { Input } from '@/components/ui/input'
@@ -12,28 +12,28 @@ import {
   conGuardada, nombreEnBandeja, PLANTILLAS_EMAIL, predeterminadosPara, whatsappDe, problemaDeCampos, remitenteDe, renderEmail, ROTULOS_CAMPOS,
   type CampoEmail, type CamposEmail, type PlantillaEmailId, type Remitente,
 } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
-import { base64Size, fileToAttachment, MAX_ATTACHMENTS_BYTES, sendEmail } from '../service/email.service'
+import { base64Size, fileToAttachment, guardarPlantilla, MAX_ATTACHMENTS_BYTES, sendEmail } from '../service/email.service'
 import { useEstadoDeEnvio, usePlantillasGuardadas } from '../hooks/useEmails'
 import { CRM_KEYS } from '../hooks/keys'
 import { estadoDelEnvio, motivoLegible } from '../lib/emails'
 import type { CrmClient } from '../types'
 
 /* La pestaña Email de «Mensajes» (18/10/2026): las dos plantillas HTML de `_shared/plantillasEmail.ts`,
-   con el texto precargado y editable antes de mandar. Desde el 21/10/2026 el texto precargado es el
-   del último enviado de esa plantilla, de quien sea (`crm_email_plantillas`, lo guarda `send-email`):
-   editar y mandar cambia la plantilla para la próxima. Sin nada guardado, el texto de fábrica. La vista previa es el mismo
-   `renderEmail` que arma el mail en el servidor, así que lo que se ve es lo que sale. Va en una
-   tercera columna y se rearma con cada tecla: editar a ciegas y alternar para mirar era el doble
-   de clics por cada cambio. En pantallas angostas cae debajo de los campos.
+   con el texto precargado y editable antes de mandar. El texto precargado es la plantilla del equipo
+   (`crm_email_plantillas`). Desde el 21/11/2026 lo editado antes de mandar vale solo para ese envío;
+   la plantilla se cambia con «Editar plantilla». Sin nada guardado, el texto de fábrica. «Ver email»
+   muestra el mismo `renderEmail` que arma el mail en el servidor, así que lo que se ve es lo que sale.
+   Desde el 21/11/2026 (por pedido) no hay vista previa fija al costado: los campos ocupan todo el
+   ancho y el mail se ve solo al pedirlo.
    La firma y los datos de contacto son los de quien está logueado (`firma_*` de `users`): la
    vista previa los lee de `useYo` y el servidor los vuelve a leer de la base al mandar. */
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const MULTILINEA: Partial<Record<CampoEmail, { filas: number; ayuda?: string }>> = {
-  cuerpo: { filas: 5, ayuda: 'Una línea en blanco separa párrafos.' },
-  puntos: { filas: 5, ayuda: 'Una tarjeta por renglón; hasta el primer punto va en negrita.' },
-  notaBoton: { filas: 2 },
+  cuerpo: { filas: 10, ayuda: 'Una línea en blanco separa párrafos.' },
+  puntos: { filas: 7, ayuda: 'Una tarjeta por renglón; hasta el primer punto va en negrita.' },
+  notaBoton: { filas: 3 },
 }
 
 const formatSize = (bytes: number) =>
@@ -110,28 +110,6 @@ export function EmailConPlantilla({ id, client, leadId, onEnviado, paraInicial }
     const url = whatsappDe(remitente, { nombre: campos.nombre, empresa }, id)
     setCampos(c => (c.urlBoton === url ? c : { ...c, urlBoton: url }))
   }, [id, botonTocado, remitente, campos.nombre, empresa])
-  /* `<base target="_blank">`: en la vista previa los enlaces se prueban como en el mail (el botón de
-     WhatsApp, el vídeo, la firma), pero en una pestaña nueva y no adentro del iframe. Solo va en la
-     vista previa: el mail que sale lo arma el servidor sin esto. */
-  const html = useMemo(() => renderEmail(id, campos, remitente, { assets: `${window.location.origin}/email` }).html
-    .replace('<head>', '<head><base target="_blank">'), [id, campos, remitente])
-
-  /* El iframe recarga el documento entero con cada `srcDoc` nuevo y queda en blanco hasta el `load`
-     (que espera las imágenes). Por eso se le pasa recién cuando se deja de tipear, y mientras
-     carga hay una barra al medio. El tope de 8 s es por si el `load` no llega: la barra no puede
-     quedar tapando la vista previa para siempre. */
-  const [htmlEnVista, setHtmlEnVista] = useState(html)
-  const [cargando, setCargando] = useState(true)
-  useEffect(() => {
-    if (html === htmlEnVista) return
-    const t = setTimeout(() => { setHtmlEnVista(html); setCargando(true) }, 350)
-    return () => clearTimeout(t)
-  }, [html, htmlEnVista])
-  useEffect(() => {
-    if (!cargando) return
-    const t = setTimeout(() => setCargando(false), 8000)
-    return () => clearTimeout(t)
-  }, [cargando, htmlEnVista])
   /* Los adjuntos (solo el «Mail puntual», `adjuntos` de la plantilla): valen para este envío, como
      el texto. No salen en la vista previa, que es el HTML del mail. */
   const [archivos, setArchivos] = useState<File[]>([])
@@ -157,9 +135,7 @@ export function EmailConPlantilla({ id, client, leadId, onEnviado, paraInicial }
     onSuccess: () => {
       toast.success(`«${plantilla.nombre}» enviado a ${para.trim()}`)
       setArchivos([])
-      // Lo que se acaba de mandar es la plantilla de la próxima vez.
-      setEditado(true)
-      void qc.invalidateQueries({ queryKey: CRM_KEYS.plantillasGuardadas })
+      // Since 21/11/2026 sending does not touch the template: the edits were for this email only.
       onEnviado?.({ plantilla: plantilla.nombre, destino: para.trim() })
     },
     onError: (e: Error) => { toast.error(e.message || 'No se pudo enviar el email') },
@@ -171,20 +147,80 @@ export function EmailConPlantilla({ id, client, leadId, onEnviado, paraInicial }
     setCampos(c => ({ ...c, [k]: v }))
   }
 
+  const restablecer = (g: unknown) => {
+    setBotonTocado(conBotonPropio(g)); setEditado(false); setCampos(camposIniciales(id, client, remitente, g))
+  }
+
+  /* «Editar plantilla» (21/11/2026, by request): the same fields, but they edit the team template
+     that every email starts from. The draft of this email is kept aside and comes back on cancel. */
+  const [editandoPlantilla, setEditandoPlantilla] = useState(false)
+  const borrador = useRef<{ campos: CamposEmail; editado: boolean; botonTocado: boolean } | null>(null)
+  const abrirEdicionDePlantilla = () => {
+    borrador.current = { campos, editado, botonTocado }
+    restablecer(guardada)
+    setEditandoPlantilla(true)
+  }
+  const cerrarEdicionDePlantilla = () => {
+    const b = borrador.current
+    if (b) { setCampos(b.campos); setEditado(b.editado); setBotonTocado(b.botonTocado) }
+    setEditandoPlantilla(false)
+  }
+  const guardar = useMutation({
+    mutationFn: () => guardarPlantilla(id, campos, userSession!.user.id),
+    onSuccess: async () => {
+      toast.success(`Plantilla «${plantilla.nombre}» guardada`)
+      await qc.invalidateQueries({ queryKey: CRM_KEYS.plantillasGuardadas })
+      const nueva = qc.getQueryData<Partial<Record<PlantillaEmailId, unknown>>>(CRM_KEYS.plantillasGuardadas)?.[id]
+      // An untouched draft follows the new template; one already edited stays as it was.
+      if (borrador.current?.editado) cerrarEdicionDePlantilla()
+      else { restablecer(nueva); setEditandoPlantilla(false) }
+    },
+    onError: (e: Error) => { toast.error(e.message || 'No se pudo guardar la plantilla') },
+  })
+  const problemaDePlantilla = problemaDeCampos(id, campos)
+
   return (
     <>
-      <div className="grid min-h-0 flex-1 overflow-y-auto xl:grid-cols-[minmax(0,1fr)_640px] xl:overflow-hidden">
-      <div className="flex min-w-0 flex-col gap-3 p-4 xl:min-h-0 xl:overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="flex min-w-0 flex-col gap-3 p-4">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="truncate text-[14px] font-semibold">{plantilla.nombre}</h3>
-          <button type="button" onClick={() => { setBotonTocado(conBotonPropio(guardada)); setEditado(false); setCampos(camposIniciales(id, client, remitente, guardada)) }}
-            title={guardada ? 'Volver al texto del último enviado' : 'Volver al texto de la plantilla'}
-            className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground">
-            <RotateCcw size={13} />Restablecer
-          </button>
+          <h3 className="min-w-0 flex-1 truncate text-[14px] font-semibold">
+            {editandoPlantilla ? `Editando la plantilla «${plantilla.nombre}»` : plantilla.nombre}
+          </h3>
+          {/* Hidden by default (21/11/2026, by request): the fields get the whole width and the
+              email shows up only when asked for, with subject and inbox (from, to). */}
+          <VerEmail className="text-[12.5px]"
+            render={() => renderEmail(id, campos, remitente, { assets: `${window.location.origin}/email` })}
+            title={`Así le llega «${plantilla.nombre}»`}
+            description="Con el texto de los campos y tu firma: es el mismo HTML que arma el servidor al enviar. Los adjuntos no se ven."
+            from={`${nombreEnBandeja(remitente)} <info@propelia.es>`}
+            to={para.trim() || 'Falta la casilla en «Para»'} />
+          {!editandoPlantilla && (
+            <>
+              <button type="button" onClick={() => restablecer(guardada)}
+                title="Volver al texto de la plantilla"
+                className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground">
+                <RotateCcw size={13} />Restablecer
+              </button>
+              <button type="button" onClick={abrirEdicionDePlantilla}
+                title="Cambiar el texto con el que arranca este mail, para todo el equipo"
+                className="inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-[12.5px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground">
+                <Pencil size={13} />Editar plantilla
+              </button>
+            </>
+          )}
         </div>
 
-        <label className="flex flex-col gap-1">
+        {editandoPlantilla ? (
+          <p className="rounded-lg bg-(--surface-2) px-3 py-2 text-[12.5px] text-(--fg-2)">
+            Lo que guardes acá es el texto con el que arranca este mail para todo el equipo. Lo que cambies antes
+            de enviar un mail vale solo para ese envío. El nombre del lead y el WhatsApp de quien manda se ponen solos.
+          </p>
+        ) : (
+          <p className="text-[12px] text-(--fg-muted)">Los cambios valen solo para este envío: la plantilla no se modifica.</p>
+        )}
+
+        {!editandoPlantilla && <label className="flex flex-col gap-1">
           <span className={ETIQUETA}>Para</span>
           <Input type="email" value={para} placeholder="casilla@inmobiliaria.com" onChange={e => setPara(e.target.value)}
             className="h-9 text-[13px] md:text-[13px]" />
@@ -197,9 +233,9 @@ export function EmailConPlantilla({ id, client, leadId, onEnviado, paraInicial }
               ))}
             </span>
           )}
-        </label>
+        </label>}
 
-        {plantilla.editables.map(k => {
+        {plantilla.editables.filter(k => !(editandoPlantilla && k === 'nombre')).map(k => {
             const multi = MULTILINEA[k]
             return (
               <label key={k} className="flex flex-col gap-1">
@@ -217,7 +253,7 @@ export function EmailConPlantilla({ id, client, leadId, onEnviado, paraInicial }
             )
           })}
 
-        {plantilla.adjuntos && (
+        {plantilla.adjuntos && !editandoPlantilla && (
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between gap-2">
               <span className={ETIQUETA}>Adjuntos</span>
@@ -245,40 +281,22 @@ export function EmailConPlantilla({ id, client, leadId, onEnviado, paraInicial }
           </div>
         )}
       </div>
-
-      {/* La vista previa: 640px son los 600 del mail más su margen, así se ve como en el escritorio. */}
-      <div className="flex min-w-0 flex-col gap-1.5 bg-(--surface-2) p-3 max-xl:[border-top:1px_solid_var(--line)] xl:min-h-0 xl:[border-left:1px_solid_var(--line)]">
-        {/* «Ver email» (4/11/2026, por pedido): el mismo mail en la ventana de los demás flows, con
-            el asunto y la bandeja (de, para), que la columna no muestra. */}
-        <div className="flex items-center justify-between gap-2 px-1">
-          <span className={ETIQUETA}>Vista previa</span>
-          <VerEmail className="text-[12px]"
-            render={() => renderEmail(id, campos, remitente, { assets: `${window.location.origin}/email` })}
-            title={`Así le llega «${plantilla.nombre}»`}
-            description="Con el texto de los campos y tu firma: es el mismo HTML que arma el servidor al enviar. Los adjuntos no se ven."
-            from={`${nombreEnBandeja(remitente)} <info@propelia.es>`}
-            to={para.trim() || 'Falta la casilla en «Para»'} />
-        </div>
-        <div className="relative h-[70vh] w-full overflow-hidden rounded-lg bg-white [border:1px_solid_var(--line)] xl:h-auto xl:min-h-0 xl:flex-1">
-          <iframe title="Vista previa del email" srcDoc={htmlEnVista}
-            // Sin scripts; solo abrir enlaces en otra pestaña, y que esa pestaña no herede el sandbox.
-            sandbox="allow-popups allow-popups-to-escape-sandbox" onLoad={() => setCargando(false)}
-            className="absolute inset-0 size-full" />
-          {cargando && (
-            <div role="progressbar" aria-label="Cargando la vista previa"
-              className="absolute inset-0 flex flex-col items-center justify-center gap-2.5 bg-white/80">
-              <style>{'@keyframes barra-vista-previa{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}'}</style>
-              <div className="h-1.5 w-48 overflow-hidden rounded-full bg-(--surface-2)">
-                <div className="h-full w-2/5 rounded-full bg-[#0147FE] animate-[barra-vista-previa_1.1s_ease-in-out_infinite]" />
-              </div>
-              <span className="text-[12px] font-medium text-(--fg-muted)">Cargando vista previa…</span>
-            </div>
-          )}
-        </div>
       </div>
-      </div>
+      {editandoPlantilla ? (
+        <footer className="flex shrink-0 items-center justify-end gap-3 px-4 py-3 [border-top:1px_solid_var(--line)]">
+          {problemaDePlantilla && <span className="min-w-0 truncate text-[12px] text-(--fg-muted)">{problemaDePlantilla}</span>}
+          <button type="button" onClick={cerrarEdicionDePlantilla} disabled={guardar.isPending}
+            className="inline-flex h-9 shrink-0 cursor-pointer items-center rounded-lg px-3.5 text-[13px] font-medium text-(--fg-2) hover:bg-(--surface-2) hover:text-foreground disabled:opacity-40">
+            Cancelar
+          </button>
+          <button type="button" onClick={() => guardar.mutate()} disabled={!!problemaDePlantilla || guardar.isPending || !userSession}
+            className="inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-foreground px-3.5 text-[13px] font-semibold text-background transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40">
+            <Save size={14} />{guardar.isPending ? 'Guardando…' : 'Guardar plantilla'}
+          </button>
+        </footer>
+      ) : (
       <footer className="flex shrink-0 items-center justify-end gap-3 px-4 py-3 [border-top:1px_solid_var(--line)]">
-        {problema && <span className="min-w-0 truncate text-[12px] text-(--fg-muted)">{problema}</span>}
+        {problema &&<span className="min-w-0 truncate text-[12px] text-(--fg-muted)">{problema}</span>}
         {/* Lo que pasó con el último envío, al lado del botón; mientras no se mandó nada, de quién llega. */}
         {enviar.isPending || enviar.data
           ? <EstadoDelEnvio enviando={enviar.isPending} resendId={enviar.isPending ? null : enviar.data?.id ?? null} />
@@ -288,6 +306,7 @@ export function EmailConPlantilla({ id, client, leadId, onEnviado, paraInicial }
           <Send size={14} />{enviar.isPending ? 'Enviando…' : 'Enviar email'}
         </button>
       </footer>
+      )}
     </>
   )
 }

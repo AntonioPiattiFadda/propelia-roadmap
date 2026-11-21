@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CrmClient, CrmLeadRow, CrmStage } from '../types'
-import { filterLeads, filtrosVacios, leadsDeCarteras, type LeadFilterContext, type LeadFilterState } from './leadFilters'
+import { faltaTareaMia, filterLeads, filtrosVacios, leadsDeCarteras, type LeadFilterContext, type LeadFilterState } from './leadFilters'
 
 const NOW = new Date(2026, 8, 30, 12).getTime()
 const etapa = (id: string, over: Partial<CrmStage> = {}): CrmStage => ({
@@ -55,6 +55,48 @@ describe('buscador (Review Focus 1)', () => {
   })
   it('mayúsculas y espacios de más no importan', () => {
     expect(filterLeads([conTel], f({ q: '  ANA ' }), ctx()).map(l => l.id)).toEqual(['b'])
+  })
+  it('encuentra por nombre y apellido juntos', () => {
+    const l = lead('x', { client: cliente({ first_name: 'Ana', last_name: 'Pérez' }) })
+    expect(filterLeads([l], f({ q: 'ana perez' }), ctx()).map(l => l.id)).toEqual(['x'])
+  })
+  it('las tildes no importan, ni en lo buscado ni en el dato', () => {
+    const l = lead('x', { client: cliente({ company_name: 'Inmobiliaria Barceló' }) })
+    expect(filterLeads([l], f({ q: 'barcelo' }), ctx()).map(l => l.id)).toEqual(['x'])
+    expect(filterLeads([lead('y', { client: cliente({ city: 'Malaga' }) })], f({ q: 'málaga' }), ctx()).map(l => l.id)).toEqual(['y'])
+  })
+  it('los espacios no importan, ni en lo buscado ni en el dato', () => {
+    const l = lead('x', { client: cliente({ company_name: 'Inmo Sur', email: 'info@inmosur.es' }) })
+    expect(filterLeads([l], f({ q: 'inmosur' }), ctx())).toHaveLength(1)
+    expect(filterLeads([l], f({ q: 'info @ inmosur .es' }), ctx())).toHaveLength(1)
+  })
+  it('no junta dos datos distintos al sacar los espacios', () => {
+    const l = lead('x', { client: cliente({ city: 'Sevilla', neighborhood: 'Triana' }) })
+    expect(filterLeads([l], f({ q: 'sevillatriana' }), ctx())).toHaveLength(0)
+  })
+  it('encuentra por un contacto alternativo: nombre, email y teléfono', () => {
+    const l = lead('x', { client: cliente({
+      alternative_phone_2_note: 'Jorge Ruiz', alternative_phone_1_email: 'jorge@agencia.es', alternative_phone_2: '611 22 33 44',
+    }) })
+    expect(filterLeads([l], f({ q: 'jorge ruiz' }), ctx())).toHaveLength(1)
+    expect(filterLeads([l], f({ q: 'agencia.es' }), ctx())).toHaveLength(1)
+    expect(filterLeads([l], f({ q: '+34 611223344' }), ctx())).toHaveLength(0)
+    expect(filterLeads([l], f({ q: '611223344' }), ctx())).toHaveLength(1)
+  })
+  it('encuentra por los teléfonos de Google Maps y de Idealista', () => {
+    const l = lead('x', { client: cliente({ google_maps_phone: '93 111 22 33', idealista_phone: '+34 900 000 999' }) })
+    expect(filterLeads([l], f({ q: '931112233' }), ctx())).toHaveLength(1)
+    expect(filterLeads([l], f({ q: '900 000 999' }), ctx())).toHaveLength(1)
+  })
+  it('encuentra por los demás datos de la inmobiliaria', () => {
+    const l = lead('x', { client: cliente({
+      city: 'Sevilla', neighborhood: 'Triana', office_address: 'Calle Betis 12', website: 'www.casas.es',
+      idealista_url: 'https://www.idealista.com/pro/casas-triana/', import_batch: 'BCN-S01', current_crm: 'Inmovilla',
+      contact_role: 'Gerente', notes: 'llamar por la tarde', sdr_advice: 'Tienen 3 oficinas',
+    }) })
+    for (const q of ['sevilla', 'triana', 'betis', 'casas.es', 'casas-triana', 'bcn-s01', 'inmovilla', 'gerente', 'por la tarde', 'oficinas']) {
+      expect(filterLeads([l], f({ q }), ctx()), q).toHaveLength(1)
+    }
   })
 })
 
@@ -158,6 +200,26 @@ describe('pendiente agendar tarea', () => {
   })
   it('skip lo apaga (para el contador)', () => {
     expect(filterLeads(todos, f({ pendienteAgendar: true }), c, ['agendar'])).toHaveLength(4)
+  })
+  describe('faltaTareaMia (la pregunta al irse del lead)', () => {
+    const tarea = (over: Partial<{ assigned_to: string; completed: boolean; deleted_at: string | null }> = {}) =>
+      ({ assigned_to: 'yo', completed: false, deleted_at: null, ...over })
+    it('en seguimiento sin tareas, falta', () => {
+      expect(faltaTareaMia(sinTarea, etapas, [], 'yo')).toBe(true)
+    })
+    it('con una pendiente mía, no falta', () => {
+      expect(faltaTareaMia(sinTarea, etapas, [tarea()], 'yo')).toBe(false)
+    })
+    it('una de otro, una completada o una borrada no cuentan', () => {
+      const ajenas = [tarea({ assigned_to: 'otro' }), tarea({ completed: true }), tarea({ deleted_at: '2026-11-01' })]
+      expect(faltaTareaMia(sinTarea, etapas, ajenas, 'yo')).toBe(true)
+    })
+    it('fuera de seguimiento no pide nada', () => {
+      expect(faltaTareaMia(primerContacto, etapas, [], 'yo')).toBe(false)
+    })
+    it('sin saber quién mira, no pide nada', () => {
+      expect(faltaTareaMia(sinTarea, etapas, [], null)).toBe(false)
+    })
   })
   it('no cuenta a los de una etapa donde no se agendan tareas', () => {
     const sinTareas = new Map(etapas).set('seguimiento', etapa('seguimiento', { management_type: 'por_tarea', allows_tasks: false }))

@@ -170,7 +170,10 @@ export function mensajeDeWhatsapp(d: Destinatario = {}, id: PlantillaEmailId = '
 export function whatsappDe(r: Remitente, d?: Destinatario, id: PlantillaEmailId = 'puntual'): string {
   const digitos = r.telefono.replace(/\D/g, '')
   if (!digitos) return `mailto:${r.email}`
-  return `https://wa.me/${digitos}?text=${encodeURIComponent(mensajeDeWhatsapp(d, id))}`
+  // encodeURIComponent leaves the apostrophe as is, and ES_URL rejects it: a lead named
+  // «Finques L'Arboç» left the Send button disabled.
+  const texto = encodeURIComponent(mensajeDeWhatsapp(d, id)).replace(/'/g, '%27')
+  return `https://wa.me/${digitos}?text=${texto}`
 }
 
 /** Lo que arranca cargado en el diálogo: el botón de los dos va al WhatsApp de quien manda. */
@@ -178,8 +181,9 @@ export function predeterminadosPara(id: PlantillaEmailId, r: Remitente, d?: Dest
   return { ...plantillaEmail(id)!.predeterminados, urlBoton: whatsappDe(r, d, id) }
 }
 
-/* El último enviado es la plantilla (21/10/2026, por pedido): `send-email` guarda en
-   `crm_email_plantillas` el texto de cada envío y el diálogo arranca desde ahí. Es una por plantilla
+/* La plantilla del equipo vive en `crm_email_plantillas` y el diálogo arranca desde ahí. Del
+   21/10/2026 la guardaba `send-email` en cada envío; desde el 21/11/2026 (por pedido) solo «Editar
+   plantilla» del CRM (`guardarPlantilla`), y lo editado antes de mandar vale para ese envío. Es una por plantilla
    y del equipo, no de cada uno. Lo que es de ese envío y no de la plantilla no se guarda: el nombre
    del lead y el botón armado solo (el WhatsApp o el mailto de quien mandó, con el nombre del lead
    adentro). Un enlace del botón escrito a mano (un Calendly) sí queda. */

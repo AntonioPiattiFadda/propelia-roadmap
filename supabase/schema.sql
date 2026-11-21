@@ -140,6 +140,8 @@ create table if not exists public.expenses (
   notes        text,
   -- Quién pagó, que no tiene por qué ser quién lo cargó (`created_by`).
   paid_by      uuid references public.users(id) on delete restrict,
+  -- «Pagaron ambos»: se reparte en partes iguales entre los de `users.caja` (`paid_by` igual va).
+  paid_by_both boolean not null default false,
   created_by   uuid default auth.uid() references public.users(id) on delete restrict,
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
@@ -163,6 +165,10 @@ alter table public.expenses add constraint expenses_fixed_paid_check
 alter table public.expenses drop constraint if exists expenses_paid_by_check;
 alter table public.expenses add constraint expenses_paid_by_check
   check (status <> 'PAID' or paid_by is not null);
+-- «Pagaron ambos» solo en un pagado.
+alter table public.expenses drop constraint if exists expenses_paid_by_both_check;
+alter table public.expenses add constraint expenses_paid_by_both_check
+  check (not paid_by_both or status = 'PAID');
 -- Una etiqueta no se repite (sin importar mayúsculas); las borradas no cuentan.
 create unique index if not exists expense_presets_name_key
   on public.expense_presets (lower(name))
@@ -1743,6 +1749,17 @@ alter table public.crm_email_plantillas enable row level security;
 
 drop policy if exists crm_email_plantillas_leer on public.crm_email_plantillas;
 create policy crm_email_plantillas_leer on public.crm_email_plantillas for select using (public.es_usuario());
+
+-- (migración 20261121213000_crm_email_plantillas_editables) Desde el 21/11/2026 enviar ya no
+-- cambia la plantilla: la escribe «Editar plantilla» del CRM, cualquier usuario activo.
+drop policy if exists crm_email_plantillas_insertar on public.crm_email_plantillas;
+create policy crm_email_plantillas_insertar on public.crm_email_plantillas for insert
+  with check (public.es_usuario() and updated_by = auth.uid());
+
+drop policy if exists crm_email_plantillas_editar on public.crm_email_plantillas;
+create policy crm_email_plantillas_editar on public.crm_email_plantillas for update
+  using (public.es_usuario())
+  with check (public.es_usuario() and updated_by = auth.uid());
 
 -- ---------- Google Calendar: conexión, agenda y sync de reuniones
 -- (migración 20261021151726_crm_google_calendar) ----------
