@@ -31,10 +31,15 @@ import type { CrmClient } from '../types'
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const MULTILINEA: Partial<Record<CampoEmail, { filas: number; ayuda?: string }>> = {
-  cuerpo: { filas: 10, ayuda: 'Una línea en blanco separa párrafos.' },
-  puntos: { filas: 7, ayuda: 'Una tarjeta por renglón; hasta el primer punto va en negrita.' },
-  notaBoton: { filas: 3 },
+  cuerpo: { filas: 6, ayuda: 'Una línea en blanco separa párrafos.' },
+  puntos: { filas: 5, ayuda: 'Una tarjeta por renglón; hasta el primer punto va en negrita.' },
+  notaBoton: { filas: 2 },
 }
+
+/* Layout order (23/11/2026, by request: less scroll). Short fields go in pairs on a two-column
+   grid, long texts take the full width: Para | Nombre, Asunto | Preencabezado, Titular | Vídeo,
+   Cuerpo, Puntos, Texto | Enlace del botón, Nota. */
+const ORDEN: CampoEmail[] = ['nombre', 'asunto', 'preencabezado', 'titular', 'urlVideo', 'cuerpo', 'puntos', 'textoBoton', 'urlBoton', 'notaBoton']
 
 const formatSize = (bytes: number) =>
   bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
@@ -220,7 +225,8 @@ export function EmailConPlantilla({ id, client, leadId, onEnviado, paraInicial }
           <p className="text-[12px] text-(--fg-muted)">Los cambios valen solo para este envío: la plantilla no se modifica.</p>
         )}
 
-        {!editandoPlantilla && <label className="flex flex-col gap-1">
+        <div className="grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2">
+        {!editandoPlantilla && <label className="flex min-w-0 flex-col gap-1">
           <span className={ETIQUETA}>Para</span>
           <Input type="email" value={para} placeholder="casilla@inmobiliaria.com" onChange={e => setPara(e.target.value)}
             className="h-9 text-[13px] md:text-[13px]" />
@@ -235,11 +241,15 @@ export function EmailConPlantilla({ id, client, leadId, onEnviado, paraInicial }
           )}
         </label>}
 
-        {plantilla.editables.filter(k => !(editandoPlantilla && k === 'nombre')).map(k => {
+        {ORDEN.filter(k => plantilla.editables.includes(k) && !(editandoPlantilla && k === 'nombre')).map(k => {
             const multi = MULTILINEA[k]
+            const ancho = !!multi || (k === 'titular' && !plantilla.editables.includes('urlVideo'))
             return (
-              <label key={k} className="flex flex-col gap-1">
-                <span className={ETIQUETA}>{ROTULOS_CAMPOS[k]}</span>
+              <label key={k} className={cn('flex min-w-0 flex-col gap-1', ancho && 'sm:col-span-2')}>
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className={ETIQUETA}>{ROTULOS_CAMPOS[k]}</span>
+                  {multi?.ayuda && <span className="truncate text-[11.5px] text-(--fg-muted)">{multi.ayuda}</span>}
+                </span>
                 {multi ? (
                   <Textarea rows={multi.filas} value={campos[k]} onChange={e => cambiar(k, e.target.value)}
                     className="resize-y text-[13px] md:text-[13px]" />
@@ -248,10 +258,10 @@ export function EmailConPlantilla({ id, client, leadId, onEnviado, paraInicial }
                     placeholder={k === 'urlVideo' || k === 'urlBoton' ? 'https://…' : undefined}
                     className="h-9 text-[13px] md:text-[13px]" />
                 )}
-                {multi?.ayuda && <span className="text-[11.5px] text-(--fg-muted)">{multi.ayuda}</span>}
               </label>
             )
           })}
+        </div>
 
         {plantilla.adjuntos && !editandoPlantilla && (
           <div className="flex flex-col gap-1">
