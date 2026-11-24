@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { armarMetaDeActividad } from './actividad'
-import { diaDeObjetivos, diasHaciaAtras, esObjetivo, LLAMADAS_POR_DEMO, mesesHaciaAtras, llamadasDesdeLaUltimaDemo, nutricionDeLaCuenta, objetivosDe, pendientesDePersona, progresoHaciaDemo, semanasHaciaAtras, sumarResumenes, tasaDeDecisor, tituloDeObjetivos } from './objetivos'
+import { diaDeObjetivos, diasHaciaAtras, esObjetivo, LLAMADAS_POR_DEMO, mesesHaciaAtras, llamadasDesdeLaUltimaDemo, nutricionDeLaCuenta, objetivosDe, pendientesDePersona, progresoHaciaDemo, semanasHaciaAtras, sumarResumenes, tasaDeDecisor, tituloDeObjetivos, tonoDeTareas } from './objetivos'
 import type { CrmLeadRow, CrmStage, CrmTask } from '../types'
 
 const llamada = (lead_id: string, resultado: 'contestada' | 'no_respondida', decisor?: boolean, con: string[] = [], created_at = '2026-11-03T10:00:00Z') => ({
@@ -195,6 +195,17 @@ describe('pendientesDePersona', () => {
 
   it('cuenta sus tareas vencidas y los leads de su cartera en seguimiento sin tarea suya', () => {
     expect(pendientesDePersona('u', leads, tareas, etapas, '2026-11-04')).toEqual({ vencidas: 2, sinTarea: 1 })
+  })
+})
+
+describe('tonoDeTareas', () => {
+  it('is fine with no overdue tasks and up to 10 leads pending a task', () => {
+    expect(tonoDeTareas({ vencidas: 0, sinTarea: 0 })).toBe('verde')
+    expect(tonoDeTareas({ vencidas: 0, sinTarea: 10 })).toBe('verde')
+  })
+  it('goes red with more than 10 pending or any overdue task', () => {
+    expect(tonoDeTareas({ vencidas: 0, sinTarea: 11 })).toBe('rojo')
+    expect(tonoDeTareas({ vencidas: 1, sinTarea: 0 })).toBe('rojo')
   })
 })
 

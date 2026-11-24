@@ -28,6 +28,17 @@ describe('mesesDeLaCaja', () => {
     expect(mesesDeLaCaja([], pagadores)).toEqual([])
   })
 
+  it('el mes que se pide asegurar aparece vacío aunque no tenga filas, en su lugar', () => {
+    const meses = mesesDeLaCaja([fila({ period: '2026-10', fecha: '2026-10-03' })], pagadores, '2026-11')
+    expect(meses.map(m => m.period)).toEqual(['2026-10', '2026-11'])
+    expect(meses[1]).toMatchObject({ fijos: [], variables: [], total: 0 })
+  })
+
+  it('asegurar un mes que ya tiene filas no lo repite', () => {
+    const meses = mesesDeLaCaja([fila({ period: '2026-10', fecha: '2026-10-03' })], pagadores, '2026-10')
+    expect(meses).toHaveLength(1)
+  })
+
   it('los meses van del más viejo al más nuevo', () => {
     const meses = mesesDeLaCaja([
       fila({ period: '2026-10', fecha: '2026-10-03' }),
@@ -96,6 +107,11 @@ describe('mesesDeLaCaja', () => {
     expect(mes.fijos.map(f => f.sub)).toEqual(['Pagó Antonio · Mensual · vence el 5', 'Sin pagar · Mensual · vence el 5'])
   })
 
+  it('el pagado entre los dos dice «Pagaron ambos»', () => {
+    const [mes] = mesesDeLaCaja([fila({ gasto: gasto({ paid_by_both: true }) })], pagadores)
+    expect(mes.variables[0].sub).toBe('Pagaron ambos')
+  })
+
   it('totales por mes, por fijos y por variables, redondeados a centavos', () => {
     const [mes] = mesesDeLaCaja([
       fila({ kind: 'FIXED', amount: 0.1, gasto: gasto({ expense_type: 'FIXED', recurrence: 'MONTHLY' }) }),
@@ -138,6 +154,17 @@ describe('totalesPorPagador', () => {
     expect(totalesPorPagador([], conInactivo).map(t => t.pagador?.id)).toEqual(['u1', 'u2'])
     expect(totalesPorPagador([fila({ gasto: gasto({ paid_by: 'u3' }) })], conInactivo).map(t => t.pagador?.id))
       .toEqual(['u1', 'u2', 'u3'])
+  })
+
+  it('«pagaron ambos» se reparte en partes iguales entre los pagadores activos', () => {
+    const r = totalesPorPagador([
+      fijo(10, 'u1'),
+      fila({ amount: 30, gasto: gasto({ paid_by: 'u1', paid_by_both: true }) }),
+    ], pagadores)
+    expect(r).toEqual([
+      { pagador: pagadores[0], total: 25, fijos: 10, variables: 15, n: 2 },
+      { pagador: pagadores[1], total: 15, fijos: 0, variables: 15, n: 1 },
+    ])
   })
 
   it('quien pagó y ya no está en la lista de pagadores no se pierde', () => {

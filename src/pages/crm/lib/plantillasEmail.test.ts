@@ -113,6 +113,17 @@ describe('Contáctame por WhatsApp', () => {
     expect(v.textoBoton).toBe('Reservar 20 minutos')
     expect(decodeURIComponent(v.urlBoton)).toContain('Me gustaría reservar 20 minutos para ver una demo de Propelia.')
   })
+
+  it('a name with an apostrophe still yields a sendable link', async () => {
+    const { predeterminadosPara } = await import('../../../../supabase/functions/_shared/plantillasEmail.ts')
+    const r = remitenteDe({ nombre: 'Lorenzo', phone: '+34 600 11 22 33' })
+    for (const id of ['puntual', 'presentacion-video'] as const) {
+      const c = predeterminadosPara(id, r, { nombre: "D'Ana", empresa: "Finques L'Arboç" })
+      expect(c.urlBoton).not.toContain("'")
+      expect(decodeURIComponent(c.urlBoton)).toContain("Soy D'Ana, de Finques L'Arboç.")
+      expect(problemaDeCampos(id, c)).toBeNull()
+    }
+  })
 })
 
 describe('remitente: email del dominio propio o info@', () => {

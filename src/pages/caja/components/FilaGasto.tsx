@@ -30,17 +30,18 @@ export function FilaGasto({ fila: f, pagadores, onPagar, onCambiarPagador, onEdi
   const chip = CHIP[f.status]
   const virtual = f.status === 'NONE'
   return (
-    <div className="group grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 px-4 py-[11px] hover:bg-(--surface-2) md:grid-cols-[52px_minmax(0,1fr)_200px_110px_124px]">
+    // En escritorio, un renglón bajo por gasto (la nota al lado del nombre), para ver el mes sin scrollear.
+    <div className="group grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 px-4 py-[11px] text-[13px] hover:bg-(--surface-2) md:grid-cols-[52px_minmax(0,1fr)_200px_110px_124px] md:gap-y-0 md:px-3 md:py-1">
       <div
         title={`${f.status === 'PAID' ? 'Pagado el' : 'Vence el'} ${d.toLocaleDateString('es-ES', FECHA_LARGA)}`}
-        className="col-start-1 row-span-2 row-start-1 flex flex-col items-center leading-[1.1] md:col-auto md:row-auto md:row-span-1"
+        className="col-start-1 row-span-2 row-start-1 flex flex-col items-center leading-[1.1] md:col-auto md:row-auto md:row-span-1 md:flex-row md:justify-center md:gap-1"
       >
-        <b className="text-base font-semibold tabular-nums">{d.getDate()}</b>
+        <b className="text-base font-semibold tabular-nums md:text-[13px]">{d.getDate()}</b>
         <span className="text-[10px] uppercase tracking-wide text-(--fg-muted)">{d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')}</span>
       </div>
-      <div className="col-start-2 row-start-1 min-w-0 md:col-auto md:row-auto">
-        <div className="truncate font-medium">{f.nombre}</div>
-        {f.sub && <div className="mt-0.5 truncate text-xs text-(--fg-muted)">{f.sub}</div>}
+      <div className="col-start-2 row-start-1 min-w-0 md:col-auto md:row-auto md:flex md:items-baseline md:gap-2">
+        <div className="truncate font-medium md:shrink-0 md:max-w-[60%]">{f.nombre}</div>
+        {f.sub && <div className="mt-0.5 truncate text-xs text-(--fg-muted) md:mt-0">{f.sub}</div>}
       </div>
       <div className="col-start-2 row-start-2 flex items-center gap-1.5 md:col-auto md:row-auto">
         <PillTipo tipo={f.kind} className="w-[70px]" />
@@ -60,7 +61,11 @@ export function FilaGasto({ fila: f, pagadores, onPagar, onCambiarPagador, onEdi
       </div>
       <div className="col-start-3 row-start-2 flex items-center justify-end gap-1 md:col-auto md:row-auto">
         {/* Solo un pagado tiene quién: un pendiente lo elige al confirmar el pago. */}
-        {f.gasto && f.status === 'PAID' && (
+        {/* «Pagaron ambos» no es una persona: se dice y no se elige desde la fila. */}
+        {f.gasto?.paid_by_both && f.status === 'PAID' && (
+          <span title="Pagaron ambos: se reparte mitad y mitad" className="rounded-full bg-(--surface-2) px-2 py-0.5 text-[11px] font-semibold text-(--fg-2)">Ambos</span>
+        )}
+        {f.gasto && f.status === 'PAID' && !f.gasto.paid_by_both && (
           <PagadorPicker
             variante="fila" pagadores={pagadores} valor={f.gasto.paid_by}
             onChange={id => { if (id !== f.gasto!.paid_by) onCambiarPagador(f.gasto!.id, id) }}

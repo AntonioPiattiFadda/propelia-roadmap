@@ -76,6 +76,20 @@ export function esPendienteAgendar(l: CrmLeadRow, ctx: Pick<LeadFilterContext, '
     && !ctx.leadIdsConTareasMias.has(l.id)
 }
 
+/** La misma regla para un lead abierto, con sus tareas a mano: quien mira (`yo`, el de pantalla)
+ *  lo deja en «Seguimiento» sin ninguna tarea pendiente suya. Es lo que pregunta el dialog del
+ *  lead al irse después de registrar una actividad (21/11/2026). Sin `yo`, no pide nada. */
+export function faltaTareaMia(
+  l: CrmLeadRow,
+  etapas: ReadonlyMap<string, CrmStage>,
+  tareas: readonly { assigned_to: string | null; completed: boolean; deleted_at: string | null }[],
+  yo: string | null | undefined,
+): boolean {
+  if (!yo) return false
+  const tengo = tareas.some(t => t.assigned_to === yo && !t.completed && t.deleted_at == null)
+  return esPendienteAgendar(l, { etapas, leadIdsConTareasMias: new Set(tengo ? [l.id] : []) })
+}
+
 export function esDescartado(l: CrmLeadRow, etapas: ReadonlyMap<string, CrmStage>): boolean {
   return etapaDelLead(l, etapas)?.is_out_of_funnel === true
 }
@@ -90,17 +104,38 @@ const soloDigitos = (s: string) => s.replace(/\D/g, '')
 // y compararlo por sus dígitos traería a todo el que tenga un 6.
 const PARECE_TELEFONO = /^[\d\s+()-]+$/
 
+/** Sin mayúsculas, sin tildes y sin espacios: «Inmo Barceló» y «inmobarcelo» son lo mismo
+ *  (21/11/2026, por pedido: un número o un mail se encuentra aunque esté escrito con espacios). */
+const normalizar = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, '')
+
+/** Todo lo que se busca del cliente (21/11/2026, por pedido: «por cualquier valor»). Cada dato va
+ *  aparte —sacar los espacios no tiene que pegar la ciudad con el barrio— y el nombre completo
+ *  entra además entero, para que «ana pérez» encuentre a Ana Pérez. */
+function textosBuscables(c: CrmLeadRow['client']): string[] {
+  if (!c) return []
+  return [
+    c.company_name, c.first_name, c.last_name, [c.first_name, c.last_name].filter(Boolean).join(' '),
+    c.email, c.alternative_phone_1_email, c.alternative_phone_2_email,
+    c.alternative_phone_1_note, c.alternative_phone_2_note,
+    c.contact_role, c.alternative_phone_1_role, c.alternative_phone_2_role,
+    c.contact_notes, c.alternative_phone_1_notes, c.alternative_phone_2_notes,
+    c.phone, c.alternative_phone_1, c.alternative_phone_2, c.google_maps_phone, c.idealista_phone,
+    c.city, c.neighborhood, c.office_address, c.website, c.idealista_url, c.google_maps_url,
+    c.current_crm, c.import_batch, c.notes, c.sdr_advice,
+  ].filter((t): t is string => !!t)
+}
+
 function matchesSearch(l: CrmLeadRow, q: string): boolean {
-  const query = q.trim().toLowerCase()
+  const query = normalizar(q)
   if (!query) return true
-  const c = l.client
-  const texto = [c?.company_name, c?.first_name, c?.last_name, c?.email].filter(Boolean).join(' ').toLowerCase()
-  if (texto.includes(query)) return true
-  if (!PARECE_TELEFONO.test(query)) return false
-  const digitos = soloDigitos(query)
+  const textos = textosBuscables(l.client)
+  if (textos.some(t => normalizar(t).includes(query))) return true
+  if (!PARECE_TELEFONO.test(q.trim())) return false
+  const digitos = soloDigitos(q)
   // Sin este corte, '' está incluido en cualquier string y un teléfono vacío igualaría todo.
   if (!digitos) return false
-  return [c?.phone, c?.alternative_phone_1, c?.alternative_phone_2]
+  const c = l.client
+  return [c?.phone, c?.alternative_phone_1, c?.alternative_phone_2, c?.google_maps_phone, c?.idealista_phone]
     .some(tel => !!tel && soloDigitos(tel).includes(digitos))
 }
 

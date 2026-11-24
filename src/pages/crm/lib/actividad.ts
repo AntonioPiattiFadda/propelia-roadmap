@@ -96,9 +96,10 @@ export function textoEditado(i: Pick<ItemActividad, 'tipo' | 'resultado'>, texto
 
 /** «Avances para contactar al decisor» (18/11/2026, por pedido): solo en la llamada y solo cuando
  *  quien atendió NO decide (`esDecisor`: lo contestado o lo que ya sabe el perfil; null = sin
- *  contestar). Si decide, no hay a quién más buscar. */
-export function pideAvancesDelDecisor(tipo: string, esDecisor: boolean | null): boolean {
-  return tipo === 'llamada' && esDecisor === false
+ *  contestar). Si decide, no hay a quién más buscar. Tampoco si el perfil ya tiene un decisor
+ *  cargado (`hayDecisorCargado`, 21/11/2026, por pedido): ya se sabe a quién buscar. */
+export function pideAvancesDelDecisor(tipo: string, esDecisor: boolean | null, hayDecisorCargado = false): boolean {
+  return tipo === 'llamada' && esDecisor === false && !hayDecisorCargado
 }
 
 /** Día (`YYYY-MM-DD`) y hora de España (`HH:MM`) para volver a llamar al decisor. */
@@ -129,6 +130,13 @@ export function proximoContactoDelBloque(
 export function tituloDeLlamarAlDecisor(apuntado: string, delPerfil: readonly string[]): string {
   const nombre = apuntado.trim() || delPerfil.map(n => n.trim()).find(Boolean)
   return nombre ? `Llamar al decisor ${nombre}` : 'Llamar al decisor'
+}
+
+/** El título de la tarea del próximo contacto (20/11/2026, por pedido: se elige y se escribe).
+ *  `escrito` null = el campo no se tocó, así sigue al sugerido (y al nombre que se va cargando);
+ *  vaciado da '', que es lo que falta para registrar. */
+export function tituloDeLaTareaDelProximo(escrito: string | null, sugerido: string): string {
+  return escrito === null ? sugerido : escrito.trim().replace(/\s+/g, ' ')
 }
 
 /** «20/11 a las 10:30 (hora de España)». */

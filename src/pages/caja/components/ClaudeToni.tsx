@@ -34,19 +34,18 @@ export function ClaudeToni({ className }: { className?: string }) {
             // El corto se ve; el largo («octubre de 2026») es el que leen los lectores de pantalla.
             const mes = tituloDePeriodo(period)
             return (
-              <li key={period} className="flex flex-col gap-1 px-3 py-1.5 text-xs">
-                <div className="flex min-h-5 items-center gap-2">
-                  <Checkbox checked={pagado} aria-label={`Pagado ${mes}`}
-                    onCheckedChange={() => guardar.mutate(alternarPagado(pagados, period))} />
-                  <span className="flex-1 truncate" title={mes}>{mesCorto(period)}</span>
-                  <span className="tabular-nums text-(--fg-2)">{eur(MONTO_CLAUDE_TONI)}</span>
-                </div>
-                {pagado && (
+              // Un renglón por mes: la nota del pagado va al lado del mes, no debajo, para que entre sin scrollear.
+              <li key={period} className="flex min-h-6 items-center gap-2 px-3 py-0.5 text-xs">
+                <Checkbox checked={pagado} aria-label={`Pagado ${mes}`}
+                  onCheckedChange={() => guardar.mutate(alternarPagado(pagados, period))} />
+                <span className="w-11 shrink-0 truncate" title={mes}>{mesCorto(period)}</span>
+                {pagado ? (
                   <NotaDelMes
                     key={nota} nota={nota} mes={mes}
                     onGuardar={texto => guardar.mutate(conNota(pagados, period, texto))}
                   />
-                )}
+                ) : <span className="flex-1" />}
+                <span className="shrink-0 tabular-nums text-(--fg-2)">{eur(MONTO_CLAUDE_TONI)}</span>
               </li>
             )
           })}
@@ -77,7 +76,7 @@ function NotaDelMes({ nota, mes, onGuardar }: {
         if (ev.key === 'Enter') ev.currentTarget.blur()
         if (ev.key === 'Escape') setBorrador(nota)
       }}
-      className="ml-6 rounded border border-transparent bg-transparent px-1 py-0.5 text-[11px] text-(--fg-2) placeholder:text-(--fg-faint) hover:border-border focus:border-border focus:outline-none"
+      className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-[11px] text-(--fg-2) placeholder:text-(--fg-faint) hover:border-border focus:border-border focus:outline-none"
     />
   )
 }

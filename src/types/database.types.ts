@@ -1291,6 +1291,7 @@ export type Database = {
           id: string
           notes: string | null
           paid_by: string | null
+          paid_by_both: boolean
           period: string
           preset_id: string | null
           recurrence: string
@@ -1308,6 +1309,7 @@ export type Database = {
           id?: string
           notes?: string | null
           paid_by?: string | null
+          paid_by_both?: boolean
           period: string
           preset_id?: string | null
           recurrence?: string
@@ -1325,6 +1327,7 @@ export type Database = {
           id?: string
           notes?: string | null
           paid_by?: string | null
+          paid_by_both?: boolean
           period?: string
           preset_id?: string | null
           recurrence?: string

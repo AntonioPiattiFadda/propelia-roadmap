@@ -35,7 +35,9 @@ const nombreDe = (id: string | null, pagadores: Pagador[]) => pagadores.find(p =
 
 // Fijos y variables dicen quién los pagó; el fijo lo lleva delante de su «Mensual · vence el N».
 function conPagador(f: FilaCaja, pagadores: Pagador[]): FilaCaja {
-  const quien = f.status === 'PAID' ? `Pagó ${nombreDe(f.gasto?.paid_by ?? null, pagadores) ?? '—'}` : 'Sin pagar'
+  const quien = f.status !== 'PAID' ? 'Sin pagar'
+    : f.gasto?.paid_by_both ? 'Pagaron ambos'
+      : `Pagó ${nombreDe(f.gasto?.paid_by ?? null, pagadores) ?? '—'}`
   return { ...f, sub: [quien, f.sub].filter(Boolean).join(' · ') }
 }
 
@@ -45,9 +47,11 @@ function bloque(fs: FilaCaja[], pagadores: Pagador[]): Omit<MesDeLaCaja, 'period
   return { fijos, variables, total: suma(fs), totalFijos: suma(fijos), totalVariables: suma(variables) }
 }
 
-/** Meses del más viejo al más nuevo; adentro, fechas de la más vieja a la más nueva. */
-export function mesesDeLaCaja(filas: FilaCaja[], pagadores: Pagador[]): MesDeLaCaja[] {
+/** Meses del más viejo al más nuevo; adentro, fechas de la más vieja a la más nueva. `asegurar`
+    (el mes de hoy) aparece aunque esté vacío: es donde se carga el primer gasto del mes. */
+export function mesesDeLaCaja(filas: FilaCaja[], pagadores: Pagador[], asegurar?: string): MesDeLaCaja[] {
   const porMes = new Map<string, FilaCaja[]>()
+  if (asegurar) porMes.set(asegurar, [])
   for (const f of filas) porMes.set(f.period, [...(porMes.get(f.period) ?? []), f])
   return [...porMes.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -60,9 +64,14 @@ export function mesesDeLaCaja(filas: FilaCaja[], pagadores: Pagador[]): MesDeLaC
  */
 export function totalesPorPagador(filas: FilaCaja[], pagadores: Pagador[]): TotalDePagador[] {
   const porId = new Map<string, FilaCaja[]>()
+  const anotar = (id: string, f: FilaCaja) => porId.set(id, [...(porId.get(id) ?? []), f])
+  // «Pagaron ambos» se parte en partes iguales entre los pagadores activos (los de `users.caja`).
+  const entreTodos = pagadores.filter(p => p.activo)
   for (const f of filas) {
     if (f.status !== 'PAID' || !f.gasto?.paid_by) continue
-    porId.set(f.gasto.paid_by, [...(porId.get(f.gasto.paid_by) ?? []), f])
+    if (f.gasto.paid_by_both && entreTodos.length) {
+      for (const p of entreTodos) anotar(p.id, { ...f, amount: f.amount / entreTodos.length })
+    } else anotar(f.gasto.paid_by, f)
   }
   const total = (pagador: Pagador | null, fs: FilaCaja[]): TotalDePagador => ({
     pagador, total: suma(fs), n: fs.length,

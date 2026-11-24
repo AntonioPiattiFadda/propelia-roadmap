@@ -1,6 +1,7 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
-import type { CamposEmail, DatosDeAcceso, PlantillaEmailId } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
+import { plantillaGuardable, type CamposEmail, type DatosDeAcceso, type PlantillaEmailId } from '../../../../supabase/functions/_shared/plantillasEmail.ts'
+import type { Json } from '@/types/database.types'
 import { ESTADOS_QUE_NO_LLEGARON } from '../lib/emails'
 import type { EmailDelHistorial } from '../lib/historialDeEmails'
 import type { AvisoDelLead } from '../lib/avisosDelLead'
@@ -108,6 +109,16 @@ export async function getPlantillasGuardadas(): Promise<Partial<Record<Plantilla
   const { data, error } = await supabase.from('crm_email_plantillas').select('plantilla, campos')
   if (error) return {}
   return Object.fromEntries((data ?? []).map(f => [f.plantilla, f.campos]))
+}
+
+/* «Editar plantilla» (21/11/2026): writes the team template for `id`. Sending no longer does it.
+   Without the migration `20261121213000_crm_email_plantillas_editables` the RLS rejects it. */
+export async function guardarPlantilla(id: PlantillaEmailId, campos: CamposEmail, userId: string): Promise<void> {
+  const { error } = await supabase.from('crm_email_plantillas').upsert({
+    plantilla: id, campos: plantillaGuardable(id, campos) as Json,
+    updated_by: userId, updated_at: new Date().toISOString(),
+  })
+  if (error) throw error
 }
 
 /* Los avisos para la SDR que siguen pendientes (`crm_lead_avisos`, 19/11/2026), de todo lo que la

@@ -4,10 +4,10 @@ import type { ResumenCaja as Resumen } from '../types'
 
 function Tarjeta({ titulo, valor, sub, className }: { titulo: string; valor: string; sub: string; className?: string }) {
   return (
-    <div className={cn('rounded-xl border border-border bg-card px-4 py-3.5', className)}>
-      <div className="text-[11px] font-medium uppercase tracking-wide text-(--fg-muted)">{titulo}</div>
-      <div className="mt-1 text-[22px] font-semibold tabular-nums tracking-tight">{valor}</div>
-      <div className="mt-0.5 text-xs text-(--fg-2)">{sub}</div>
+    <div className={cn('rounded-lg border border-border bg-card px-3 py-2', className)}>
+      <div className="text-[10px] font-medium uppercase tracking-wide text-(--fg-muted)">{titulo}</div>
+      <div className="text-lg font-semibold tabular-nums tracking-tight">{valor}</div>
+      <div className="text-[11px] text-(--fg-2)">{sub}</div>
     </div>
   )
 }
@@ -18,13 +18,13 @@ export function ResumenCaja({ resumen: r, conPendientes, cargando = false }: { r
   // Mientras llegan los gastos del rango nuevo no hay cifras honestas: se atenúa y no se muestran.
   if (cargando) {
     return (
-      <section className="grid grid-cols-2 gap-3 opacity-50 md:grid-cols-4" aria-busy>
+      <section className="grid grid-cols-2 gap-2 opacity-50 md:grid-cols-4" aria-busy>
         {['Total del período', 'Pagado', 'Por pagar', 'Fijos · Variables'].map(t => <Tarjeta key={t} titulo={t} valor="—" sub="Cargando…" />)}
       </section>
     )
   }
   return (
-    <section className="grid grid-cols-2 gap-3 md:grid-cols-4">
+    <section className="grid grid-cols-2 gap-2 md:grid-cols-4">
       <Tarjeta titulo="Total del período" valor={eur(r.total)} sub={`${r.nGastos} gastos`} />
       <Tarjeta titulo="Pagado" valor={eur(r.pagado)} sub={`${r.nPagados} gastos`} />
       {conPendientes ? (

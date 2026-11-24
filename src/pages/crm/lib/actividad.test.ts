@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { CrmMeeting, CrmTask, LeadDetalle, Usuario } from '../types'
 import {
   agruparPorDia, armarMetaDeActividad, decisorContactado, horaDe, leerMetaDeActividad, lineaDeTiempo, primeroLosUltimos, resumenDeLlamadas, textoEditado,
-  pideAvancesDelDecisor, proximoContactoDelBloque, tituloDeLlamarAlDecisor, ultimoContacto, type ItemActividad, type MetaDeActividad,
+  pideAvancesDelDecisor, proximoContactoDelBloque, tituloDeLaTareaDelProximo, tituloDeLlamarAlDecisor, ultimoContacto, type ItemActividad, type MetaDeActividad,
 } from './actividad'
 
 describe('proximoContactoDelBloque', () => {
@@ -26,6 +26,18 @@ describe('proximoContactoDelBloque', () => {
   })
 })
 
+describe('tituloDeLaTareaDelProximo', () => {
+  it('sin tocar el campo, vale el sugerido', () => {
+    expect(tituloDeLaTareaDelProximo(null, 'Llamar al decisor Jordi')).toBe('Llamar al decisor Jordi')
+  })
+  it('lo escrito manda, sin espacios de más', () => {
+    expect(tituloDeLaTareaDelProximo('  Mandar   propuesta a Jordi ', 'Llamar al decisor')).toBe('Mandar propuesta a Jordi')
+  })
+  it('vaciado queda vacío: es lo que falta', () => {
+    expect(tituloDeLaTareaDelProximo('   ', 'Llamar al decisor')).toBe('')
+  })
+})
+
 describe('tituloDeLlamarAlDecisor', () => {
   it('con el nombre conseguido en la llamada', () => {
     expect(tituloDeLlamarAlDecisor('Jordi', ['Marta'])).toBe('Llamar al decisor Jordi')
@@ -43,6 +55,10 @@ describe('pideAvancesDelDecisor', () => {
     expect(pideAvancesDelDecisor('llamada', false)).toBe(true)
     expect(pideAvancesDelDecisor('llamada', true)).toBe(false)
     expect(pideAvancesDelDecisor('llamada', null)).toBe(false) // todavía sin contestar
+  })
+  it('con un decisor ya cargado en el perfil no lo pide', () => {
+    expect(pideAvancesDelDecisor('llamada', false, true)).toBe(false)
+    expect(pideAvancesDelDecisor('llamada', false, false)).toBe(true)
   })
   it('la nota, el contacto fallido y la demo no lo piden', () => {
     expect(pideAvancesDelDecisor('nota', false)).toBe(false)

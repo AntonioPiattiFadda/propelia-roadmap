@@ -17,6 +17,16 @@ export function tonoSinLlamar(min: number | null | undefined): TonoSinLlamar | n
   return 'rojo'
 }
 
+/** El aviso al SDR cuando el contador pasa la hora y queda en rojo (21/11/2026, por pedido): que
+ *  contacte a Lorenzo Piatti para ver si fue un problema técnico o qué se puede mejorar. */
+export function avisoSinLlamar(min: number | null | undefined): { titulo: string; texto: string } | null {
+  if (tonoSinLlamar(min) !== 'rojo') return null
+  return {
+    titulo: `Pasaste la hora sin llamar (${horasYMinutos(min)})`,
+    texto: 'Para ver si es por problemas técnicos o qué se puede mejorar, ponete en contacto urgente con Lorenzo Piatti y reportale esto para buscar soluciones.',
+  }
+}
+
 /** Hace cuánto se calculó (19/11/2026, por pedido): «hace 5 min», «hace 3 h», «hace 2 d». Un
  *  instante roto o del futuro (reloj corrido) no dice nada: null. */
 export function haceCuanto(iso: string | null | undefined, ahora: Date = new Date()): string | null {

@@ -118,6 +118,15 @@ export function pendientesDePersona(
   }
 }
 
+/** Up to this many leads pending a task is still fine (21/11/2026, by request). */
+export const MAX_PENDIENTES_DE_AGENDAR = 10
+
+/** The «Tareas» card of Objetivos: green («Bien») with no overdue task and at most
+ *  `MAX_PENDIENTES_DE_AGENDAR` leads pending a task; red otherwise. */
+export function tonoDeTareas(p: { vencidas: number; sinTarea: number }): 'verde' | 'rojo' {
+  return p.vencidas > 0 || p.sinTarea > MAX_PENDIENTES_DE_AGENDAR ? 'rojo' : 'verde'
+}
+
 /** Un tramo de días para pedir objetivos: [desde, hasta), los dos 'YYYY-MM-DD' locales. */
 export type PeriodoDeObjetivos = { desde: string; hasta: string; label: string }
 
