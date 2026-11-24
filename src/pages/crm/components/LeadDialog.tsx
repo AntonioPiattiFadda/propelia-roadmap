@@ -228,8 +228,7 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
   const grupoActual = etapaMostrada ? etapasPorGestion([etapaMostrada])[0]?.label : undefined
   const actualizarLead = useActualizarLead()
   const actualizarCliente = useActualizarCliente()
-  /* En onboarding (13/11/2026, por pedido) el lead es de solo lectura: lo lleva /clientes. Las
-     tareas no (`escribeTareas`): /clientes las muestra y no las tilda, y quedarían sin cerrar. */
+  /* En onboarding el lead se edita igual (24/11/2026, por pedido); el cartel solo lo avisa. */
   const onboarding = enOnboarding(lead)
   const escribe = puedeEditarLead(lead)
   const escribeTareas = puedeEscribir(lead.assigned_to)
@@ -848,7 +847,7 @@ function CuerpoDelLead({ lead, indice, total, hayAnterior, haySiguiente, pestana
           className="ui-scale max-md:[zoom:1] flex shrink-0 items-center gap-2 bg-warning-soft px-4 py-2 text-[13px] text-warning [border-bottom:1px_solid_var(--line)] max-md:px-2">
           <Lock size={14} aria-hidden className="shrink-0" />
           <span className="min-w-0 flex-1">
-            <strong className="font-semibold">Este lead está en onboarding</strong>, así que no se puede modificar desde el CRM. Las tareas se siguen pudiendo marcar.
+            <strong className="font-semibold">Este lead está en onboarding</strong>: el alta se lleva desde Clientes.
           </span>
           {esSuperadmin && (
             <Link to={`/clientes?lead=${lead.id}`} className="shrink-0 font-semibold underline-offset-2 hover:underline">

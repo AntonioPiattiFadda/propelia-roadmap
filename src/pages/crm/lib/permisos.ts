@@ -31,14 +31,12 @@ export const puedeLeer = (yo: YoPermisos, owner: string, accesos: readonly Acces
 export const puedeEscribir = (yo: YoPermisos, owner: string, accesos: readonly Acceso[]) =>
   nivelSobre(yo, owner, accesos) === 'write'
 
-/* Un lead en onboarding (13/11/2026, por pedido) sigue en el CRM pero ya no se toca desde ahí: lo
-   lleva /clientes. Es solo del front, sin trigger: /clientes escribe en el mismo lead (tareas,
-   reuniones, comentarios) y la base no distingue de dónde viene. Las tareas del CRM sí se siguen
-   tildando en el lead (`puedeEscribir` a secas): /clientes las muestra pero no las tilda. */
+/* Un lead en onboarding sigue en el CRM y, desde el 24/11/2026 (por pedido), se edita igual que
+   cualquiera: etapa, tareas, actividad y demo. Del 13/11 al 24/11/2026 fue de solo lectura. */
 export const enOnboarding = (lead: { lead_type?: string | null }) => lead.lead_type === 'ONBOARDING'
 
 export const puedeEditarLead = (yo: YoPermisos, lead: { assigned_to: string; lead_type?: string | null }, accesos: readonly Acceso[]) =>
-  puedeEscribir(yo, lead.assigned_to, accesos) && !enOnboarding(lead)
+  puedeEscribir(yo, lead.assigned_to, accesos)
 
 const porNombre =(a: Usuario, b: Usuario) => a.nombre.localeCompare(b.nombre, 'es')
 
