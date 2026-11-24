@@ -118,11 +118,13 @@ describe('quienesVenLaCartera (a quién se le puede pasar una tarea)', () => {
   })
 })
 
-describe('puedeEditarLead (un lead en onboarding es de solo lectura en el CRM)', () => {
-  it('ONBOARDING no se edita, ni siquiera un SUPERADMIN', () => {
-    const lead = { assigned_to: 'admin', lead_type: 'ONBOARDING' }
+describe('puedeEditarLead (un lead en onboarding se edita igual en el CRM)', () => {
+  it('ONBOARDING se edita con permiso de escritura sobre la cartera', () => {
+    const lead = { assigned_to: 'sdr', lead_type: 'ONBOARDING' }
     expect(enOnboarding(lead)).toBe(true)
-    expect(puedeEditarLead(ADMIN, lead, [])).toBe(false)
+    expect(puedeEditarLead(ADMIN, lead, [])).toBe(true)
+    expect(puedeEditarLead(SDR, lead, [])).toBe(true)
+    expect(puedeEditarLead(SDR, { assigned_to: 'ana', lead_type: 'ONBOARDING' }, [])).toBe(false)
   })
   it('LEAD, CLIENT o sin lead_type (un optimista) siguen la regla de la cartera', () => {
     expect(puedeEditarLead(ADMIN, { assigned_to: 'ana', lead_type: 'LEAD' }, [])).toBe(true)
