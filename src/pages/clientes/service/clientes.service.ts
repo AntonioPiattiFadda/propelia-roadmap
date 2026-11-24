@@ -70,6 +70,15 @@ export async function reabrirAlta(onboardingId: string) {
   if (e2) throw e2
 }
 
+/** «Dar de alta» (24/11/2026): el nombre, la web y el link de Idealista los cargamos nosotros. Van
+ *  al alta (no pisan `crm_clients`), como los guardaba la página pública. La RLS ya deja: SUPERADMIN. */
+export async function guardarDatosDeLaInmobiliaria(p: { onboardingId: string; nombre: string; web: string | null; idealista: string | null }) {
+  const { error } = await supabase.from('client_onboardings')
+    .update({ company_name: p.nombre, website: p.web, idealista_url: p.idealista })
+    .eq('id', p.onboardingId)
+  if (error) throw error
+}
+
 /** `existing_account`: ya tenía cuenta en la org (org existente vinculada): no se le mandan accesos.
  *  Sin la migración `20261105134748_onboarding_vincular_org_existente` la base lo ignora. */
 export type MiembroAImportar = { first_name: string; last_name: string; email: string; phone: string; role: 'admin' | 'agent'; is_owner: boolean; existing_account?: boolean }

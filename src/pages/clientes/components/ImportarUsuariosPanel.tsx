@@ -302,7 +302,7 @@ export function OrgVinculada({ orgId, onboardingId }: { orgId: string; onboardin
 }
 
 /** Las orgs de Propelia (`list_organizations`), con búsqueda por nombre o slug. */
-function SelectorDeOrg({ valor, onElegir, deshabilitado }: { valor: OrgEnLista | null; onElegir: (o: OrgEnLista) => void; deshabilitado: boolean }) {
+export function SelectorDeOrg({ valor, onElegir, deshabilitado }: { valor: OrgEnLista | null; onElegir: (o: OrgEnLista) => void; deshabilitado: boolean }) {
   const [abierto, setAbierto] = useState(false)
   const orgs = useOrganizacionesDePropelia(true)
   return (

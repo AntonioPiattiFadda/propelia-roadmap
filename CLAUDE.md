@@ -475,6 +475,23 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   idealista.com/.pt/.it (`alta_idealista_invalido`; espejo en `idealistaInvalido` de la página). En
   /clientes se ve como enlace en la vista previa de «Importar»; no viaja a Propelia. `onboarding-alta`
   manda el parámetro solo si vino escrito: sin la migración corrida, un alta con link falla y sin link anda.
+- **El alta se hace en un solo botón, y la cargamos nosotros** (24/11/2026, por pedido; mock en
+  `docs/onboarding/alta-en-un-paso.html`): el paso 1 quedó en «Dar de alta: organización, equipo y
+  cartera» (id `contacto.importar-usuarios`, para no destildar nada) y los accesos. Salieron «Enviar el
+  saludo con el enlace» y «Recibir el equipo»: el cliente ya no carga nada (la página pública y
+  `onboarding-alta` siguen andando, sin puerta desde acá). `DarDeAltaDialog` tiene tres etapas: **Datos**
+  (nombre, web y link de Idealista, que van a `client_onboardings` con `guardarDatosDeLaInmobiliaria`;
+  org nueva o existente; el equipo fila por fila, reglas en `lib/alta.ts`; el Excel de la cartera,
+  **opcional**, con «Importar fotos»), **Revisar** (con org existente, los simulacros de cuentas y de
+  cartera; con org nueva la cartera se revisa recién creada la org, porque los agentes se buscan entre
+  sus cuentas, y las filas con error no entran y se listan al final) y **Dar de alta** (crea la org y
+  **la ata al lead en el acto** con `vincularOrg`, así «Reintentar» suma a esa y no crea otra; guarda el
+  equipo con `client_onboarding_importar_equipo`; importa propiedades y fotos y tilda
+  `cartera-leads.excel` / `.importar`). Hecha el alta, la tarea ofrece **«Importar cartera (de nuevo)»**:
+  solo el Excel, y entra solo lo que falta. Sin migración. **«Cartera y leads» y «Configuración del MCP»
+  salieron de la pantalla «por ahora»** (`PASOS_EN_PAUSA` en `lib/pasos.ts`, con sus ids): con ellos se
+  fueron las capacitaciones, el tutorial de leads, las direcciones y el lead de prueba. Lo tildado sigue
+  en la base. Lo que sigue: un seguimiento de la demo realizada, que todavía no tiene definido cómo se vincula.
 - **Vincular una org que ya existe** (5/11/2026, por pedido; migración
   `20261105134748_onboarding_vincular_org_existente`, que **la aplica Antonio**): el panel de
   «Importar» (`ImportarUsuariosPanel`) elige entre «Crear organización nueva» y «Usar una que ya
