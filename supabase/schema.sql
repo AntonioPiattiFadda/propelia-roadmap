@@ -757,6 +757,46 @@ returns boolean language sql stable security definer set search_path to 'public'
       and public.crm_puede(l.assigned_to, p_nivel));
 $$;
 
+-- Lo mismo, pero de una vez por consulta (24/11/2026, migración
+-- `20261124134002_crm_rls_una_vez_por_consulta`): las políticas de LEER las llaman envueltas en
+-- `(select …)` y Postgres las corre una sola vez, en vez de las de arriba por cada fila (que como
+-- son security definer no se pueden inlinear: la lista de leads tardaba 3 s). Mismas reglas: si
+-- cambia `crm_puede()`, cambian estas. El SUPERADMIN se pregunta aparte en cada política.
+create or replace function public.crm_carteras_que_leo()
+returns uuid[] language sql stable security definer set search_path to 'public' as $$
+  select case when not public.es_usuario() then '{}'::uuid[]
+    else array(
+      select auth.uid()
+      union
+      select a.subject_id from public.crm_data_access a
+      where a.viewer_id = auth.uid() and a.access in ('read', 'write'))
+  end;
+$$;
+
+-- `crm_puede_lead(id, 'read')` para todos los leads de una vez (sin mirar `deleted_at`, como aquella).
+create or replace function public.crm_leads_que_leo()
+returns setof uuid language sql stable security definer set search_path to 'public' as $$
+  select l.id from public.crm_leads l
+  where (l.solo_para is null or l.solo_para = (select auth.uid()))
+    and ((select public.crm_es_superadmin()) or l.assigned_to = any((select public.crm_carteras_que_leo())::uuid[]));
+$$;
+
+-- `crm_puede_cliente(id, 'read')` para todos los clientes de una vez.
+create or replace function public.crm_clientes_que_leo()
+returns setof uuid language sql stable security definer set search_path to 'public' as $$
+  select distinct l.client_id from public.crm_leads l
+  where l.deleted_at is null
+    and (l.solo_para is null or l.solo_para = (select auth.uid()))
+    and ((select public.crm_es_superadmin()) or l.assigned_to = any((select public.crm_carteras_que_leo())::uuid[]));
+$$;
+
+revoke execute on function public.crm_carteras_que_leo() from public, anon;
+revoke execute on function public.crm_leads_que_leo() from public, anon;
+revoke execute on function public.crm_clientes_que_leo() from public, anon;
+grant execute on function public.crm_carteras_que_leo() to authenticated;
+grant execute on function public.crm_leads_que_leo() to authenticated;
+grant execute on function public.crm_clientes_que_leo() to authenticated;
+
 -- security definer + EXECUTE de fábrica para PUBLIC = también anon. Devolverían false, pero no
 -- hay por qué dejar la puerta: las llama la RLS de `authenticated`.
 revoke execute on function public.crm_es_superadmin() from public, anon;
@@ -798,12 +838,24 @@ begin
   end loop;
 end $$;
 
+-- Leer, en leads, comentarios, tareas y clientes, va con las funciones «…_que_leo» (una vez por
+-- consulta). Escribir va partido en insert/update/delete y no en un `for all`: un `for all` se
+-- evalúa también en cada SELECT y en las filas de otra cartera corría la función cara de nuevo.
+-- Escribir implica leer, así que sacarlas del SELECT no cambia qué se ve (24/11/2026).
+--
 -- Leads. El `with check` también pide write: reasignar exige write sobre la cartera vieja
 -- (using, fila de antes) y sobre la nueva (with check, fila de después).
+drop policy if exists crm_leads_insertar on public.crm_leads;
+drop policy if exists crm_leads_editar on public.crm_leads;
+drop policy if exists crm_leads_borrar on public.crm_leads;
 create policy crm_leads_leer on public.crm_leads for select
-  using (public.crm_puede(assigned_to, 'read'));
-create policy crm_leads_escribir on public.crm_leads for all
+  using ((select public.crm_es_superadmin()) or assigned_to = any((select public.crm_carteras_que_leo())::uuid[]));
+create policy crm_leads_insertar on public.crm_leads for insert
+  with check (public.crm_puede(assigned_to, 'write'));
+create policy crm_leads_editar on public.crm_leads for update
   using (public.crm_puede(assigned_to, 'write')) with check (public.crm_puede(assigned_to, 'write'));
+create policy crm_leads_borrar on public.crm_leads for delete
+  using (public.crm_puede(assigned_to, 'write'));
 -- Leads de prueba: restrictiva, se suma con AND a las dos de arriba (ver `solo_para`).
 drop policy if exists crm_leads_solo_para on public.crm_leads;
 create policy crm_leads_solo_para on public.crm_leads
@@ -812,13 +864,22 @@ create policy crm_leads_solo_para on public.crm_leads
   with check (solo_para is null or solo_para = auth.uid());
 
 -- Tareas y reuniones: con lead, por el lead; sin lead (las dos columnas son nullable), por su responsable.
+drop policy if exists crm_tasks_insertar on public.crm_tasks;
+drop policy if exists crm_tasks_editar on public.crm_tasks;
+drop policy if exists crm_tasks_borrar on public.crm_tasks;
 create policy crm_tasks_leer on public.crm_tasks for select using (
-  case when lead_id is not null then public.crm_puede_lead(lead_id, 'read')
-       else public.crm_puede(assigned_to, 'read') end);
-create policy crm_tasks_escribir on public.crm_tasks for all using (
+  case when lead_id is not null then lead_id in (select public.crm_leads_que_leo())
+       else (select public.crm_es_superadmin()) or assigned_to = any((select public.crm_carteras_que_leo())::uuid[]) end);
+create policy crm_tasks_insertar on public.crm_tasks for insert with check (
+  case when lead_id is not null then public.crm_puede_lead(lead_id, 'write')
+       else public.crm_puede(assigned_to, 'write') end);
+create policy crm_tasks_editar on public.crm_tasks for update using (
   case when lead_id is not null then public.crm_puede_lead(lead_id, 'write')
        else public.crm_puede(assigned_to, 'write') end)
   with check (
+  case when lead_id is not null then public.crm_puede_lead(lead_id, 'write')
+       else public.crm_puede(assigned_to, 'write') end);
+create policy crm_tasks_borrar on public.crm_tasks for delete using (
   case when lead_id is not null then public.crm_puede_lead(lead_id, 'write')
        else public.crm_puede(assigned_to, 'write') end);
 create policy crm_meetings_leer on public.crm_meetings for select using (
@@ -835,7 +896,7 @@ create policy crm_meetings_escribir on public.crm_meetings for all using (
 do $$
 declare t text;
 begin
-  foreach t in array array['crm_comments','crm_management_events'] loop
+  foreach t in array array['crm_management_events'] loop
     execute format('create policy %I on public.%I for select using (public.crm_puede_lead(lead_id, ''read''))', t || '_leer', t);
     execute format('create policy %I on public.%I for all
                     using (public.crm_puede_lead(lead_id, ''write'')) with check (public.crm_puede_lead(lead_id, ''write''))', t || '_escribir', t);
@@ -845,13 +906,26 @@ begin
     execute format('create policy %I on public.%I for select using (public.crm_puede_lead(lead_id, ''read''))', t || '_leer', t);
   end loop;
 end $$;
+-- Los comentarios, aparte: son los que más se leen (la «Última actividad» de la lista).
+drop policy if exists crm_comments_insertar on public.crm_comments;
+drop policy if exists crm_comments_editar on public.crm_comments;
+drop policy if exists crm_comments_borrar on public.crm_comments;
+create policy crm_comments_leer on public.crm_comments for select
+  using (lead_id in (select public.crm_leads_que_leo()));
+create policy crm_comments_insertar on public.crm_comments for insert
+  with check (public.crm_puede_lead(lead_id, 'write'));
+create policy crm_comments_editar on public.crm_comments for update
+  using (public.crm_puede_lead(lead_id, 'write')) with check (public.crm_puede_lead(lead_id, 'write'));
+create policy crm_comments_borrar on public.crm_comments for delete
+  using (public.crm_puede_lead(lead_id, 'write'));
 
 -- Clientes. `created_by` porque el alta crea primero el cliente y después el lead: sin esa rama
 -- el cliente recién creado no se podría ni leer de vuelta. El SUPERADMIN ve todo: también el
 -- cliente sin ningún lead activo, que por la cartera no lo vería nadie.
 create policy crm_clients_leer on public.crm_clients for select using (
-  public.crm_puede_cliente(id, 'read') or public.crm_es_superadmin()
-  or (public.es_usuario() and created_by = auth.uid()));
+  (select public.crm_es_superadmin())
+  or id in (select public.crm_clientes_que_leo())
+  or ((select public.es_usuario()) and created_by = (select auth.uid())));
 -- Escribir va partido en insert/update/delete y NO en un `for all`: un cliente es compartido
 -- entre carteras, y `crm_leads.client_id … on delete cascade` corre por fuera de la RLS. Con
 -- `for all`, alguien con write sobre UN lead del cliente podía borrarlo y arrastrar los leads,

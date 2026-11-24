@@ -31,13 +31,26 @@ const refrescar = (qc: QueryClient, leadId?: string) => {
   void qc.invalidateQueries({ queryKey: leadId ? CRM_KEYS.detalle(leadId) : CRM_KEYS.detalles })
 }
 
+/* Lo que contesta la base se fusiona en la lista en vez de re-traerla entera (24/11/2026): un
+   cambio de etapa o de un contacto pasa en cada actividad registrada, y re-traer ~950 leads por
+   cada uno saturaba la base. Si falla, sí se re-trae (el revert puede quedar viejo). */
+function fusionarLead(qc: QueryClient, fila: Partial<CrmLeadRow> & { id: string }) {
+  qc.setQueryData<CrmLeadRow[]>(CRM_KEYS.leads, old => old?.map(l => (l.id === fila.id ? { ...l, ...fila } : l)))
+}
+
 export function useActualizarLead() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: LeadPatch }) => updateLead(id, patch),
     onMutate: ({ id, patch }) => optimistaSobreLeads(qc, l => ({ ...l, ...patch }), new Set([id])),
-    onError: (error, _v, ctx) => { revertir(qc, ctx?.previo); toast.error(mensajeDeError(error)) },
-    onSettled: (_d, _e, { id }) => refrescar(qc, id),
+    onError: (error, _v, ctx) => {
+      revertir(qc, ctx?.previo)
+      toast.error(mensajeDeError(error))
+      void qc.invalidateQueries({ queryKey: CRM_KEYS.leads })
+    },
+    // La fila trae lo que escribieron los triggers (p. ej. `lead_type` al entrar al onboarding).
+    onSuccess: lead => fusionarLead(qc, lead),
+    onSettled: (_d, _e, { id }) => { void qc.invalidateQueries({ queryKey: CRM_KEYS.detalle(id) }) },
   })
 }
 
@@ -53,8 +66,15 @@ export function useActualizarCliente() {
         l.client?.id === clientId ? { ...l, client: { ...l.client, ...patch } } : l))
       return { previo }
     },
-    onError: (error, _v, ctx) => { revertir(qc, ctx?.previo); toast.error(mensajeDeError(error)) },
-    onSettled: () => { void qc.invalidateQueries({ queryKey: CRM_KEYS.leads }) },
+    onError: (error, _v, ctx) => {
+      revertir(qc, ctx?.previo)
+      toast.error(mensajeDeError(error))
+      void qc.invalidateQueries({ queryKey: CRM_KEYS.leads })
+    },
+    onSuccess: cliente => {
+      qc.setQueryData<CrmLeadRow[]>(CRM_KEYS.leads, old => old?.map(l =>
+        l.client?.id === cliente.id ? { ...l, client: { ...l.client, ...cliente } } : l))
+    },
   })
 }
 
@@ -201,9 +221,9 @@ export function useMutacionDelDetalle<TVars, TData>(
     onSuccess: () => { if (opciones.exito) toast.success(opciones.exito) },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: key })
-      // La «Última actividad» de la lista sale de los registros del detalle.
-      void qc.invalidateQueries({ queryKey: CRM_KEYS.leads })
-      void qc.invalidateQueries({ queryKey: CRM_KEYS.tareasPendientes })
+      /* La «Última actividad» de la lista y las tareas pendientes ya no se re-traen enteras
+         (24/11/2026): el aviso de realtime de lo que se acaba de escribir las pone al día en la
+         cache (`useCrmRealtime`), y estas mutaciones solo corren en pantallas que lo montan. */
       void qc.invalidateQueries({ queryKey: ['crm', 'reuniones'] })
       void qc.invalidateQueries({ queryKey: CRM_KEYS.llamadas })
     },

@@ -3,10 +3,15 @@ import { daysInMonth, periodBounds, startOfMonthIso } from '@/lib/calendarDate'
 import { getLead, getLeads, getReunionesEntre, getTareasPendientes } from '../service/crm.service'
 import { CRM_KEYS } from './keys'
 
-/* La lista entera, una vez (decisión 4 de la spec): son decenas de leads, la RLS ya recortó, y
-   filtros y contadores salen de funciones puras sobre este array. */
+/* La lista entera, una vez (decisión 4 de la spec): la RLS ya recortó, y filtros y contadores
+   salen de funciones puras sobre este array.
+   `FRESCA_MS` (24/11/2026): mientras el CRM está abierto la mantiene al día el realtime
+   (`useCrmRealtime` aplica cada aviso sobre la cache), así que volver a la pestaña —la SDR va y
+   viene de Aircall y WhatsApp todo el día— ya no la re-trae entera. Pasado ese rato, sí. */
+const FRESCA_MS = 5 * 60_000
+
 export function useCrmLeads() {
-  return useQuery({ queryKey: CRM_KEYS.leads, queryFn: getLeads })
+  return useQuery({ queryKey: CRM_KEYS.leads, queryFn: getLeads, staleTime: FRESCA_MS })
 }
 
 /** Un lead solo, para quien no tiene la lista (la Agenda). */
@@ -20,6 +25,7 @@ export function useLead(leadId: string | undefined) {
 export function useTareasPendientes(opciones: { enabled?: boolean; refetchInterval?: number } = {}) {
   return useQuery({
     queryKey: CRM_KEYS.tareasPendientes, queryFn: getTareasPendientes,
+    staleTime: FRESCA_MS,
     enabled: opciones.enabled,
     refetchInterval: opciones.refetchInterval,
     // Con la pestaña de fondo también: es justo cuando la alarma tiene que sonar.

@@ -581,6 +581,19 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   `crm_puede_cliente(cliente, nivel)`, que exigen `es_usuario()`. Un `SUPERADMIN` ve y edita todo y
   es el único que toca el catálogo (etapas y canales) y `crm_data_access`. **Esto
   cambió lo del 29/9** («cualquiera ve y edita todo el CRM»; «`rol` no restringe nada»).
+- **La RLS de leer se calcula una vez por consulta** (24/11/2026, migración
+  `20261124134002_crm_rls_una_vez_por_consulta`): las políticas de SELECT de `crm_leads`,
+  `crm_comments`, `crm_tasks` y `crm_clients` usan `crm_carteras_que_leo()`, `crm_leads_que_leo()` y
+  `crm_clientes_que_leo()` envueltas en `(select …)`, no `crm_puede*()` por fila (son security definer
+  y no se cachean: la lista de leads tardaba 3,2 s de media, hasta el corte de 8 s). Mismas reglas,
+  verificado usuario por usuario. Escribir quedó en insert/update/delete con las `crm_puede*()` de
+  siempre (un `for all` se evalúa también en cada SELECT). **Si cambia `crm_puede()`, cambian esas tres.**
+- **El realtime del CRM no re-trae la lista** (24/11/2026, por lo mismo): `useCrmRealtime` aplica cada
+  aviso sobre la cache (`lib/realtimeCrm.ts`: última actividad, lead, cliente, tareas pendientes) y lo
+  que no puede deducir lo re-trae junto, tras 2 s de calma (6 s como mucho). Las mutaciones de lead,
+  cliente y de lo que cuelga del lead fusionan lo que contesta la base en vez de re-traer, y la lista
+  y las tareas tienen `staleTime` de 5 min (volver a la pestaña no las re-trae). Antes, cada llamada
+  registrada re-traía ~950 leads en todas las pantallas abiertas: ~2.400 veces por día.
 - **`src/pages/crm/lib/permisos.ts` es el espejo en pantalla de `crm_puede()`**, no la seguridad:
   sirve para no ofrecer un botón que la base va a rechazar. Si cambia la regla en `schema.sql`,
   cambia ahí (misma relación que `accesoDe()` con `es_usuario()`).
