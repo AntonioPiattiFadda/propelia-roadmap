@@ -1,0 +1,586 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Alta en un paso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Propuesta (24/11/2026): «Dar de alta» reemplaza a «Enviar el saludo», «Recibir el equipo», «Importar el
+   equipo», «Recibir el Excel» e «Importar la cartera». Mock interactivo con datos de ejemplo en memoria. */
+:root {
+  --bg: #f6f7fb; --surface: #ffffff; --surface-2: #f9fafd; --fg: #171a2b; --muted: #5d6280; --faint: #a3a8c3; --line: #dfe2ee;
+  --brand: #3644f2; --brand-soft: #e8eaff; --on-brand: #ffffff;
+  --ok: #0f8a6a; --ok-soft: #dcf3ec; --warn: #a86400; --warn-soft: #fdf0d8; --danger: #b4233a; --danger-soft: #fbe3e7;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1120; --surface: #171a2e; --surface-2: #1b1f36; --fg: #e8eaf6; --muted: #9ba0c0; --faint: #5b6182; --line: #2a2e4a;
+    --brand: #8f98ff; --brand-soft: #23285a; --on-brand: #0f1120;
+    --ok: #4fd1aa; --ok-soft: #10392f; --warn: #f0b552; --warn-soft: #3b2c0e; --danger: #ff8597; --danger-soft: #401822;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1120; --surface: #171a2e; --surface-2: #1b1f36; --fg: #e8eaf6; --muted: #9ba0c0; --faint: #5b6182; --line: #2a2e4a;
+  --brand: #8f98ff; --brand-soft: #23285a; --on-brand: #0f1120;
+  --ok: #4fd1aa; --ok-soft: #10392f; --warn: #f0b552; --warn-soft: #3b2c0e; --danger: #ff8597; --danger-soft: #401822;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.55 var(--f-body);
+  padding: 40px max(16px, env(safe-area-inset-right, 0px)) 64px max(16px, env(safe-area-inset-left, 0px)); }
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; line-height: 1.15; text-wrap: balance; }
+h1 { font-size: clamp(28px, 4.5vw, 40px); letter-spacing: -0.02em; }
+h2 { font-size: 22px; }
+h3 { font-size: 15px; }
+p { margin: 0; }
+code { font-family: var(--f-mono); font-size: .86em; background: var(--brand-soft); padding: 1px 5px; border-radius: 4px; }
+.eyebrow { font: 500 12px/1 var(--f-mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.lede { color: var(--muted); max-width: 72ch; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+.demo-ctl { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--muted); }
+.demo-ctl label { display: inline-flex; gap: 6px; align-items: center; }
+.demo-ctl button { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 10px; }
+
+/* ---------- el dialog del alta ---------- */
+.mock { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 1px 3px rgb(0 0 0 / .06); min-height: 680px; display: flex; flex-direction: column; }
+.dhead { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; padding: 16px 22px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+.dhead h3 { font-size: 18px; color: var(--fg); letter-spacing: .02em; }
+.dhead b { color: var(--fg); font-weight: 600; }
+.dhead .sp { flex: 1; }
+.dhead .x { border: 0; background: none; font-size: 18px; color: var(--muted); }
+.lnk { color: var(--brand); background: none; border: 0; padding: 0; }
+.dbody { flex: 1; display: grid; grid-template-columns: 230px minmax(0, 1fr) 300px; min-height: 0; }
+.pasos { border-right: 1px solid var(--line); padding: 10px; display: flex; flex-direction: column; gap: 2px; }
+.paso { display: flex; gap: 10px; align-items: center; padding: 9px 10px; border-radius: 10px; font-size: 14px; }
+.paso .n { width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 11.5px; color: var(--muted); flex: none; }
+.paso.on { background: var(--brand-soft); outline: 1px solid color-mix(in srgb, var(--brand) 35%, transparent); }
+.paso.on .n { border-color: var(--brand); color: var(--brand); }
+.paso.ok .n { background: var(--ok); border-color: var(--ok); color: #fff; }
+.paso.prox { color: var(--faint); }
+.paso small { display: block; font-size: 11px; color: var(--faint); }
+.centro { padding: 22px 26px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.centro h2 { font: 600 16px/1.3 var(--f-body); margin-bottom: 14px; }
+.tarea { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px dashed var(--line); }
+.tarea:last-of-type { border-bottom: 0; }
+.chk { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--faint); flex: none; margin-top: 2px; display: grid; place-items: center; font-size: 12px; color: #fff; }
+.chk.on { background: var(--brand); border-color: var(--brand); }
+.tarea .txt { flex: 1; min-width: 0; }
+.tarea .txt .t { font-size: 14.5px; }
+.tarea.hecha .t { color: var(--muted); }
+.tarea .sub { font-size: 12.5px; color: var(--muted); margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap; }
+.tarea .acc { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 9px; padding: 7px 13px; font-size: 13.5px; font-weight: 500; display: inline-flex; gap: 7px; align-items: center; white-space: nowrap; }
+.btn.pri { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.btn.ico { padding: 7px 9px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.pill { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 500; background: var(--surface-2); border: 1px solid var(--line); color: var(--muted); }
+.pill.ok { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
+.pill.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+.pill.bad { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+.pill.br { background: var(--brand-soft); color: var(--brand); border-color: transparent; }
+.nota { font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+.coment { border-left: 1px solid var(--line); padding: 16px 18px; font-size: 13px; display: flex; flex-direction: column; gap: 12px; }
+.coment h3 { font: 600 14px/1 var(--f-body); }
+.coment .m { color: var(--muted); font-size: 11.5px; }
+
+/* ---------- la ventana «Dar de alta» ---------- */
+.velo { position: absolute; inset: 0; background: rgb(15 17 32 / .38); display: none; align-items: flex-start; justify-content: center; padding: 26px 16px; z-index: 5; }
+.velo.on { display: flex; }
+.ventana { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; width: min(980px, 100%); max-height: 100%; display: flex; flex-direction: column; box-shadow: 0 18px 50px rgb(0 0 0 / .22); }
+.vhead { padding: 16px 22px 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+.vhead .fila { display: flex; align-items: center; gap: 10px; }
+.vhead h2 { font: 600 17px/1.2 var(--f-body); flex: 1; }
+.etapas { display: flex; gap: 6px; font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
+.etapas span { display: inline-flex; gap: 6px; align-items: center; }
+.etapas span i { font-style: normal; width: 19px; height: 19px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 10.5px; }
+.etapas span.on { color: var(--fg); font-weight: 600; }
+.etapas span.on i { border-color: var(--brand); background: var(--brand); color: var(--on-brand); }
+.etapas span.ok i { background: var(--ok); border-color: var(--ok); color: #fff; }
+.etapas .sep { color: var(--faint); }
+.vcuerpo { overflow: auto; padding: 18px 22px; display: flex; flex-direction: column; gap: 22px; }
+.vpie { border-top: 1px solid var(--line); padding: 12px 22px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.vpie .sp { flex: 1; }
+.vpie .msg { font-size: 12.5px; color: var(--muted); }
+.vpie .msg.bad { color: var(--danger); }
+.bloque { display: flex; flex-direction: column; gap: 10px; }
+.bloque > .tit { display: flex; align-items: baseline; gap: 8px; }
+.bloque > .tit h3 { font: 600 14px/1.2 var(--f-body); }
+.bloque > .tit .opc { font-size: 12px; color: var(--muted); }
+.campos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.campo { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.in { border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; background: var(--surface); font-size: 13.5px; min-width: 0; width: 100%; color: var(--fg); }
+.in.bad { border-color: var(--danger); background: var(--danger-soft); }
+.radios { display: flex; gap: 8px; flex-wrap: wrap; }
+.radio { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; display: flex; gap: 8px; align-items: center; font-size: 13.5px; }
+.radio.on { border-color: var(--brand); background: var(--brand-soft); }
+.tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tabla th { text-align: left; font-weight: 500; color: var(--muted); font-size: 11.5px; padding: 0 6px 6px; white-space: nowrap; }
+.tabla td { padding: 3px 6px; vertical-align: middle; }
+.tabla td .in { padding: 6px 8px; font-size: 13px; }
+.tabla .tel { display: flex; gap: 4px; }
+.tabla .tel select { width: 72px; flex: none; }
+.tabla .resp { text-align: center; }
+.tabla .borrar { border: 0; background: none; color: var(--faint); font-size: 16px; }
+.agregar { align-self: flex-start; border: 1px dashed var(--line); background: none; border-radius: 8px; padding: 6px 12px; font-size: 13px; color: var(--muted); }
+.drop { border: 1.5px dashed var(--line); border-radius: 12px; padding: 18px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; background: var(--surface-2); }
+.drop .ic { font-size: 22px; }
+.drop .t { flex: 1; min-width: 200px; font-size: 13.5px; }
+.drop .t small { display: block; color: var(--muted); font-size: 12px; }
+.archivo { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.archivo .t { flex: 1; min-width: 180px; font-size: 13.5px; }
+.archivo .t small { display: block; color: var(--muted); font-size: 12px; }
+.check { display: inline-flex; gap: 7px; align-items: center; font-size: 13.5px; }
+
+.rev { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.rev > .cab { display: flex; gap: 10px; align-items: center; padding: 10px 14px; background: var(--surface-2); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.rev > .cab h3 { font: 600 13.5px/1.2 var(--f-body); flex: 1; }
+.rev > .cont { padding: 10px 14px; font-size: 13px; display: flex; flex-direction: column; gap: 8px; }
+.rev .tabla td { padding: 6px; border-top: 1px solid var(--line); }
+.cifras { display: flex; gap: 8px; flex-wrap: wrap; }
+.cifra { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-width: 120px; }
+.cifra b { display: block; font: 700 20px/1.1 var(--f-display); }
+.cifra span { font-size: 12px; color: var(--muted); }
+.cifra.warn b { color: var(--warn); } .cifra.bad b { color: var(--danger); } .cifra.ok b { color: var(--ok); }
+.filas-detalle { font-size: 12.5px; color: var(--muted); display: flex; flex-direction: column; gap: 3px; }
+.filas-detalle .bad { color: var(--danger); }
+.filas-detalle .warn { color: var(--warn); }
+
+.prog { display: flex; flex-direction: column; gap: 12px; }
+.prog .p { display: flex; gap: 12px; align-items: flex-start; font-size: 14px; }
+.prog .p .est { width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--line); flex: none; display: grid; place-items: center; font-size: 12px; }
+.prog .p.ok .est { background: var(--ok); border-color: var(--ok); color: #fff; }
+.prog .p.run .est { border-color: var(--brand); border-top-color: transparent; animation: gira .8s linear infinite; }
+.prog .p.salt { color: var(--faint); }
+.prog .p small { display: block; color: var(--muted); font-size: 12.5px; }
+.barra { height: 6px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; margin-top: 6px; width: min(360px, 100%); }
+.barra i { display: block; height: 100%; background: var(--brand); transition: width .2s; }
+@keyframes gira { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .prog .p.run .est { animation: none; } }
+
+.notas { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.card ul, .card ol { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.card .fuera { color: var(--muted); text-decoration: line-through; }
+
+@media (max-width: 1000px) {
+  .dbody { grid-template-columns: 1fr; }
+  .pasos { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .paso { white-space: nowrap; }
+  .coment { display: none; }
+  .campos, .notas { grid-template-columns: 1fr; }
+  .tabla-equipo { display: block; overflow-x: auto; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:12px">
+    <span class="eyebrow">Onboarding · propuesta · 24/11/2026</span>
+    <h1>El alta en un solo botón</h1>
+    <p class="lede">La inmobiliaria, el equipo y la cartera los cargamos nosotros, en una ventana. Se revisa todo junto y se confirma una vez. La cartera es opcional: si se vuelve a importar, solo entran las propiedades que faltan.</p>
+  </header>
+
+  <div class="demo-ctl" aria-label="Controles del mock">
+    <span class="eyebrow">Probar</span>
+    <label><input type="checkbox" id="dErr"> Que el Excel traiga un agente que no es del equipo</label>
+    <button id="dReset">Volver a empezar</button>
+  </div>
+
+  <div class="mock" id="mock">
+    <div class="dhead">
+      <h3>INMOBENE GROUP</h3>
+      <span>Responsable <b>Facundo Benedetti Antich</b> · +34637458114</span>
+      <span>Org <b id="hOrg">sin crear</b></span>
+      <span>Firmó <b>2 nov 2026</b></span>
+      <span>Lleva <b>Antonio</b></span>
+      <span class="sp"></span>
+      <button class="btn">↗ Lead en el CRM</button>
+      <button class="x" aria-label="Cerrar">✕</button>
+    </div>
+    <div class="dbody">
+      <nav class="pasos" aria-label="Pasos">
+        <div class="paso on" id="p1"><span class="n">1</span>Contacto y cuentas</div>
+        <div class="paso"><span class="n">2</span>Pago</div>
+        <div class="paso prox"><span class="n">3</span><span>Integrar los portales<small>Próximamente</small></span></div>
+        <div class="paso prox"><span class="n">4</span><span>Sincronizar las keys<small>Próximamente</small></span></div>
+      </nav>
+      <main class="centro">
+        <h2>1 · Contacto y cuentas</h2>
+        <div id="tareas"></div>
+      </main>
+      <aside class="coment">
+        <h3>Comentarios del lead</h3>
+        <div><div class="m">Lorenzo · 30 oct, 13:07</div>hablamos con facundo y le digo que lo probemos…</div>
+        <div><div class="m">Lorenzo · 27 oct, 12:01</div>No respondió.</div>
+      </aside>
+    </div>
+
+    <div class="velo" id="velo">
+      <div class="ventana" role="dialog" aria-modal="true" aria-labelledby="vTit">
+        <div class="vhead">
+          <div class="fila"><h2 id="vTit">Dar de alta</h2><button class="x btn ico" id="vCerrar" aria-label="Cerrar">✕</button></div>
+          <div class="etapas" id="etapas"></div>
+        </div>
+        <div class="vcuerpo" id="vCuerpo"></div>
+        <div class="vpie" id="vPie"></div>
+      </div>
+    </div>
+  </div>
+
+  <section class="notas">
+    <div class="card">
+      <h2>Qué cambia en las tareas</h2>
+      <p><b>Paso 1</b></p>
+      <ul>
+        <li class="fuera">Enviar el saludo con el enlace para que carguen su equipo</li>
+        <li class="fuera">Recibir el equipo y el nombre de la inmobiliaria</li>
+        <li><b>Dar de alta: organización, equipo y cartera</b> (reemplaza a «Importar el equipo»)</li>
+        <li>Verificar accesos y enviar los mails (igual que hoy)</li>
+      </ul>
+      <p><b>Salen por ahora dos pasos enteros</b>: «Cartera y leads» y «Configuración del MCP». La cartera ahora vive en el botón y en «Importar cartera», al lado del alta hecha. Con «Cartera y leads» se van de la pantalla también las capacitaciones por Meet, el tutorial de leads, «Que asignen las propiedades», los mails de Idealista y el lead de prueba. En la base no se borra nada: lo tildado sigue ahí para cuando vuelvan.</p>
+      <p style="color:var(--muted);font-size:13px">Las claves de las tareas (<code>contacto.importar-usuarios</code>, <code>cartera-leads.importar</code>…) siguen siendo las mismas, así las altas en curso no pierden nada tildado.</p>
+    </div>
+    <div class="card">
+      <h2>Qué hace «Confirmar», en orden</h2>
+      <ol>
+        <li>Crea la org con el equipo y la web (<code>create_org_with_users</code>), o vincula la existente y suma a los que faltan (<code>add_users_to_org</code>).</li>
+        <li>Guarda el equipo en el CRM (<code>client_onboarding_importar_equipo</code>) y tilda «Importar el equipo».</li>
+        <li>Si hay Excel: importa las propiedades (<code>import_properties</code>, de a 50) y las fotos (<code>import_photos</code>, de a 20), y tilda las tareas de la cartera.</li>
+        <li>Si se corta, volver a apretarlo sigue desde donde quedó: la org vinculada no se recrea, las cuentas y propiedades que ya están se saltean.</li>
+      </ol>
+      <p style="color:var(--muted);font-size:13px">Los mails de accesos siguen siendo un paso aparte, después de verificar que las cuentas entran. El WhatsApp de los accesos deja de decir que va adjunto el Excel.</p>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s)
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
+
+const inicial = () => ({
+  modo: 'datos', soloCartera: false, hecho: false,
+  cartera: { importadas: 0, fotos: 0 },
+  nombre: 'Inmobene Group', web: 'inmobene.example', idealista: 'https://www.idealista.com/pro/inmobene-group/',
+  org: 'nueva', orgExistente: '',
+  equipo: [
+    { nombre: 'Facundo', apellido: 'Benedetti Antich', email: 'facundo@inmobene.example', pre: '+34', tel: '637458114', rol: 'admin' },
+    { nombre: 'Lucía', apellido: 'Ferrer', email: 'lucia@inmobene.example', pre: '+34', tel: '611223344', rol: 'agent' },
+    { nombre: 'Marc', apellido: 'Soler', email: 'marc@inmobene.example', pre: '+34', tel: '622334455', rol: 'agent' },
+    { nombre: 'Paula', apellido: 'Gómez', email: 'paula@inmobene.example', pre: '+34', tel: '633445566', rol: 'agent' },
+  ],
+  responsable: 0,
+  archivo: null, fotos: true,
+  progreso: [],
+})
+let st = inicial()
+
+/* ---------- reglas del mock ---------- */
+function erroresDelEquipo() {
+  const errs = {}
+  const vistos = {}
+  st.equipo.forEach((p, i) => {
+    const e = []
+    if (!p.nombre.trim()) e.push('Falta el nombre')
+    if (!p.apellido.trim()) e.push('Falta el apellido')
+    if (!EMAIL.test(p.email.trim())) e.push('Email mal escrito')
+    const k = p.email.trim().toLowerCase()
+    if (k && vistos[k] !== undefined) e.push('Email repetido')
+    vistos[k] = i
+    if (i === st.responsable && p.rol !== 'admin') e.push('La responsable tiene que ser Administrador')
+    if (e.length) errs[i] = e
+  })
+  return errs
+}
+/* Lo que diría `check_properties`. La primera vez entra todo; la segunda, solo lo nuevo. */
+function revisionDeCartera() {
+  if (!st.archivo) return null
+  const reimport = st.cartera.importadas > 0
+  const total = reimport ? 136 : 132
+  const error = $('#dErr').checked ? 1 : 0
+  const yaEstaban = reimport ? st.cartera.importadas : 0
+  const nuevas = total - yaEstaban - error
+  return { total, yaEstaban, nuevas, avisos: reimport ? 1 : 4, error,
+    fotosNuevas: st.fotos ? (reimport ? 31 : 512) : 0, fotosYa: st.fotos && reimport ? st.cartera.fotos : 0 }
+}
+function sePuedeConfirmar() {
+  if (!st.soloCartera && Object.keys(erroresDelEquipo()).length) return false
+  if (!st.soloCartera && st.org === 'existente' && !st.orgExistente) return false
+  const c = revisionDeCartera()
+  if (st.soloCartera && !c) return false
+  return !(c && c.error)
+}
+
+/* ---------- las tareas del paso 1 ---------- */
+function pintarTareas() {
+  const c = st.cartera
+  const resumen = st.hecho ? [
+    `<span class="pill ok">Org ${esc(st.nombre)}</span>`,
+    `<span class="pill">${st.equipo.length} cuentas</span>`,
+    c.importadas ? `<span class="pill">${c.importadas} propiedades</span>` : `<span class="pill warn">Sin cartera todavía</span>`,
+    c.fotos ? `<span class="pill">${c.fotos} fotos</span>` : '',
+  ].join('') : ''
+  $('#tareas').innerHTML = `
+    <div class="tarea ${st.hecho ? 'hecha' : ''}">
+      <span class="chk ${st.hecho ? 'on' : ''}">${st.hecho ? '✓' : ''}</span>
+      <div class="txt">
+        <div class="t">Dar de alta: organización, equipo y cartera</div>
+        ${st.hecho ? `<div class="sub">${resumen}</div>` : `<div class="sub">Nombre, web, cuentas del equipo y, si ya está, el Excel de propiedades.</div>`}
+      </div>
+      <div class="acc">
+        ${st.hecho
+          ? `<button class="btn" data-abrir="cartera">⇪ ${c.importadas ? 'Importar cartera de nuevo' : 'Importar cartera'}</button><button class="btn">Ver cuentas</button>`
+          : `<button class="btn pri" data-abrir="alta">＋ Dar de alta</button>`}
+      </div>
+    </div>
+    <div class="tarea">
+      <span class="chk"></span>
+      <div class="txt"><div class="t">Verificar accesos y enviar a cada uno su usuario y clave por mail</div>
+        ${st.hecho ? '' : '<div class="sub">Se habilita con el alta hecha.</div>'}</div>
+      <div class="acc">
+        <button class="btn ico" ${st.hecho ? '' : 'disabled'} title="Copiar mensaje">⧉</button>
+        <button class="btn ico" ${st.hecho ? '' : 'disabled'} title="WhatsApp">➤</button>
+        <button class="btn" ${st.hecho ? '' : 'disabled'}>✉ Enviar mails</button>
+      </div>
+    </div>`
+  $('#hOrg').textContent = st.hecho ? st.nombre : 'sin crear'
+}
+
+/* ---------- la ventana ---------- */
+function pintarEtapas() {
+  const orden = ['datos', 'revisar', 'corriendo']
+  const nombres = { datos: st.soloCartera ? 'Excel' : 'Datos', revisar: 'Revisar', corriendo: 'Dar de alta' }
+  const i = st.modo === 'listo' ? 3 : orden.indexOf(st.modo)
+  $('#etapas').innerHTML = orden.map((k, j) =>
+    `<span class="${j === i ? 'on' : j < i ? 'ok' : ''}"><i>${j < i ? '✓' : j + 1}</i>${nombres[k]}</span>`
+  ).join('<span class="sep">›</span>')
+  $('#vTit').textContent = st.soloCartera ? (st.cartera.importadas ? 'Importar cartera de nuevo' : 'Importar cartera') : 'Dar de alta'
+}
+
+function bloqueCartera() {
+  const a = st.archivo
+  return `<div class="bloque">
+    <div class="tit"><h3>${st.soloCartera ? 'Excel de propiedades' : 'Cartera'}</h3>${st.soloCartera ? '' : '<span class="opc">Opcional: se puede importar después</span>'}</div>
+    ${a ? `<div class="archivo">
+        <span style="font-size:20px">▦</span>
+        <div class="t">${esc(a.nombre)}<small>${a.filas} filas en «Propiedades» · ${a.fotos} en «Fotos»</small></div>
+        <label class="check"><input type="checkbox" id="fFotos" ${st.fotos ? 'checked' : ''}> Importar fotos</label>
+        <button class="btn" id="fQuitar">Quitar</button>
+      </div>`
+      : `<div class="drop">
+        <span class="ic">⇪</span>
+        <div class="t">Soltá acá el Excel de propiedades<small>El de la plantilla: una fila por propiedad, con «Agente captador» y «Agente comercializador» opcionales y la hoja «Fotos».</small></div>
+        <button class="btn" id="fSubir">Elegir archivo</button>
+        <button class="btn">↓ Plantilla</button>
+      </div>`}
+  </div>`
+}
+
+function vistaDatos() {
+  if (st.soloCartera) return bloqueCartera()
+  const errs = st.intentoRevisar ? erroresDelEquipo() : {}
+  const filas = st.equipo.map((p, i) => {
+    const bad = (errs[i] || []).join(' · ')
+    const malEmail = bad.includes('Email')
+    return `<tr>
+      <td><input class="in ${errs[i] && !p.nombre.trim() ? 'bad' : ''}" data-f="nombre" data-i="${i}" value="${esc(p.nombre)}" placeholder="Nombre"></td>
+      <td><input class="in ${errs[i] && !p.apellido.trim() ? 'bad' : ''}" data-f="apellido" data-i="${i}" value="${esc(p.apellido)}" placeholder="Apellido"></td>
+      <td><input class="in ${malEmail ? 'bad' : ''}" data-f="email" data-i="${i}" value="${esc(p.email)}" placeholder="email@inmobiliaria.es" title="${esc(bad)}"></td>
+      <td><div class="tel"><select class="in" data-f="pre" data-i="${i}">${['+34', '+351', '+39', '+54'].map(x => `<option ${x === p.pre ? 'selected' : ''}>${x}</option>`).join('')}</select><input class="in" data-f="tel" data-i="${i}" value="${esc(p.tel)}" placeholder="Teléfono"></div></td>
+      <td><select class="in ${bad.includes('Administrador') ? 'bad' : ''}" data-f="rol" data-i="${i}"><option value="admin" ${p.rol === 'admin' ? 'selected' : ''}>Administrador</option><option value="agent" ${p.rol === 'agent' ? 'selected' : ''}>Agente</option></select></td>
+      <td class="resp"><input type="radio" name="resp" data-resp="${i}" ${st.responsable === i ? 'checked' : ''} aria-label="Responsable"></td>
+      <td><button class="borrar" data-borrar="${i}" aria-label="Quitar" ${st.equipo.length === 1 ? 'disabled' : ''}>✕</button></td>
+    </tr>`
+  }).join('')
+  return `
+    <div class="bloque">
+      <div class="tit"><h3>Inmobiliaria</h3></div>
+      <div class="campos">
+        <label class="campo">Nombre<input class="in" data-g="nombre" value="${esc(st.nombre)}"></label>
+        <label class="campo">Web<input class="in" data-g="web" value="${esc(st.web)}"></label>
+        <label class="campo">Link de Idealista<input class="in" data-g="idealista" value="${esc(st.idealista)}"></label>
+      </div>
+    </div>
+    <div class="bloque">
+      <div class="tit"><h3>Organización en Propelia</h3></div>
+      <div class="radios">
+        <label class="radio ${st.org === 'nueva' ? 'on' : ''}"><input type="radio" name="org" value="nueva" ${st.org === 'nueva' ? 'checked' : ''}> Crear una nueva</label>
+        <label class="radio ${st.org === 'existente' ? 'on' : ''}"><input type="radio" name="org" value="existente" ${st.org === 'existente' ? 'checked' : ''}> Usar una que ya existe</label>
+        ${st.org === 'existente' ? `<select class="in" id="orgSel" style="width:auto;min-width:240px"><option value="">Elegir organización…</option>${['Inmobene Group (prueba)', 'Docta Inmobiliaria', 'Altamarco'].map(o => `<option ${o === st.orgExistente ? 'selected' : ''}>${o}</option>`).join('')}</select>` : ''}
+      </div>
+    </div>
+    <div class="bloque">
+      <div class="tit"><h3>Equipo</h3><span class="opc">${st.equipo.length} personas · la contraseña sale sola (nombre.apellido)</span></div>
+      <table class="tabla tabla-equipo">
+        <thead><tr><th>Nombre</th><th>Apellido</th><th>Email</th><th>Teléfono</th><th>Rol</th><th>Responsable</th><th></th></tr></thead>
+        <tbody>${filas}</tbody>
+      </table>
+      <button class="agregar" id="agregar">＋ Agregar persona</button>
+    </div>
+    ${bloqueCartera()}`
+}
+
+function vistaRevisar() {
+  const errs = st.soloCartera ? {} : erroresDelEquipo()
+  const c = revisionDeCartera()
+  const existente = st.org === 'existente'
+  const org = st.soloCartera ? '' : `
+    <div class="rev"><div class="cab"><h3>Organización</h3>${existente ? '<span class="pill br">Se vincula</span>' : '<span class="pill ok">Se crea</span>'}</div>
+      <div class="cont">${existente ? `Se vincula <b>${esc(st.orgExistente)}</b> al lead.` : `Se crea <b>${esc(st.nombre)}</b> con la web <b>${esc(st.web)}</b>.`}</div></div>`
+  const equipo = st.soloCartera ? '' : `
+    <div class="rev"><div class="cab"><h3>Equipo</h3>
+      ${Object.keys(errs).length ? `<span class="pill bad">${Object.keys(errs).length} con error</span>` : `<span class="pill ok">${st.equipo.length} cuentas</span>`}</div>
+      <div class="cont"><table class="tabla"><tbody>${st.equipo.map((p, i) => {
+        const estado = errs[i] ? `<span class="pill bad">${esc(errs[i].join(' · '))}</span>`
+          : existente && i === 0 ? '<span class="pill">Ya tiene cuenta</span>' : '<span class="pill ok">Se crea</span>'
+        return `<tr><td>${esc(p.nombre)} ${esc(p.apellido)}${i === st.responsable ? ' <span class="pill br">Responsable</span>' : ''}</td><td style="color:var(--muted)">${esc(p.email)}</td><td>${p.rol === 'admin' ? 'Administrador' : 'Agente'}</td><td style="text-align:right">${estado}</td></tr>`
+      }).join('')}</tbody></table></div></div>`
+  const cartera = !c
+    ? `<div class="rev"><div class="cab"><h3>Cartera</h3><span class="pill">No se sube ahora</span></div><div class="cont" style="color:var(--muted)">Se importa después con «Importar cartera», al lado del alta hecha.</div></div>`
+    : `<div class="rev"><div class="cab"><h3>Cartera · ${esc(st.archivo.nombre)}</h3>${c.error ? '<span class="pill bad">1 fila con error</span>' : '<span class="pill ok">Lista</span>'}</div>
+      <div class="cont">
+        <div class="cifras">
+          <div class="cifra ok"><b>${c.nuevas}</b><span>propiedades nuevas</span></div>
+          ${c.yaEstaban ? `<div class="cifra"><b>${c.yaEstaban}</b><span>ya estaban: no se tocan</span></div>` : ''}
+          <div class="cifra warn"><b>${c.avisos}</b><span>entran con aviso</span></div>
+          ${c.error ? `<div class="cifra bad"><b>${c.error}</b><span>con error</span></div>` : ''}
+          ${st.fotos ? `<div class="cifra"><b>${c.fotosNuevas}</b><span>fotos nuevas${c.fotosYa ? ` · ${c.fotosYa} ya estaban` : ''}</span></div>` : ''}
+        </div>
+        <div class="filas-detalle">
+          ${c.error ? '<span class="bad">Fila 41 · «Agente comercializador»: jorge@inmobene.example no es del equipo. Agregalo arriba o corregí el Excel.</span>' : ''}
+          <span class="warn">Fila 12 · Sin número de calle: entra y en Propelia queda «Dirección incompleta».</span>
+          ${c.avisos > 1 ? `<span class="warn">Filas 57, 88 y 103 · Sin número de calle.</span>` : ''}
+        </div>
+      </div></div>`
+  return org + equipo + cartera
+}
+
+function vistaProgreso() {
+  return `<div class="prog">${st.progreso.map(p => `
+    <div class="p ${p.estado}"><span class="est">${p.estado === 'ok' ? '✓' : p.estado === 'salt' ? '–' : ''}</span>
+      <div style="flex:1"><div>${p.texto}</div>${p.det ? `<small>${p.det}</small>` : ''}
+      ${p.barra !== undefined ? `<div class="barra"><i style="width:${p.barra}%"></i></div>` : ''}</div></div>`).join('')}</div>`
+}
+
+function vistaListo() {
+  const c = st.cartera
+  return `<div class="cifras">
+      ${st.soloCartera ? '' : `<div class="cifra ok"><b>${st.equipo.length}</b><span>cuentas en ${esc(st.nombre)}</span></div>`}
+      <div class="cifra ${c.importadas ? 'ok' : ''}"><b>${c.importadas}</b><span>propiedades en total</span></div>
+      ${c.fotos ? `<div class="cifra"><b>${c.fotos}</b><span>fotos</span></div>` : ''}
+    </div>
+    ${vistaProgreso()}
+    <p class="nota">Lo que sigue: probar las cuentas y mandar los mails de accesos.</p>`
+}
+
+function pintarVentana() {
+  pintarEtapas()
+  const cuerpo = { datos: vistaDatos, revisar: vistaRevisar, corriendo: vistaProgreso, listo: vistaListo }[st.modo]()
+  $('#vCuerpo').innerHTML = cuerpo
+  let pie = ''
+  if (st.modo === 'datos') {
+    const falta = st.soloCartera && !st.archivo
+    pie = `<span class="msg">${st.soloCartera ? 'Solo entran las propiedades y fotos que no estén.' : st.archivo ? 'Se revisa todo antes de crear nada.' : 'Sin Excel: se da de alta solo el equipo.'}</span><span class="sp"></span>
+      <button class="btn" data-cerrar>Cancelar</button><button class="btn pri" id="aRevisar" ${falta ? 'disabled' : ''}>Revisar →</button>`
+  } else if (st.modo === 'revisar') {
+    const ok = sePuedeConfirmar()
+    pie = `<span class="msg ${ok ? '' : 'bad'}">${ok ? 'Todavía no se creó nada.' : 'Hay errores: corregilos para seguir.'}</span><span class="sp"></span>
+      <button class="btn" id="aVolver">← Corregir</button>
+      <button class="btn pri" id="aConfirmar" ${ok ? '' : 'disabled'}>${st.soloCartera ? 'Importar' : 'Confirmar y dar de alta'}</button>`
+  } else if (st.modo === 'corriendo') {
+    pie = `<span class="msg">No cierres la ventana: si se corta, volver a apretarlo sigue desde donde quedó.</span>`
+  } else {
+    pie = `<span class="sp"></span><button class="btn pri" data-cerrar>Listo</button>`
+  }
+  $('#vPie').innerHTML = pie
+}
+
+/* ---------- correr el alta (simulado) ---------- */
+const espera = ms => new Promise(r => setTimeout(r, ms))
+async function correr() {
+  st.modo = 'corriendo'
+  const c = revisionDeCartera()
+  const pasos = []
+  if (!st.soloCartera) {
+    pasos.push({ texto: st.org === 'existente' ? `Vincular ${esc(st.orgExistente)} y sumar al equipo` : `Crear ${esc(st.nombre)} con ${st.equipo.length} cuentas`, estado: '' })
+    pasos.push({ texto: 'Guardar el equipo en el CRM y tildar «Importar el equipo»', estado: '' })
+  }
+  pasos.push({ texto: 'Importar las propiedades', estado: c ? '' : 'salt', det: c ? '' : 'Sin Excel: queda para después' })
+  pasos.push({ texto: 'Copiar las fotos', estado: c && st.fotos ? '' : 'salt', det: c && st.fotos ? '' : 'No se pidieron' })
+  st.progreso = pasos
+  pintarVentana()
+  for (const p of pasos) {
+    if (p.estado === 'salt') continue
+    p.estado = 'run'; pintarVentana()
+    if (p.texto.startsWith('Importar las propiedades')) {
+      for (let n = 0; n <= c.nuevas; n += 50) { p.det = `${Math.min(n, c.nuevas)} de ${c.nuevas}${c.yaEstaban ? ` · ${c.yaEstaban} ya estaban` : ''}`; p.barra = Math.min(n, c.nuevas) / c.nuevas * 100; pintarVentana(); await espera(350) }
+      p.det = `${c.nuevas} nuevas${c.yaEstaban ? ` · ${c.yaEstaban} ya estaban` : ''} · ${c.avisos} con aviso`; delete p.barra
+    } else if (p.texto.startsWith('Copiar las fotos')) {
+      const total = c.fotosNuevas
+      for (let n = 0; n < total; n += 20 * 4) { p.det = `${n} de ${total}`; p.barra = n / total * 100; pintarVentana(); await espera(180) }
+      p.det = `${total} copiadas${c.fotosYa ? ` · ${c.fotosYa} ya estaban` : ''}`; delete p.barra
+    } else {
+      await espera(700)
+    }
+    p.estado = 'ok'; pintarVentana()
+  }
+  st.hecho = true
+  if (c) { st.cartera.importadas += c.nuevas; st.cartera.fotos += c.fotosNuevas }
+  st.modo = 'listo'
+  pintarVentana(); pintarTareas()
+}
+
+/* ---------- eventos ---------- */
+function abrir(soloCartera) {
+  st.soloCartera = soloCartera; st.modo = 'datos'; st.intentoRevisar = false
+  if (soloCartera) st.archivo = null
+  $('#velo').classList.add('on'); pintarVentana()
+}
+function cerrar() { if (st.modo === 'corriendo') return; $('#velo').classList.remove('on') }
+
+$('#tareas').addEventListener('click', e => {
+  const b = e.target.closest('[data-abrir]'); if (b) abrir(b.dataset.abrir === 'cartera')
+})
+$('#vCerrar').onclick = cerrar
+$('#velo').addEventListener('click', e => {
+  if (e.target.id === 'velo' || e.target.closest('[data-cerrar]')) return cerrar()
+  const t = e.target
+  if (t.id === 'agregar') { st.equipo.push({ nombre: '', apellido: '', email: '', pre: '+34', tel: '', rol: 'agent' }); pintarVentana() }
+  else if (t.dataset.borrar !== undefined) { const i = +t.dataset.borrar; st.equipo.splice(i, 1); if (st.responsable >= st.equipo.length) st.responsable = 0; pintarVentana() }
+  else if (t.id === 'fSubir') { st.archivo = st.cartera.importadas ? { nombre: 'cartera-inmobene-v2.xlsx', filas: 136, fotos: 543 } : { nombre: 'cartera-inmobene.xlsx', filas: 132, fotos: 512 }; pintarVentana() }
+  else if (t.id === 'fQuitar') { st.archivo = null; pintarVentana() }
+  else if (t.id === 'aRevisar') { st.intentoRevisar = true; st.modo = 'revisar'; pintarVentana() }
+  else if (t.id === 'aVolver') { st.modo = 'datos'; pintarVentana() }
+  else if (t.id === 'aConfirmar') correr()
+})
+$('#velo').addEventListener('input', e => {
+  const t = e.target
+  if (t.dataset.g) st[t.dataset.g] = t.value
+  else if (t.dataset.f) st.equipo[+t.dataset.i][t.dataset.f] = t.value
+})
+$('#velo').addEventListener('change', e => {
+  const t = e.target
+  if (t.name === 'org') { st.org = t.value; pintarVentana() }
+  else if (t.id === 'orgSel') st.orgExistente = t.value
+  else if (t.dataset.resp !== undefined) { st.responsable = +t.dataset.resp; st.equipo[st.responsable].rol = 'admin'; pintarVentana() }
+  else if (t.id === 'fFotos') st.fotos = t.checked
+  else if (t.dataset.f === 'rol') pintarVentana()
+})
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrar() })
+$('#dErr').onchange = () => { if (st.modo === 'revisar') pintarVentana() }
+$('#dReset').onclick = () => { st = inicial(); $('#velo').classList.remove('on'); pintarTareas() }
+
+pintarTareas()
+</script>
+</body>
+</html>

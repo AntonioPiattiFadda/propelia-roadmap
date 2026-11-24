@@ -2,13 +2,13 @@
    (`onboardingCatalog.ts`): en la base solo van las tareas hechas, por `task_id` = `<paso>.<tarea>`.
    Cambiar un id deja esa tarea pendiente para todos. Diseño en docs/onboarding/clientes.html.
 
-   Los pasos 5 a 8 están escritos pero en «Próximamente»: se iteran después. No cuentan para el
-   avance ni para «Marcar completo» hasta que se abran. */
+   Los pasos de «Próximamente» están escritos pero se iteran después. No cuentan para el avance ni
+   para «Marcar completo» hasta que se abran. Los que salieron por un tiempo viven en `PASOS_EN_PAUSA`. */
 
 /** Lo que va al lado de cada tarea. `wa:<plantilla>` es copiar + enviar por WhatsApp Web. */
 export type Accion =
   | `wa:${PlantillaId}`
-  | 'link-alta' | 'equipo-recibido' | 'importar-usuarios' | 'mails'
+  | 'link-alta' | 'equipo-recibido' | 'importar-usuarios' | 'dar-de-alta' | 'mails'
   | 'plantilla-cartera' | 'importar-cartera' | 'link-pago' | 'ver-pago'
   | 'direcciones' | 'simular-lead' | 'tutoriales' | 'reiniciar-tutoriales' | 'desactivar-tutoriales' | 'agendar-reunion'
 
@@ -25,40 +25,12 @@ export const PASOS: Paso[] = [
   {
     id: 'contacto', titulo: 'Contacto y cuentas',
     tareas: [
-      // Los ids son de cuando el equipo llegaba por Excel: cambiarlos destildaría lo hecho.
-      { id: 'enviar', texto: 'Enviar el saludo con el enlace para que carguen su equipo', acciones: ['wa:contacto_inicial', 'link-alta'] },
-      { id: 'excel-recibido', texto: 'Recibir el equipo y el nombre de la inmobiliaria', acciones: ['equipo-recibido'] },
-      { id: 'importar-usuarios', texto: 'Importar el equipo: crea la organización y todas las cuentas', acciones: ['importar-usuarios'] },
-      { id: 'credenciales', texto: 'Verificar accesos y enviar a cada uno su usuario y clave por mail', acciones: ['mails', 'wa:accesos_enviados', 'plantilla-cartera'] },
-    ],
-  },
-  /* 29/10/2026, por pedido: el paso 2 junta la cartera con lo de los leads (tutorial, asignar, mails de
-     Idealista, lead de prueba), el 3 es el MCP y el pago va aparte. Nadie tenía tildado nada de
-     `cartera-org-pago` ni de `asignar-mails`, así que los ids de paso cambiaron sin perder nada. */
-  {
-    id: 'cartera-leads', titulo: 'Cartera y leads',
-    tareas: [
-      { id: 'excel', texto: 'Recibir el Excel de propiedades del cliente (va adjunto al WhatsApp de los accesos)', acciones: ['plantilla-cartera'] },
-      { id: 'importar', texto: 'Importar la cartera a su organización', acciones: ['importar-cartera'] },
-      /* 31/10/2026, por pedido: las dos capacitaciones por Google Meet, arriba del tutorial. El WhatsApp
-         la propone y «Agendar» la deja en el Google de quien la agenda; el link de Meet, por ahora, a mano. */
-      { id: 'reunion-equipo', texto: 'Agendar la capacitación con el equipo por Google Meet', acciones: ['wa:reunion_equipo', 'agendar-reunion'], reunion: { titulo: 'Capacitación del equipo' } },
-      { id: 'reunion-dueno', texto: 'Agendar la capacitación con el dueño por Google Meet', acciones: ['wa:reunion_dueno', 'agendar-reunion'], reunion: { titulo: 'Capacitación con el dueño' } },
-      // Fue «Configurar la organización con ellos» (`llamada-org`): desde el 29/10/2026 la org la configuran solos con la guía de Propelia.
-      /* 29/10/2026, por pedido: además del WhatsApp, prende en Propelia el «Tutorial de leads» (un
-         recorrido guiado por punto del mensaje) a todo el equipo. Tildarla lo prende: ver
-         `TAREA_TUTORIAL_LEADS`. */
-      { id: 'tutorial-leads', texto: 'Activar el tutorial de cómo funciona el sistema de leads y avisarles', acciones: ['tutoriales', 'reiniciar-tutoriales', 'desactivar-tutoriales', 'wa:tutorial_leads'] },
-      { id: 'asignar', texto: 'Que asignen las propiedades importadas a cada agente', acciones: ['wa:asignar_y_mails'] },
-      { id: 'mails-idealista', texto: 'Que configuren en Idealista los mails de cada agente', acciones: ['direcciones'] },
-      { id: 'lead-prueba', texto: 'Probar que un lead llega', acciones: ['simular-lead'] },
-    ],
-  },
-  {
-    // Los pasos y el mensaje con los tutoriales se definen después: por ahora, una tarea a mano.
-    id: 'mcp', titulo: 'Configuración del MCP',
-    tareas: [
-      { id: 'tutoriales', texto: 'Enviar el mensaje con los tutoriales del MCP' },
+      /* 24/11/2026, por pedido: el alta la cargamos nosotros, en un solo botón («Dar de alta»:
+         inmobiliaria, equipo y, opcional, la cartera). Salieron «Enviar el saludo con el enlace»
+         (`enviar`) y «Recibir el equipo» (`excel-recibido`): el cliente ya no carga nada. El id sigue
+         siendo `importar-usuarios` para no destildar las altas en curso. */
+      { id: 'importar-usuarios', texto: 'Dar de alta: organización, equipo y cartera', acciones: ['dar-de-alta'] },
+      { id: 'credenciales', texto: 'Verificar accesos y enviar a cada uno su usuario y clave por mail', acciones: ['mails', 'wa:accesos_enviados'] },
     ],
   },
   {
@@ -100,6 +72,38 @@ export const PASOS: Paso[] = [
   },
 ]
 
+/* «Cartera y leads» y «Configuración del MCP» salieron de la pantalla el 24/11/2026, por pedido
+   («por ahora»). Quedan escritos acá, con sus ids, para volver a ponerlos en `PASOS` sin destildar
+   nada: lo hecho sigue en `client_onboarding_tasks`. La cartera la importa ahora «Dar de alta» (y
+   su «Importar cartera»), que sigue tildando `cartera-leads.excel` y `cartera-leads.importar`: el
+   hito «Equipo» de lo que ve el cliente cuenta esa última. */
+export const PASOS_EN_PAUSA: Paso[] = [
+  {
+    id: 'cartera-leads', titulo: 'Cartera y leads',
+    tareas: [
+      { id: 'excel', texto: 'Recibir el Excel de propiedades del cliente (va adjunto al WhatsApp de los accesos)', acciones: ['plantilla-cartera'] },
+      { id: 'importar', texto: 'Importar la cartera a su organización', acciones: ['importar-cartera'] },
+      /* 31/10/2026, por pedido: las dos capacitaciones por Google Meet, arriba del tutorial. El WhatsApp
+         la propone y «Agendar» la deja en el Google de quien la agenda; el link de Meet, por ahora, a mano. */
+      { id: 'reunion-equipo', texto: 'Agendar la capacitación con el equipo por Google Meet', acciones: ['wa:reunion_equipo', 'agendar-reunion'], reunion: { titulo: 'Capacitación del equipo' } },
+      { id: 'reunion-dueno', texto: 'Agendar la capacitación con el dueño por Google Meet', acciones: ['wa:reunion_dueno', 'agendar-reunion'], reunion: { titulo: 'Capacitación con el dueño' } },
+      /* 29/10/2026, por pedido: además del WhatsApp, prende en Propelia el «Tutorial de leads». Tildarla
+         lo prende: ver `TAREA_TUTORIAL_LEADS`. */
+      { id: 'tutorial-leads', texto: 'Activar el tutorial de cómo funciona el sistema de leads y avisarles', acciones: ['tutoriales', 'reiniciar-tutoriales', 'desactivar-tutoriales', 'wa:tutorial_leads'] },
+      { id: 'asignar', texto: 'Que asignen las propiedades importadas a cada agente', acciones: ['wa:asignar_y_mails'] },
+      { id: 'mails-idealista', texto: 'Que configuren en Idealista los mails de cada agente', acciones: ['direcciones'] },
+      { id: 'lead-prueba', texto: 'Probar que un lead llega', acciones: ['simular-lead'] },
+    ],
+  },
+  {
+    // Los pasos y el mensaje con los tutoriales se definen después: por ahora, una tarea a mano.
+    id: 'mcp', titulo: 'Configuración del MCP',
+    tareas: [
+      { id: 'tutoriales', texto: 'Enviar el mensaje con los tutoriales del MCP' },
+    ],
+  },
+]
+
 /** Clave de la tarea en `client_onboarding_tasks.task_id`. */
 export const claveDeTarea = (pasoId: string, tareaId: string) => `${pasoId}.${tareaId}`
 
@@ -109,6 +113,11 @@ export const TAREA_EQUIPO_RECIBIDO = claveDeTarea('contacto', 'excel-recibido')
 /** La tilda `client_onboarding_importar_equipo`. Hecha = el equipo ya son cuentas en Propelia. Desde
  *  el 5/11/2026 es la única marca de «importado»: la org se puede vincular antes (`vincularOrg`). */
 export const TAREA_IMPORTAR_USUARIOS = claveDeTarea('contacto', 'importar-usuarios')
+
+/** La cartera: las tilda «Dar de alta» (o «Importar cartera») al importar el Excel. Viven en
+ *  «Cartera y leads», que está en pausa, pero el hito «Equipo» del cliente cuenta `importar`. */
+export const TAREA_CARTERA_RECIBIDA = claveDeTarea('cartera-leads', 'excel')
+export const TAREA_CARTERA_IMPORTADA = claveDeTarea('cartera-leads', 'importar')
 
 /** La tarea que no se tilda a mano: manda mails, pasa por `ConfirmarAccesosDialog`. */
 export const TAREA_CREDENCIALES = claveDeTarea('contacto', 'credenciales')

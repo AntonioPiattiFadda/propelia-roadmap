@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react'
-import { CalendarCheck, CalendarPlus, ChevronRight, CircleOff, CreditCard, Download, FlaskConical, GraduationCap, Inbox, Link, Link2, Loader2, Mail, RotateCcw, Upload, Users } from 'lucide-react'
+import { CalendarCheck, CalendarPlus, ChevronRight, CircleOff, CreditCard, Download, FlaskConical, GraduationCap, Inbox, Link, Link2, Loader2, Mail, Plus, RotateCcw, Upload, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -14,11 +14,12 @@ import { markMeetingOutcome } from '@/pages/agenda/service/meetings.service'
 import { useActivarTutorialDeLeads, useDesactivarTutorialDeLeads, useMarcarTarea, useReiniciarTutorialDeLeads, useOrganizacion, useReabrirAlta } from '../hooks/useClientes'
 import { estadoDelAlta } from '../lib/equipo'
 import { listaDeMailsQueNoLlegaron } from '../lib/mensajes'
-import { claveDeTarea, TAREA_CORREGIR_MAILS, TAREA_CREDENCIALES, TAREA_TUTORIAL_LEADS, tareaReunionHecha, type Accion, type Paso, type PlantillaId, type Tarea } from '../lib/pasos'
+import { claveDeTarea, TAREA_CARTERA_IMPORTADA, TAREA_CORREGIR_MAILS, TAREA_CREDENCIALES, TAREA_IMPORTAR_USUARIOS, TAREA_TUTORIAL_LEADS, tareaReunionHecha, type Accion, type Paso, type PlantillaId, type Tarea } from '../lib/pasos'
 import { preguntaSiSeHizo, reunionDeLaTarea } from '../lib/reuniones'
 import { descargarExcel } from '../service/excel'
 import { enviarLeadDePrueba, getColumnasDeCartera, GRUPO_TUTORIAL_DE_LEADS, HOJA_DE_FOTOS, PUENTE_SIMULADO } from '../service/puente'
 import { ConfirmarAccesosDialog } from './ConfirmarAccesosDialog'
+import { DarDeAltaDialog } from './DarDeAltaDialog'
 import { copiarTexto, EnviarPorWhatsapp } from './EnviarPorWhatsapp'
 import { ImportarCarteraPanel } from './ImportarCarteraPanel'
 import { ImportarUsuariosPanel, OrgVinculada, VincularOrgPanel } from './ImportarUsuariosPanel'
@@ -55,6 +56,7 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
   const desactivar = () => datos.orgId && desactivarTutorial.mutate({ orgId: datos.orgId, onboardingId: datos.o.id, taskId: clave })
   const [panel, setPanel] = useState<Panel | null>(null)
   const [confirmando, setConfirmando] = useState(false)
+  const [alta, setAlta] = useState<'alta' | 'cartera' | null>(null)
   const [ocupado, setOcupado] = useState<Accion | null>(null)
   /* «Importar fotos» (2/11/2026, por pedido): se elige ANTES de subir el Excel y hace que se lea
      también su hoja «Fotos». Apagado, el import es el de siempre. */
@@ -87,6 +89,11 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
     if (clave === TAREA_CREDENCIALES && v) {
       if (!datos.equipoImportado) toast.error(SIN_EQUIPO)
       else setConfirmando(true)
+      return
+    }
+    // «Dar de alta» no se tilda a mano: la tilda la base al guardar el equipo. Tildarla abre la ventana.
+    if (clave === TAREA_IMPORTAR_USUARIOS) {
+      if (v && !datos.equipoImportado) setAlta('alta')
       return
     }
     // Tildar el tutorial lo prende en Propelia: se tilda recién cuando Propelia contestó.
@@ -164,6 +171,30 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
             <Button size="sm" variant={panel?.tipo === 'usuarios' ? 'secondary' : 'outline'} className="h-8"
               disabled={!enviado} title={enviado ? undefined : SIN_ENVIAR} onClick={() => alternar({ tipo: 'usuarios' })}>
               <Users className="size-4" /> Importar
+            </Button>
+          </span>
+        )
+      }
+      case 'dar-de-alta': {
+        if (!datos.equipoImportado) {
+          return (
+            <span key={a} className="flex items-center gap-2">
+              {datos.orgId && <OrgVinculada orgId={datos.orgId} onboardingId={datos.o.id} />}
+              <Button size="sm" className="h-8" onClick={() => setAlta('alta')}><Plus className="size-4" /> Dar de alta</Button>
+            </span>
+          )
+        }
+        const yaTenian = datos.o.miembros.filter(m => m.existing_account).length
+        const nuevas = datos.o.miembros.length - yaTenian
+        const conCartera = datos.o.tareas.some(t => t.task_id === TAREA_CARTERA_IMPORTADA)
+        return (
+          <span key={a} className="flex items-center gap-2">
+            <span className="text-[12px] font-medium text-success">
+              {yaTenian ? `${nuevas} ${nuevas === 1 ? 'cuenta nueva' : 'cuentas nuevas'}, ${yaTenian} ya ${yaTenian === 1 ? 'existía' : 'existían'}` : `${nuevas} cuentas`}
+              {conCartera ? ' · cartera importada' : ' · sin cartera todavía'}
+            </span>
+            <Button size="sm" variant="outline" className="h-8" title="Entran solo las propiedades y fotos que no estén" onClick={() => setAlta('cartera')}>
+              <Upload className="size-4" /> {conCartera ? 'Importar cartera de nuevo' : 'Importar cartera'}
             </Button>
           </span>
         )
@@ -336,6 +367,9 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
           // La fila tiene todo lo que pide el form; `status` y `sync_status` son text en la base.
           meeting={reunion?.activa ? reunion.activa as unknown as EditableMeeting : undefined}
           onSaved={() => { if (!hecha) marcar.mutate({ onboardingId: datos.o.id, taskId: clave, hecha: true }) }} />
+      )}
+      {clave === TAREA_IMPORTAR_USUARIOS && (
+        <DarDeAltaDialog datos={datos} modo={alta ?? 'alta'} abierto={alta !== null} onCerrar={() => setAlta(null)} />
       )}
       {clave === TAREA_CREDENCIALES && <ConfirmarAccesosDialog datos={datos} abierto={confirmando} onCerrar={() => setConfirmando(false)} />}
     </div>
