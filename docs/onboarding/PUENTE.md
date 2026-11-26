@@ -355,7 +355,7 @@ Leads de prueba en la org (26/11/2026, por pedido): el set que se cargó a mano 
 (`supabase/test-seeds/leads/inmuga-homes.json` del producto), armado contra los pisos **activos**
 que la org ya tiene, así que se puede correr apenas importada la cartera o cuando sea:
 
-- **6 compradores «Test Matching»**. Cada uno toma un piso de la cartera (repartidos de barato a
+- **6 compradores «Test Cruce»**. Cada uno toma un piso de la cartera (repartidos de barato a
   caro) y lleva la búsqueda que cruza con él cerca del **100, 90, 80, 65 y 50 %**; el sexto no
   cruza con nada (presupuesto debajo del filtro). La búsqueda se elige con el motor de verdad
   (`composeMatch` + `passesFilters` y las `scoring_rules` de la base, `roadmap-bridge/testLeads.ts`):
@@ -376,7 +376,7 @@ cada comprador y devuelve el porcentaje **real** con su piso (si falla, queda en
 // { "action": "create_test_leads", "org_id": "6f1c…" } →
 { "created": 12, "skipped_existing": 0, "failed": 0,
   "leads": [
-    { "key": "lucia-matching", "kind": "matching", "lead_type": "BUYER", "name": "Lucía Test Matching",
+    { "key": "lucia-matching", "kind": "matching", "lead_type": "BUYER", "name": "Lucía Test Cruce",
       "assigned_to": { "id": "u1", "name": "Marta Gil" }, "status": "created", "lead_id": "…", "error": null,
       "tasks": 2, "expected": { "property_label": "Calle Mayor 3, Madrid", "score": 100 },
       "matches": 7, "anchor_score": 100 }

@@ -248,9 +248,9 @@ async function simular(action: string, p: Record<string, unknown>): Promise<unkn
         matches: kind === 'vendedor' ? null : score == null && kind === 'matching' ? 0 : 3, anchor_score: score,
       })
       const leads = [
-        lead('lucia-matching', 'Lucía Test Matching', 'matching', 100), lead('javier-matching', 'Javier Test Matching', 'matching', 90),
-        lead('carmen-matching', 'Carmen Test Matching', 'matching', 80), lead('andres-matching', 'Andrés Test Matching', 'matching', 65),
-        lead('elena-matching', 'Elena Test Matching', 'matching', 50), lead('marcos-matching', 'Marcos Test Matching', 'matching', null),
+        lead('lucia-matching', 'Lucía Test Cruce', 'matching', 100), lead('javier-matching', 'Javier Test Cruce', 'matching', 90),
+        lead('carmen-matching', 'Carmen Test Cruce', 'matching', 80), lead('andres-matching', 'Andrés Test Cruce', 'matching', 65),
+        lead('elena-matching', 'Elena Test Cruce', 'matching', 50), lead('marcos-matching', 'Marcos Test Cruce', 'matching', null),
         lead('laura-consulta', 'Laura Test Consulta', 'consulta', null), lead('pablo-consulta', 'Pablo Test Consulta', 'consulta', null),
         lead('sofia-consulta', 'Sofía Test Consulta', 'consulta', null), lead('rosa-vendedora', 'Rosa Test Vendedora', 'vendedor', null),
         lead('miguel-vendedor', 'Miguel Test Vendedor', 'vendedor', null), lead('teresa-vendedora', 'Teresa Test Vendedora', 'vendedor', null),

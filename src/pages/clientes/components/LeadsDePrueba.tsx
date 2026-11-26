@@ -9,7 +9,7 @@ import { crearLeadsDePrueba, PUENTE_SIMULADO, type LeadDePrueba, type ResultadoD
    Inmuga Homes, armado contra la cartera que la org ya tiene (`create_test_leads` del puente,
    PUENTE.md). 6 compradores con porcentajes de cruce escalonados (100, 90, 80, 65, 50 y uno que
    no cruza), 3 consultas por un piso y 3 vendedores, con sus tareas y repartidos entre el equipo.
-   Sin marca de prueba: se reconocen por el nombre («Test Matching»…), los teléfonos +346000001xx
+   Sin marca de prueba: se reconocen por el nombre («Test Cruce»…), los teléfonos +346000001xx
    y la nota «[TEST]». Dos puertas: la casilla de «Dar de alta» / «Importar cartera» y el botón de
    la tarea del alta ya hecha (`LeadsDePruebaDialog`). Repetirlo no duplica. */
 
@@ -97,7 +97,7 @@ export function LeadsDePruebaDialog({ orgId, nombre, abierto, onCerrar }: {
       <DialogContent className="ui-scale dialog-fullscreen-mobile flex max-h-[90vh] w-[min(860px,96vw)] max-w-none flex-col gap-3 overflow-hidden">
         <DialogTitle className="flex items-center gap-2 text-[16px]"><FlaskConical className="size-4" /> Leads de prueba · {nombre}</DialogTitle>
         <DialogDescription className="text-[13px]">
-          {QUE_SE_CREA} Se arman con los pisos activos que la org ya tiene en Propelia. Se reconocen por el nombre («Test Matching»…) y la nota «[TEST]»; correrlo de nuevo no los duplica.
+          {QUE_SE_CREA} Se arman con los pisos activos que la org ya tiene en Propelia. Se reconocen por el nombre («Test Cruce»…) y la nota «[TEST]»; correrlo de nuevo no los duplica.
         </DialogDescription>
         {PUENTE_SIMULADO && <p className="text-[12px] text-warning">Puente simulado: no se crea nada en Propelia.</p>}
         <div className="min-h-0 flex-1 overflow-y-auto">
