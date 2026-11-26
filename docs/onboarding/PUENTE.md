@@ -44,6 +44,7 @@ Cualquier error responde con status ≠ 2xx y este cuerpo:
 | `bad_request` | 400 | Falta un parámetro o tiene mal formato; `message` dice cuál |
 | `not_found` | 404 | La org, el plan o el escenario no existen |
 | `not_demo_org` | 409 | Simular un lead fuera de la org demo |
+| `no_team` / `no_properties` | 409 | `create_test_leads` en una org sin equipo o sin pisos activos con precio |
 | `too_many_rows` | 413 | Más filas que el máximo de la acción |
 | `upstream_error` | 502 | El producto o un tercero (Google, Lemon Squeezy, Resend) falló, o el puente está mal configurado; `message` lo explica |
 
@@ -347,6 +348,45 @@ Baja cada foto de su URL (la del CDN de Idealista, firmada y con vencimiento) y 
   Idealista y va a `label`, la clasificación que muestra la grilla («Salón» → `living`;
   `photoLabelCode`). «Plano» queda sin clasificar. El texto tal cual va además a `alt_text`.
 - Más de 20 filas → `too_many_rows`.
+
+### `create_test_leads`
+
+Leads de prueba en la org (26/11/2026, por pedido): el set que se cargó a mano en Inmuga Homes
+(`supabase/test-seeds/leads/inmuga-homes.json` del producto), armado contra los pisos **activos**
+que la org ya tiene, así que se puede correr apenas importada la cartera o cuando sea:
+
+- **6 compradores «Test Matching»**. Cada uno toma un piso de la cartera (repartidos de barato a
+  caro) y lleva la búsqueda que cruza con él cerca del **100, 90, 80, 65 y 50 %**; el sexto no
+  cruza con nada (presupuesto debajo del filtro). La búsqueda se elige con el motor de verdad
+  (`composeMatch` + `passesFilters` y las `scoring_rules` de la base, `roadmap-bridge/testLeads.ts`):
+  presupuesto, dormitorios, baños y m², **sin zonas** (las filas sin calle no se geocodifican) y
+  **sin notas** (con notas corre la etapa de IA, que gasta y no puntúa).
+- **3 consultas «Test Consulta»** atadas a un piso (`lead_properties`), por Idealista o Fotocasa.
+- **3 vendedores** con su inmueble inactivo (fuera del matching), a precios de la org.
+- Las tareas del archivo (1 a 4 por lead, «Asesorar cliente» ya hecha), con fechas desde hoy en
+  España, y una nota a mano «[TEST] …» en cada lead.
+
+Se reparten en ronda entre los admin y agentes de la org. **Sin marca de prueba** (por pedido):
+se reconocen por el nombre, los teléfonos `+346000001xx`, los emails `@propelia-test.es` y la
+nota. Cuentan como leads reales. **Repetirlo no duplica**: un teléfono que ya tiene su lead vivo
+vuelve `skipped_existing`. Un lead que falla no corta los demás. Al terminar corre el matching de
+cada comprador y devuelve el porcentaje **real** con su piso (si falla, queda en la cola).
+
+```json
+// { "action": "create_test_leads", "org_id": "6f1c…" } →
+{ "created": 12, "skipped_existing": 0, "failed": 0,
+  "leads": [
+    { "key": "lucia-matching", "kind": "matching", "lead_type": "BUYER", "name": "Lucía Test Matching",
+      "assigned_to": { "id": "u1", "name": "Marta Gil" }, "status": "created", "lead_id": "…", "error": null,
+      "tasks": 2, "expected": { "property_label": "Calle Mayor 3, Madrid", "score": 100 },
+      "matches": 7, "anchor_score": 100 }
+  ] }
+```
+
+`matches` es null en vendedores o si el matching quedó en la cola. Por la RPC `roadmap_create_test_lead`
+del producto (migración `20261126125938_roadmap_create_test_lead`): crea un lead entero en una
+transacción por las RPC del alta manual, haciéndose pasar por el agente (`agent_bot_act_as`).
+`409 no_team` sin admin ni agentes; `409 no_properties` sin pisos activos con precio.
 
 ### `simulated_inbound_scenarios`
 

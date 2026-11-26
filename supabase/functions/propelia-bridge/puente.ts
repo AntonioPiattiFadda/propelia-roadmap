@@ -14,6 +14,7 @@ export const ACCIONES = [
   'check_properties',
   'import_properties',
   'import_photos',
+  'create_test_leads',
   'simulated_inbound_scenarios',
   'send_simulated_inbound',
   'list_payment_plans',

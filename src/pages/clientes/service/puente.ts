@@ -53,6 +53,27 @@ export type RevisionDeFotos =
   | { ok: false; error: string }
 export type ResultadoDeFoto = { row_number: number; status: 'created' | 'skipped_existing' | 'failed' | 'invalid'; property_id?: string; errors?: string[] }
 
+/** Un lead de prueba de `create_test_leads` (PUENTE.md). */
+export type LeadDePrueba = {
+  key: string
+  name: string
+  /** `matching`: comprador pensado para cruzar a un porcentaje; `consulta`: preguntó por un piso. */
+  kind: 'matching' | 'consulta' | 'vendedor'
+  lead_type: 'BUYER' | 'SELLER'
+  assigned_to: { id: string; name: string | null }
+  status: 'created' | 'skipped_existing' | 'failed'
+  lead_id: string | null
+  error: string | null
+  tasks: number
+  /** Con qué piso debería cruzar y a cuánto; null en el que está pensado para no cruzar, las consultas y los vendedores. */
+  expected: { property_label: string; score: number } | null
+  /** Cruces que dio el motor; null en vendedores o si el matching quedó en la cola. */
+  matches: number | null
+  /** El porcentaje real con el piso de `expected`. */
+  anchor_score: number | null
+}
+export type ResultadoDeLeadsDePrueba = { leads: LeadDePrueba[]; created: number; skipped_existing: number; failed: number }
+
 /** Máximo de filas por llamada a `import_properties` (PUENTE.md). */
 export const FILAS_POR_LOTE = 50
 /** Máximo de fotos por llamada a `import_photos` (PUENTE.md): cada una es bajarla y subirla. */
@@ -97,6 +118,11 @@ export const importarLoteDeCartera = (org_id: string, header: string[], rows: { 
   invocar<{ results: ResultadoDeFila[] }>('import_properties', { org_id, header, rows }).then(r => r.results)
 export const importarLoteDeFotos = (org_id: string, header: string[], rows: { row_number: number; cells: string[] }[]) =>
   invocar<{ results: ResultadoDeFoto[] }>('import_photos', { org_id, header, rows }).then(r => r.results)
+/** Leads de prueba armados contra la cartera que la org ya tiene (el set de Inmuga Homes): 6
+ *  compradores con porcentajes de matching escalonados, 3 consultas por un piso y 3 vendedores,
+ *  con sus tareas y repartidos entre el equipo. Repetirlo no duplica: saltea los que ya están. */
+export const crearLeadsDePrueba = (org_id: string) =>
+  invocar<ResultadoDeLeadsDePrueba>('create_test_leads', { org_id })
 export const getPlanes = (org_id: string) =>
   invocar<{ plans: PlanDePago[] }>('list_payment_plans', { org_id }).then(r => r.plans)
 export const crearLinkDePago = (p: { plan_id: string; org_id: string; customer_email: string | null; note: string }) =>
@@ -210,6 +236,26 @@ async function simular(action: string, p: Record<string, unknown>): Promise<unkn
       const org = m.orgs[String(p.org_id)]
       if (org) { org.properties_count += rows.length; guardar(m) }
       return { results: rows.map(r => ({ row_number: r.row_number, status: 'created', property_id: crypto.randomUUID() })) }
+    }
+    case 'create_test_leads': {
+      const org = m.orgs[String(p.org_id)]
+      if (!org) throw new Error('La organización no existe en Propelia (simulado: se creó en otro navegador).')
+      if (!org.properties_count) throw new Error('La organización no tiene pisos activos con precio: hay que importar la cartera antes.')
+      const quien = org.agents[0] ? { id: org.agents[0].id, name: org.agents[0].name } : { id: 'simulado', name: 'Simulado' }
+      const lead = (key: string, name: string, kind: LeadDePrueba['kind'], score: number | null): LeadDePrueba => ({
+        key, name, kind, lead_type: kind === 'vendedor' ? 'SELLER' : 'BUYER', assigned_to: quien, status: 'created', lead_id: crypto.randomUUID(),
+        error: null, tasks: 2, expected: score == null ? null : { property_label: 'Calle de ejemplo 1', score },
+        matches: kind === 'vendedor' ? null : score == null && kind === 'matching' ? 0 : 3, anchor_score: score,
+      })
+      const leads = [
+        lead('lucia-matching', 'Lucía Test Matching', 'matching', 100), lead('javier-matching', 'Javier Test Matching', 'matching', 90),
+        lead('carmen-matching', 'Carmen Test Matching', 'matching', 80), lead('andres-matching', 'Andrés Test Matching', 'matching', 65),
+        lead('elena-matching', 'Elena Test Matching', 'matching', 50), lead('marcos-matching', 'Marcos Test Matching', 'matching', null),
+        lead('laura-consulta', 'Laura Test Consulta', 'consulta', null), lead('pablo-consulta', 'Pablo Test Consulta', 'consulta', null),
+        lead('sofia-consulta', 'Sofía Test Consulta', 'consulta', null), lead('rosa-vendedora', 'Rosa Test Vendedora', 'vendedor', null),
+        lead('miguel-vendedor', 'Miguel Test Vendedor', 'vendedor', null), lead('teresa-vendedora', 'Teresa Test Vendedora', 'vendedor', null),
+      ]
+      return { leads, created: leads.length, skipped_existing: 0, failed: 0 }
     }
     case 'list_payment_plans':
       return { plans: [{ id: 'pro', name: 'Pro', amount_cents: 19900, individual: false }, { id: 'basic', name: 'Básico', amount_cents: 9900, individual: false }] }

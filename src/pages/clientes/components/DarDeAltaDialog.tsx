@@ -16,10 +16,12 @@ import { TAREA_CARTERA_IMPORTADA, TAREA_CARTERA_RECIBIDA } from '../lib/pasos'
 import { guardarDatosDeLaInmobiliaria, importarEquipo, marcarTarea, vincularOrg } from '../service/clientes.service'
 import { descargarExcel } from '../service/excel'
 import {
-  crearOrgConUsuarios, FILAS_POR_LOTE, FOTOS_POR_LOTE, getColumnasDeCartera, HOJA_DE_FOTOS, importarLoteDeCartera, importarLoteDeFotos,
-  PUENTE_SIMULADO, revisarCartera, sumarUsuariosAOrg, type FilaRevisada, type OrgEnLista, type ResultadoDeUsuario, type RevisionDeFotos,
+  crearLeadsDePrueba, crearOrgConUsuarios, FILAS_POR_LOTE, FOTOS_POR_LOTE, getColumnasDeCartera, HOJA_DE_FOTOS, importarLoteDeCartera,
+  importarLoteDeFotos, PUENTE_SIMULADO, revisarCartera, sumarUsuariosAOrg, type FilaRevisada, type OrgEnLista, type ResultadoDeLeadsDePrueba,
+  type ResultadoDeUsuario, type RevisionDeFotos,
 } from '../service/puente'
 import { SelectorDeOrg } from './ImportarUsuariosPanel'
+import { QUE_SE_CREA, resumenDeLeadsDePrueba, TablaDeLeadsDePrueba } from './LeadsDePrueba'
 import type { DatosDelAlta } from './datosDelAlta'
 
 /* «Dar de alta» (24/11/2026, por pedido; mock en docs/onboarding/alta-en-un-paso.html): la
@@ -50,6 +52,7 @@ type Resumen = {
   org: string | null; cuentasNuevas: number; cuentasYaTenian: number
   propiedades: number; propiedadesYaEstaban: number; filasConError: { row_number: number; error: string }[]
   fotos: number; fotosFallidas: { row_number: number; error: string }[]
+  leadsDePrueba: ResultadoDeLeadsDePrueba | null
 }
 
 const ROL = { admin: 'Administrador', agent: 'Agente' } as const
@@ -99,6 +102,8 @@ function Cuerpo({ datos, modo, ocupado, onOcupado, onCerrar }: {
   const [intento, setIntento] = useState(false)
   const [cartera, setCartera] = useState<Cartera | null>(null)
   const [conFotos, setConFotos] = useState(true)
+  // Apagada de entrada: en la org de un cliente real quedarían leads inventados en su cartera.
+  const [conLeadsDePrueba, setConLeadsDePrueba] = useState(false)
   const [leyendo, setLeyendo] = useState(false)
   const [bajandoPlantilla, setBajandoPlantilla] = useState(false)
   const [revCuentas, setRevCuentas] = useState<RevisionDeCuentas | null>(null)
@@ -208,12 +213,13 @@ function Cuerpo({ datos, modo, ocupado, onOcupado, onCerrar }: {
       if (!revisadaAntes) lista.push({ id: 'revisar', texto: 'Revisar el Excel de la cartera', estado: 'pendiente' })
       lista.push({ id: 'propiedades', texto: 'Importar las propiedades', estado: 'pendiente' })
       if (fotosAUsar) lista.push({ id: 'fotos', texto: 'Copiar las fotos', estado: 'pendiente' })
+      if (conLeadsDePrueba) lista.push({ id: 'leads', texto: 'Crear los leads de prueba y correr su matching', estado: 'pendiente' })
     } else {
       lista.push({ id: 'propiedades', texto: 'Cartera', estado: 'salteado', detalle: 'Sin Excel: se importa después con «Importar cartera»' })
     }
     setPasos(lista)
 
-    const r: Resumen = { org: null, cuentasNuevas: 0, cuentasYaTenian: 0, propiedades: 0, propiedadesYaEstaban: 0, filasConError: [], fotos: 0, fotosFallidas: [] }
+    const r: Resumen = { org: null, cuentasNuevas: 0, cuentasYaTenian: 0, propiedades: 0, propiedadesYaEstaban: 0, filasConError: [], fotos: 0, fotosFallidas: [], leadsDePrueba: null }
     let actual = ''
     const empezar = (id: string) => { actual = id; actualizar(id, { estado: 'corriendo', detalle: undefined }) }
     try {
@@ -313,6 +319,14 @@ function Cuerpo({ datos, modo, ocupado, onOcupado, onCerrar }: {
         }
         await marcarTarea({ onboardingId, taskId: TAREA_CARTERA_RECIBIDA, hecha: true })
         await marcarTarea({ onboardingId, taskId: TAREA_CARTERA_IMPORTADA, hecha: true })
+
+        // Después de la cartera: los compradores se arman contra los pisos que acaban de entrar.
+        // Un reintento no los duplica (el puente saltea los que ya están).
+        if (conLeadsDePrueba) {
+          empezar('leads')
+          r.leadsDePrueba = await crearLeadsDePrueba(org)
+          actualizar('leads', { estado: 'ok', detalle: resumenDeLeadsDePrueba(r.leadsDePrueba) })
+        }
       }
       setResumen(r)
       setEtapa('listo')
@@ -456,6 +470,9 @@ function Cuerpo({ datos, modo, ocupado, onOcupado, onCerrar }: {
                 <label className={cn('flex items-center gap-2', cartera.fotos ? 'cursor-pointer' : 'opacity-50')}>
                   <Checkbox checked={conFotos && !!cartera.fotos} disabled={!cartera.fotos} onCheckedChange={v => setConFotos(v === true)} /> Importar fotos
                 </label>
+                <label className="flex cursor-pointer items-center gap-2" title={QUE_SE_CREA}>
+                  <Checkbox checked={conLeadsDePrueba} onCheckedChange={v => setConLeadsDePrueba(v === true)} /> Crear leads de prueba
+                </label>
                 <Button size="sm" variant="outline" onClick={() => setCartera(null)}>Quitar</Button>
               </div>
             ) : (
@@ -570,6 +587,11 @@ function Cuerpo({ datos, modo, ocupado, onOcupado, onCerrar }: {
                 {resumen.filasConError.map(f => <li key={`p${f.row_number}`} className="border-b border-(--line) px-2.5 py-1.5 last:border-0"><span className="tabular-nums text-(--fg-muted)">Fila {f.row_number}</span> · {f.error}</li>)}
                 {resumen.fotosFallidas.map(f => <li key={`f${f.row_number}`} className="border-b border-(--line) px-2.5 py-1.5 last:border-0"><span className="tabular-nums text-(--fg-muted)">Fotos, fila {f.row_number}</span> · {f.error}</li>)}
               </ul>
+            </Bloque>
+          )}
+          {etapa === 'listo' && resumen?.leadsDePrueba && (
+            <Bloque titulo="Leads de prueba" nota="El porcentaje es el que dio el motor de matching con su piso">
+              <TablaDeLeadsDePrueba resultado={resumen.leadsDePrueba} />
             </Bloque>
           )}
           {etapa === 'listo' && !soloCartera && <p className="text-(--fg-muted)">Lo que sigue: probar las cuentas y mandar los mails de accesos.</p>}
