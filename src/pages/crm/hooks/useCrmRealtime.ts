@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useQueryClient, type InvalidateQueryFilters, type QueryClient, type QueryKey } from '@tanstack/react-query'
+import { cuandoEsteVisible } from '@/lib/pestanas'
 import { supabase } from '@/lib/supabase'
 import {
   RECARGAR, campoDelAviso, esLlamadaDe, leadsConCliente, leadsConComentario, leadsConLead, tareasConTarea,
@@ -26,25 +27,37 @@ function encolador(qc: QueryClient) {
   const pendientes: Pendientes = new Map()
   let timer: ReturnType<typeof setTimeout> | undefined
   let primero = 0
+  let esperandoVista: (() => void) | undefined
 
-  const soltar = () => {
-    timer = undefined
-    primero = 0
+  /* Con la pestaña de fondo la tanda espera a que vuelva a estar a la vista (26/11/2026): con
+     muchas pestañas abiertas, cada aviso se re-traía en todas. Lo pendiente se sigue juntando y
+     sale una sola vez al volver. */
+  const vaciar = () => {
+    esperandoVista = undefined
     const filtros = [...pendientes.values()]
     pendientes.clear()
     for (const f of filtros) void qc.invalidateQueries(f)
+  }
+  const soltar = () => {
+    timer = undefined
+    primero = 0
+    if (esperandoVista) return
+    let yaCorrio = false
+    const cancelar = cuandoEsteVisible(() => { yaCorrio = true; vaciar() })
+    if (!yaCorrio) esperandoVista = cancelar
   }
 
   return {
     /** `clave` deduplica: dos avisos que piden lo mismo salen una vez. */
     encolar(clave: string, filtro: InvalidateQueryFilters) {
       pendientes.set(clave, filtro)
+      if (esperandoVista) return // ya hay una tanda esperando la vista: se suma a esa
       const ahora = Date.now()
       if (!primero) primero = ahora
       if (timer) clearTimeout(timer)
       timer = setTimeout(soltar, Math.max(0, Math.min(ESPERA_MS, primero + ESPERA_MAX_MS - ahora)))
     },
-    cerrar() { if (timer) clearTimeout(timer) },
+    cerrar() { if (timer) clearTimeout(timer); esperandoVista?.() },
   }
 }
 

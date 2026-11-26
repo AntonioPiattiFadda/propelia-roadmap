@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { shiftIsoDate } from '@/lib/calendarDate'
+import { useSondeaDeFondo } from '@/lib/pestanas'
 import { relojDeEspana } from '@/pages/agenda/lib/horaDeEspana'
 import { minutosSinLlamarDelDia } from '../service/crm.service'
 import { avisoSinLlamar } from '../lib/minutosSinLlamar'
@@ -32,13 +33,14 @@ function guardarAvisados(ids: Set<string>) {
 export function useAvisoSinLlamar(yoId: string | null, activo: boolean) {
   const hoy = relojDeEspana(new Date()).ymd
   const dias = Array.from({ length: DIAS_HACIA_ATRAS + 1 }, (_, i) => shiftIsoDate(hoy, -i))
+  const deFondo = useSondeaDeFondo() // de fondo sondea una pestaña sola (`lib/pestanas.ts`)
   const consultas = useQueries({
     queries: dias.map(dia => ({
       queryKey: CRM_KEYS.minutosSinLlamar(yoId ?? '', dia),
       queryFn: () => minutosSinLlamarDelDia(yoId!, dia),
       enabled: activo && !!yoId,
       refetchInterval: dia === hoy ? REFRESCO_MS : false,
-      refetchIntervalInBackground: dia === hoy,
+      refetchIntervalInBackground: dia === hoy && deFondo,
     })),
   })
   const firma = consultas.map(q => q.data?.min_sin_llamar ?? '').join('|')
