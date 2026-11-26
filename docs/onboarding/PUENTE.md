@@ -355,9 +355,10 @@ Leads de prueba en la org (26/11/2026, por pedido): el set que se cargó a mano 
 (`supabase/test-seeds/leads/inmuga-homes.json` del producto), armado contra los pisos **activos**
 que la org ya tiene, así que se puede correr apenas importada la cartera o cuando sea:
 
-- **6 compradores «Test Cruce»**. Cada uno toma un piso de la cartera (repartidos de barato a
-  caro) y lleva la búsqueda que cruza con él cerca del **100, 90, 80, 65 y 50 %**; el sexto no
-  cruza con nada (presupuesto debajo del filtro). La búsqueda se elige con el motor de verdad
+- **6 compradores «Test Cruce»**, que **cruzan siempre**. Cada uno toma un piso de la cartera
+  (repartidos de barato a caro) y lleva la búsqueda que cruza con él cerca del **100, 90, 80, 70,
+  60 y 50 %**; si su piso no llega al objetivo, prueba con el siguiente. Un piso sin venta ni
+  alquiler marcados no se usa: el filtro de operación del motor lo descarta para toda búsqueda. La búsqueda se elige con el motor de verdad
   (`composeMatch` + `passesFilters` y las `scoring_rules` de la base, `roadmap-bridge/testLeads.ts`):
   presupuesto, dormitorios, baños y m², **sin zonas** (las filas sin calle no se geocodifican) y
   **sin notas** (con notas corre la etapa de IA, que gasta y no puntúa).
@@ -371,6 +372,11 @@ se reconocen por el nombre, los teléfonos `+346000001xx`, los emails `@propelia
 nota. Cuentan como leads reales. **Repetirlo no duplica**: un teléfono que ya tiene su lead vivo
 vuelve `skipped_existing`. Un lead que falla no corta los demás. Al terminar corre el matching de
 cada comprador y devuelve el porcentaje **real** con su piso (si falla, queda en la cola).
+
+**`dry_run: true`** no escribe nada: devuelve el mismo `leads` con `status: "planned"` (o
+`"skipped_existing"` si ese teléfono ya tiene su lead), el porcentaje que daría cada comprador
+con su piso en `anchor_score` y en `matches` a cuántos pisos de la cartera les cruzaría, más
+`dry_run: true` y `planned`. Es lo que muestra el botón «Leads de prueba» antes de crear.
 
 ```json
 // { "action": "create_test_leads", "org_id": "6f1c…" } →
@@ -386,7 +392,9 @@ cada comprador y devuelve el porcentaje **real** con su piso (si falla, queda en
 `matches` es null en vendedores o si el matching quedó en la cola. Por la RPC `roadmap_create_test_lead`
 del producto (migración `20261126125938_roadmap_create_test_lead`): crea un lead entero en una
 transacción por las RPC del alta manual, haciéndose pasar por el agente (`agent_bot_act_as`).
-`409 no_team` sin admin ni agentes; `409 no_properties` sin pisos activos con precio.
+`409 no_team` sin admin ni agentes; `409 no_properties` sin pisos activos con precio y operación.
+Los creados antes del 26/11/2026 por la tarde (compradores «Test Matching», uno sin cruces) los da de
+baja la migración `20261126141210_roadmap_test_leads_rehacer` del producto, para recrearlos.
 
 ### `simulated_inbound_scenarios`
 
