@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { useUserSession } from '@/hooks/useUserSession'
+import { useSondeaDeFondo } from '@/lib/pestanas'
 import { getEmailsQueNoLlegaron, getEstadoDeEnvio, getHistorialDeEmails, getPlantillasGuardadas, marcarEmailVisto, type EmailQueNoLlego } from '../service/email.service'
 import { avisosSinVer, estadoDelEnvio, motivoLegible, rotuloDelEstado } from '../lib/emails'
 import { enlaceAlCrm, escribirLeadAbierto } from '../lib/leadFilterParams'
@@ -12,11 +13,12 @@ import { CRM_KEYS } from './keys'
    lo suyo con las funciones de `lib/emails.ts`. Adentro del CRM la refresca el realtime
    (`crm_emails`); afuera, el `refetchInterval` del aviso global. */
 export function useEmailsQueNoLlegaron(opciones: { enabled?: boolean; refetchInterval?: number } = {}) {
+  const deFondo = useSondeaDeFondo() // de fondo sondea una pestaña sola (`lib/pestanas.ts`)
   return useQuery({
     queryKey: CRM_KEYS.emailsQueNoLlegaron, queryFn: getEmailsQueNoLlegaron,
     enabled: opciones.enabled,
     refetchInterval: opciones.refetchInterval,
-    refetchIntervalInBackground: opciones.refetchInterval != null,
+    refetchIntervalInBackground: opciones.refetchInterval != null && deFondo,
   })
 }
 

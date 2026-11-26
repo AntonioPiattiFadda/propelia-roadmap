@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useSondeaDeFondo } from '@/lib/pestanas'
 import { daysInMonth, periodBounds, startOfMonthIso } from '@/lib/calendarDate'
 import { getLead, getLeads, getReunionesEntre, getTareasPendientes } from '../service/crm.service'
 import { CRM_KEYS } from './keys'
@@ -23,13 +24,15 @@ export function useLead(leadId: string | undefined) {
  *  Las alarmas (`useAlarmasDeTareas`) la leen además con `refetchInterval`: fuera del CRM no hay
  *  realtime abierto que la invalide. */
 export function useTareasPendientes(opciones: { enabled?: boolean; refetchInterval?: number } = {}) {
+  const deFondo = useSondeaDeFondo()
   return useQuery({
     queryKey: CRM_KEYS.tareasPendientes, queryFn: getTareasPendientes,
     staleTime: FRESCA_MS,
     enabled: opciones.enabled,
     refetchInterval: opciones.refetchInterval,
-    // Con la pestaña de fondo también: es justo cuando la alarma tiene que sonar.
-    refetchIntervalInBackground: opciones.refetchInterval != null,
+    /* Con la pestaña de fondo también: es justo cuando la alarma tiene que sonar. Pero una sola
+       pestaña (`lib/pestanas.ts`, 26/11/2026): con muchas abiertas sondeaban todas. */
+    refetchIntervalInBackground: opciones.refetchInterval != null && deFondo,
   })
 }
 

@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { alVerse } from '@/lib/pestanas'
 import { supabase } from '@/lib/supabase'
 import {
   asignarOnboarding, completarOnboarding, getOnboardings, getPlantillas, importarEquipo, marcarTarea, reabrirAlta, vincularOrg,
@@ -43,14 +44,15 @@ export function useClientesRealtime(activo: boolean) {
   useEffect(() => {
     if (!activo) return
     const canal = supabase.channel(`clientes-${crypto.randomUUID()}`)
+    // Con la pestaña de fondo, una vez al volver (`alVerse`).
+    const recargar = alVerse(() => { void qc.invalidateQueries({ queryKey: CLIENTES_KEYS.onboardings }) })
     // crm_tasks: la columna «Tareas» (la tarea que crea el envío del alta aparece sola). crm_meetings:
     // las capacitaciones, que se mueven o se cancelan también desde la Agenda y desde Google.
     for (const tabla of ['client_onboardings', 'client_onboarding_members', 'client_onboarding_tasks', 'crm_tasks', 'crm_meetings']) {
-      canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla },
-        () => { void qc.invalidateQueries({ queryKey: CLIENTES_KEYS.onboardings }) })
+      canal.on('postgres_changes', { event: '*', schema: 'public', table: tabla }, () => recargar.avisar())
     }
     canal.subscribe()
-    return () => { void supabase.removeChannel(canal) }
+    return () => { recargar.cerrar(); void supabase.removeChannel(canal) }
   }, [activo, qc])
 }
 

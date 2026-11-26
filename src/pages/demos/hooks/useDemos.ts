@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
+import { alVerse, useSondeaDeFondo } from '@/lib/pestanas'
 import { supabase } from '@/lib/supabase'
 import { useUserSession } from '@/hooks/useUserSession'
 import { CRM_KEYS } from '@/pages/crm/hooks/keys'
@@ -17,11 +18,12 @@ const CLAVE_MARCA = 'crm-demos-avisadas-hasta'
 const fmt = new Intl.DateTimeFormat('es-ES', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 
 export function useDemos(opciones: { enabled?: boolean; refetchInterval?: number } = {}) {
+  const deFondo = useSondeaDeFondo() // de fondo sondea una pestaña sola (`lib/pestanas.ts`)
   return useQuery({
     queryKey: CRM_KEYS.demos, queryFn: getDemos,
     enabled: opciones.enabled,
     refetchInterval: opciones.refetchInterval,
-    refetchIntervalInBackground: opciones.refetchInterval != null,
+    refetchIntervalInBackground: opciones.refetchInterval != null && deFondo,
   })
 }
 
@@ -51,11 +53,12 @@ export function useAvisosDeDemos(activo: boolean) {
 
   useEffect(() => {
     if (!activo) return
+    // Con la pestaña de fondo no re-trae: el sondeo de fondo (una pestaña sola) avisa igual.
+    const recargar = alVerse(() => { void qc.invalidateQueries({ queryKey: CRM_KEYS.demos }) })
     const canal = supabase.channel(`demos-${crypto.randomUUID()}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_meetings' },
-        () => { void qc.invalidateQueries({ queryKey: CRM_KEYS.demos }) })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'crm_meetings' }, () => recargar.avisar())
       .subscribe()
-    return () => { void supabase.removeChannel(canal) }
+    return () => { recargar.cerrar(); void supabase.removeChannel(canal) }
   }, [activo, qc])
 
   useEffect(() => {

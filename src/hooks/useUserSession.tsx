@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Session } from '@supabase/supabase-js'
-import { useQueryClient } from '@tanstack/react-query'
 
 export function useUserSession() {
   const [lookingForSession, setLookingForSession] = useState(true)
   const [userSession, setUserSession] = useState<Session | null>(null)
-  const queryClient = useQueryClient()
 
   useEffect(() => {
     let signOutTimer: ReturnType<typeof setTimeout> | null = null
@@ -42,9 +40,10 @@ export function useUserSession() {
         setUserSession(session)
         setLookingForSession(false)
 
-        if (event === 'TOKEN_REFRESHED' && session) {
-          queryClient.invalidateQueries()
-        }
+        /* Renovar el token NO re-trae nada (26/11/2026): los pedidos que siguen ya salen con el
+           token nuevo. Hasta ese día hacía `invalidateQueries()` y, como el token es uno para
+           todas las pestañas, cada hora todas re-traían la app entera a la vez: con una SDR con
+           ~170 pestañas eran más de 4.000 pedidos en un minuto y la base se saturaba. */
       }
     )
 
@@ -52,7 +51,7 @@ export function useUserSession() {
       subscription.unsubscribe()
       if (signOutTimer) clearTimeout(signOutTimer)
     }
-  }, [queryClient])
+  }, [])
 
   return { lookingForSession, userSession }
 }

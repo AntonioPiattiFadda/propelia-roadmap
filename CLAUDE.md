@@ -606,6 +606,14 @@ Desde el 30/9/2026 (rama `crm-pantalla`). Diseño en
   cliente y de lo que cuelga del lead fusionan lo que contesta la base en vez de re-traer, y la lista
   y las tareas tienen `staleTime` de 5 min (volver a la pestaña no las re-trae). Antes, cada llamada
   registrada re-traía ~950 leads en todas las pantallas abiertas: ~2.400 veces por día.
+- **Muchas pestañas no cargan la base** (26/11/2026; una SDR llegó a tener ~170 abiertas y cada
+  hora mandaba más de 4.000 pedidos en un minuto, que la saturaban y le dejaban su «Registrar» en
+  la cola). (1) **Renovar el token no re-trae nada**: `useUserSession` hacía `invalidateQueries()` en
+  `TOKEN_REFRESHED`, y el token es uno para todas las pestañas. (2) **Lo que el realtime re-trae
+  espera a que la pestaña esté a la vista** y sale una vez al volver (`cuandoEsteVisible` /
+  `alVerse`, `lib/pestanas.ts`; parchear la cache sigue al toque). (3) **Los sondeos de fondo
+  (alarmas, emails, avisos, demos, «sin llamar») los hace una sola pestaña** (`useSondeaDeFondo`,
+  Web Locks; al cerrarla lo hereda otra): un `refetchIntervalInBackground` nuevo va con `&& deFondo`.
 - **`src/pages/crm/lib/permisos.ts` es el espejo en pantalla de `crm_puede()`**, no la seguridad:
   sirve para no ofrecer un botón que la base va a rechazar. Si cambia la regla en `schema.sql`,
   cambia ahí (misma relación que `accesoDe()` con `es_usuario()`).
