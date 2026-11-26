@@ -321,7 +321,7 @@ function Cuerpo({ datos, modo, ocupado, onOcupado, onCerrar }: {
         await marcarTarea({ onboardingId, taskId: TAREA_CARTERA_IMPORTADA, hecha: true })
 
         // Después de la cartera: los compradores se arman contra los pisos que acaban de entrar.
-        // Un reintento no los duplica (el puente saltea los que ya están).
+        // Un reintento los rehace: el puente da de baja los anteriores antes de crear.
         if (conLeadsDePrueba) {
           empezar('leads')
           r.leadsDePrueba = await crearLeadsDePrueba(org)

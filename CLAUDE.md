@@ -525,8 +525,12 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   tiene los pisos (`LeadsDePrueba.tsx`), que **primero corre el simulacro** (`dry_run`: el plan
   con los cruces que daría cada uno, sin crear nada) y recién con «Crear» escribe. Muestra el porcentaje real que dio el motor contra el
   esperado. **Sin marca de prueba** (por pedido): se reconocen por el nombre, los teléfonos
-  `+346000001xx` y la nota «[TEST]», y cuentan como leads reales. Repetirlo no duplica. Hace falta
-  la migración `20261126125938_roadmap_create_test_lead` y deployar `roadmap-bridge` (producto) y
+  `+346000001xx` y la nota «[TEST]», y cuentan como leads reales. **Repetirlo los reemplaza**
+  (26/11/2026, por pedido; hasta ese día salteaba los que ya estaban): el puente da de baja los leads
+  de la org con esos teléfonos, con lo que les cuelga, y crea el set de nuevo contra la cartera de hoy
+  (`replaced`; el simulacro dice cuántos se darían de baja y el botón pasa a «Reemplazar y crear»).
+  Hace falta la migración `20261126125938_roadmap_create_test_lead`, la
+  `20261126191559_roadmap_delete_test_leads` (producto) y deployar `roadmap-bridge` (producto) y
   `propelia-bridge` (acá).
 - **Vincular una org que ya existe** (5/11/2026, por pedido; migración
   `20261105134748_onboarding_vincular_org_existente`, que **la aplica Antonio**): el panel de

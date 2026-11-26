@@ -369,18 +369,21 @@ que la org ya tiene, así que se puede correr apenas importada la cartera o cuan
 
 Se reparten en ronda entre los admin y agentes de la org. **Sin marca de prueba** (por pedido):
 se reconocen por el nombre, los teléfonos `+346000001xx`, los emails `@propelia-test.es` y la
-nota. Cuentan como leads reales. **Repetirlo no duplica**: un teléfono que ya tiene su lead vivo
-vuelve `skipped_existing`. Un lead que falla no corta los demás. Al terminar corre el matching de
+nota. Cuentan como leads reales. **Repetirlo los reemplaza** (26/11/2026, por pedido): antes de
+crear da de baja los leads vivos de la org con los teléfonos del set (y lo que les cuelga: tareas,
+notas, cruces, el inmueble de los vendedores), por la RPC `roadmap_delete_test_leads` del producto
+(migración `20261126191559_roadmap_delete_test_leads`), y cuántos eran vuelve en `replaced`. Un lead
+que falla no corta los demás. Al terminar corre el matching de
 cada comprador y devuelve el porcentaje **real** con su piso (si falla, queda en la cola).
 
-**`dry_run: true`** no escribe nada: devuelve el mismo `leads` con `status: "planned"` (o
-`"skipped_existing"` si ese teléfono ya tiene su lead), el porcentaje que daría cada comprador
-con su piso en `anchor_score` y en `matches` a cuántos pisos de la cartera les cruzaría, más
-`dry_run: true` y `planned`. Es lo que muestra el botón «Leads de prueba» antes de crear.
+**`dry_run: true`** no escribe nada: devuelve el mismo `leads` con `status: "planned"`, el
+porcentaje que daría cada comprador con su piso en `anchor_score` y en `matches` a cuántos pisos de
+la cartera les cruzaría, más `dry_run: true`, `planned` y en `replaced` cuántos leads de prueba hay
+hoy (los que se darían de baja). Es lo que muestra el botón «Leads de prueba» antes de crear.
 
 ```json
 // { "action": "create_test_leads", "org_id": "6f1c…" } →
-{ "created": 12, "skipped_existing": 0, "failed": 0,
+{ "created": 12, "replaced": 12, "skipped_existing": 0, "failed": 0,
   "leads": [
     { "key": "lucia-matching", "kind": "matching", "lead_type": "BUYER", "name": "Lucía Test Cruce",
       "assigned_to": { "id": "u1", "name": "Marta Gil" }, "status": "created", "lead_id": "…", "error": null,
