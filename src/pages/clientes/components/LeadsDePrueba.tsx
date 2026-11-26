@@ -7,15 +7,15 @@ import { crearLeadsDePrueba, PUENTE_SIMULADO, type LeadDePrueba, type ResultadoD
 
 /* Leads de prueba en la org de Propelia (26/11/2026, por pedido): el set que se cargó a mano en
    Inmuga Homes, armado contra la cartera que la org ya tiene (`create_test_leads` del puente,
-   PUENTE.md). 6 compradores con porcentajes de matching escalonados (100, 90, 80, 65, 50 y uno que
+   PUENTE.md). 6 compradores con porcentajes de cruce escalonados (100, 90, 80, 65, 50 y uno que
    no cruza), 3 consultas por un piso y 3 vendedores, con sus tareas y repartidos entre el equipo.
    Sin marca de prueba: se reconocen por el nombre («Test Matching»…), los teléfonos +346000001xx
    y la nota «[TEST]». Dos puertas: la casilla de «Dar de alta» / «Importar cartera» y el botón de
    la tarea del alta ya hecha (`LeadsDePruebaDialog`). Repetirlo no duplica. */
 
-export const QUE_SE_CREA = '6 compradores para probar el matching (al 100, 90, 80, 65 y 50 % con un piso de la cartera, y uno que no cruza), 3 consultas por un piso y 3 vendedores, con sus tareas y repartidos entre el equipo.'
+export const QUE_SE_CREA = '6 compradores para probar los cruces (al 100, 90, 80, 65 y 50 % con un piso de la cartera, y uno que no cruza), 3 consultas por un piso y 3 vendedores, con sus tareas y repartidos entre el equipo.'
 
-const TIPO: Record<LeadDePrueba['kind'], string> = { matching: 'Matching', consulta: 'Consulta', vendedor: 'Vendedor' }
+const TIPO: Record<LeadDePrueba['kind'], string> = { matching: 'Cruce', consulta: 'Consulta', vendedor: 'Vendedor' }
 
 /** Una línea para el paso del alta: «12 creados · 2 ya estaban». */
 export function resumenDeLeadsDePrueba(r: ResultadoDeLeadsDePrueba) {
@@ -26,7 +26,7 @@ export function resumenDeLeadsDePrueba(r: ResultadoDeLeadsDePrueba) {
   ].filter(Boolean).join(' · ') || 'Nada que crear'
 }
 
-function Matching({ l }: { l: LeadDePrueba }) {
+function Cruce({ l }: { l: LeadDePrueba }) {
   if (l.lead_type === 'SELLER') return <span className="text-(--fg-muted)">—</span>
   if (l.matches == null) return <span className="text-(--fg-muted)">{l.status === 'failed' ? '—' : 'En la cola'}</span>
   if (l.expected) {
@@ -53,7 +53,7 @@ export function TablaDeLeadsDePrueba({ resultado }: { resultado: ResultadoDeLead
             <th className="px-2.5 py-1.5 font-medium">Lead</th>
             <th className="px-2.5 py-1.5 font-medium">Tipo</th>
             <th className="px-2.5 py-1.5 font-medium">Asignado a</th>
-            <th className="px-2.5 py-1.5 font-medium">Matching</th>
+            <th className="px-2.5 py-1.5 font-medium">Cruce</th>
             <th className="px-2.5 py-1.5 text-right font-medium">Tareas</th>
           </tr>
         </thead>
@@ -67,7 +67,7 @@ export function TablaDeLeadsDePrueba({ resultado }: { resultado: ResultadoDeLead
               </td>
               <td className="px-2.5 py-1.5 text-(--fg-2)">{TIPO[l.kind]}</td>
               <td className="px-2.5 py-1.5 text-(--fg-2)">{l.assigned_to.name ?? '—'}</td>
-              <td className="px-2.5 py-1.5"><Matching l={l} /></td>
+              <td className="px-2.5 py-1.5"><Cruce l={l} /></td>
               <td className="px-2.5 py-1.5 text-right tabular-nums text-(--fg-2)">{l.status === 'created' ? l.tasks : '—'}</td>
             </tr>
           ))}

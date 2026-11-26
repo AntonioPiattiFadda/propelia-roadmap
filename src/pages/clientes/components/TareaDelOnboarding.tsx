@@ -199,7 +199,7 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
               <Upload className="size-4" /> {conCartera ? 'Importar cartera de nuevo' : 'Importar cartera'}
             </Button>
             {datos.orgId && (
-              <Button size="sm" variant="outline" className="h-8" title="Compradores con distintos porcentajes de matching, consultas y vendedores, con sus tareas"
+              <Button size="sm" variant="outline" className="h-8" title="Compradores con distintos porcentajes de cruce, consultas y vendedores, con sus tareas"
                 onClick={() => setLeadsDePrueba(true)}>
                 <FlaskConical className="size-4" /> Leads de prueba
               </Button>

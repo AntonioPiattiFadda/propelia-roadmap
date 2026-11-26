@@ -213,7 +213,7 @@ function Cuerpo({ datos, modo, ocupado, onOcupado, onCerrar }: {
       if (!revisadaAntes) lista.push({ id: 'revisar', texto: 'Revisar el Excel de la cartera', estado: 'pendiente' })
       lista.push({ id: 'propiedades', texto: 'Importar las propiedades', estado: 'pendiente' })
       if (fotosAUsar) lista.push({ id: 'fotos', texto: 'Copiar las fotos', estado: 'pendiente' })
-      if (conLeadsDePrueba) lista.push({ id: 'leads', texto: 'Crear los leads de prueba y correr su matching', estado: 'pendiente' })
+      if (conLeadsDePrueba) lista.push({ id: 'leads', texto: 'Crear los leads de prueba y calcular sus cruces', estado: 'pendiente' })
     } else {
       lista.push({ id: 'propiedades', texto: 'Cartera', estado: 'salteado', detalle: 'Sin Excel: se importa después con «Importar cartera»' })
     }
@@ -590,7 +590,7 @@ function Cuerpo({ datos, modo, ocupado, onOcupado, onCerrar }: {
             </Bloque>
           )}
           {etapa === 'listo' && resumen?.leadsDePrueba && (
-            <Bloque titulo="Leads de prueba" nota="El porcentaje es el que dio el motor de matching con su piso">
+            <Bloque titulo="Leads de prueba" nota="El porcentaje es el que dio el motor de cruces con su piso">
               <TablaDeLeadsDePrueba resultado={resumen.leadsDePrueba} />
             </Bloque>
           )}
