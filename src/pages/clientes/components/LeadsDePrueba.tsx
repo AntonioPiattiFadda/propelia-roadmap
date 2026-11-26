@@ -12,20 +12,25 @@ import { crearLeadsDePrueba, PUENTE_SIMULADO, type LeadDePrueba, type ResultadoD
    Sin marca de prueba: se reconocen por el nombre («Test Cruce»…), los teléfonos +346000001xx
    y la nota «[TEST]». Dos puertas: la casilla de «Dar de alta» / «Importar cartera» y el botón de
    la tarea del alta ya hecha (`LeadsDePruebaDialog`), que primero corre el simulacro (`dry_run`):
-   el plan con los cruces que daría cada uno, sin crear nada. Repetirlo no duplica. */
+   el plan con los cruces que daría cada uno, sin crear nada. **Repetirlo los reemplaza**
+   (26/11/2026, por pedido): el puente da de baja los anteriores (por sus teléfonos) y crea el set
+   entero de nuevo contra la cartera de hoy. */
 
 export const QUE_SE_CREA = '6 compradores que cruzan con pisos de la cartera (al 100, 90, 80, 70, 60 y 50 % con uno de ellos), 3 consultas por un piso y 3 vendedores, con sus tareas y repartidos entre el equipo.'
 
 const TIPO: Record<LeadDePrueba['kind'], string> = { matching: 'Cruce', consulta: 'Consulta', vendedor: 'Vendedor' }
 const cruces = (n: number) => `${n} ${n === 1 ? 'cruce' : 'cruces'}`
 
-/** Una línea para el paso del alta: «12 creados · 2 ya estaban». */
+/** Una línea para el paso del alta: «12 creados · 12 anteriores dados de baja». */
 export function resumenDeLeadsDePrueba(r: ResultadoDeLeadsDePrueba) {
+  const anteriores = r.replaced ?? 0
   return [
     r.planned && `${r.planned} ${r.planned === 1 ? 'se crearía' : 'se crearían'}`,
+    r.dry_run && anteriores > 0 && `reemplazando ${anteriores} ${anteriores === 1 ? 'anterior' : 'anteriores'}`,
     r.created && `${r.created} ${r.created === 1 ? 'creado' : 'creados'}`,
     r.skipped_existing && `${r.skipped_existing} ya ${r.skipped_existing === 1 ? 'estaba' : 'estaban'}`,
     r.failed && `${r.failed} ${r.failed === 1 ? 'falló' : 'fallaron'}`,
+    !r.dry_run && anteriores > 0 && `${anteriores} ${anteriores === 1 ? 'anterior dado' : 'anteriores dados'} de baja`,
   ].filter(Boolean).join(' · ') || 'Nada que crear'
 }
 
@@ -123,6 +128,7 @@ export function LeadsDePruebaDialog({ orgId, nombre, abierto, onCerrar }: {
   const plan = estado.tipo === 'plan' ? estado.r : estado.tipo === 'creando' ? estado.plan : estado.tipo === 'error' ? estado.plan : null
   const mostrado = estado.tipo === 'listo' ? estado.r : plan
   const faltan = plan ? plan.planned ?? 0 : 0
+  const reemplaza = (plan?.replaced ?? 0) > 0
   const avisos = mostrado ? sinCruces(mostrado) : []
 
   return (
@@ -130,7 +136,7 @@ export function LeadsDePruebaDialog({ orgId, nombre, abierto, onCerrar }: {
       <DialogContent className="ui-scale dialog-fullscreen-mobile flex max-h-[90vh] w-[min(860px,96vw)] max-w-none flex-col gap-3 overflow-hidden">
         <DialogTitle className="flex items-center gap-2 text-[16px]"><FlaskConical className="size-4" /> Leads de prueba · {nombre}</DialogTitle>
         <DialogDescription className="text-[13px]">
-          {QUE_SE_CREA} Se arman con los pisos activos que la org ya tiene en Propelia. Se reconocen por el nombre («Test Cruce»…) y la nota «[TEST]»; correrlo de nuevo no los duplica.
+          {QUE_SE_CREA} Se arman con los pisos activos que la org ya tiene en Propelia. Se reconocen por el nombre («Test Cruce»…) y la nota «[TEST]»; correrlo de nuevo da de baja los anteriores y los crea otra vez.
         </DialogDescription>
         {PUENTE_SIMULADO && <p className="text-[12px] text-warning">Puente simulado: no se crea nada en Propelia.</p>}
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -155,9 +161,9 @@ export function LeadsDePruebaDialog({ orgId, nombre, abierto, onCerrar }: {
               <Button size="sm" variant="outline" disabled={ocupado} onClick={cerrar}>Cancelar</Button>
               {estado.tipo === 'error' && !plan && <Button size="sm" onClick={revisar}>Reintentar</Button>}
               {plan && (
-                <Button size="sm" disabled={ocupado || faltan === 0} title={faltan === 0 ? 'Ya están todos creados' : undefined} onClick={() => void crear(plan)}>
+                <Button size="sm" disabled={ocupado || faltan === 0} title={reemplaza ? `Da de baja los ${plan.replaced} leads de prueba que hay y crea estos` : undefined} onClick={() => void crear(plan)}>
                   {estado.tipo === 'creando' ? <Loader2 className="size-4 animate-spin" /> : <FlaskConical className="size-4" />}
-                  {faltan === 0 ? 'Ya están todos' : `Crear ${faltan} ${faltan === 1 ? 'lead' : 'leads'}`}
+                  {faltan === 0 ? 'Nada que crear' : `${reemplaza ? 'Reemplazar y crear' : 'Crear'} ${faltan} ${faltan === 1 ? 'lead' : 'leads'}`}
                 </Button>
               )}
             </>)}

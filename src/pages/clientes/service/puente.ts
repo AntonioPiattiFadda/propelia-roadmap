@@ -75,6 +75,8 @@ export type LeadDePrueba = {
 }
 export type ResultadoDeLeadsDePrueba = {
   leads: LeadDePrueba[]; created: number; skipped_existing: number; failed: number
+  /** Los leads de prueba anteriores que se dieron de baja (en el simulacro, los que se darían): crear reemplaza. Sin el puente nuevo, undefined. */
+  replaced?: number
   /** Sólo en el simulacro: no se creó nada y `planned` son los que se crearían. */
   dry_run?: boolean; planned?: number
 }
@@ -160,7 +162,8 @@ export const enviarLeadDePrueba = (org_id: string) =>
 /* Lo creado se recuerda en este navegador (localStorage, con try/catch), para que la org, sus
    agentes y los links sigan ahí al recargar. No es un dato del equipo: es de mentira. */
 const CLAVE = 'clientes-puente-simulado'
-type Memoria = { orgs: Record<string, OrgConAgentes>; links: Record<string, LinkDePago[]> }
+/** `leads_de_prueba`: cuántos dejó el último «Crear», para simular que el siguiente los reemplaza. */
+type Memoria = { orgs: Record<string, OrgConAgentes & { leads_de_prueba?: number }>; links: Record<string, LinkDePago[]> }
 const leer = (): Memoria => {
   try { return { orgs: {}, links: {}, ...JSON.parse(localStorage.getItem(CLAVE) ?? '{}') } } catch { return { orgs: {}, links: {} } }
 }
@@ -263,9 +266,11 @@ async function simular(action: string, p: Record<string, unknown>): Promise<unkn
         lead('sofia-consulta', 'Sofía Test Consulta', 'consulta', null), lead('rosa-vendedora', 'Rosa Test Vendedora', 'vendedor', null),
         lead('miguel-vendedor', 'Miguel Test Vendedor', 'vendedor', null), lead('teresa-vendedora', 'Teresa Test Vendedora', 'vendedor', null),
       ]
-      return simulacro
-        ? { dry_run: true, leads, created: 0, planned: leads.length, skipped_existing: 0, failed: 0 }
-        : { leads, created: leads.length, skipped_existing: 0, failed: 0 }
+      const replaced = org.leads_de_prueba ?? 0
+      if (simulacro) return { dry_run: true, leads, created: 0, planned: leads.length, replaced, skipped_existing: 0, failed: 0 }
+      org.leads_de_prueba = leads.length
+      guardar(m)
+      return { leads, created: leads.length, replaced, skipped_existing: 0, failed: 0 }
     }
     case 'list_payment_plans':
       return { plans: [{ id: 'pro', name: 'Pro', amount_cents: 19900, individual: false }, { id: 'basic', name: 'Básico', amount_cents: 9900, individual: false }] }
