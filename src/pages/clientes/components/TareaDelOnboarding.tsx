@@ -23,6 +23,7 @@ import { DarDeAltaDialog } from './DarDeAltaDialog'
 import { copiarTexto, EnviarPorWhatsapp } from './EnviarPorWhatsapp'
 import { ImportarCarteraPanel } from './ImportarCarteraPanel'
 import { ImportarUsuariosPanel, OrgVinculada, VincularOrgPanel } from './ImportarUsuariosPanel'
+import { LeadsDePruebaDialog } from './LeadsDePrueba'
 import { DireccionesPanel, LinkDePagoPanel, PagoPanel } from './PanelesDelPuente'
 import type { DatosDelAlta } from './datosDelAlta'
 
@@ -57,6 +58,7 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
   const [panel, setPanel] = useState<Panel | null>(null)
   const [confirmando, setConfirmando] = useState(false)
   const [alta, setAlta] = useState<'alta' | 'cartera' | null>(null)
+  const [leadsDePrueba, setLeadsDePrueba] = useState(false)
   const [ocupado, setOcupado] = useState<Accion | null>(null)
   /* «Importar fotos» (2/11/2026, por pedido): se elige ANTES de subir el Excel y hace que se lea
      también su hoja «Fotos». Apagado, el import es el de siempre. */
@@ -196,6 +198,12 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
             <Button size="sm" variant="outline" className="h-8" title="Entran solo las propiedades y fotos que no estén" onClick={() => setAlta('cartera')}>
               <Upload className="size-4" /> {conCartera ? 'Importar cartera de nuevo' : 'Importar cartera'}
             </Button>
+            {datos.orgId && (
+              <Button size="sm" variant="outline" className="h-8" title="Compradores con distintos porcentajes de matching, consultas y vendedores, con sus tareas"
+                onClick={() => setLeadsDePrueba(true)}>
+                <FlaskConical className="size-4" /> Leads de prueba
+              </Button>
+            )}
           </span>
         )
       }
@@ -370,6 +378,9 @@ export function TareaDelOnboarding({ datos, paso, tarea }: { datos: DatosDelAlta
       )}
       {clave === TAREA_IMPORTAR_USUARIOS && (
         <DarDeAltaDialog datos={datos} modo={alta ?? 'alta'} abierto={alta !== null} onCerrar={() => setAlta(null)} />
+      )}
+      {clave === TAREA_IMPORTAR_USUARIOS && datos.orgId && (
+        <LeadsDePruebaDialog orgId={datos.orgId} nombre={datos.inmobiliaria} abierto={leadsDePrueba} onCerrar={() => setLeadsDePrueba(false)} />
       )}
       {clave === TAREA_CREDENCIALES && <ConfirmarAccesosDialog datos={datos} abierto={confirmando} onCerrar={() => setConfirmando(false)} />}
     </div>

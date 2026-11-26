@@ -514,6 +514,19 @@ Desde el 26/10/2026 (por pedido). Diseño en `docs/onboarding/clientes.html` (el
   salieron de la pantalla «por ahora»** (`PASOS_EN_PAUSA` en `lib/pasos.ts`, con sus ids): con ellos se
   fueron las capacitaciones, el tutorial de leads, las direcciones y el lead de prueba. Lo tildado sigue
   en la base. Lo que sigue: un seguimiento de la demo realizada, que todavía no tiene definido cómo se vincula.
+- **Leads de prueba en la org** (26/11/2026, por pedido): el set que se cargó a mano en Inmuga Homes
+  (6 compradores «Test Matching» al 100/90/80/65/50 % con un piso de la cartera y uno que no cruza, 3
+  «Test Consulta» atados a un piso y 3 vendedores, con sus tareas, en ronda entre el equipo), armado
+  contra los pisos **activos** que la org ya tiene: acción `create_test_leads` del puente
+  (`docs/onboarding/PUENTE.md`; la búsqueda la elige el motor de matching de verdad, en
+  `roadmap-bridge/testLeads.ts` del producto). Dos puertas: la casilla **«Crear leads de prueba»**
+  de «Dar de alta» / «Importar cartera» (apagada de entrada: en un cliente real quedarían leads
+  inventados) y el botón **«Leads de prueba»** de la tarea del alta ya hecha, para una org que ya
+  tiene los pisos (`LeadsDePrueba.tsx`). Muestra el porcentaje real que dio el motor contra el
+  esperado. **Sin marca de prueba** (por pedido): se reconocen por el nombre, los teléfonos
+  `+346000001xx` y la nota «[TEST]», y cuentan como leads reales. Repetirlo no duplica. Hace falta
+  la migración `20261126125938_roadmap_create_test_lead` y deployar `roadmap-bridge` (producto) y
+  `propelia-bridge` (acá).
 - **Vincular una org que ya existe** (5/11/2026, por pedido; migración
   `20261105134748_onboarding_vincular_org_existente`, que **la aplica Antonio**): el panel de
   «Importar» (`ImportarUsuariosPanel`) elige entre «Crear organización nueva» y «Usar una que ya
